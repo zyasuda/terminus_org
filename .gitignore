@@ -1,0 +1,16 @@
+# Generated media and large files
+videos/*.mp4
+presentation/*.pptx
+
+# Working/brainstorm documents
+docs/ブレスト_オリジナル.md
+
+# Design assets
+design/*.png
+design/*.psd
+
+# OS artifacts
+.DS_Store
+*.swp
+*.swo
+*~
