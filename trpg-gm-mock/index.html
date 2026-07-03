@@ -64,6 +64,23 @@
     border: 1px solid var(--lantern-dim); padding: 5px 12px; border-radius: 6px;
     background: rgba(232,163,61,.06);
   }
+  .pic { align-self: center; max-width: 86%; }
+  .pic img { width: 100%; display: block; border-radius: 10px; border: 1px solid var(--line); }
+  .dice .rollnum { display: inline-block; min-width: 1.6em; text-align: center; }
+  #gateBar { display: none; justify-content: center; padding: 8px 16px 0; }
+  #gateBar button {
+    background: rgba(232,163,61,.12); border: 1px solid var(--lantern-dim); color: var(--lantern);
+    border-radius: 8px; padding: 8px 20px; font-size: 13px; cursor: pointer; letter-spacing: .04em;
+  }
+  #fx { position: fixed; inset: 0; pointer-events: none; opacity: 0; z-index: 99; }
+  #fx.crit { background: radial-gradient(circle, rgba(255,215,120,.55), transparent 70%); animation: fxflash .6s ease-out; }
+  #fx.fumble { background: radial-gradient(circle, rgba(217,107,107,.5), transparent 70%); animation: fxflash .6s ease-out; }
+  @keyframes fxflash { 0% { opacity: 1; } 100% { opacity: 0; } }
+  @keyframes shake {
+    0%,100% { transform: translate(0); } 20% { transform: translate(-6px,2px); }
+    40% { transform: translate(5px,-2px); } 60% { transform: translate(-4px,1px); } 80% { transform: translate(3px,-1px); }
+  }
+  body.shake { animation: shake .35s; }
   #inputRow { display: flex; gap: 8px; padding: 12px 16px; border-top: 1px solid var(--line); flex-shrink: 0; }
   #inputRow input {
     flex: 1; background: var(--panel); border: 1px solid var(--line);
@@ -115,9 +132,12 @@
 <main>
   <div id="chatCol">
     <div id="chat"></div>
+    <!-- セーフティ・ゲート: システムが進行条件の充足を検知したときだけ出現(GEMINI試案1-3) -->
+    <div id="gateBar"><button onclick="proceedScene()">▶ 奥へ進む — 手がかりは掴んだ</button></div>
     <div id="inputRow">
-      <input id="playerInput" placeholder="行動を宣言(例:灯りに近づいて様子を見る)" onkeydown="if(event.key==='Enter')sendAction()">
-      <button id="sendBtn" onclick="sendAction()">宣言</button>
+      <!-- isComposing/keyCode 229: 日本語IMEの変換確定Enterでは送信しない -->
+      <input id="playerInput" placeholder="行動を宣言(例:灯りに近づいて様子を見る)" onkeydown="if(event.key==='Enter'&&!event.isComposing&&event.keyCode!==229)sendAction()">
+      <button id="sendBtn" onclick="sendAction()">行動</button>
     </div>
   </div>
   <div id="debugCol">
@@ -144,6 +164,7 @@
     </section>
   </div>
 </main>
+<div id="fx"></div>
 
 <script>
 /* =========================================================
@@ -163,9 +184,10 @@ const SCENARIO = {
       brief: "坑口。朽ちたトロッコ軌道が闇へ続く。壁に古い作業札が掛かっている。奥からかすかな金属音。",
       goal: "プレイヤーが坑道の奥へ進む決断をしたら scene_complete を true にする。",
       direction: "ここが日常から切り離された場所だと感じさせよ。30年前に人の営みが突然止まったことを直接は語らず、物の古び方と「最近も何かが動いている」気配の対比で匂わせよ。",
+      img: "mine_entrance.jpg",
       secrets: [
         { id: "s1a", text: "作業札の日付は30年前で止まっており、最後の記録は『第三坑道、封鎖。誰も近づくな』とある。" },
-        { id: "s1b", text: "軌道の錆には最近こすれた跡がある。何かが今もトロッコを動かしている。" }
+        { id: "s1b", text: "軌道の錆には最近こすれた跡がある。何かが今もトロッコを動かしている。", img: "scraped_track.jpg" }
       ]
     },
     {
@@ -173,9 +195,9 @@ const SCENARIO = {
       brief: "第二坑道の分岐点。天井から水が滴り、足場が悪い。灯りは右手の第三坑道方向で揺れている。落盤の危険がある。",
       goal: "プレイヤーが第三坑道(封鎖区画)へ入る手段を見つけたら scene_complete を true にする。",
       direction: "封鎖柵は「外から閉じ込める」ためではなく「内側の意思で維持されている」という違和感を、断定せずに漂わせよ。危険の予感と同時に、奥にあるものへの哀感を予感させよ。",
-      enemy: { name: "錆喰い", hp: 5, maxHp: 5, trait: "レールの錆を喰う犬ほどの甲殻獣。縄張りに入る者を威嚇し、襲う。光を嫌う。" },
+      enemy: { name: "錆喰い", hp: 5, maxHp: 5, trait: "レールの錆を喰う犬ほどの甲殻獣。縄張りに入る者を威嚇し、襲う。光を嫌う。", img: "rust_eater.jpg" },
       secrets: [
-        { id: "s2a", text: "封鎖の木柵は内側から何度も修繕されている。中の『何か』は外に出たくないのだ。" },
+        { id: "s2a", text: "封鎖区画の錆びた鉄柵は内側から何度も修繕されている。中の『何か』は外に出たくないのだ。", img: "locked_iron_gate.jpg" },
         { id: "s2b", text: "柵の脇に人一人分の隙間があり、油の匂いが漂う。機械油だ。" }
       ]
     },
@@ -184,9 +206,10 @@ const SCENARIO = {
       brief: "第三坑道の最奥。広い空洞にランタンの灯り。その持ち主がこちらを向く——最終シーン。",
       goal: "プレイヤーが灯りの正体と対峙し、対話か戦闘か逃走のいずれかで決着したら scene_complete を true にする。",
       direction: "番人に敵意がないことを、正体を明かさずに佇まいと所作で示唆せよ。プレイヤーが刃を向けない限り、脅威ではなく孤独と献身を感じさせる存在として描け。",
+      // 番人には img を付けない: 見た目(機械)そのものが③層の真相であり、戦闘開始時に出すとネタバレになる
       enemy: { name: "灯の番人", hp: 8, maxHp: 8, trait: "ランタンを掲げた大柄な人影。プレイヤーが敵対しない限り自分からは攻撃しない。" },
       secrets: [
-        { id: "s3a", text: "灯りの正体は、30年前に置き去りにされた鉱山用の旧式自動人形。ずっと一人で坑道を保守し続けていた。" },
+        { id: "s3a", text: "灯りの正体は、30年前に置き去りにされた鉱山用の旧式自動人形。ずっと一人で坑道を保守し続けていた。", img: "mining_automaton.jpg" },
         { id: "s3b", text: "自動人形は敵意を持たないが、動力源が尽きかけている。彼が守ってきた坑道は、彼が止まれば崩れる。" }
       ]
     }
@@ -208,6 +231,7 @@ function resetGame() {
   busy = false;
   document.getElementById("chat").innerHTML = "";
   document.getElementById("diceLog").innerHTML = "";
+  if (SCENARIO.scenes[0].img) addPic(SCENARIO.scenes[0].img);
   addGm(SCENARIO.intro + "\n\n" + SCENARIO.scenes[0].brief + "\n\nどうする?");
   renderDebug();
 }
@@ -224,26 +248,60 @@ function addMsg(cls, text) {
 const addGm = t => { chron.push({ t: state.turn, kind: "gm", text: t }); addMsg("gm", t); };
 const addPlayer = t => { chron.push({ t: state.turn, kind: "player", text: t }); addMsg("player", t); };
 const addNote = t => { chron.push({ t: state.turn, kind: "sys", text: t }); addMsg("sysnote", t); };
+// クリティカル/ファンブル時の画面演出(フラッシュ+シェイク)
+function screenFx(kind) {
+  const fx = document.getElementById("fx");
+  fx.className = ""; void fx.offsetWidth; // アニメーション再トリガーのためのreflow
+  fx.className = kind;
+  document.body.classList.remove("shake"); void document.body.offsetWidth;
+  document.body.classList.add("shake");
+  setTimeout(() => { fx.className = ""; document.body.classList.remove("shake"); }, 700);
+}
+
+// ダイス演出: 出目が高速で回転してから確定する。確定までawaitできる
 function addDice(roll, diff, ok, crit, fumble, reason) {
-  chron.push({ t: state.turn, kind: "dice", roll, diff, ok, crit, fumble, reason });
   const el = document.createElement("div");
   el.className = "msg dice";
-  const label = crit ? "クリティカル!" : fumble ? "ファンブル…" : ok ? "成功" : "失敗";
-  el.innerHTML = `🎲 ${reason} — d20 → <b>${roll}</b> / DC ${diff} … <b class="${ok?"ok":"ng"}">${label}</b>`;
+  el.innerHTML = `🎲 ${reason} — d20 → <b class="rollnum">?</b> / DC ${diff} …`;
   chat().appendChild(el);
   chat().scrollTop = chat().scrollHeight;
-  const log = document.getElementById("diceLog");
-  log.innerHTML = `[T${state.turn}] d20=${roll} vs DC${diff} ${ok?"OK":"NG"}${crit?" CRIT":""}${fumble?" FUMBLE":""} (${reason})<br>` + log.innerHTML;
+  const num = el.querySelector(".rollnum");
+  return new Promise(resolve => {
+    const iv = setInterval(() => { num.textContent = 1 + Math.floor(Math.random() * 20); }, 60);
+    setTimeout(() => {
+      clearInterval(iv);
+      num.textContent = roll;
+      const label = crit ? "クリティカル!" : fumble ? "ファンブル…" : ok ? "成功" : "失敗";
+      el.insertAdjacentHTML("beforeend", ` <b class="${ok ? "ok" : "ng"}">${label}</b>`);
+      if (crit || fumble) screenFx(crit ? "crit" : "fumble");
+      chron.push({ t: state.turn, kind: "dice", roll, diff, ok, crit, fumble, reason });
+      const log = document.getElementById("diceLog");
+      log.innerHTML = `[T${state.turn}] d20=${roll} vs DC${diff} ${ok?"OK":"NG"}${crit?" CRIT":""}${fumble?" FUMBLE":""} (${reason})<br>` + log.innerHTML;
+      resolve();
+    }, 750);
+  });
 }
-function addReveal(text) {
+function addPic(src) {
+  const d = document.createElement("div");
+  d.className = "msg pic";
+  const img = document.createElement("img");
+  img.src = "images/" + src;
+  img.onload = () => { chat().scrollTop = chat().scrollHeight; };
+  d.appendChild(img);
+  chat().appendChild(d);
+}
+
+function addReveal(text, img) {
   chron.push({ t: state.turn, kind: "reveal", text });
   const el = document.createElement("div");
   el.className = "msg reveal";
   el.textContent = "🔓 情報開示:システムがこの秘密をLLMに注入した";
   chat().appendChild(el);
+  if (img) addPic(img); // 画像も③層に従う: 開示条件を満たした時にだけ表示される
 }
 
 function renderDebug() {
+  document.getElementById("gateBar").style.display = gateReady() ? "flex" : "none";
   document.getElementById("directionView").textContent = SCENARIO.scenes[state.sceneIndex].direction;
   document.getElementById("hpFill").style.width = (state.hp / state.maxHp * 100) + "%";
   document.getElementById("hpFill").style.background = state.hp <= 3 ? "var(--ng)" : "var(--ok)";
@@ -296,6 +354,7 @@ function maybeEngage(r) {
   if (r.engage_enemy && sc.enemy && !state.enemy && !state.defeated.includes(sc.enemy.name)) {
     state.enemy = { ...sc.enemy };
     addNote(`⚔ 戦闘開始:${state.enemy.name}(HP管理はシステム側)`);
+    if (state.enemy.img) addPic(state.enemy.img); // imgを持つ敵のみ表示(番人は③層のため持たない)
   }
 }
 
@@ -310,13 +369,36 @@ function checkEnemyDown() {
   return false;
 }
 
+/* ---- セーフティ・ゲート(GEMINI試案1-3): 進行条件の監視はシステム専権 ---- */
+// 条件: 最終シーン以外で、現シーンの秘密を1つ以上開示済み・非戦闘中・生存
+function gateReady() {
+  const sc = SCENARIO.scenes[state.sceneIndex];
+  return state.hp > 0 && !state.enemy &&
+    state.sceneIndex < SCENARIO.scenes.length - 1 &&
+    sc.secrets.some(s => revealed.has(s.id));
+}
+
+// ボタンによる進行はLLMを呼ばない(シーン冒頭は事前執筆データの再生 = D-011柱1)
+function proceedScene() {
+  if (busy || !gateReady()) return;
+  state.turn++;
+  addPlayer("奥へ進む");
+  state.sceneIndex++;
+  state.enemy = null;
+  history = []; // シーン切替で履歴リセット(既存仕様と同じ)
+  addNote(`—— シーン${state.sceneIndex + 1} ——(進行条件達成による移動)`);
+  if (SCENARIO.scenes[state.sceneIndex].img) addPic(SCENARIO.scenes[state.sceneIndex].img);
+  addGm(SCENARIO.scenes[state.sceneIndex].brief + "\n\nどうする?");
+  renderDebug();
+}
+
 // 判定成功時、現シーンの未開示秘密を1つ開放して返す(=このターンだけLLMに注入)
 function unlockNextSecret() {
   const sc = SCENARIO.scenes[state.sceneIndex];
   const next = sc.secrets.find(s => !revealed.has(s.id));
   if (!next) return null;
   revealed.add(next.id);
-  return next.text;
+  return next; // {id, text, img?}
 }
 
 /* ---------------- Chronicle Lite(D-015/D-016): 構造化ログの.md書き出し。LLM不使用 ---------------- */
@@ -507,14 +589,14 @@ async function sendAction() {
       const roll = rollD20();
       const crit = roll === 20, fumble = roll === 1;
       const ok = crit || (!fumble && roll >= diff);
-      addDice(roll, diff, ok, crit, fumble, r.check.reason || "判定");
+      await addDice(roll, diff, ok, crit, fumble, r.check.reason || "判定"); // 出目確定の溜めを作ってからGMが結果を語る
 
       let extra = "";
       if (ok && !state.enemy) {
         const secret = unlockNextSecret();
         if (secret) {
-          addReveal(secret);
-          extra = `\n# 判定成功によりシステムが開示する新情報(これを語りに織り込め)\n・${secret}`;
+          addReveal(secret.text, secret.img);
+          extra = `\n# 判定成功によりシステムが開示する新情報(これを語りに織り込め)\n・${secret.text}`;
         }
       }
       const outcome = crit ? "クリティカル(自動成功)" : fumble ? "ファンブル(自動失敗)" : ok ? "成功" : "失敗";
@@ -532,7 +614,7 @@ async function sendAction() {
       if (checkEnemyDown()) {
         // 撃破もシーンの秘密開示トリガーとして扱う
         const secret = unlockNextSecret();
-        if (secret) addReveal(secret);
+        if (secret) addReveal(secret.text, secret.img);
       }
       r.scene_complete = r.scene_complete || r2.scene_complete;
     }
@@ -548,6 +630,7 @@ async function sendAction() {
         state.enemy = null; // 戦闘はシーンをまたがない
         history = []; // シーン切替で履歴をリセット(状態はシステムが保持している証明)
         addNote(`—— シーン${state.sceneIndex + 1} ——`);
+        if (SCENARIO.scenes[state.sceneIndex].img) addPic(SCENARIO.scenes[state.sceneIndex].img);
         addGm(SCENARIO.scenes[state.sceneIndex].brief + "\n\nどうする?");
       } else {
         addNote("—— 物語は決着した。おつかれさま。「最初から」で別の選択を試せる ——");

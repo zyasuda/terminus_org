@@ -33,8 +33,15 @@ if (!API_KEY) {
     ".env の ANTHROPIC_API_KEY / GEMINI_API_KEY と LLM_BACKEND を確認してください。");
   process.exit(1);
 }
-const MODEL = process.env.LLM_MODEL ||
+// LLM_MODELがバックエンドと食い違う場合(例: anthropicなのにgemini-*)は無視して既定値を使う
+const envModel = process.env.LLM_MODEL;
+const modelMatchesBackend = envModel &&
+  (BACKEND === "gemini" ? envModel.startsWith("gemini") : envModel.startsWith("claude"));
+const MODEL = modelMatchesBackend ? envModel :
   (BACKEND === "gemini" ? "gemini-2.5-flash" : "claude-sonnet-4-6");
+if (envModel && !modelMatchesBackend) {
+  console.warn(`LLM_MODEL="${envModel}" はバックエンド"${BACKEND}"と不一致のため無視し、既定値 ${MODEL} を使います。`);
+}
 
 const MIME = { ".html": "text/html; charset=utf-8" };
 
@@ -85,7 +92,9 @@ async function callGemini(payload) {
         system_instruction: { parts: [{ text: payload.system || "" }] },
         contents,
         generationConfig: {
-          maxOutputTokens: payload.max_tokens || 1000,
+          // 思考モデル対策: 思考トークンがmaxOutputTokensを消費するため上限を大きめに取り、思考は最小化する
+          maxOutputTokens: Math.max((payload.max_tokens || 1000) * 4, 4000),
+          thinkingConfig: { thinkingBudget: 0 },
           // GMの応答は常にJSONを要求している(R4-9)ため、JSON出力を強制する
           responseMimeType: "application/json"
         }
@@ -110,15 +119,34 @@ const server = http.createServer((req, res) => {
     req.on("end", async () => {
       try {
         const payload = JSON.parse(body);
-        const result = BACKEND === "gemini"
-          ? await callGemini(payload)
-          : await callAnthropic(payload);
+        const call = () => BACKEND === "gemini" ? callGemini(payload) : callAnthropic(payload);
+        let result = await call();
+        // 無料枠のレート制限(429)は、指示された待ち時間だけ待って1回だけ自動リトライする。
+        // プレイヤーには「エラー」ではなく「少し長い待ち」として見せる
+        if (result.status === 429) {
+          const m = /retry in ([\d.]+)/i.exec(result.body.error?.message || "");
+          const waitMs = Math.min((m ? parseFloat(m[1]) : 30) * 1000 + 1500, 65000);
+          console.log(`429検知: ${Math.round(waitMs / 1000)}秒待って自動リトライ`);
+          await new Promise(r => setTimeout(r, waitMs));
+          result = await call();
+        }
         res.writeHead(result.status, { "Content-Type": "application/json" });
         res.end(JSON.stringify(result.body));
       } catch (e) {
         res.writeHead(500, { "Content-Type": "application/json" });
         res.end(JSON.stringify({ error: { type: "proxy_error", message: e.message } }));
       }
+    });
+    return;
+  }
+
+  if (req.method === "GET" && req.url.startsWith("/images/")) {
+    const name = path.basename(decodeURIComponent(req.url)); // basename でパストラバーサルを防ぐ
+    fs.readFile(path.join(__dirname, "images", name), (err, data) => {
+      if (err) { res.writeHead(404); res.end(); return; }
+      const type = name.toLowerCase().endsWith(".png") ? "image/png" : "image/jpeg";
+      res.writeHead(200, { "Content-Type": type, "Cache-Control": "max-age=3600" });
+      res.end(data);
     });
     return;
   }
