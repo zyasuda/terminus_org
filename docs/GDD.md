@@ -204,6 +204,8 @@ Platform → Campaign → Chapter → Session
 
 - キャラクターはキャンペーンを跨がない
 - キャンペーン終了時にAIの記憶はリセットされる（7.4）
+- Chapterの内部構造は運搬物方式（quest／deliverable／world_flags）を採用する
+  （D-019。詳細は docs/AI_DESIGN.md 3節）
 - 【未決】1キャンペーンの標準Chapter数（体験設計と価格設定に直結）
 
 ---
@@ -257,6 +259,9 @@ Platform → Campaign → Chapter → Session
 
 LLMは「演技・会話・描写」のみ。
 ルール・HP・位置・判定・保存はゲームエンジンが管理する。
+
+AIに渡す知識は三層知識モデル（①事実／②演出指示／③真相）で管理する。
+ネタバレ防止は設計で保証し、LLMの自制には頼らない（D-018。詳細は docs/AI_DESIGN.md）。
 
 ## 7.2 コスト設計（D-011）
 
