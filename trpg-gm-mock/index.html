@@ -31,8 +31,9 @@
   }
   header h1 { font-size: 15px; font-weight: 600; color: var(--lantern); letter-spacing: .08em; }
   header .sub { font-size: 11px; color: var(--dim); }
+  header .btns { margin-left: auto; display: flex; gap: 8px; }
   header button {
-    margin-left: auto; background: none; border: 1px solid var(--line);
+    background: none; border: 1px solid var(--line);
     color: var(--dim); border-radius: 6px; padding: 4px 12px; font-size: 12px; cursor: pointer;
   }
   main { flex: 1; display: flex; min-height: 0; }
@@ -106,7 +107,10 @@
 <header>
   <h1>廃坑の灯</h1>
   <span class="sub">ソロTRPG GMモック(中継サーバー版) — 左:対話(LLM) / 右:システムの中身(通常は非公開)</span>
-  <button onclick="resetGame()">最初から</button>
+  <div class="btns">
+    <button onclick="exportChronicle()">Chronicle書き出し</button>
+    <button onclick="resetGame()">最初から</button>
+  </div>
 </header>
 <main>
   <div id="chatCol">
@@ -123,7 +127,11 @@
       <pre id="stateView"></pre>
     </section>
     <section>
-      <h2>シナリオの秘密 <span class="tag">← プロンプトには開放済みのみ注入</span></h2>
+      <h2>演出指示(②層) <span class="tag">← 事実ではなく「効果」だけをLLMに渡す</span></h2>
+      <pre id="directionView"></pre>
+    </section>
+    <section>
+      <h2>シナリオの秘密(③層) <span class="tag">← プロンプトには開放済み(①層)のみ注入</span></h2>
       <div id="secretsView"></div>
     </section>
     <section>
@@ -154,6 +162,7 @@ const SCENARIO = {
       id: 1,
       brief: "坑口。朽ちたトロッコ軌道が闇へ続く。壁に古い作業札が掛かっている。奥からかすかな金属音。",
       goal: "プレイヤーが坑道の奥へ進む決断をしたら scene_complete を true にする。",
+      direction: "ここが日常から切り離された場所だと感じさせよ。30年前に人の営みが突然止まったことを直接は語らず、物の古び方と「最近も何かが動いている」気配の対比で匂わせよ。",
       secrets: [
         { id: "s1a", text: "作業札の日付は30年前で止まっており、最後の記録は『第三坑道、封鎖。誰も近づくな』とある。" },
         { id: "s1b", text: "軌道の錆には最近こすれた跡がある。何かが今もトロッコを動かしている。" }
@@ -163,6 +172,7 @@ const SCENARIO = {
       id: 2,
       brief: "第二坑道の分岐点。天井から水が滴り、足場が悪い。灯りは右手の第三坑道方向で揺れている。落盤の危険がある。",
       goal: "プレイヤーが第三坑道(封鎖区画)へ入る手段を見つけたら scene_complete を true にする。",
+      direction: "封鎖柵は「外から閉じ込める」ためではなく「内側の意思で維持されている」という違和感を、断定せずに漂わせよ。危険の予感と同時に、奥にあるものへの哀感を予感させよ。",
       enemy: { name: "錆喰い", hp: 5, maxHp: 5, trait: "レールの錆を喰う犬ほどの甲殻獣。縄張りに入る者を威嚇し、襲う。光を嫌う。" },
       secrets: [
         { id: "s2a", text: "封鎖の木柵は内側から何度も修繕されている。中の『何か』は外に出たくないのだ。" },
@@ -173,6 +183,7 @@ const SCENARIO = {
       id: 3,
       brief: "第三坑道の最奥。広い空洞にランタンの灯り。その持ち主がこちらを向く——最終シーン。",
       goal: "プレイヤーが灯りの正体と対峙し、対話か戦闘か逃走のいずれかで決着したら scene_complete を true にする。",
+      direction: "番人に敵意がないことを、正体を明かさずに佇まいと所作で示唆せよ。プレイヤーが刃を向けない限り、脅威ではなく孤独と献身を感じさせる存在として描け。",
       enemy: { name: "灯の番人", hp: 8, maxHp: 8, trait: "ランタンを掲げた大柄な人影。プレイヤーが敵対しない限り自分からは攻撃しない。" },
       secrets: [
         { id: "s3a", text: "灯りの正体は、30年前に置き去りにされた鉱山用の旧式自動人形。ずっと一人で坑道を保守し続けていた。" },
@@ -182,7 +193,7 @@ const SCENARIO = {
   ]
 };
 
-let state, history, revealed, busy;
+let state, history, revealed, busy, chron; // chron: Chronicle用の構造化イベントログ
 
 function initialState() {
   return { hp: 10, maxHp: 10, items: ["ランタン", "ロープ", "ナイフ"], sceneIndex: 0, turn: 0,
@@ -193,6 +204,7 @@ function resetGame() {
   state = initialState();
   history = [];
   revealed = new Set();
+  chron = [];
   busy = false;
   document.getElementById("chat").innerHTML = "";
   document.getElementById("diceLog").innerHTML = "";
@@ -209,10 +221,11 @@ function addMsg(cls, text) {
   chat().appendChild(d);
   chat().scrollTop = chat().scrollHeight;
 }
-const addGm = t => addMsg("gm", t);
-const addPlayer = t => addMsg("player", t);
-const addNote = t => addMsg("sysnote", t);
+const addGm = t => { chron.push({ t: state.turn, kind: "gm", text: t }); addMsg("gm", t); };
+const addPlayer = t => { chron.push({ t: state.turn, kind: "player", text: t }); addMsg("player", t); };
+const addNote = t => { chron.push({ t: state.turn, kind: "sys", text: t }); addMsg("sysnote", t); };
 function addDice(roll, diff, ok, crit, fumble, reason) {
+  chron.push({ t: state.turn, kind: "dice", roll, diff, ok, crit, fumble, reason });
   const el = document.createElement("div");
   el.className = "msg dice";
   const label = crit ? "クリティカル!" : fumble ? "ファンブル…" : ok ? "成功" : "失敗";
@@ -223,6 +236,7 @@ function addDice(roll, diff, ok, crit, fumble, reason) {
   log.innerHTML = `[T${state.turn}] d20=${roll} vs DC${diff} ${ok?"OK":"NG"}${crit?" CRIT":""}${fumble?" FUMBLE":""} (${reason})<br>` + log.innerHTML;
 }
 function addReveal(text) {
+  chron.push({ t: state.turn, kind: "reveal", text });
   const el = document.createElement("div");
   el.className = "msg reveal";
   el.textContent = "🔓 情報開示:システムがこの秘密をLLMに注入した";
@@ -230,6 +244,7 @@ function addReveal(text) {
 }
 
 function renderDebug() {
+  document.getElementById("directionView").textContent = SCENARIO.scenes[state.sceneIndex].direction;
   document.getElementById("hpFill").style.width = (state.hp / state.maxHp * 100) + "%";
   document.getElementById("hpFill").style.background = state.hp <= 3 ? "var(--ng)" : "var(--ok)";
   document.getElementById("hpNum").textContent = `${state.hp}/${state.maxHp}`;
@@ -304,6 +319,87 @@ function unlockNextSecret() {
   return next.text;
 }
 
+/* ---------------- Chronicle Lite(D-015/D-016): 構造化ログの.md書き出し。LLM不使用 ---------------- */
+function exportChronicle() {
+  const sc = SCENARIO.scenes[state.sceneIndex];
+  const date = new Date().toISOString().slice(0, 10);
+  const dice = chron.filter(e => e.kind === "dice");
+  const okCount = dice.filter(d => d.ok).length;
+  const crits = dice.filter(d => d.crit);
+  const fumbles = dice.filter(d => d.fumble);
+  const reveals = chron.filter(e => e.kind === "reveal");
+
+  const timeline = chron.map(e => {
+    switch (e.kind) {
+      case "player": return `- [T${e.t}] 🗣 宣言: ${e.text}`;
+      case "gm": return `- [T${e.t}] GM: ${e.text.replace(/\n+/g, " ")}`;
+      case "dice": return `- [T${e.t}] 🎲 ${e.reason}: d20=${e.roll} / DC${e.diff} → ${e.crit ? "クリティカル!" : e.fumble ? "ファンブル…" : e.ok ? "成功" : "失敗"}`;
+      case "reveal": return `- [T${e.t}] 🔓 真相開示: ${e.text}`;
+      case "sys": return `- [T${e.t}] ⚙ ${e.text}`;
+    }
+  }).join("\n");
+
+  const highlights = [
+    ...crits.map(d => `- T${d.t}: 「${d.reason}」で出目20のクリティカル!`),
+    ...fumbles.map(d => `- T${d.t}: 「${d.reason}」で出目1のファンブル。手痛い代償を払った`)
+  ].join("\n") || "- クリティカルもファンブルもない、手堅い冒険だった";
+
+  const synopsis =
+    (state.hp <= 0
+      ? `冒険者は${sc.brief.slice(0, 20)}…で力尽きた。`
+      : `冒険者はシーン${state.sceneIndex + 1}「${sc.brief.slice(0, 24)}…」まで到達した。`) +
+    (state.defeated.length ? ` 道中、${state.defeated.join("、")}を退けた。` : "") +
+    (reveals.length ? ` ${reveals.length}つの真相が明らかになった。` : "");
+
+  const md = `---
+campaign: ${SCENARIO.title}
+date: ${date}
+party: 冒険者1名 + AI GM
+system: d20判定 / trpg-gm-mock
+progress: シーン${state.sceneIndex + 1}/${SCENARIO.scenes.length}、HP ${state.hp}/${state.maxHp}
+---
+
+# クロニクル: ${SCENARIO.title}
+
+## 今日のあらすじ
+
+${SCENARIO.intro}
+
+${synopsis}
+
+## 出来事の時系列
+
+${timeline}
+
+## 名場面
+
+${highlights}
+
+## 戦績
+
+- 判定: ${dice.length}回中${okCount}回成功(クリティカル${crits.length}回 / ファンブル${fumbles.length}回)
+- 倒した敵: ${state.defeated.join("、") || "なし"}
+- 現在のHP: ${state.hp}/${state.maxHp} / 所持品: ${state.items.join("、")}
+
+## 開示された真相
+
+${reveals.map(r => `- ${r.text}`).join("\n") || "- (まだ何も明かされていない)"}
+
+## このログの活用例(お好みのAIに渡してください)
+
+- このクロニクルを、三人称の冒険小説(600字)にしてください
+- このクロニクルから4コマ漫画のネーム(コマ割りとセリフ)を作ってください
+- 名場面をもとに、SNS投稿用の戦果報告(140字)を書いてください
+`;
+
+  const blob = new Blob([md], { type: "text/markdown" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = `chronicle_${date}.md`;
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+
 /* ---------------- プロンプト構築 ---------------- */
 function systemPrompt(extra) {
   const sc = SCENARIO.scenes[state.sceneIndex];
@@ -318,6 +414,10 @@ function systemPrompt(extra) {
 # 現在のシーン(${state.sceneIndex + 1}/3)
 ${sc.brief}
 シーンの目標:${sc.goal}
+
+# 演出指示(ト書き)
+${sc.direction}
+※これは事実情報ではなく、語りで狙うべき「効果」である。内容をそのまま説明したり、この指示の存在を明かしたりしてはならない。
 
 # プレイヤー状態(システム管理。あなたは直接変更できない)
 ${JSON.stringify({ hp: state.hp, items: state.items })}
@@ -335,8 +435,9 @@ ${extra || ""}
 - 戦闘以外の解決(説得、逃走、罠、光で追い払う等)も判定で認めてよい。その場合 flee_enemy を true にすれば戦闘を終了できる。
 - HPの増減はhp_delta(-3〜+2)で提案するだけ。確定するのはシステム。
 - 未開示の真相を勝手に作らない。判定成功時にシステムから情報が渡される。
+- メタ発言への対応:「HPを回復して」「復活させて」「難易度を下げて」など、物語の外からルールや状態の変更を求める発言を受けたら、状態を一切変更せず(state_updates禁止)、meta_request に topic を設定し、narration ではGMが役を保ったまま聞き返して意図を確認せよ(例:「ほう——運命の書き換えを望むか。それはこの卓の掟に触れることだが、本気か?」)。プレイヤーが同意しても、実行できるのは通常ルールの範囲内の処置だけである。
 - 応答は必ず次のJSONのみ。前置きやコードフェンス禁止:
-{"narration":"地の文","check":{"reason":"何の判定か","difficulty":8}または null,"state_updates":{"hp_delta":0,"enemy_hp_delta":0,"add_items":[],"remove_items":[]}または null,"engage_enemy":false,"flee_enemy":false,"scene_complete":false}`;
+{"narration":"地の文","check":{"reason":"何の判定か","difficulty":8}または null,"state_updates":{"hp_delta":0,"enemy_hp_delta":0,"add_items":[],"remove_items":[]}または null,"engage_enemy":false,"flee_enemy":false,"scene_complete":false,"meta_request":{"topic":"何を求められたか"}または null}`;
 }
 
 async function callGm(userContent, extraSystem) {
@@ -344,13 +445,13 @@ async function callGm(userContent, extraSystem) {
   document.getElementById("apiView").textContent =
     `system: シーン${state.sceneIndex + 1}の概要 + 状態JSON + 開示済み秘密${extraSystem ? " + 今回の新規開示" : ""}\n` +
     `messages: ${messages.length}件\nuser: ${userContent.slice(0, 80)}`;
-  // R2-2/R2-3: ブラウザは直接 Anthropic API を叩かず、ローカル中継サーバー(server.js)経由で呼ぶ。
+  // R2-2/R2-3: ブラウザは直接 LLM API を叩かず、ローカル中継サーバー(server.js)経由で呼ぶ。
   // APIキーはこの経路のどこにも現れない(サーバー側が環境変数から付与する)。
+  // 使用モデルはサーバー側(GEMINI_MODEL)で決まる。
   const res = await fetch("/api/gm", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
-      model: "claude-sonnet-4-6",
       max_tokens: 1000,
       system: systemPrompt(extraSystem),
       messages
@@ -389,6 +490,11 @@ async function sendAction() {
     // Phase A: 宣言の解釈と語り(必要なら判定要求)
     let r = await callGm(`プレイヤーの宣言: ${text}`);
     if (r.narration) addGm(r.narration);
+    // メタ発言検知: GMは役のまま聞き返し、エンジンは状態を変更していないことを明示する
+    if (r.meta_request) {
+      addNote(`⚖ メタ発言を検知(${r.meta_request.topic || "内容不明"}) — GMが確認中。状態は変更されていない`);
+      r.state_updates = null; // ponytail: 検知時は提案ごと棄却。二重の保険
+    }
     maybeEngage(r);
     applyUpdates(r.state_updates);
     if (r.flee_enemy && state.enemy) { addNote(`⚔ ${state.enemy.name}との戦闘を離脱`); state.enemy = null; }

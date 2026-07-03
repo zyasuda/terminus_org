@@ -19,7 +19,11 @@ claude.ai 版は APIキーなしで `https://api.anthropic.com/v1/messages` を 
 
 社内再現版の必須要件:
 
-- **R2-1**: Anthropic APIキーは環境変数(`ANTHROPIC_API_KEY`)で管理する。コード・リポジトリへの埋め込み禁止
+- **R2-1**: APIキーは環境変数で管理する。コード・リポジトリへの埋め込み禁止
+  (2026-07-03改訂: Anthropic/Gemini両対応。環境変数 `LLM_API_KEY` のキー形式で
+  自動判別(sk-ant…→Anthropic、AIza…→Gemini)。モデルは `LLM_MODEL` で上書き可
+  (既定: claude-sonnet-4-6 / gemini-2.5-flash)。フロントは常にAnthropic形式、
+  Gemini時はserver.jsが変換する)
 - **R2-2**: ブラウザから API を直接呼ばない(キー露出とCORSの両面で不可)。
   ローカルの中継サーバーを1本立て、ブラウザ→中継→Anthropic API の経路とする
 - **R2-3**: 中継サーバーは最小構成でよい(Node.js + 数十行程度)。認証・マルチユーザー対応は不要(localhost前提)
@@ -28,19 +32,19 @@ claude.ai 版は APIキーなしで `https://api.anthropic.com/v1/messages` を 
 
 ```
 [ブラウザ: index.html(UI+ゲームロジック)]
-        │ POST /api/gm  (JSON)
+        │ POST /api/gm  (Anthropic形式のJSON)
         ▼
-[ローカル中継サーバー: server.js]
-        │ POST https://api.anthropic.com/v1/messages
-        │ (ANTHROPIC_API_KEY を付与)
+[ローカル中継サーバー: server.js]  ← ここでGemini形式に変換
+        │ POST https://generativelanguage.googleapis.com/v1beta/models/{MODEL}:generateContent
+        │ (GEMINI_API_KEY を付与、responseMimeType=application/json でJSON出力を強制)
         ▼
-[Anthropic API: claude-sonnet-4-6]
+[Gemini API: gemini-2.5-flash(既定)]
 ```
 
 - **R3-1**: フロントは単一HTML(vanilla JS)を維持する。フレームワーク・ビルド不要
 - **R3-2**: ゲームロジック(状態管理・ダイス・開示制御)はフロント側に置く(モック段階の割り切り。
   製品化時にサーバーへ移す前提をコメントで明記)
-- **R3-3**: モデルは `claude-sonnet-4-6`、`max_tokens: 1000`
+- **R3-3**: モデルはサーバー側の `GEMINI_MODEL` で決定(既定: gemini-2.5-flash)、`max_tokens: 1000`
 
 ## 4. 機能要件
 

@@ -9,6 +9,10 @@ docs/ブレスト_オリジナル.md
 design/*.png
 design/*.psd
 
+# Secrets
+.env
+**/.env
+
 # OS artifacts
 .DS_Store
 *.swp
