@@ -76,11 +76,6 @@
   }
   .pic { align-self: center; max-width: 86%; }
   .pic img { width: 100%; display: block; border-radius: 10px; border: 1px solid var(--line); }
-  #gateBar { display: none; justify-content: center; padding: 8px 16px 0; }
-  #gateBar button {
-    background: rgba(232,163,61,.12); border: 1px solid var(--lantern-dim); color: var(--lantern);
-    border-radius: 8px; padding: 8px 20px; font-size: 13px; cursor: pointer; letter-spacing: .04em;
-  }
   #fx { position: fixed; inset: 0; pointer-events: none; opacity: 0; z-index: 99; }
   #fx.crit { background: radial-gradient(circle, rgba(255,215,120,.55), transparent 70%); animation: fxflash .6s ease-out; }
   #fx.fumble { background: radial-gradient(circle, rgba(217,107,107,.5), transparent 70%); animation: fxflash .6s ease-out; }
@@ -141,8 +136,6 @@
 <main>
   <div id="chatCol">
     <div id="chat"></div>
-    <!-- セーフティ・ゲート: システムが進行条件の充足を検知したときだけ出現(GEMINI試案1-3) -->
-    <div id="gateBar"><button onclick="proceedScene()">▶ 奥へ進む — 手がかりは掴んだ</button></div>
     <div id="inputRow">
       <!-- isComposing/keyCode 229: 日本語IMEの変換確定Enterでは送信しない -->
       <input id="playerInput" placeholder="行動を宣言(例:灯りに近づいて様子を見る)" onkeydown="if(event.key==='Enter'&&!event.isComposing&&event.keyCode!==229)sendAction()">
@@ -529,7 +522,6 @@ function renderTokens() {
 
 function renderDebug() {
   renderTokens();
-  document.getElementById("gateBar").style.display = gateReady() ? "flex" : "none";
   const curScene = SCENARIO.scenes[state.sceneIndex];
   document.getElementById("directionView").textContent = curScene.report ? reportDirection() : curScene.direction;
   document.getElementById("hpFill").style.width = (state.hp / state.maxHp * 100) + "%";
@@ -681,30 +673,6 @@ function unlockNextSecret() {
   if (!next) return null;
   revealed.add(next.id);
   return next; // {id, entity, surface, text, img?}
-}
-
-/* ---- セーフティ・ゲート(GEMINI試案1-3): 進行条件の監視はシステム専権 ---- */
-// 条件: 最終シーン以外で、現シーンの秘密を1つ以上開示済み・非戦闘中・生存
-function gateReady() {
-  const sc = SCENARIO.scenes[state.sceneIndex];
-  return state.hp > 0 && !state.enemy &&
-    state.sceneIndex < SCENARIO.scenes.length - 1 &&
-    sc.secrets.some(s => revealed.has(s.id));
-}
-
-// ボタンによる進行はLLMを呼ばない(シーン冒頭は事前執筆データの再生 = D-011柱1)
-function proceedScene() {
-  if (busy || !gateReady()) return;
-  state.turn++;
-  addPlayer("奥へ進む");
-  state.sceneIndex++;
-  state.enemy = null;
-  state.noProgressTurns = 0; // 明確な前進なのでカウンタをリセット
-  history = []; // シーン切替で履歴リセット(既存仕様と同じ)
-  addNote(`—— シーン${state.sceneIndex + 1} ——(進行条件達成による移動)`);
-  if (SCENARIO.scenes[state.sceneIndex].img) addPic(SCENARIO.scenes[state.sceneIndex].img);
-  addGm(SCENARIO.scenes[state.sceneIndex].brief + "\n\nどうする?");
-  renderDebug();
 }
 
 /* ---------------- Chronicle Lite(D-015/D-016): 構造化ログの.md書き出し。LLM不使用 ----------------
