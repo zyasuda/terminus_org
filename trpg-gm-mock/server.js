@@ -12,6 +12,19 @@ const http = require("http");
 const fs = require("fs");
 const path = require("path");
 
+// .env ファイルを読み込む
+const envPath = path.join(__dirname, ".env");
+if (fs.existsSync(envPath)) {
+  const envContent = fs.readFileSync(envPath, "utf-8");
+  envContent.split("\n").forEach(line => {
+    const trimmed = line.trim();
+    if (trimmed && !trimmed.startsWith("#")) {
+      const [key, ...valueParts] = trimmed.split("=");
+      process.env[key.trim()] = valueParts.join("=").trim();
+    }
+  });
+}
+
 const PORT = process.env.PORT || 8787;
 
 // 両方のキーを併存させ、LLM_BACKEND(anthropic|gemini)で使う方を選ぶ。
@@ -69,7 +82,10 @@ async function callAnthropic(payload) {
   }
   const data = JSON.parse(raw);
   const text = (data.content || []).map(b => b.text || "").join("");
-  return { status: 200, body: { content: [{ type: "text", text }] } };
+  // usage(トークン消費)を素通しする。フロント側で通算表示・コスト概算に使う
+  const u = data.usage || {};
+  return { status: 200, body: { content: [{ type: "text", text }],
+    usage: { input_tokens: u.input_tokens || 0, output_tokens: u.output_tokens || 0 } } };
 }
 
 /* ---- Gemini: Anthropic形式 → generateContent 形式に変換 ---- */
@@ -109,7 +125,10 @@ async function callGemini(payload) {
   }
   const data = JSON.parse(raw);
   const text = (data.candidates?.[0]?.content?.parts || []).map(p => p.text || "").join("");
-  return { status: 200, body: { content: [{ type: "text", text }] } };
+  // GeminiのusageMetadataをAnthropic形式に合わせて素通しする
+  const um = data.usageMetadata || {};
+  return { status: 200, body: { content: [{ type: "text", text }],
+    usage: { input_tokens: um.promptTokenCount || 0, output_tokens: um.candidatesTokenCount || 0 } } };
 }
 
 const server = http.createServer((req, res) => {
@@ -168,3 +187,7 @@ const server = http.createServer((req, res) => {
 server.listen(PORT, () => {
   console.log(`中継サーバー起動: http://localhost:${PORT} (バックエンド: ${BACKEND} / モデル: ${MODEL})`);
 });
+
+// プレイセッション中の不意のプロセス死を防ぐ(原因はログに残して生存を優先)
+process.on("uncaughtException", e => console.error("uncaughtException:", e));
+process.on("unhandledRejection", e => console.error("unhandledRejection:", e));
