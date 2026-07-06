@@ -306,7 +306,9 @@ function initialState() {
            lastAction: null,
            // 前進(秘密開示・判定成功・入手・戦闘・シーン進行)のない連続ターン数。
            // 停滞ナッジ(soft/strong)の閾値判定に使う。頻度決定権はシステム側。
-           noProgressTurns: 0
+           noProgressTurns: 0,
+           // 直前ターンでプレイヤーがダメージを受けたか。次ターン頭で気遣いキューを1回だけ発行する
+           pendingInjuryConcern: false
          };
 }
 
@@ -324,6 +326,14 @@ function takeStagnationCue() {
     return `\n# 停滞への対応(軽・任意)\nプレイヤーは目立った前進のないまま${n}手番が過ぎている。プレイヤーが迷っている可能性がある。同行者の一言(companion)で、状況を短く整理するか、依頼の目的をさりげなく思い出させよ。`;
   }
   return "";
+}
+
+// 直前ターンでプレイヤーが負傷していれば、次ターン頭で1回だけ気遣いを促す(時差成立)。
+// フラグは取り出した時点で消費する(2ターン続けて発行しない)
+function takeInjuryCue() {
+  if (!state.pendingInjuryConcern) return "";
+  state.pendingInjuryConcern = false;
+  return `\n# 気遣いの機会(この手番のみ・任意)\nプレイヤーは直前のターンで負傷した。同行者の誰か(companion)が、短く様子を尋ねるか気遣ってよい。深刻すぎる怪我でなければ軽口でもよい。場面が急を要し、気遣う余裕がないなら無理に入れず companion は null でよい。`;
 }
 
 // 「今の状況」の指紋。プレイヤーの宣言と合わせて、前回と完全一致するかの判定に使う。
@@ -584,6 +594,7 @@ function applyUpdates(u, opts = {}) {
 function applyUpdatesLogged(u, opts) {
   const before = state.hp;
   applyUpdates(u, opts);
+  if (state.hp < before) state.pendingInjuryConcern = true;
   if (state.hp !== before) {
     chron.push({ t: state.turn, ts: Date.now(), kind: "hp", from: before, to: state.hp });
   }
@@ -1043,15 +1054,18 @@ async function sendAction() {
   // 次のターンからカウンタがリセットされる=蓄積は常に「これまで」の分だけ)
   const stagnationCue = takeStagnationCue();
   const nudgeActive = state.noProgressTurns >= STAGNATION_SOFT;
+  // 直前ターンで負傷していれば、気遣いの機会を1回だけ渡す(呼びかけ応答と同じ優先度で扱う)
+  const injuryCue = takeInjuryCue();
+  const concernActive = injuryCue !== "";
   const itemsBefore = state.items.length;
   let progressed = false; // 秘密開示・判定成功・入手・戦闘・シーン進行のいずれかが起きたか
 
   try {
     // Phase A: 宣言の解釈と語り(必要なら判定要求)
-    let r = await callGm(`プレイヤーの宣言: ${text}`, banterCue + stagnationCue);
+    let r = await callGm(`プレイヤーの宣言: ${text}`, banterCue + stagnationCue + injuryCue);
     if (r.narration) addGm(r.narration);
-    // 停滞中は、迷子への声かけを頻度制御より優先する(=呼びかけ応答と同じ扱い)
-    maybeCompanion(r, addressed || nudgeActive);
+    // 停滞中・負傷直後は、頻度制御より優先して声かけを通す(=呼びかけ応答と同じ扱い)
+    maybeCompanion(r, addressed || nudgeActive || concernActive);
     // メタ発言検知: GMは役のまま聞き返し、エンジンは状態を変更していないことを明示する
     if (r.meta_request) {
       addNote(`⚖ メタ発言を検知(${r.meta_request.topic || "内容不明"}) — GMが確認中。状態は変更されていない`);
