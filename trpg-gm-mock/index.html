@@ -248,6 +248,7 @@ const SCENARIO = {
       goal: "プレイヤーが第三坑道(封鎖区画)へ入る手段を見つけたら scene_complete を true にする。",
       direction: "封鎖柵は「外から閉じ込める」ためではなく「内側の意思で維持されている」という違和感を、断定せずに漂わせよ。危険の予感と同時に、奥にあるものへの哀感を予感させよ。",
       enemy: { name: "錆喰い", hp: 5, maxHp: 5, trait: "レールの錆を喰う犬ほどの甲殻獣。縄張りに入る者を威嚇し、襲う。光を嫌う。", img: "rust_eater.jpg" },
+      encounterChance: 0.35, // 1ターンごとの強制遭遇抽選(戦闘ルート検証のため)
       loot: [],
       secrets: [
         { id: "s2a", entity: "封鎖の木柵", surface: "古いが、なぜか崩れていない木柵", text: "封鎖の木柵は内側から何度も修繕されている。中の『何か』は外に出たくないのだ。" },
@@ -642,12 +643,15 @@ function takeBanterCue() {
   return `\n# 掛け合い許可(この手番のみ・任意)\n先ほど${toName}が軽口をこぼした:「${p.bokeLine || "(先の一言)"}」\nこれに${fromName}が短く反応してよい。${fromName}らしい呆れ・皮肉、あるいは「ふん」と流す黙殺でもよい。40字以内。companion に who:"${p.from}" で入れ、aside:true とせよ。\nトーン見本(そのまま使わず、場に合わせて書き直せ): ${samples}\n※場面が緊迫・厳粛、または今この反応が不自然なら、無理に入れず companion は null でよい。`;
 }
 
-// LLMの戦闘開始要求。シーンに敵が定義済みで、未撃破・未交戦の場合のみシステムが許可する
+// 戦闘開始はLLMの提案(engage_enemy)に加え、システム側の確率抽選でも起こる(encounterChance)。
+// LLMの気分に依存させず、戦闘ルートの再現性・検証可能性を確保する
 function maybeEngage(r) {
   const sc = SCENARIO.scenes[state.sceneIndex];
-  if (r.engage_enemy && sc.enemy && !state.enemy && !state.defeated.includes(sc.enemy.name)) {
+  if (!sc.enemy || state.enemy || state.defeated.includes(sc.enemy.name)) return;
+  const forced = sc.encounterChance && Math.random() < sc.encounterChance;
+  if (r.engage_enemy || forced) {
     state.enemy = { ...sc.enemy };
-    addNote(`⚔ 戦闘開始:${state.enemy.name}(HP管理はシステム側)`);
+    addNote(`⚔ 戦闘開始:${state.enemy.name}(HP管理はシステム側)${forced ? " — 抽選による強制遭遇" : ""}`);
     if (state.enemy.img) addPic(state.enemy.img); // imgを持つ敵のみ表示(番人は③層のため持たない)
   }
 }
