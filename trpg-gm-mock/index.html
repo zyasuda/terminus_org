@@ -448,13 +448,13 @@ function addMsg(cls, text) {
   chat().appendChild(d);
   chat().scrollTop = chat().scrollHeight;
 }
-const addGm = t => { chron.push({ t: state.turn, kind: "gm", text: t }); addMsg("gm", t); };
-const addPlayer = t => { chron.push({ t: state.turn, kind: "player", text: t }); addMsg("player", t); };
-const addNote = t => { chron.push({ t: state.turn, kind: "sys", text: t }); addMsg("sysnote", t); };
+const addGm = t => { chron.push({ t: state.turn, ts: Date.now(), kind: "gm", text: t }); addMsg("gm", t); };
+const addPlayer = t => { chron.push({ t: state.turn, ts: Date.now(), kind: "player", text: t }); addMsg("player", t); };
+const addNote = t => { chron.push({ t: state.turn, ts: Date.now(), kind: "sys", text: t }); addMsg("sysnote", t); };
 // 話者(who)対応。既定はガレス。リディアは別スタイルで表示する。
 const addCompanion = (t, who = "gareth") => {
   const name = (CAST[who] && CAST[who].name) || "ガレス";
-  chron.push({ t: state.turn, kind: "companion", who, text: t });
+  chron.push({ t: state.turn, ts: Date.now(), kind: "companion", who, text: t });
   addMsg("companion companion-" + who, name + "「" + t + "」");
 };
 // クリティカル/ファンブル時の画面演出(フラッシュ+シェイク)
@@ -482,7 +482,7 @@ function addDice(roll, diff, ok, crit, fumble, reason) {
       const label = crit ? "クリティカル!" : fumble ? "ファンブル…" : ok ? "成功" : "失敗";
       el.insertAdjacentHTML("beforeend", ` <b class="${ok ? "ok" : "ng"}">${label}</b>`);
       if (crit || fumble) screenFx(crit ? "crit" : "fumble");
-      chron.push({ t: state.turn, kind: "dice", roll, diff, ok, crit, fumble, reason });
+      chron.push({ t: state.turn, ts: Date.now(), kind: "dice", roll, diff, ok, crit, fumble, reason });
       const log = document.getElementById("diceLog");
       log.innerHTML = `[T${state.turn}] d20=${roll} vs DC${diff} ${ok?"OK":"NG"}${crit?" CRIT":""}${fumble?" FUMBLE":""} (${esc(reason)})<br>` + log.innerHTML;
       resolve();
@@ -499,7 +499,7 @@ function addPic(src) {
   chat().appendChild(d);
 }
 function addReveal(text, img) {
-  chron.push({ t: state.turn, kind: "reveal", text });
+  chron.push({ t: state.turn, ts: Date.now(), kind: "reveal", text });
   const el = document.createElement("div");
   el.className = "msg reveal";
   el.textContent = "🔓 情報開示:システムがこの秘密をLLMに注入した";
@@ -585,7 +585,7 @@ function applyUpdatesLogged(u, opts) {
   const before = state.hp;
   applyUpdates(u, opts);
   if (state.hp !== before) {
-    chron.push({ t: state.turn, kind: "hp", from: before, to: state.hp });
+    chron.push({ t: state.turn, ts: Date.now(), kind: "hp", from: before, to: state.hp });
   }
 }
 
@@ -763,6 +763,18 @@ function exportChronicle() {
   const fumbles = dice.filter(d => d.fumble);
   const reveals = chron.filter(e => e.kind === "reveal");
 
+  // 実プレイ時間: 隣接イベント間の間隔を合計する。長い放置(離席・翌日再開)は
+  // プレイ時間としてカウントしない(1回のギャップ上限3分でクランプ)
+  const PLAYTIME_GAP_CAP_MS = 3 * 60 * 1000;
+  let playtimeMs = 0;
+  for (let i = 1; i < chron.length; i++) {
+    if (!chron[i].ts || !chron[i - 1].ts) continue; // 旧セーブ(ts未記録)との混在対策
+    const gap = chron[i].ts - chron[i - 1].ts;
+    if (gap > 0) playtimeMs += Math.min(gap, PLAYTIME_GAP_CAP_MS);
+  }
+  const playtimeMin = Math.round(playtimeMs / 60000);
+  const playtimeLabel = playtimeMin < 1 ? "1分未満" : `約${playtimeMin}分`;
+
   const timeline = chron.map(e => {
     switch (e.kind) {
       case "player": return `- [T${e.t}] 🗣 宣言: ${e.text}`;
@@ -804,6 +816,7 @@ party: ${partyLine}
 main_characters: ${ref.cast.join(" / ")}
 system: d20判定 / trpg-gm-mock
 progress: シーン${state.sceneIndex + 1}/${SCENARIO.scenes.length}、HP ${state.hp}/${state.maxHp}
+playtime: ${playtimeLabel}
 ---
 
 # クロニクル: ${SCENARIO.title}
@@ -828,6 +841,7 @@ ${highlights}
 
 ## 戦績
 
+- プレイ時間: ${playtimeLabel}(全${state.turn}ターン)
 - 判定: ${dice.length}回中${okCount}回成功(クリティカル${crits.length}回 / ファンブル${fumbles.length}回)
 - 倒した敵: ${state.defeated.join("、") || "なし"}
 - 現在のHP: ${state.hp}/${state.maxHp} / 所持品: ${state.items.join("、")}
