@@ -20,10 +20,12 @@ claude.ai 版は APIキーなしで `https://api.anthropic.com/v1/messages` を 
 社内再現版の必須要件:
 
 - **R2-1**: APIキーは環境変数で管理する。コード・リポジトリへの埋め込み禁止
-  (2026-07-03改訂: Anthropic/Gemini両対応。環境変数 `LLM_API_KEY` のキー形式で
-  自動判別(sk-ant…→Anthropic、AIza…→Gemini)。モデルは `LLM_MODEL` で上書き可
-  (既定: claude-sonnet-4-6 / gemini-2.5-flash)。フロントは常にAnthropic形式、
-  Gemini時はserver.jsが変換する)
+  (2026-07-03改訂: Anthropic/Gemini両対応。2026-07-07改訂: OpenAI対応を追加。
+  環境変数 `LLM_API_KEY` のキー形式で自動判別
+  sk-ant…→Anthropic、AIza…→Gemini、sk-…→OpenAI)。
+  モデルは `LLM_MODEL` で上書き可。
+  既定: claude-sonnet-4-6 / gemini-2.5-flash / gpt-5.4-mini。
+  フロントは常に共通形式、Gemini/OpenAI時はserver.jsが変換する
 - **R2-2**: ブラウザから API を直接呼ばない(キー露出とCORSの両面で不可)。
   ローカルの中継サーバーを1本立て、ブラウザ→中継→Anthropic API の経路とする
 - **R2-3**: 中継サーバーは最小構成でよい(Node.js + 数十行程度)。認証・マルチユーザー対応は不要(localhost前提)
@@ -34,17 +36,23 @@ claude.ai 版は APIキーなしで `https://api.anthropic.com/v1/messages` を 
 [ブラウザ: index.html(UI+ゲームロジック)]
         │ POST /api/gm  (Anthropic形式のJSON)
         ▼
-[ローカル中継サーバー: server.js]  ← ここでGemini形式に変換
-        │ POST https://generativelanguage.googleapis.com/v1beta/models/{MODEL}:generateContent
-        │ (GEMINI_API_KEY を付与、responseMimeType=application/json でJSON出力を強制)
+[ローカル中継サーバー: server.js]  ← ここで各backend形式に変換
+        │ Anthropic: POST https://api.anthropic.com/v1/messages
+        │ Gemini: POST https://generativelanguage.googleapis.com/v1beta/models/{MODEL}:generateContent
+        │ OpenAI: POST https://api.openai.com/v1/responses
+        │ (各APIキーを付与、JSON出力を強制)
         ▼
-[Gemini API: gemini-2.5-flash(既定)]
+[LLM API: LLM_BACKEND で選択]
 ```
 
 - **R3-1**: フロントは単一HTML(vanilla JS)を維持する。フレームワーク・ビルド不要
 - **R3-2**: ゲームロジック(状態管理・ダイス・開示制御)はフロント側に置く(モック段階の割り切り。
   製品化時にサーバーへ移す前提をコメントで明記)
-- **R3-3**: モデルはサーバー側の `GEMINI_MODEL` で決定(既定: gemini-2.5-flash)、`max_tokens: 1000`
+- **R3-3**: モデルはサーバー側の `LLM_MODEL` で決定、`max_tokens: 1000`
+  - 低消費のOpenAI構成例:
+    - `LLM_BACKEND=openai`
+    - `OPENAI_API_KEY=...`
+    - `LLM_MODEL=gpt-5.4-mini`
 
 ## 4. 機能要件
 
@@ -84,6 +92,10 @@ claude.ai 版は APIキーなしで `https://api.anthropic.com/v1/messages` を 
 ### 4.5 戦闘
 
 - **R4-13**: 戦闘開始はLLMの `engage_enemy` 要求を、システムが検証(シーンに敵定義あり・未撃破・未交戦)して許可
+  - 奇襲は敵定義に `ambush` がある場合のみ、システム側がプレイヤー宣言を検査して発生させる
+  - プレイヤーが警戒・確認を宣言せず危険領域へ不用意に踏み込んだ時だけ、気配察知判定を行う
+  - 判定成功時は奇襲を回避し、判定失敗時のみ敵の登場・先制行動・戦闘開始をシステムが確定する
+  - 戦闘開始時に敵名・特徴が語られていない場合、システム側で最低限の登場描写を補う
 - **R4-14**: 攻撃は必ず判定。成功時のみ `enemy_hp_delta` を受理
 - **R4-15**: 非戦闘解決(説得・逃走・環境利用)を判定で認め、`flee_enemy` で戦闘終了できる
 
