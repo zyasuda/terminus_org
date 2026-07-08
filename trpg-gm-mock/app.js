@@ -132,7 +132,11 @@ function resetGame() {
   document.getElementById("chat").innerHTML = "";
   document.getElementById("diceLog").innerHTML = "";
   if (SCENARIO.scenes[0].img) addPic(SCENARIO.scenes[0].img);
-  addGm(SCENARIO.intro + "\n\n" + SCENARIO.scenes[0].brief + "\n\nどうする?");
+  const openingBrief = SCENARIO.intro + "\n\n" + SCENARIO.scenes[0].brief;
+  addGm(openingBrief + "\n\nどうする?");
+  // シーン切替時と同じ理由(app.js内の該当コメント参照)で、LLMの会話履歴にも残しておく
+  history.push({ role: "user", content: "【システム】セッションが始まった。" });
+  history.push({ role: "assistant", content: JSON.stringify({ narration: openingBrief, companion: null, check: null, state_updates: null, engage_enemy: false, flee_enemy: false, scene_complete: false, meta_request: null }) });
   renderDebug();
 }
 
@@ -147,6 +151,43 @@ function addMsg(cls, text) {
   d.textContent = text;
   chat().appendChild(d);
   chat().scrollTop = chat().scrollHeight;
+}
+// LLMはプロンプトの文字数指示を守り切らないことがあるため、GMの語りは表示前に必ず短く切る(子ども向け可読性要件、GDD 1.7)
+// 「」の中の句点では区切らない(鍵カッコが閉じる前に切れるのを防ぐ)。文の途中では切らず、常に文の切れ目で止める。
+function trimNarration(text) {
+  if (!text) return text;
+  const sentences = [];
+  let depth = 0, start = 0;
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i];
+    if (c === "「") depth++;
+    else if (c === "」") depth = Math.max(0, depth - 1);
+    else if ("。!?！？".includes(c) && depth === 0) {
+      sentences.push(text.slice(start, i + 1));
+      start = i + 1;
+    }
+  }
+  if (start < text.length) sentences.push(text.slice(start));
+
+  let out = "";
+  for (let i = 0; i < sentences.length; i++) {
+    if (out && (out.length + sentences[i].length > 100 || i >= 3)) break;
+    out += sentences[i];
+  }
+  if (!out) out = text;
+
+  // 1文だけで100字を超える場合も、そのまま通さず切る(鍵カッコの途中で切れないよう少しだけ余裕を見る)
+  if (out.length > 100) {
+    let cut = out.slice(0, 100);
+    let d = 0;
+    for (const c of cut) { if (c === "「") d++; else if (c === "」") d = Math.max(0, d - 1); }
+    if (d > 0) {
+      const closeIdx = out.indexOf("」", 100);
+      cut = (closeIdx !== -1 && closeIdx < 140) ? out.slice(0, closeIdx + 1) : out.slice(0, 100);
+    }
+    out = cut;
+  }
+  return out;
 }
 const addGm = t => { chron.push({ t: state.turn, ts: Date.now(), kind: "gm", text: t }); addMsg("gm", t); };
 const addPlayer = t => { chron.push({ t: state.turn, ts: Date.now(), kind: "player", text: t }); addMsg("player", t); };
@@ -376,7 +417,7 @@ function maybeEngage(r) {
   if (r.engage_enemy) {
     state.enemy = { ...sc.enemy };
     if (!String(r.narration || "").includes(state.enemy.name)) {
-      addGm(`${state.enemy.name}が姿を現した。${state.enemy.trait}`);
+      addGm(`${state.enemy.name}が姿を現した。${state.enemy.surface || state.enemy.trait}`);
     }
     addNote(`⚔ 戦闘開始:${state.enemy.name}(HP管理はシステム側)`);
     if (state.enemy.img) addPic(state.enemy.img); // imgを持つ敵のみ表示(番人は③層のため持たない)
@@ -414,7 +455,7 @@ async function resolveAmbushIfNeeded(playerText) {
   }
 
   state.enemy = { ...ambush.enemy };
-  addGm(`${ambush.enemy.name}が暗がりから飛び出した。${ambush.enemy.trait}`);
+  addGm(`${ambush.enemy.name}が暗がりから飛び出した。${ambush.enemy.surface || ambush.enemy.trait}`);
   addNote(`⚔ 奇襲:${ambush.enemy.name}に先手を取られた`);
   if (state.enemy.img) addPic(state.enemy.img);
 
@@ -423,9 +464,9 @@ async function resolveAmbushIfNeeded(playerText) {
   addNote(`⚔ ${state.enemy.name}の先制攻撃: d20=${attackRoll} → ${hit ? "命中" : "外れ/かすめる"}`);
   if (hit) {
     applyUpdatesLogged({ hp_delta: -1 });
-    addGm(`${ambush.enemy.name}の牙がかすめ、熱い痛みが走る。`);
+    addGm(`${ambush.enemy.name}の牙が当たった。熱くて痛い。`);
   } else {
-    addGm(`${ambush.enemy.name}の牙は空を噛み、湿った岩壁に爪音だけが散った。`);
+    addGm(`${ambush.enemy.name}の牙は外れた。岩の壁に、爪の音だけが響いた。`);
   }
   return true;
 }
@@ -481,8 +522,13 @@ function systemPrompt(extra) {
   const failedCheckBlock = state.pendingFailedCheck
     ? `\n# 直前に失敗した判定\n${state.pendingFailedCheck.reason} は失敗している。この対象について、真相・正体・仕組み・最近の痕跡・内側/外側の構造などの確定情報を語ってはならない。見えた表層、危険、分からなさだけを描写せよ。`
     : "";
-  return `あなたはソロTRPGのゲームマスター。日本語で、簡潔で雰囲気のある語りをする。地の文は150字以内。
-文章は中学生にそのまま伝わる平易さで書く。抽象的な漢語で内面や状況を評価するな(例:「譲歩だ」「逡巡している」は不可)。評価語の代わりに、見えたこと・聞こえたことで示せ。坑道・軌条など絵が浮かぶ具象の名詞はそのまま使ってよい。
+  return `あなたはソロTRPGのゲームマスター。日本語の「である調」(だ・である。ですます調は禁止)で語る。地の文は3文以内、合計80字以内。1文は短く、主語と動詞だけのシンプルな形で書く。
+小学校高学年が読んですぐ分かる、やさしい言葉だけを使う。難しい漢語・比喩・抽象語は禁止(例:「遷回する」「制する」「悲鳴めいた」「逡巡」「譲歩」「甲殻」「獲物」「警戒音」「くねる」「佇まい」は不可)。内面や状況を評価語で語らず、見えたこと・聞こえたことをそのまま短い動詞で書け(例:「よける」「当たる」「外れる」「近づく」)。
+良い例:「廊下は暗くて静かだ。足音がよく響く。」
+悪い例:「薄明の廊下に、沈黙を湛えた気配が漂っている。」
+戦闘の描写も同じ基準を守る。動きを凝った言い回しで飾らない。一度に説明する情報は1つか2つまでにする。
+プレイヤーが「まとめて報告する」「全部話す」のように行動をまとめて宣言した時も、事実を箇条書き的に並べるな。相手の反応を交えた、つながりのある自然な会話として書け。
+「軌条」など説明なしで通じない言葉は使わず、やさしい言い換え(レール等)を使え。
 舞台は電気も内燃機関もない前近代の世界。現代の機器や語彙(懐中電灯・電灯・モーター・メートル等)を語りに出してはならない。
 
 # 現在のシーン(${state.sceneIndex + 1}/${SCENARIO.scenes.length})
@@ -624,7 +670,7 @@ async function sendAction() {
     // Phase A: 宣言の解釈と語り(必要なら判定要求)
     let r = await callGm(`プレイヤーの宣言: ${text}`, banterCue + stagnationCue + injuryCue);
     state.pendingFailedCheck = null;
-    if (r.narration) addGm(r.narration);
+    if (r.narration) addGm(trimNarration(r.narration));
     // 停滞中・負傷直後は、頻度制御より優先して声かけを通す(=呼びかけ応答と同じ扱い)
     maybeCompanion(r, addressed || nudgeActive || concernActive);
     // メタ発言検知: GMは役のまま聞き返し、エンジンは状態を変更していないことを明示する
@@ -674,7 +720,7 @@ async function sendAction() {
         `【システム】判定結果: d20=${roll}(DC${diff})→${outcome}。結果を描写せよ。${hint}${enemyDirective}`,
         extra
       );
-      if (r2.narration) addGm(r2.narration);
+      if (r2.narration) addGm(trimNarration(r2.narration));
       maybeCompanion(r2, false);
       maybeEngage(r2);
       // 敵ダメージは「判定成功のこの局面」でのみ受理(プロンプト契約のシステム側担保)
@@ -706,7 +752,12 @@ async function sendAction() {
         history = []; // シーン切替で履歴をリセット(状態はシステムが保持している証明)
         addNote(`—— シーン${state.sceneIndex + 1} ——`);
         if (SCENARIO.scenes[state.sceneIndex].img) addPic(SCENARIO.scenes[state.sceneIndex].img);
-        addGm(SCENARIO.scenes[state.sceneIndex].brief + "\n\nどうする?");
+        const newBrief = SCENARIO.scenes[state.sceneIndex].brief;
+        addGm(newBrief + "\n\nどうする?");
+        // このbriefはLLMへの会話履歴に無い(addGmはchron/画面用)。空のまま次ターンを呼ぶと
+        // LLMが「まだ語っていない」と誤認し、この場面をもう一度語り直してしまう。履歴に足しておく。
+        history.push({ role: "user", content: "【システム】シーンが切り替わった。" });
+        history.push({ role: "assistant", content: JSON.stringify({ narration: newBrief, companion: null, check: null, state_updates: null, engage_enemy: false, flee_enemy: false, scene_complete: false, meta_request: null }) });
       } else {
         addNote("—— 物語は決着した。おつかれさま。「最初から」で別の選択を試せる ——");
       }
