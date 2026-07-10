@@ -67,6 +67,13 @@ function clearSave() {
   try { localStorage.removeItem(SAVE_KEY); } catch (e) { /* no-op */ }
 }
 
+function setSceneBackdrop(src) {
+  const value = src
+    ? `url("images/${src}")`
+    : "linear-gradient(135deg, #151720 0%, #1e2230 100%)";
+  document.documentElement.style.setProperty("--scene-bg", value);
+}
+
 // chronの1件をDOMへ再生する(chronへの再pushはしない=保存済みログをそのまま画面に描き直すだけ)
 function renderChronEntry(e) {
   switch (e.kind) {
@@ -104,6 +111,7 @@ function restoreGame(saved) {
   chron = saved.chron || [];
   history = saved.history || [];
   revealed = new Set(saved.revealed || []);
+  setSceneBackdrop(SCENARIO.scenes[state.sceneIndex] && SCENARIO.scenes[state.sceneIndex].img);
   busy = false;
   document.getElementById("chat").innerHTML = "";
   document.getElementById("diceLog").innerHTML = "";
@@ -129,6 +137,7 @@ function resetGame() {
   revealed = new Set();
   chron = [];
   busy = false;
+  setSceneBackdrop(SCENARIO.scenes[0] && SCENARIO.scenes[0].img);
   document.getElementById("chat").innerHTML = "";
   document.getElementById("diceLog").innerHTML = "";
   if (SCENARIO.scenes[0].img) addPic(SCENARIO.scenes[0].img);
@@ -747,6 +756,7 @@ async function sendAction() {
     } else if (r.scene_complete) {
       if (state.sceneIndex < SCENARIO.scenes.length - 1) {
         state.sceneIndex++;
+        setSceneBackdrop(SCENARIO.scenes[state.sceneIndex] && SCENARIO.scenes[state.sceneIndex].img);
         state.enemy = null; // 戦闘はシーンをまたがない
         state.pendingFailedCheck = null;
         history = []; // シーン切替で履歴をリセット(状態はシステムが保持している証明)
