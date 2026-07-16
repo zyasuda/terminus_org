@@ -33,6 +33,9 @@ const CONTEXT_FILES = ["CAMPAIGN_01.md", "AI_DESIGN.md"];
 const OUTPUT_DIR = path.join(__dirname, "output");
 const CAMPAIGN_OUTPUT_DIR = process.env.CAMPAIGN_OUTPUT_DIR ||
   "/Users/yasuda_k/Desktop/Terminus/trpg-gm-mock2/public/data";
+// 画像の集約先はmock2のimagesフォルダ。下書きには /images/ファイル名 のパスだけを保持する
+const IMAGES_DIR = process.env.MOCK_IMAGES_DIR ||
+  "/Users/yasuda_k/Desktop/Terminus/trpg-gm-mock2/images";
 
 const KEYS = {
   anthropic: process.env.ANTHROPIC_API_KEY,
@@ -219,6 +222,47 @@ async function callOpenAICompatible(payload) {
     usage: { input_tokens: u.prompt_tokens || 0, output_tokens: u.completion_tokens || 0 } } };
 }
 
+/* mock2の読み込み時検証(trpg-gm-mock2/src/scenario.js validate)と同一ルール。
+   ここでNGを返せば、mock2側で起動時エラーになるデータを書き込まない */
+function validateCampaignData(campaign, chapter) {
+  const errs = [];
+  const st = campaign.style || {};
+  if (!st.narration || !st.readingLevel || !st.world) errs.push("campaign.style に narration/readingLevel/world が必要");
+  if (!Array.isArray(campaign.companions) || campaign.companions.length === 0) {
+    errs.push("campaign.companions が空");
+  } else {
+    campaign.companions.forEach((c, i) => {
+      if (!c.id || !c.name || !c.persona) errs.push(`companions[${i}] に id/name/persona が必要`);
+    });
+  }
+  if (!chapter.quest) errs.push("chapter.quest がない");
+  if (!chapter.intro) errs.push("chapter.intro がない");
+  if (!Array.isArray(chapter.scenes) || chapter.scenes.length === 0) {
+    errs.push("chapter.scenes が空");
+  } else {
+    const ids = new Set();
+    chapter.scenes.forEach((sc, i) => {
+      const label = `scene ${sc.id ?? i + 1}`;
+      if (!sc.brief || !sc.goal) errs.push(`${label}: brief/goal が必要`);
+      if (!Array.isArray(sc.secrets)) errs.push(`${label}: secrets は配列(空でも可)が必要`);
+      (sc.secrets || []).forEach(s => {
+        if (!s.id || !s.entity || !s.text) errs.push(`${label}: secret に id/entity/text が必要`);
+        if (ids.has(s.id)) errs.push(`secret id が重複: ${s.id}`);
+        ids.add(s.id);
+      });
+      if (sc.enemy && (!sc.enemy.name || typeof sc.enemy.hp !== "number" || typeof sc.enemy.maxHp !== "number")) {
+        errs.push(`${label}: enemy に name/hp/maxHp が必要`);
+      }
+      // TAS追加分: 進行ゲートが実在するsecretを指すか(scenario.jsにはない事前チェック)
+      const own = new Set((sc.secrets || []).map(s => s.id));
+      (sc.completeRequires?.secretsAny || []).forEach(id => {
+        if (!own.has(id)) errs.push(`${label}: completeRequires.secretsAny "${id}" がこのシーンのsecretsにない`);
+      });
+    });
+  }
+  return errs;
+}
+
 function readBody(req) {
   return new Promise(resolve => {
     let body = "";
@@ -244,8 +288,10 @@ const server = http.createServer(async (req, res) => {
       }
     }
     // dataFilesはプロンプトへ注入しない(③真相を含む構造化データのため表示のみ)
+    // ベースデータはmock2のpublic/data(エクスポート先)を正とする。二重管理による巻き戻り防止。
+    // mock2側が無い環境ではTAS/data/のスナップショットへフォールバックする
     const dataFiles = {};
-    const dataDir = path.join(__dirname, "data");
+    const dataDir = fs.existsSync(CAMPAIGN_OUTPUT_DIR) ? CAMPAIGN_OUTPUT_DIR : path.join(__dirname, "data");
     if (fs.existsSync(dataDir)) {
       for (const name of fs.readdirSync(dataDir).filter(n => n.endsWith(".json"))) {
         try { dataFiles[name] = fs.readFileSync(path.join(dataDir, name), "utf-8"); } catch (e) {}
@@ -298,6 +344,10 @@ const server = http.createServer(async (req, res) => {
       if (!payload.campaign || !payload.chapter || !payload.chapterFile) {
         return json(400, { error: { message: "campaign / chapter / chapterFile が必要です" } });
       }
+      const errs = validateCampaignData(payload.campaign, payload.chapter);
+      if (errs.length) {
+        return json(400, { error: { message: "検証エラー(mock2読み込み仕様):\n・" + errs.join("\n・") } });
+      }
       const chapterFile = path.basename(payload.chapterFile);
       if (!/^chapter_\d+\.json$/.test(chapterFile)) {
         return json(400, { error: { message: "chapterFile は chapter_XX.json 形式にしてください" } });
@@ -311,6 +361,34 @@ const server = http.createServer(async (req, res) => {
     } catch (e) {
       return json(500, { error: { message: e.message } });
     }
+  }
+
+  // 画像アップロード: mock2のimagesフォルダへ保存し、参照パスを返す
+  if (req.method === "POST" && req.url === "/api/upload-image") {
+    try {
+      const { filename, dataUrl } = JSON.parse(await readBody(req));
+      const m = /^data:image\/(\w+);base64,(.+)$/s.exec(dataUrl || "");
+      if (!m) return json(400, { error: { message: "dataUrlが不正です(image/*のbase64のみ)" } });
+      const safe = path.basename(String(filename || "image")).replace(/[^\w.-]+/g, "_");
+      const name = /\.(png|jpe?g|gif|webp)$/i.test(safe) ? safe : `${safe}.${m[1] === "jpeg" ? "jpg" : m[1]}`;
+      fs.mkdirSync(IMAGES_DIR, { recursive: true });
+      fs.writeFileSync(path.join(IMAGES_DIR, name), Buffer.from(m[2], "base64"));
+      return json(200, { url: `/images/${name}` });
+    } catch (e) {
+      return json(500, { error: { message: e.message } });
+    }
+  }
+
+  // 画像配信: mock2のimagesフォルダから返す
+  if (req.method === "GET" && req.url.startsWith("/images/")) {
+    const name = path.basename(decodeURIComponent(req.url.slice("/images/".length).split("?")[0]));
+    fs.readFile(path.join(IMAGES_DIR, name), (err, data) => {
+      if (err) { res.writeHead(404); res.end("image not found"); return; }
+      const type = { ".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".gif": "image/gif", ".webp": "image/webp" }[path.extname(name).toLowerCase()] || "application/octet-stream";
+      res.writeHead(200, { "Content-Type": type });
+      res.end(data);
+    });
+    return;
   }
 
   if (req.method === "GET" && ["/", "/index.html", "/marked.min.js"].includes(req.url)) {
