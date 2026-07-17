@@ -1,0 +1,258 @@
+{
+  "version": 1,
+  "updated": "2026-07-14",
+  "assets": {
+    "mine_entrance": {
+      "file": "mine_entrance.jpg",
+      "kind": "background",
+      "status": "approved",
+      "size": "1376x768",
+      "usedBy": [
+        "chapter_01.scenes.1.img"
+      ],
+      "notes": "既存素材。1920x1080版への更新候補。"
+    },
+    "scraped_track": {
+      "file": "scraped_track.jpg",
+      "kind": "popup",
+      "status": "approved",
+      "usedBy": [
+        "chapter_01.scenes.1.secrets.s1b.img"
+      ]
+    },
+    "rust_eater_popup": {
+      "file": "rust_eater.jpg",
+      "kind": "popup",
+      "status": "approved",
+      "usedBy": [
+        "chapter_01.scenes.2.enemy.img"
+      ],
+      "notes": "旧プレゼン用画像。s2_rust_eater.png(スプライト)承認済みのため、表示はスプライト優先に変更(2026-07-12)。スプライトが無い敵のフォールバック用に残置"
+    },
+    "locked_iron_gate": {
+      "file": "locked_iron_gate.jpg",
+      "kind": "legacy",
+      "status": "approved",
+      "usedBy": [
+        "ui.popup.intro"
+      ],
+      "notes": "依頼(intro)ポップアップの挿絵に採用(2026-07-13)"
+    },
+    "mining_automaton": {
+      "file": "mining_automaton.jpg",
+      "kind": "legacy",
+      "status": "rejected",
+      "usedBy": [],
+      "notes": "番人の正体が背景に描き込まれているため使用しない。"
+    },
+    "portrait_gareth": {
+      "file": "portrait_gareth.png",
+      "kind": "portrait",
+      "status": "rejected",
+      "usedBy": [],
+      "notes": "旧ガレス。男性キャラの見た目に合わないため不採用(2026-07-12)。portrait_gareth_altを採用"
+    },
+    "portrait_lydia": {
+      "file": "portrait_lydia.png",
+      "kind": "portrait",
+      "status": "approved",
+      "usedBy": [],
+      "notes": "パーティ枠はalt版(portrait_lydia_alt)を使用中"
+    },
+    "player_avatar": {
+      "file": "player_avatar.png",
+      "kind": "player-sprite",
+      "status": "approved",
+      "target": "full-body transparent PNG",
+      "alpha": true,
+      "usedBy": [],
+      "source": "imagegen",
+      "promptVersion": 1,
+      "notes": "Figmaオーバーレイ UIでパーティ枠に置換され未使用(将来プレイヤー枠で再利用候補)"
+    },
+    "gm_mascot": {
+      "file": "gm_mascot.png",
+      "kind": "gm-mascot",
+      "status": "approved",
+      "target": "small floating transparent PNG",
+      "alpha": true,
+      "usedBy": [
+        "ui.stage.gmPet"
+      ],
+      "source": "imagegen",
+      "promptVersion": 6,
+      "notes": "添付画像を採用。658x1236 RGBA。模様入りバンダナ、口元の青い陰影、グレーのスニーカーを維持。 GMペットは主画面に常駐(ドラッグで自由配置)に決定。下パネル内表示案は撤去。"
+    },
+    "s1_sky": {
+      "file": "s1_sky.jpg",
+      "kind": "parallax-sky",
+      "status": "approved",
+      "target": "2400x1080",
+      "usedBy": [
+        "chapter_01.scenes.1.parallax.sky"
+      ],
+      "source": "imagegen",
+      "promptVersion": 1,
+      "notes": "夕暮れの空と雲、遠い山の奥レイヤー。2400x1080へ整形済み。"
+    },
+    "s1_foreground": {
+      "file": "s1_foreground.png",
+      "kind": "parallax-foreground",
+      "status": "approved",
+      "target": "1920x1080",
+      "alpha": true,
+      "usedBy": [
+        "chapter_01.scenes.1.parallax.fg"
+      ],
+      "source": "imagegen",
+      "promptVersion": 1,
+      "notes": "坑道入口、岩壁、レール、木の札を含む透過前景。空部分を透明化し1920x1080へ整形済み。"
+    },
+    "s2_junction": {
+      "file": "s2_junction.jpg",
+      "kind": "background",
+      "status": "approved",
+      "target": "1920x1080",
+      "usedBy": [
+        "chapter_01.scenes.2.img"
+      ],
+      "source": "imagegen",
+      "promptVersion": 1,
+      "notes": "2026-07-12生成。16:9にクロップして配置。"
+    },
+    "s2_barrier": {
+      "file": "s2_barrier.jpg",
+      "kind": "background",
+      "status": "approved",
+      "target": "1920x1080",
+      "usedBy": [
+        "chapter_01.scenes.2.secrets.s2a.bg"
+      ],
+      "source": "imagegen",
+      "promptVersion": 1,
+      "notes": "2026-07-12生成。現行シナリオの封鎖の木柵に合わせた。16:9にクロップして配置。"
+    },
+    "s2_rust_eater": {
+      "file": "s2_rust_eater.png",
+      "kind": "sprite",
+      "status": "approved",
+      "target": "height 600px",
+      "alpha": true,
+      "usedBy": [
+        "chapter_01.scenes.2.enemy.sprite"
+      ],
+      "source": "imagegen",
+      "promptVersion": 1,
+      "notes": "錆を食べる犬サイズの虫型魔物。未識別時はCSSで黒シルエット化する。"
+    },
+    "s3_chamber": {
+      "file": "s3_chamber.jpg",
+      "kind": "background",
+      "status": "pending",
+      "target": "1920x1080",
+      "usedBy": [
+        "chapter_01.scenes.3.img"
+      ],
+      "notes": "プレースホルダー配置済み(ロジック検証用の仮画像。本番素材で同名上書き予定)"
+    },
+    "s3_guardian": {
+      "file": "s3_guardian.png",
+      "kind": "sprite",
+      "status": "approved",
+      "target": "height 800px",
+      "alpha": true,
+      "usedBy": [
+        "chapter_01.scenes.3.enemy.sprite"
+      ],
+      "source": "imagegen",
+      "promptVersion": 1,
+      "notes": "継ぎ接ぎの鉱山用自動人形。正体開示後に表示する。"
+    },
+    "s3_guardian_b": {
+      "file": "s3_guardian_b.png",
+      "kind": "sprite-variant",
+      "status": "pending",
+      "target": "height 800px",
+      "alpha": true,
+      "usedBy": []
+    },
+    "s3_heartstone": {
+      "file": "s3_heartstone.jpg",
+      "kind": "popup",
+      "status": "pending",
+      "target": "width 1200px",
+      "usedBy": []
+    },
+    "s4_village": {
+      "file": "s4_village.jpg",
+      "kind": "background",
+      "status": "pending",
+      "target": "1920x1080",
+      "usedBy": [],
+      "notes": "プレースホルダー。s4_village_square.jpg(approved)に置換され未使用"
+    },
+    "s4_myra_room": {
+      "file": "s4_myra_room.jpg",
+      "kind": "background",
+      "status": "approved",
+      "target": "1920x1080",
+      "usedBy": [
+        "chapter_01.scenes.5.img"
+      ],
+      "source": "imagegen",
+      "promptVersion": 1,
+      "notes": "村の顔役マイラ・ヴェインの執務部屋。元行商人らしい帳簿、地図、交易品を置いた報告シーン背景。"
+    },
+    "s4_village_square": {
+      "file": "s4_village_square.jpg",
+      "kind": "background",
+      "status": "approved",
+      "target": "1920x1080",
+      "usedBy": [
+        "chapter_01.scenes.4.img"
+      ],
+      "source": "imagegen",
+      "promptVersion": 1,
+      "notes": "村の広場。マイラの家が見える帰還・導入用の外観背景。"
+    },
+    "s4_myra": {
+      "file": "s4_myra.png",
+      "kind": "portrait",
+      "status": "approved",
+      "target": "portrait equivalent",
+      "alpha": true,
+      "usedBy": [
+        "chapter_01.scenes.5.npcSprite"
+      ],
+      "source": "imagegen",
+      "promptVersion": 1,
+      "notes": "元行商人で村の顔役のマイラ・ヴェイン。"
+    },
+    "portrait_gareth_alt": {
+      "file": "portrait_gareth_alt.png",
+      "kind": "portrait-variant",
+      "status": "approved",
+      "target": "waist-up transparent PNG",
+      "alpha": true,
+      "usedBy": [
+        "ui.stage.partySlotR1"
+      ],
+      "source": "imagegen",
+      "promptVersion": 2,
+      "notes": "男性の戦士・用心棒。写実寄りの坑道ポートレート調で、腕組みと鞘付き短剣の差分。 2026-07-12: ガレスの正式ポートレートとして採用(旧portrait_gareth.pngは不採用)"
+    },
+    "portrait_lydia_alt": {
+      "file": "portrait_lydia_alt.png",
+      "kind": "portrait-variant",
+      "status": "approved",
+      "target": "waist-up transparent PNG",
+      "alpha": true,
+      "usedBy": [
+        "ui.stage.partySlotL1"
+      ],
+      "source": "imagegen",
+      "promptVersion": 1,
+      "notes": "手がかりを指し示す調査・遺工向けの差分。"
+    }
+  }
+}

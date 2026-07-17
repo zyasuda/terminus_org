@@ -258,6 +258,22 @@ function validateCampaignData(campaign, chapter) {
       (sc.completeRequires?.secretsAny || []).forEach(id => {
         if (!own.has(id)) errs.push(`${label}: completeRequires.secretsAny "${id}" がこのシーンのsecretsにない`);
       });
+      if (Array.isArray(sc.exits)) {
+        const exitIds = new Set();
+        sc.exits.forEach((exit, exitIndex) => {
+          if (!exit || !Array.isArray(exit.match)) errs.push(`${label}: exits[${exitIndex}] に match 配列が必要`);
+          if (!exit?.id) errs.push(`${label}: exits[${exitIndex}] に id が必要`);
+          if (exit?.id && exitIds.has(exit.id)) errs.push(`${label}: exit id が重複: ${exit.id}`);
+          if (exit?.id) exitIds.add(exit.id);
+          if (exit && exit.to !== null && exit.to !== "end" && !Number.isFinite(Number(exit.to))) {
+            errs.push(`${label}: exits[${exitIndex}].to は数値/null/end が必要`);
+          }
+          const req = exit?.requires || {};
+          [...(req.secretsAny || []), ...(req.secretsAll || [])].forEach(id => {
+            if (!own.has(id)) errs.push(`${label}: exits[${exitIndex}] の条件 "${id}" がこのシーンのsecretsにない`);
+          });
+        });
+      }
     });
   }
   return errs;
