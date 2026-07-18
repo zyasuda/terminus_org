@@ -145,7 +145,8 @@ export default function App() {
   return (
     <>
       <div id="rotateNotice">端末を横向きにしてください</div>
-      <div id="stage">
+      {/* panelUp: 下パネル表示中は背景とシーン上のキャラ(NPC/敵)をパネル高さ分だけ上へ逃がす */}
+      <div id="stage" className={eng.underPanelOpen ? "panelUp" : ""}>
         <div id="bgPics" style={{ background: eng.sceneBg }}>
           {/* パララックス(D-027): 空レイヤーがゆっくり横スクロールし、透過前景が手前に重なる。
               素材が404の間はレイヤーが透明のままなので、親のsceneBg(単層img)が見える */}
@@ -228,6 +229,11 @@ export default function App() {
         </div>
         <div id="rightPanelTab" className={"panelTab" + (eng.rightPanelOpen ? " open" : "")} onClick={eng.toggleRightPanel}>
           {eng.rightPanelOpen ? ">>" : "<<"}
+        </div>
+        {/* 下パネルタブ: 左右パネルと同じ「>>」グリフをCSSで90度回転して流用。
+            閉時は画面下中央で上向き(開く方向)、開時はパネル上端の縁で下向き(閉じる方向) */}
+        <div id="underPanelTab" className={"panelTab" + (eng.underPanelOpen ? " open" : "")} onClick={eng.toggleUnderPanel}>
+          &gt;&gt;
         </div>
 
         <div id="leftPanel" className={eng.leftPanelOpen ? "open" : ""}>

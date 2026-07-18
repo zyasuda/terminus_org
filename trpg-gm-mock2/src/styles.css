@@ -68,7 +68,10 @@ body {
   background: var(--scene-bg);
   background-size: cover;
   background-position: center;
+  transition: transform .2s ease; /* 下パネル開閉(#underPanelのtransform .2s)と同期 */
 }
+/* 下パネル表示中: 背景をパネル高さ(24.94%)分だけ上へ逃がし、被写体が隠れないようにする */
+#stage.panelUp #bgPics { transform: translateY(-24.94%); }
 
 /* ---- 会話ログ(Figma 11:60「会話表示エリア」) ----
    パネルを持たず、シーンの上に透過表示する。下端に揃えて積み上がる。 */
@@ -145,12 +148,15 @@ body {
   filter: brightness(0) blur(5px); /* 未識別: 半透明のぼけた黒い影(ポップアップのシルエットと同調) */
   opacity: .7;
   animation: spriteIn .8s ease;
-  transition: filter 2.5s ease, opacity 2.5s ease;
+  transition: filter 2.5s ease, opacity 2.5s ease, bottom .2s ease;
 }
 #enemySprite.identified {
   filter: brightness(1) blur(0);
   opacity: 1;
 }
+/* 下パネル表示中: シーン上のキャラ(NPC/敵)も背景と一緒にパネル高さ(24.94%)分だけ上へ。
+   transformのtranslateYは自身の高さ基準になるため、ステージ基準のbottomで動かす */
+#stage.panelUp #enemySprite { bottom: 34.94%; /* 10% + パネル24.94% */ }
 
 @keyframes spriteIn { from { opacity: 0; } }
 
@@ -409,6 +415,28 @@ body {
 #leftPanelTab.open { left: 29.93%; transform: translateX(-100%); border-left: 1px solid rgba(192, 202, 243, .4); border-right: none; border-radius: 6px 0 0 6px; }
 #rightPanelTab { right: 0; border-right: none; border-radius: 6px 0 0 6px; }
 #rightPanelTab.open { right: 29.93%; transform: translateX(100%); border-right: 1px solid rgba(192, 202, 243, .4); border-left: none; border-radius: 0 6px 6px 0; }
+
+/* 下パネルタブ: 画面下中央、左右パネルと同じ「>>」グリフを90度回転して流用。
+   左右パネルは開時に内側の縁へ移動するが、下パネルは縁(パネル上端)だと背後の
+   会話ログ文字と重なるため、開閉どちらも画面最下部の同じ位置に固定し、矢印の
+   向きだけ反転させる(閉=上向き/開くと上へ、開=下向き/閉じると下へ) */
+#underPanelTab {
+  left: 50%;
+  bottom: 0;
+  top: auto;
+  z-index: 22; /* 下パネル(20)・会話ログ(21)より前に出して隠れないようにする */
+  transform: translateX(-50%) rotate(-90deg);
+  transform-origin: center;
+  text-align: center;
+  border: none;
+  border-top: 1px solid rgba(192, 202, 243, .4);
+  border-radius: 6px 6px 0 0;
+  padding: 4px 10px;
+  transition: transform .2s ease, opacity .2s ease;
+}
+#underPanelTab.open {
+  transform: translateX(-50%) rotate(90deg);
+}
 
 /* Left Panel(Figma 15:80): x0 y0 w255 h295。枠線・角丸なしで左上に密着 */
 #leftPanel {

@@ -663,6 +663,11 @@ function engageEnemy(def) {
   const order = combatActors(state.enemy).map(a => a.name).join(" → ");
   addGm(`戦闘になった! 相手は「${enemyName(state.enemy)}」。行動順は ${order} だ。`, "Fear");
   addNote(`⚔ 戦闘開始 — 行動順: ${order}`);
+  // 戦闘開始の瞬間は全パネルを閉じて画面を戦闘に譲る。ターン終了時(sendActionのfinally)に
+  // 下パネルだけ再度開く。engageEnemyの呼び出し元は複数(通常/奇襲/不意打ち)あるため、
+  // フラグをここで立てて出口を一箇所(finally)に集約する
+  setStore({ leftPanelOpen: false, rightPanelOpen: false, underPanelOpen: false });
+  state.justEngaged = true;
 }
 // エンカウント通知: 遭遇の瞬間をポップアップで見せる。未識別の敵は画像も黒シルエット(ウィザードリィ式)
 function pushEncounterPopup() {
@@ -1644,6 +1649,11 @@ export async function sendAction(text) {
   } catch (e) {
     addNote("通信エラー: " + e.message);
   } finally {
+    // 戦闘開始ターンの後始末: このターンでengageEnemyが呼ばれていたら、下パネルだけ再度開く
+    if (state.justEngaged) {
+      state.justEngaged = false;
+      setStore({ underPanelOpen: true });
+    }
     busy = false;
     setStore({ busy: false });
   }
@@ -1658,5 +1668,9 @@ export function toggleRightPanel() {
   setStore(s => ({ rightPanelOpen: !s.rightPanelOpen }));
 }
 export function toggleUnderPanel() {
-  setStore(s => ({ underPanelOpen: !s.underPanelOpen }));
+  // 下パネルを閉じる時は、開いている左右パネルも道連れで閉じる(下パネルタブ・
+  // 下スワイプのどちらの経路でも同じ。左右パネル側の開閉に下パネルは連動させない)
+  setStore(s => s.underPanelOpen
+    ? { underPanelOpen: false, leftPanelOpen: false, rightPanelOpen: false }
+    : { underPanelOpen: true });
 }
