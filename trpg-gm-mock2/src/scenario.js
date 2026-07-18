@@ -78,7 +78,8 @@ export async function loadScenarioData() {
   CAST = {};
   BANTER = [];
   campaign.companions.forEach(c => {
-    CAST[c.id] = { name: c.name, persona: c.persona, retortDrive: c.retortDrive || 3, quirks: c.quirks || [] };
+    CAST[c.id] = { name: c.name, persona: c.persona, retortDrive: c.retortDrive || 3,
+      quirks: c.quirks || [], battleMutters: c.battleMutters || [] };
     (c.banter || []).forEach(b => BANTER.push({ from: c.id, ...b }));
   });
 

@@ -365,7 +365,28 @@ const server = http.createServer((req, res) => {
 
 server.listen(PORT, () => {
   console.log(`中継サーバー起動: http://localhost:${PORT} (バックエンド: ${BACKEND} / モデル: ${MODEL})`);
+  warmUpOllama();
 });
+
+// Ollamaのモデルロード(9.6GBで約30秒)を最初のプレイヤー行動ではなくサーバー起動時に済ませる。
+// keep_aliveも延ばして、ロード済みのままプレイ開始を迎えられるようにする
+async function warmUpOllama() {
+  if (BACKEND !== "ollama") return;
+  const host = process.env.OLLAMA_HOST || "http://localhost:11434";
+  console.log(`モデル ${MODEL} を事前ロード中…(初回応答の待ち時間対策)`);
+  const t0 = Date.now();
+  try {
+    const res = await fetch(`${host}/api/generate`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ model: MODEL, prompt: "", keep_alive: "30m" }) // promptなし=ロードのみ
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    console.log(`事前ロード完了(${((Date.now() - t0) / 1000).toFixed(1)}秒)`);
+  } catch (e) {
+    console.warn(`事前ロード失敗(プレイは可能・初回だけ遅くなる): ${e.message}`);
+  }
+}
 
 // プレイセッション中の不意のプロセス死を防ぐ(原因はログに残して生存を優先)
 process.on("uncaughtException", e => console.error("uncaughtException:", e));

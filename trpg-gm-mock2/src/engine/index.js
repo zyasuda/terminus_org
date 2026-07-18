@@ -915,9 +915,21 @@ async function tryCombatTurn(text) {
         defending++;
         fact(`${a.name}は防御に回った`);
       } else {
-        const quirks = CAST[a.id].quirks || [];
-        const q = quirks.length ? quirks[Math.floor(Math.random() * quirks.length)] : null;
-        if (q && q.mutter) addCompanion(q.mutter, a.id);
+        // 一言(20%): 探索用の癖セリフ(quirks)は戦闘の文脈を無視して唐突になる
+        // (「先に罠を見せて」問題。クロニクル2026-07-18(2) T18/T20)。戦闘中は
+        // (1)正体判明済みで弱点ヒントが未提示なら、実在する弱点のヒント(プレイヤーが
+        //    実際に宣言すれば weakness アクションとして機能する)
+        // (2)戦闘用の一言(battleMutters)
+        // (3)どちらも無ければ黙って攻撃 にフォールバックする
+        const w = state.enemy.weakness;
+        if (state.enemy.identified && w && w.hint && !state.enemy.hintGiven) {
+          state.enemy.hintGiven = true;
+          addCompanion(w.hint, a.id);
+        } else {
+          const lines = CAST[a.id].battleMutters || [];
+          if (lines.length) addCompanion(lines[Math.floor(Math.random() * lines.length)], a.id);
+          else await attackOnce(a.name, true);
+        }
       }
     }
   }
@@ -1416,6 +1428,13 @@ export async function sendAction(text) {
   const itemsBefore = state.items.length;
   let progressed = false;
 
+  // 戦闘中の宣言: 解決の間は全パネルを閉じて戦闘演出を見せる。ターン解決が終わったら
+  // (finally)下パネルだけ開いて次の入力を促す。戦闘開始ターン(engageEnemy)も同じ流れ
+  if (state.enemy) {
+    setStore({ underPanelOpen: false, leftPanelOpen: false, rightPanelOpen: false });
+    state.justEngaged = true; // 「ターン終了時に下パネルを開く」フラグとして共用
+  }
+
   try {
     const ambushed = await resolveAmbushIfNeeded(text);
     if (ambushed) {
@@ -1689,7 +1708,8 @@ export async function sendAction(text) {
   } catch (e) {
     addNote("通信エラー: " + e.message);
   } finally {
-    // 戦闘開始ターンの後始末: このターンでengageEnemyが呼ばれていたら、下パネルだけ再度開く
+    // 戦闘ターンの後始末: このターンで戦闘演出のためにパネルを閉じていたら(戦闘開始・戦闘中の宣言)、
+    // 解決が終わった今、下パネルだけ再度開いて次の入力を促す
     if (state.justEngaged) {
       state.justEngaged = false;
       setStore({ underPanelOpen: true });
