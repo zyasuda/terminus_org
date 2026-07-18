@@ -110,7 +110,8 @@ export function exportChronicleFile() {
       case "gm": return `- [T${e.t}] GM: ${e.text.replace(/\n+/g, " ")}`;
       case "dice": return `- [T${e.t}] 🎲 ${e.reason}: d20=${e.roll} / DC${e.diff} → ${e.crit ? "クリティカル!" : e.fumble ? "ファンブル…" : e.ok ? "成功" : "失敗"}`;
       case "reveal": return `- [T${e.t}] 🔓 真相開示: ${e.text}`;
-      case "companion": return `- [T${e.t}] ${(CAST[e.who] && CAST[e.who].name) || "ガレス"}: 「${e.text}」`;
+      case "companion": return `- [T${e.t}] ${(CAST[e.who] && CAST[e.who].name) || e.who}: 「${e.text}」`;
+      case "npc": return `- [T${e.t}] ${e.name || "？？？"}: 「${e.text}」`;
       case "sys": return `- [T${e.t}] ⚙ ${e.text}`;
       case "hp": return `- [T${e.t}] ${e.to < e.from ? "💔" : "💚"} HP ${e.from}→${e.to}`;
     }

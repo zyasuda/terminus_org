@@ -105,6 +105,7 @@ body {
 .msg.companion { font-size: .95em; }
 .msg.companion-lydia { color: #d98cc9; }
 .msg.companion-gareth { color: #f2df7e; } /* 黄色(オレンジはチップ色と被るため変更) */
+.msg.companion-npc { color: #8fd0b8; } /* シーンNPC(依頼人マイラ等)。同行者と区別する緑系 */
 
 /* ---- パララックス背景(D-027: シーン1のみ試作) ----
    空レイヤー: 2400×1080想定・横に繋がる絵。repeat-xで-2400pxまで流して無限ループ。
