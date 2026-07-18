@@ -1281,7 +1281,7 @@ function systemPrompt(extra) {
   // normalizeWhoの解決失敗→誤帰属(マイラの台詞がリディア名義になる等)が起きるため、出口を分ける
   const npc = sc.npc;
   const npcBlock = npc
-    ? `\n# シーンの人物(同行者ではない)\nこのシーンには${npc.name}がいる。あなたが演じてよいが、${npc.name}の台詞は必ず npc.say に入れよ。companion は同行者(${companionIds})専用であり、${npc.name}の台詞を入れてはならない。\n`
+    ? `\n# シーンの人物(同行者ではない)\nこのシーンには${npc.name}がいる。あなたが演じてよいが、${npc.name}の台詞は必ず npc.say に入れよ。companion は同行者(${companionIds})専用であり、${npc.name}の台詞を入れてはならない。\nこのシーンの対話の主役は${npc.name}とプレイヤーである。同行者はプレイヤーに直接話しかけられた時だけ返答し、それ以外は companion を null にせよ。\n`
     : "";
   const npcSchema = npc ? `"npc":{"say":"${npc.name}の一言"}または null,` : "";
   // これまでの経緯: シーンごとの確定事実の記録(履歴24件切れ対策。特に終盤の報告シーンで章全体を参照できる)
@@ -1567,11 +1567,18 @@ export async function sendAction(text) {
     // talkTurnsMin条件用: 会話系の宣言だけを数える(調査連打で報告シーンが決着するのを防ぐ。Codexレビュー指摘)
     if (!cls || ["talk", "talk_gm", "other"].includes(cls.intent)) {
       state.sceneTalkTurns = (state.sceneTalkTurns || 0) + 1;
+      // 報告シーンでは会話そのものが前進(クリア条件がtalkTurnsMin)。前進扱いにしないと
+      // noProgressTurnsが積み上がり、停滞ナッジが誤爆して同行者が毎ターン喋り出す
+      // (クロニクル2026-07-18: マイラの部屋でリディア/ガレスが喋りすぎる問題)
+      if (SCENARIO.scenes[state.sceneIndex].report) progressed = true;
     }
     let r = await callGm(`プレイヤーの宣言: ${text}`, banterCue + stagnationCue + injuryCue + gmDirectCue);
     state.pendingFailedCheck = null; state.blockedMove = false;
     if (r.narration) addGmNarration(trimNarration(r.narration), r.emotion);
-    maybeCompanion(r, addressed || nudgeActive || concernActive);
+    // 報告シーンの対話の主役はNPCとプレイヤー。同行者のスロットル解除は「直接話しかけられた時」
+    // だけに限定する(停滞・負傷の割り込みでは口を挟ませない)
+    maybeCompanion(r, addressed ||
+      ((nudgeActive || concernActive) && !SCENARIO.scenes[state.sceneIndex].report));
     // NPCの一言は専用エージェント(npcAgentReply)が非同期で生成する。r.npc.sayは受け皿として捨てる
     npcAgentReply(text);
     if (r.meta_request) {
