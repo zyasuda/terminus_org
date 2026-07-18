@@ -384,6 +384,7 @@ const addNpc = t => {
   if (!t) return;
   chron.push({ t: state.turn, ts: Date.now(), kind: "npc", name: npc.name, text: t });
   addMsg("companion companion-npc", npc.name + "「" + t + "」");
+  saveGame(); // 非同期(npcAgentReply)でターン確定後に届くため、ここで保存しないとリロードで消える
 };
 // クリティカル/ファンブル時の画面演出。フラッシュはPhaser(PhaserFx.jsx)、
 // シェイクはDOM全体を揺らす必要があるため従来のCSS(body.shake)のまま。
@@ -614,11 +615,42 @@ function maybeCompanion(r, addressed) {
   }
 }
 
-// シーンNPCの台詞チャネル(npc.say)。話者はシーン定義で固定なので誤帰属が起きない
-function maybeNpc(r) {
+// メイン応答のnpc.sayフィールドはスキーマ上の「受け皿」としてだけ残し、表示には使わない
+// (受け皿がないとマイラの台詞がcompanion枠へ流れ込む。一方、表示に使うとローカルSLMが
+// シーンbrief内の台詞をそのまま複写し、毎ターン同じ一言に固定化する。クロニクル2026-07-18(1) T27-34)。
+// 実際の台詞は下のnpcAgentReplyが専用コンテキストで生成する。
+
+// NPCの部分エージェント化: revealFlavorと同じ「専用の小さな呼び出し・非同期・本編を待たせない」
+// パターンで、シーンNPC(依頼人マイラ等)の一言を生成する。メインGMのJSONから独立した
+// コンテキストを持つため、briefの複写や他キャラとの混同が構造的に起きない
+function npcAgentReply(playerText) {
   const npc = sceneNpc();
-  if (!npc || !r.npc || !r.npc.say) return;
-  addNpc(String(r.npc.say).slice(0, 120));
+  if (!npc) return;
+  const sc = SCENARIO.scenes[state.sceneIndex];
+  const direction = sc.report ? reportDirection() : (sc.direction || "");
+  // 直近のやり取り(プレイヤー宣言・GM語り・自分の過去の発言)だけを渡す。未開示の真相は渡らない
+  const recent = chron.slice(-14)
+    .filter(e => ["player", "gm", "npc"].includes(e.kind))
+    .map(e => e.kind === "player" ? `プレイヤー: ${e.text}`
+      : e.kind === "gm" ? `GM: ${e.text}`
+      : `${npc.name}(あなた): ${e.text}`)
+    .join("\n");
+  callGmApi({
+    system: `ソロTRPGの登場人物「${npc.name}」として一言だけ返す。${direction}\n` +
+      `日本語の口語。40字以内で言い切る。直前の自分の発言と同じ文・同じ問いを繰り返すな。` +
+      `プレイヤーが新しい情報を伝えたら、それを聞いた反応を返せ。応答はJSONのみ: {"say":"一言"}`,
+    messages: [{ role: "user", content: `直近のやり取り:\n${recent}\n\nプレイヤーの最新の発言・行動:「${playerText}」\n${npc.name}が返す一言だけをJSONで。` }],
+    maxTokens: 80
+  }).then(data => {
+    const raw = ((data && data.content) || []).map(b => b.text || "").join("");
+    const m = raw.match(/\{[\s\S]*\}/);
+    const r = JSON.parse(m ? m[0] : raw);
+    const say = sanitizeSay(String(r.say || "").slice(0, 120));
+    // 前回と同じ一言は表示しない(固定化の再発防止。沈黙の方が壊れて見えない)
+    if (!say || say === state.lastNpcLine) return;
+    state.lastNpcLine = say;
+    addNpc(say);
+  }).catch(() => {});
 }
 
 function banterAllowed() { return !SCENARIO.scenes[state.sceneIndex].noBanter; }
@@ -1540,7 +1572,8 @@ export async function sendAction(text) {
     state.pendingFailedCheck = null; state.blockedMove = false;
     if (r.narration) addGmNarration(trimNarration(r.narration), r.emotion);
     maybeCompanion(r, addressed || nudgeActive || concernActive);
-    maybeNpc(r);
+    // NPCの一言は専用エージェント(npcAgentReply)が非同期で生成する。r.npc.sayは受け皿として捨てる
+    npcAgentReply(text);
     if (r.meta_request) {
       addNote(`⚖ メタ発言を検知(${r.meta_request.topic || "内容不明"}) — GMが確認中。状態は変更されていない`);
       r.state_updates = null;
@@ -1615,7 +1648,7 @@ export async function sendAction(text) {
       );
       if (r2.narration) addGmNarration(trimNarration(r2.narration), r2.emotion);
       maybeCompanion(r2, false);
-      maybeNpc(r2);
+      // NPCの一言はメイン応答側(npcAgentReply)で1ターン1回だけ生成済み。r2側では発火しない
       maybeEngage(r2);
       applyUpdatesLogged(r2.state_updates, { allowEnemyDamage: ok, allowPlayerDamage: !!state.enemy || fumble }, enemyAttackCause);
       if (r2.flee_enemy && state.enemy) { addNote(`⚔ ${enemyName(state.enemy)}との戦闘を離脱`); logSceneEvent(`${enemyName(state.enemy)}と戦わずに切り抜けた`); (state.fled ||= []).push(state.enemy.name); state.enemy = null; }
