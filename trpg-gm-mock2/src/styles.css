@@ -254,6 +254,79 @@ body {
 @keyframes bubbleIn { from { opacity: 0; transform: translateY(8px); } }
 @keyframes bubbleOut { to { opacity: 0; visibility: hidden; } }
 
+/* ---- 同行者の吹き出し(GMペットの吹き出しと同じ見た目)。立ち絵スロットの脇に出す ---- */
+.charBubble {
+  position: absolute;
+  transform: translateY(-50%);
+  max-width: 34%;
+  z-index: 24; /* 立ち絵(21/22)より前、GM吹き出し(25)より後ろ */
+  pointer-events: none;
+  background: rgba(22, 25, 40, .58);
+  color: #fff;
+  border: 1px solid rgba(192, 202, 243, .5);
+  backdrop-filter: blur(3px);
+  border-radius: 16px;
+  padding: 12px 16px;
+  font-size: 1.45vw;
+  line-height: 2.3vw;
+  text-shadow: 0 1px 4px rgba(0, 0, 0, .6);
+  animation: bubbleIn .25s ease, bubbleOut .6s ease 8s forwards; /* GMより短め(台詞が短いため)の約8秒表示 */
+}
+/* 立ち絵の頭の高さ(上端59〜63%)の脇に置く。R系は立ち絵の左側へ、L系は右側へ伸ばす */
+.charBubble.slotR1 { right: 15.7%; top: 66%; }
+.charBubble.slotR2 { right: 21.9%; top: 64%; }
+.charBubble.slotL1 { left: 15.7%; top: 66%; }
+.charBubble.slotL2 { left: 22.4%; top: 64%; }
+/* 話者の識別: チャットログの文字色と同じ色を、枠線と尻尾の縁取りの両方に使う。
+   --tail-color を各話者で上書きし、尻尾の::before(縁取り)/::after(塗り)から参照する */
+.charBubble { --tail-color: rgba(192, 202, 243, .8); }
+.charBubble.who-lydia { border-color: rgba(217, 140, 201, .65); --tail-color: rgba(217, 140, 201, .9); }
+.charBubble.who-gareth { border-color: rgba(242, 223, 126, .65); --tail-color: rgba(242, 223, 126, .9); }
+/* 尻尾は縁取り(::before、話者色・少し大きい)+塗り(::after、吹き出しの地色・少し小さい)の
+   二重三角形にして輪郭を立たせる。背景が濃淡入り乱れる画面上でも埋もれないように */
+.charBubble.tailRight::before { /* 右側(立ち絵側)へ向く尻尾・縁取り */
+  content: "";
+  position: absolute;
+  right: -14px;
+  top: 50%;
+  margin-top: -10px;
+  border-width: 10px 0 10px 15px;
+  border-style: solid;
+  border-color: transparent transparent transparent var(--tail-color);
+  filter: drop-shadow(0 1px 3px rgba(0, 0, 0, .5));
+}
+.charBubble.tailRight::after {
+  content: "";
+  position: absolute;
+  right: -10px;
+  top: 50%;
+  margin-top: -7px;
+  border-width: 7px 0 7px 10px;
+  border-style: solid;
+  border-color: transparent transparent transparent rgba(22, 25, 40, .9);
+}
+.charBubble.tailLeft::before { /* 左側(立ち絵側)へ向く尻尾・縁取り */
+  content: "";
+  position: absolute;
+  left: -14px;
+  top: 50%;
+  margin-top: -10px;
+  border-width: 10px 15px 10px 0;
+  border-style: solid;
+  border-color: transparent var(--tail-color) transparent transparent;
+  filter: drop-shadow(0 1px 3px rgba(0, 0, 0, .5));
+}
+.charBubble.tailLeft::after {
+  content: "";
+  position: absolute;
+  left: -10px;
+  top: 50%;
+  margin-top: -7px;
+  border-width: 7px 10px 7px 0;
+  border-style: solid;
+  border-color: transparent rgba(22, 25, 40, .9) transparent transparent;
+}
+
 /* ---- シーン説明(Figma 11:61の位置)。フェードイン(1s)→表示(10s)→フェードアウト(1s) ---- */
 #sceneDesc {
   position: absolute;

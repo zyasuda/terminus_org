@@ -374,6 +374,9 @@ const addCompanion = (t, who = "gareth") => {
   if (!t) return;
   chron.push({ t: state.turn, ts: Date.now(), kind: "companion", who, text: t });
   addMsg("companion companion-" + who, name + "「" + t + "」");
+  // GMペットと同じ形式の吹き出しを、その同行者の立ち絵の脇に出す(約8秒でフェードアウト)
+  setStore(s => ({ companionBubbles: { ...s.companionBubbles,
+    [who]: { text: t, seq: ((s.companionBubbles[who] || {}).seq || 0) + 1 } } }));
   highlightPortrait(who);
 };
 // シーンNPC(依頼人マイラ等)の台詞。話者名はシーン定義から取る(モデルに選ばせない)
@@ -1401,6 +1404,9 @@ export async function sendAction(text) {
   text = text.trim();
   if (!text || busy) return;
   if (state.hp <= 0) { addNote("倒れている。「最初から」でやり直そう。"); return; }
+  // 終幕後も入力を受け付けてしまうと、最終シーン(報告等)の仕組みがそのまま動き続け、
+  // マイラが際限なく聞き返すループになる(クロニクル2026-07-20 T27-30)。終幕後はここで止める
+  if (state.chapterEnded) { addNote("物語は決着している。「最初から」で別の選択を試せる。"); return; }
   busy = true;
   setStore({ busy: true });
   state.turn++;

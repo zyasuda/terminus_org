@@ -19,6 +19,7 @@ let snapshot = {
   clues: [],            // 開示済み手がかり(secretのtext)。左パネルに永続表示
   enemySprite: null,    // {src, identified} 交戦中の敵スプライト。未識別はCSSで黒シルエット→判明時に実体化
   gmBubble: { text: "", emotion: "Neutral", seq: 0 }, // GMペットの吹き出し(最新のGM発言+感情)。感情はCE仕様の5種、表情アニメの駆動用
+  companionBubbles: {},  // 同行者の吹き出し {who: {text, seq}}。立ち絵スロットの脇にGMと同じ形式で表示
   busy: false,
   hp: 10, maxHp: 10, items: [],
   tokenText: "",

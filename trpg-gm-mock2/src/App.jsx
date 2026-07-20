@@ -187,16 +187,34 @@ export default function App() {
         ))}
         {/* 下部の枠はプレイヤーのパーティ専用。依頼人マイラ(報告シーン)は将来、主画面の中央に出す予定 */}
 
+        {/* 同行者の吹き出し: GMペットの吹き出しと同じ見た目で、その同行者の立ち絵の脇に出す。
+            keyにseqを含めることで同じ相手の連続発言でもフェードアニメが再トリガーされる */}
+        {eng.partySlots.map(s => {
+          const b = eng.companionBubbles[s.who];
+          if (!s.img || !b || !b.text) return null;
+          const onRight = s.slot.startsWith("slotR");
+          return (
+            <div
+              key={s.slot + "-bub" + b.seq}
+              className={"charBubble " + s.slot + " who-" + s.who + (onRight ? " tailRight" : " tailLeft")}
+            >{b.text}</div>
+          );
+        })}
+
         {/* シーン説明(Figma 11:61の位置)。シーン開始時にフェードインし、約10秒表示してフェードアウト。
             全文は左パネルでいつでも読み返せる */}
         {eng.overlay.text && (
           <div id="sceneDesc" key={eng.overlay.seq}>{eng.overlay.text}</div>
         )}
 
-        {/* 会話ログ(Figma 11:60)。パネルを持たず、シーンの上に透過表示する(GMの地の文は吹き出し側) */}
+        {/* 会話ログ(Figma 11:60)。パネルを持たず、シーンの上に透過表示する。
+            GMの地の文は主画面のペット吹き出し、同行者の台詞は立ち絵の吹き出しへ移したため、
+            ここには表示しない(NPCのマイラは専用の吹き出しを持たないためログに残す) */}
         {eng.underPanelOpen && (
           <div id="chat" ref={chatRef}>
-            {eng.chat.filter(e => !(e.kind === "msg" && e.cls === "gm")).map(entry => <ChatEntry key={entry.id} entry={entry} />)}
+            {eng.chat.filter(e => !(e.kind === "msg" &&
+              (e.cls === "gm" || (e.cls.startsWith("companion companion-") && e.cls !== "companion companion-npc"))
+            )).map(entry => <ChatEntry key={entry.id} entry={entry} />)}
           </div>
         )}
 
