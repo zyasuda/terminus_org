@@ -22,6 +22,7 @@ let snapshot = {
   gmBubble: { text: "", emotion: "Neutral", seq: 0 }, // GMペットの吹き出し(最新のGM発言+感情)。感情はCE仕様の5種、表情アニメの駆動用
   companionBubbles: {},  // 同行者の吹き出し {who: {text, seq}}。立ち絵スロットの脇にGMと同じ形式で表示
   npcBubble: { text: "", seq: 0 }, // シーンNPC(依頼人マイラ等)の吹き出し。中央のnpcSpriteの上に表示
+  thinking: {},          // AI応答待ちの「考え中」表示 {gm: true, lydia: true, npc: true など}。対象の吹き出し位置に「…」を出す
   busy: false,
   hp: 10, maxHp: 10, items: [],
   tokenText: "",

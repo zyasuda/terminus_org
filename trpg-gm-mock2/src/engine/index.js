@@ -348,6 +348,14 @@ export function replayCompanionBubble(who) {
 export function replayNpcBubble() {
   setStore(s => s.npcBubble.text ? { npcBubble: { ...s.npcBubble, seq: s.npcBubble.seq + 1 } } : {});
 }
+// AI応答待ちの「考え中(…)」表示。key: "gm" | 同行者id | "npc"
+function setThinking(key, on) {
+  setStore(s => {
+    const t = { ...s.thinking };
+    if (on) t[key] = true; else delete t[key];
+    return { thinking: t };
+  });
+}
 // LLMの語り専用: 直前のLLM語りと完全一致なら差し替える(小型モデルが自分の応答をなぞる劣化ループ対策。
 // 2026-07-17(6) T15-26で同文が10連続した)。決定論の定型文(改めて確かめる等)には適用しない
 let lastLlmNarration = "";
@@ -659,6 +667,7 @@ function npcAgentReply(playerText) {
       : e.kind === "gm" ? `GM: ${e.text}`
       : `${npc.name}(あなた): ${e.text}`)
     .join("\n");
+  setThinking("npc", true); // 非同期でターン終了後に届くため、GM/同行者とは別に自前で消す
   callGmApi({
     system: `ソロTRPGの登場人物「${npc.name}」として一言だけ返す。${direction}\n` +
       `日本語の口語。40字以内で言い切る。直前の自分の発言と同じ文・同じ問いを繰り返すな。` +
@@ -674,7 +683,7 @@ function npcAgentReply(playerText) {
     if (!say || say === state.lastNpcLine) return;
     state.lastNpcLine = say;
     addNpc(say);
-  }).catch(() => {});
+  }).catch(() => {}).finally(() => setThinking("npc", false));
 }
 
 function banterAllowed() { return !SCENARIO.scenes[state.sceneIndex].noBanter; }
@@ -1618,13 +1627,20 @@ export async function sendAction(text) {
       // (クロニクル2026-07-18: マイラの部屋でリディア/ガレスが喋りすぎる問題)
       if (SCENARIO.scenes[state.sceneIndex].report) progressed = true;
     }
+    // 「考え中(…)」表示: 語りの主体であるGMは常に、宛先が同行者ならそのキャラにも出す
+    // (NPCへの表示は npcAgentReply 側で管理。非同期でターン終了後に届くため寿命が別)
+    const addressedWho = Object.keys(CAST).find(id => text.includes(CAST[id].name)) || null;
+    setThinking("gm", true);
+    if (addressedWho) setThinking(addressedWho, true);
     let r = await callGm(`プレイヤーの宣言: ${text}`, banterCue + stagnationCue + injuryCue + gmDirectCue);
+    setThinking("gm", false);
     state.pendingFailedCheck = null; state.blockedMove = false;
     if (r.narration) addGmNarration(trimNarration(r.narration), r.emotion);
     // 報告シーンの対話の主役はNPCとプレイヤー。同行者のスロットル解除は「直接話しかけられた時」
     // だけに限定する(停滞・負傷の割り込みでは口を挟ませない)
     maybeCompanion(r, addressed ||
       ((nudgeActive || concernActive) && !SCENARIO.scenes[state.sceneIndex].report));
+    if (addressedWho) setThinking(addressedWho, false);
     // NPCの一言は専用エージェント(npcAgentReply)が非同期で生成する。r.npc.sayは受け皿として捨てる
     npcAgentReply(text);
     if (r.meta_request) {
@@ -1695,10 +1711,12 @@ export async function sendAction(text) {
           ? `戦闘中:判定成功なら enemy_hp_delta を提案してよい。さらに${state.enemy.name}も行動し、攻撃が届いた——反撃の描写と hp_delta(-1〜-2)を必ず含めよ。`
           : `戦闘中:判定成功なら enemy_hp_delta を提案してよい。${state.enemy.name}も行動したが攻撃は届かない——牽制や威嚇として描写せよ(hp_delta不要)。`;
       }
+      setThinking("gm", true);
       const r2 = await callGm(
         `【システム】判定結果: d20=${roll}(DC${diff})→${outcome}。結果を描写せよ。${hint}${enemyDirective}`,
         extra
       );
+      setThinking("gm", false);
       if (r2.narration) addGmNarration(trimNarration(r2.narration), r2.emotion);
       maybeCompanion(r2, false);
       // NPCの一言はメイン応答側(npcAgentReply)で1ターン1回だけ生成済み。r2側では発火しない
@@ -1741,6 +1759,9 @@ export async function sendAction(text) {
       state.justEngaged = false;
       setStore({ underPanelOpen: true });
     }
+    // 「考え中」の掃除(通信エラー等で消し漏れた分)。NPC分は非同期のnpcAgentReplyが
+    // ターン終了後も生成中のことがあるため、ここでは消さない(あちらのfinallyが消す)
+    setStore(s => ({ thinking: s.thinking.npc ? { npc: true } : {} }));
     busy = false;
     setStore({ busy: false });
   }

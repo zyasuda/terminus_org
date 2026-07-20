@@ -9,6 +9,15 @@ function ChatEntry({ entry }) {
   return null;
 }
 
+// AI応答待ちの「考え中」表示。3つの点が順に明滅する
+function ThinkingDots() {
+  return (
+    <span className="thinkingDots">
+      <span>・</span><span>・</span><span>・</span>
+    </span>
+  );
+}
+
 // パーティ立ち絵スロット(Figma node 10:30)は campaign.json の companions[].sprite から
 // エンジンが組み立てて store.partySlots に入れる(コード直書き禁止の契約)。
 
@@ -176,8 +185,11 @@ export default function App() {
           ></div>
         )}
 
-        {/* シーンNPC(依頼人マイラ等)の吹き出し。GM/同行者と同じ見た目で、中央のnpcSpriteの上に出す(下向きの尻尾) */}
-        {eng.npcBubble.text && (
+        {/* シーンNPC(依頼人マイラ等)の吹き出し。GM/同行者と同じ見た目で、中央のnpcSpriteの上に出す(下向きの尻尾)。
+            応答の生成中は「…」の考え中表示に差し替える */}
+        {eng.thinking.npc ? (
+          <div className="npcBubble thinking"><ThinkingDots /></div>
+        ) : eng.npcBubble.text && (
           <div key={"npcbub" + eng.npcBubble.seq} className="npcBubble">{eng.npcBubble.text}</div>
         )}
 
@@ -202,15 +214,21 @@ export default function App() {
         {/* 下部の枠はプレイヤーのパーティ専用。依頼人マイラ(報告シーン)は将来、主画面の中央に出す予定 */}
 
         {/* 同行者の吹き出し: GMペットの吹き出しと同じ見た目で、その同行者の立ち絵の脇に出す。
-            keyにseqを含めることで同じ相手の連続発言でもフェードアニメが再トリガーされる */}
+            keyにseqを含めることで同じ相手の連続発言でもフェードアニメが再トリガーされる。
+            その同行者が応答の生成中(話しかけられた直後)は「…」の考え中表示に差し替える */}
         {eng.partySlots.map(s => {
-          const b = eng.companionBubbles[s.who];
-          if (!s.img || !b || !b.text) return null;
+          if (!s.img) return null;
           const onRight = s.slot.startsWith("slotR");
+          const cls = "charBubble " + s.slot + " who-" + s.who + (onRight ? " tailRight" : " tailLeft");
+          if (eng.thinking[s.who]) {
+            return <div key={s.slot + "-think"} className={cls + " thinking"}><ThinkingDots /></div>;
+          }
+          const b = eng.companionBubbles[s.who];
+          if (!b || !b.text) return null;
           return (
             <div
               key={s.slot + "-bub" + b.seq}
-              className={"charBubble " + s.slot + " who-" + s.who + (onRight ? " tailRight" : " tailLeft")}
+              className={cls}
             >{b.text}</div>
           );
         })}
@@ -243,7 +261,15 @@ export default function App() {
           onPointerMove={petPointerMove}
           onPointerUp={petPointerUp}
         ></div>
-        {eng.gmBubble.text && (
+        {eng.thinking.gm ? (
+          <div
+            id="gmBubble"
+            className={(bubbleOnLeft ? "tailRight" : "tailLeft") + " thinking"}
+            style={bubbleOnLeft
+              ? { right: (100 - petPos.x + 5.5) + "%", top: petPos.y + "%" }
+              : { left: (petPos.x + 5.5) + "%", top: petPos.y + "%" }}
+          ><ThinkingDots /></div>
+        ) : eng.gmBubble.text && (
           <div
             id="gmBubble"
             key={"bub" + eng.gmBubble.seq}

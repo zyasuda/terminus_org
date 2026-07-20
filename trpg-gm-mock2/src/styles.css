@@ -254,6 +254,23 @@ body {
 @keyframes bubbleIn { from { opacity: 0; transform: translateY(8px); } }
 @keyframes bubbleOut { to { opacity: 0; visibility: hidden; } }
 
+/* ---- AI応答待ちの「考え中(…)」---- 通常の吹き出しの見た目のまま小さくし、
+   フェードアウトさせない(応答が届くと実物の吹き出しに置き換わって消える) */
+#gmBubble.thinking, .charBubble.thinking, .npcBubble.thinking {
+  animation: bubbleIn .25s ease;
+  padding: 6px 14px;
+}
+.thinkingDots span {
+  display: inline-block;
+  animation: dotPulse 1.2s ease-in-out infinite;
+}
+.thinkingDots span:nth-child(2) { animation-delay: .2s; }
+.thinkingDots span:nth-child(3) { animation-delay: .4s; }
+@keyframes dotPulse {
+  0%, 60%, 100% { opacity: .25; }
+  30% { opacity: 1; }
+}
+
 /* ---- 同行者の吹き出し(GMペットの吹き出しと同じ見た目)。立ち絵スロットの脇に出す ---- */
 .charBubble {
   position: absolute;
