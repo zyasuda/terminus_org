@@ -19,6 +19,8 @@ export function useEngine() {
     resetGame: engine.resetGame,
     dismissPopup: engine.dismissPopup,
     replayGmBubble: engine.replayGmBubble,
+    replayCompanionBubble: engine.replayCompanionBubble,
+    replayNpcBubble: engine.replayNpcBubble,
     performRoll: engine.performRoll,
     toggleGmMode: engine.toggleGmMode,
     toggleLeftPanel: engine.toggleLeftPanel,

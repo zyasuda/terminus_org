@@ -159,13 +159,26 @@ export default function App() {
         </div>
 
         {/* 交戦中の敵スプライト。未識別はCSSで黒シルエット、正体判明でtransitionにより実体化。
-            素材が404の間は透明のまま(進行はポップアップ表示で担保) */}
+            素材が404の間は透明のまま(進行はポップアップ表示で担保)。
+            sceneNpcNameがある時(=敵ではなくNPC表示)だけタップに反応させる: 最後の発言を出し直し、
+            入力欄に「マイラに」を差し込む(名詞チップ・立ち絵タップと同じ2タップ指示の起点) */}
         {eng.enemySprite && (
           <div
             id="enemySprite"
             className={eng.enemySprite.identified ? "identified" : ""}
-            style={{ backgroundImage: `url("/images/${eng.enemySprite.src}")` }}
+            style={{ backgroundImage: `url("/images/${eng.enemySprite.src}")`, cursor: eng.sceneNpcName ? "pointer" : "default" }}
+            onClick={() => {
+              if (!eng.sceneNpcName) return;
+              eng.replayNpcBubble();
+              setInput(prev => prev + eng.sceneNpcName + "、");
+              setStore({ underPanelOpen: true, leftPanelOpen: false, rightPanelOpen: false });
+            }}
           ></div>
+        )}
+
+        {/* シーンNPC(依頼人マイラ等)の吹き出し。GM/同行者と同じ見た目で、中央のnpcSpriteの上に出す(下向きの尻尾) */}
+        {eng.npcBubble.text && (
+          <div key={"npcbub" + eng.npcBubble.seq} className="npcBubble">{eng.npcBubble.text}</div>
         )}
 
         {/* パーティ立ち絵(4枠)。テーブルを囲む配置で、下部の左右に外側+内側の2枠ずつ。
@@ -177,6 +190,7 @@ export default function App() {
             className={"partySlot " + s.slot + (eng.activePortrait === s.who ? " active" : "")}
             onClick={() => {
               if (!s.name) return;
+              eng.replayCompanionBubble(s.who); // 最後の発言の吹き出しを出し直す
               setInput(prev => prev + s.name + "、");
               // 下パネルを開き、左右パネルは閉じる(指示を書く画面状態に揃える)
               setStore({ underPanelOpen: true, leftPanelOpen: false, rightPanelOpen: false });

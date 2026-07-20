@@ -18,8 +18,10 @@ let snapshot = {
   sceneInfo: { num: 1, total: 1, brief: "", report: false }, // 左パネルに常時表示する現在シーンの要約。report=依頼人への報告シーン
   clues: [],            // 開示済み手がかり(secretのtext)。左パネルに永続表示
   enemySprite: null,    // {src, identified} 交戦中の敵スプライト。未識別はCSSで黒シルエット→判明時に実体化
+  sceneNpcName: null,   // enemySpriteが実際はNPC(依頼人マイラ等)表示の時だけ名前が入る。敵の時はnull
   gmBubble: { text: "", emotion: "Neutral", seq: 0 }, // GMペットの吹き出し(最新のGM発言+感情)。感情はCE仕様の5種、表情アニメの駆動用
   companionBubbles: {},  // 同行者の吹き出し {who: {text, seq}}。立ち絵スロットの脇にGMと同じ形式で表示
+  npcBubble: { text: "", seq: 0 }, // シーンNPC(依頼人マイラ等)の吹き出し。中央のnpcSpriteの上に表示
   busy: false,
   hp: 10, maxHp: 10, items: [],
   tokenText: "",

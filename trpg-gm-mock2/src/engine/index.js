@@ -337,6 +337,17 @@ const addGm = (t, emotion) => {
 export function replayGmBubble() {
   setStore(s => s.gmBubble.text ? { gmBubble: { ...s.gmBubble, seq: s.gmBubble.seq + 1 } } : {});
 }
+// 同行者の立ち絵をタップした時: その同行者の最後の発言の吹き出しを出し直す
+export function replayCompanionBubble(who) {
+  setStore(s => {
+    const b = s.companionBubbles[who];
+    return b && b.text ? { companionBubbles: { ...s.companionBubbles, [who]: { ...b, seq: b.seq + 1 } } } : {};
+  });
+}
+// NPC(依頼人マイラ等)の立ち絵をタップした時: 最後の発言の吹き出しを出し直す
+export function replayNpcBubble() {
+  setStore(s => s.npcBubble.text ? { npcBubble: { ...s.npcBubble, seq: s.npcBubble.seq + 1 } } : {});
+}
 // LLMの語り専用: 直前のLLM語りと完全一致なら差し替える(小型モデルが自分の応答をなぞる劣化ループ対策。
 // 2026-07-17(6) T15-26で同文が10連続した)。決定論の定型文(改めて確かめる等)には適用しない
 let lastLlmNarration = "";
@@ -387,6 +398,8 @@ const addNpc = t => {
   if (!t) return;
   chron.push({ t: state.turn, ts: Date.now(), kind: "npc", name: npc.name, text: t });
   addMsg("companion companion-npc", npc.name + "「" + t + "」");
+  // GM/同行者と同じ形式の吹き出しを、中央のnpcSprite(#enemySprite)の上に出す
+  setStore(s => ({ npcBubble: { text: t, seq: s.npcBubble.seq + 1 } }));
   saveGame(); // 非同期(npcAgentReply)でターン確定後に届くため、ここで保存しないとリロードで消える
 };
 // クリティカル/ファンブル時の画面演出。フラッシュはPhaser(PhaserFx.jsx)、
@@ -498,13 +511,21 @@ function renderDebug() {
     // 交戦状態から導出(engage/正体判明/撃破/離脱/シーン遷移のどこでもrenderDebugが呼ばれるため、ここで一元管理)
     // 交戦中は従来通り。presence指定の敵(灯の番人など)は交戦前からシーンに常在させ、
     // identifySecretの開示で実体化する(平和ルートでもスプライトを見せる)。
-    // npcSpriteは敵ではないシーン常在キャラ(依頼人マイラ等)。常に実体表示
-    enemySprite: state.enemy && state.enemy.sprite
-      ? { src: state.enemy.sprite, identified: !!state.enemy.identified }
-      : (curScene.enemy && curScene.enemy.presence && curScene.enemy.sprite
-          && !state.defeated.includes(curScene.enemy.name)
-        ? { src: curScene.enemy.sprite, identified: revealed.has(curScene.enemy.identifySecret) }
-        : (curScene.npcSprite ? { src: curScene.npcSprite, identified: true } : null))
+    // npcSpriteは敵ではないシーン常在キャラ(依頼人マイラ等)。常に実体表示。
+    // sceneNpcName: #enemySpriteスロットが実際にNPC表示(敵ではない)の時だけ名前を渡す
+    // (タップ時に「マイラに」を入力欄へ差し込むため、UI側は敵かNPCかを区別できる必要がある)
+    ...(() => {
+      if (state.enemy && state.enemy.sprite) {
+        return { enemySprite: { src: state.enemy.sprite, identified: !!state.enemy.identified }, sceneNpcName: null };
+      }
+      if (curScene.enemy && curScene.enemy.presence && curScene.enemy.sprite && !state.defeated.includes(curScene.enemy.name)) {
+        return { enemySprite: { src: curScene.enemy.sprite, identified: revealed.has(curScene.enemy.identifySecret) }, sceneNpcName: null };
+      }
+      if (curScene.npcSprite) {
+        return { enemySprite: { src: curScene.npcSprite, identified: true }, sceneNpcName: (curScene.npc && curScene.npc.name) || null };
+      }
+      return { enemySprite: null, sceneNpcName: null };
+    })()
   });
   saveGame(); // 状態が変わるたびに黙って自動保存(中断ボタンの代わり)
 }
