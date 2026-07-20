@@ -959,9 +959,16 @@ async function tryCombatTurn(text) {
           state.enemy.hintGiven = true;
           addCompanion(w.hint, a.id);
         } else {
-          const lines = CAST[a.id].battleMutters || [];
-          if (lines.length) addCompanion(lines[Math.floor(Math.random() * lines.length)], a.id);
-          else await attackOnce(a.name, true);
+          const allLines = CAST[a.id].battleMutters || [];
+          // 直前と同じ一言が連投されるのを防ぐ(2026-07-20チロニクルでリディアが3ターン連続同一発言)
+          const lines = allLines.length > 1
+            ? allLines.filter(l => l !== state.lastBattleMutter?.[a.id])
+            : allLines;
+          if (lines.length) {
+            const line = lines[Math.floor(Math.random() * lines.length)];
+            state.lastBattleMutter = { ...(state.lastBattleMutter || {}), [a.id]: line };
+            addCompanion(line, a.id);
+          } else await attackOnce(a.name, true);
         }
       }
     }
@@ -1169,7 +1176,10 @@ function advanceScene() {
     setSceneBackdrop(SCENARIO.scenes[state.sceneIndex]);
     state.enemy = null;
     state.pendingFailedCheck = null; state.blockedMove = false;
+    state.lastBattleMutter = {};
     history = [];
+    // 前シーンの吹き出しが新シーンに持ち越されないよう、同行者・NPCの吹き出しをクリア
+    setStore({ companionBubbles: {}, npcBubble: { text: "", seq: 0 } });
     addNote(`—— シーン${state.sceneIndex + 1} ——`);
     const newScene = SCENARIO.scenes[state.sceneIndex];
     const newBrief = newScene.brief;
