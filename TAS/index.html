@@ -15,6 +15,7 @@
 <style>.exit-row{display:grid;grid-template-columns:130px minmax(150px,1fr) 180px minmax(150px,1fr) auto;gap:8px;align-items:end}.exit-row .field{margin:0}.exit-row textarea{min-height:58px}.exit-help{margin:0 0 8px;color:var(--dim);font-size:12px}@media(max-width:900px){.exit-row{grid-template-columns:1fr}.exit-row button{justify-self:start}}</style>
 <style>@media(max-width:700px){.transition-row{grid-template-columns:1fr}.transition-row button{justify-self:start}}</style>
 <script src="/marked.min.js"></script>
+<style>.ledger-table{width:100%;border-collapse:collapse;font-size:12px}.ledger-table th,.ledger-table td{border-bottom:1px solid var(--border);padding:7px 6px;text-align:left;vertical-align:middle}.ledger-table th{color:var(--dim);font-weight:600}.ledger-link{padding:3px 7px;font-size:11px}.entity-action-card{margin-top:10px}.chip-kind{color:var(--dim);font-size:10px;margin-right:3px}.entity-index-list{display:grid;gap:6px}.entity-index-row{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;align-items:center;border:1px solid var(--border);border-radius:5px;background:#1b2129;padding:8px}.entity-index-main{min-width:0}.entity-index-title{display:flex;align-items:center;gap:6px;flex-wrap:wrap}.entity-index-title h4{margin:0;color:var(--text);font-size:13px}.entity-index-meta{display:flex;gap:5px;flex-wrap:wrap;margin-top:4px}.entity-index-meta span{color:var(--dim);font-size:11px}.entity-details{margin-top:10px}.entity-details>summary{cursor:pointer;color:var(--accent);font-weight:700;padding:8px 0}.entity-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.entity-grid .field{margin:0}.entity-grid .span-2{grid-column:1 / -1}.entity-affordances{display:flex;gap:6px;flex-wrap:wrap}.entity-affordances .check-row{min-width:0}.section-index{margin:10px 0 16px}.section-index-list{display:grid;gap:5px}.section-index-row{display:flex;align-items:center;justify-content:space-between;gap:8px;border-bottom:1px solid var(--border);padding:7px 2px}.section-index-row .index-main{min-width:0}.section-index-row .index-name{font-weight:700;color:var(--text);background:transparent;border:0;padding:0;text-align:left}.section-index-row .index-meta{display:block;color:var(--dim);font-size:11px;margin-top:2px}.section-index-empty{color:var(--dim);font-size:12px;padding:8px 2px}@media(max-width:700px){.entity-grid{grid-template-columns:1fr}.entity-grid .span-2{grid-column:auto}.entity-index-row{grid-template-columns:1fr}.entity-index-row .entity-destination{justify-self:start}.section-index-row{align-items:flex-start;flex-direction:column}.section-index-row button{align-self:flex-start}}</style>
 </head>
 <body>
 <header><h1>TAS MVP</h1><span class="meta">ストーリー制作ワークスペース</span><span class="spacer"></span><div class="top-actions"><div class="switch-row" style="gap:8px"><span>補助パネル</span><label class="switch"><input type="checkbox" id="toggleRightSwitch"><span class="slider"></span></label></div><button class="ghost" id="btnSaveDraft">保存</button><button class="ghost" id="btnLoadCampaign">読込</button><input class="sr-only" type="file" id="campaignFileInput" accept="application/json"><button id="btnBuild">出力確認</button></div></header>
@@ -25,10 +26,10 @@
 </main>
 <script>
 let assistantMode="prompt";let assistantAiResult="";
-const DRAFT_KEY="tas_campaign_draft_v1";const $=id=>document.getElementById(id);let context=null;let activeTab="world";let activeChapter="ch1";let selectedNode={type:"scene",index:0};let history=[];let draft="";let review="";let rightPanelEnabled=false;const DEFAULT_CAMPAIGN_NAME="ランタンヒル年代記";const DEFAULT_CAMPAIGN_WORLD="ミステリ / ロー・ファンタジー。静かで神秘的、少し切ない。";const DEFAULT_CAMPAIGN_THEME="孤独、献身、継承";const DEFAULT_CAMPAIGN_TERMS="現代語彙を避ける。正名はエンティティ台帳に合わせる。";let campaignName=DEFAULT_CAMPAIGN_NAME;let campaignImage="";let campaignWorld=DEFAULT_CAMPAIGN_WORLD;let campaignTheme=DEFAULT_CAMPAIGN_THEME;let campaignTerms=DEFAULT_CAMPAIGN_TERMS;let extraCompanions=0;let npcCount=1;let monsters=[];let items=[];let castImages={};let castNames={};let castProfiles={};let castFlags={};let sceneBackgrounds={};let sceneOverrides={};let discoveryFoldState={};let pendingCastFocus=null;let collapsedCampaign=false;let collapsedChapters={ch1:false,ch2:false};
+const DRAFT_KEY="tas_campaign_draft_v1";const $=id=>document.getElementById(id);let context=null;let activeTab="world";let activeChapter="ch1";let selectedNode={type:"scene",index:0};let history=[];let draft="";let review="";let rightPanelEnabled=false;const DEFAULT_CAMPAIGN_NAME="ランタンヒル年代記";const DEFAULT_CAMPAIGN_WORLD="ミステリ / ロー・ファンタジー。静かで神秘的、少し切ない。";const DEFAULT_CAMPAIGN_THEME="孤独、献身、継承";const DEFAULT_CAMPAIGN_TERMS="現代語彙を避ける。\n禁止語：懐中電灯、電灯、モーター、エンジン、電池、メートル\n言い換えが必要な場合は、世界観に合う平易な表現を使う。";let campaignName=DEFAULT_CAMPAIGN_NAME;let campaignImage="";let campaignWorld=DEFAULT_CAMPAIGN_WORLD;let campaignTheme=DEFAULT_CAMPAIGN_THEME;let campaignTerms=DEFAULT_CAMPAIGN_TERMS;let extraCompanions=0;let npcCount=1;let monsters=[];let items=[];let castImages={};let castNames={};let castProfiles={};let castFlags={};let sceneBackgrounds={};let sceneOverrides={};let discoveryFoldState={};let pendingCastFocus=null;let collapsedCampaign=false;let collapsedChapters={ch1:false,ch2:false};
 const fallbackScenes=[{id:1,name:"坑道の入口前",brief:"古いレールと木札がある。奥から金属音が聞こえる。",goal:"札とレールを確認し、奥へ進む",discoveries:["作業札","トロッコ軌道"]},{id:2,name:"分かれ道",brief:"封鎖の木柵と左右の坑道。奥に灯りが揺れる。",goal:"第三坑道へ入る手段を見つける",discoveries:["封鎖の木柵","油の匂い"]},{id:3,name:"坑道の最奥",brief:"ランタンを持つ人影がこちらを向く。",goal:"灯りの主と決着する",discoveries:["灯りの主の正体","動力と坑道維持"]},{id:4,name:"村への帰還",brief:"村の広場。マイラの家に灯りがともる。",goal:"マイラの家へ入る",discoveries:[]},{id:5,name:"マイラの部屋",brief:"マイラが報告を待っている。",goal:"見聞きしたことを報告する",discoveries:[]}];
 let freshCampaign=false;let customChapterScenes={ch1:[],ch2:[]};let chapterNames={ch1:"",ch2:""};let chapterOrder=["ch1"];
-const chapterData=()=>{if(freshCampaign)return {title:activeChapter==="ch2"?"新しい章":"新しい章",scenes:Array.isArray(customChapterScenes[activeChapter])?customChapterScenes[activeChapter]:[]};try{const file=activeChapter==="ch2"?"chapter_02.json":"chapter_01.json";const raw=context?.dataFiles?.[file]||context?.dataFiles?.["chapter_01.json"];if(raw)return JSON.parse(raw)}catch(e){}return {title:activeChapter==="ch2"?"心石の在処":"廃坑の灯",scenes:activeChapter==="ch2"?fallbackScenes.slice(0,2):fallbackScenes}};
+let chapterData=()=>{if(freshCampaign)return {title:activeChapter==="ch2"?"新しい章":"新しい章",scenes:Array.isArray(customChapterScenes[activeChapter])?customChapterScenes[activeChapter]:[]};try{const file=activeChapter==="ch2"?"chapter_02.json":"chapter_01.json";const raw=context?.dataFiles?.[file]||context?.dataFiles?.["chapter_01.json"];if(raw)return JSON.parse(raw)}catch(e){}return {title:activeChapter==="ch2"?"心石の在処":"廃坑の灯",scenes:activeChapter==="ch2"?fallbackScenes.slice(0,2):fallbackScenes}};
 const currentScenes=()=>chapterData().scenes||fallbackScenes;
 const nodeKey=(n,chapter=activeChapter)=>`${chapter}:${n.type}:${n.index??n.type}`;
 const withSceneOverride=n=>{const merged={...n,...(sceneOverrides[nodeKey(n)]||{})};const discoveries=Array.isArray(merged.discoveries)?merged.discoveries:Array.isArray(merged.secrets)?merged.secrets:null;const {secrets,...rest}=merged;return discoveries?{...rest,discoveries:discoveries.map((x,i)=>normalizeDiscoveryFor(merged,x,i))}:rest};
@@ -120,12 +121,13 @@ return out}catch(e){return []}}
 function assistantPrompt(kind){const s=scene();const scope=activeTab==="world"?"キャンペーン全体":activeTab==="cast"?"キャスト設計":activeTab==="rules"?"共通ルール":`${CHAPTERS[activeChapter].name} / ${s.type==="scene"?`シーン${s.id}`:s.name}`;const json=JSON.stringify(exportPayload(),null,2);const checks=currentValidationMessages().join("\n- ");const roleText=kind==="codex"?"あなたは実装担当のCodexです。":"あなたは設計補助のClaudeです。";return `${roleText}\n\n対象: ${scope}\n現在タブ: ${activeTab}\n検証メモ:\n- ${checks}\n\n依頼:\n- 現在の設定を読み取り、欠けている点・矛盾・次に詰めるべき論点を整理してください。\n- 必要なら、この画面で埋めるべき文面やタグ案を具体的に提案してください。\n- ゲーム状態を勝手に追加確定せず、未確定事項は未確定と明記してください。\n\n参照データ:\n${json}`.trim()}
 function promptBlock(kind,label){const prompt=assistantPrompt(kind);return `<div class="prompt-card"><div class="prompt-head"><h4>${label} 用プロンプト</h4><button class="icon-btn" data-copy-text="${escapeHtml(prompt)}">⎘</button></div><textarea class="prompt-box" readonly>${escapeHtml(prompt)}</textarea></div>`}
 function renderScenes(){const list=$("sceneList");const globals=[["world","世界設定"],["cast","キャスト／エージェント"],["monsters","モンスター"],["items","アイテム"],["rules","共通ルール"]];let html=`<div class="tree-root" data-toggle-campaign><span class="caret">${collapsedCampaign?"▸":"▾"}</span>${escapeHtml(campaignName)}</div><div class="tree-block ${collapsedCampaign?"collapsed":""}">${globals.map(([tab,label])=>`<button class="global-item ${activeTab===tab?"active":""}" data-global="${tab}">├─ ${label}</button>`).join("")}<div class="tree-label">チャプター</div>`;const chapterEntries=freshCampaign?chapterOrder.map((key,index)=>[key,chapterNames[key]||`チャプター${index+1}（未命名）`]):[["ch1","第1話「廃坑の灯」"],["ch2","第2話「心石の在処」"]];for(const [key,label] of chapterEntries){const nodes=key===activeChapter?chapterNodes():freshCampaign?[]:[{type:"scene",id:1,index:0,name:"シーン1",goal:"章の導入"},{type:"scene",id:2,index:1,name:"シーン2",goal:"章の展開"}];const collapsed=Boolean(collapsedChapters[key]);html+=`<button class="chapter-heading" data-chapter="${key}"><span class="caret">${collapsed?"▸":"▾"}</span>${label}</button><div class="chapter-children ${collapsed?"collapsed":""}">${nodes.map((n,i)=>`<button class="scene-item ${key===activeChapter&&n.type===selectedNode.type&&n.index===selectedNode.index?"active":""}" data-node="${i}" data-chapter-node="${key}">${n.type==="scene"?`├─ シーン${n.id}`:n.type==="opening"?"├─ オープニング":n.type==="ending"?"├─ エンディング":"└─ インターミッション"}：${escapeHtml(n.name)}</button>`).join("")}</div>`}html+=`</div>`;list.innerHTML=html;list.querySelectorAll("[data-toggle-campaign]").forEach(b=>b.onclick=()=>{collapsedCampaign=!collapsedCampaign;saveWorkspaceDraft();renderScenes();renderAll()});list.querySelectorAll("[data-global]").forEach(b=>b.onclick=()=>{activeTab=b.dataset.global;renderScenes();renderAll()});list.querySelectorAll("[data-chapter]").forEach(b=>b.onclick=()=>{const key=b.dataset.chapter;if(activeChapter!==key){activeChapter=key;selectedNode={type:"opening"};collapsedCampaign=false;collapsedChapters[key]=false;activeTab="structure"}else{collapsedChapters[key]=!collapsedChapters[key]}saveWorkspaceDraft();renderScenes();renderAll()});list.querySelectorAll("[data-node]").forEach(b=>b.onclick=()=>{if(b.dataset.chapterNode!==activeChapter){activeChapter=b.dataset.chapterNode;selectedNode={type:"opening"};collapsedCampaign=false;collapsedChapters[activeChapter]=false}else{const n=chapterNodes()[Number(b.dataset.node)];selectedNode={type:n.type,index:n.index}}activeTab="structure";renderScenes();renderAll()})}
-function renderWorld(){const image=campaignImage?`<img src="${campaignImage}">`:"キャンペーン画像なし";const castChips=currentSceneCastChips();return `<h2>世界設定</h2><p class="hint">キャンペーンの世界観を設定します。</p><div class="field"><label>キャンペーン画像</label><div class="scene-bg">${image}</div><input type="file" accept="image/*" id="campaignImageInput"></div><div class="field"><label>キャンペーン名</label><input id="campaignName" value="${escapeHtml(campaignName)}"></div><div class="field"><label>世界・ジャンル</label><textarea id="worldField">${escapeHtml(campaignWorld)}</textarea></div><div class="field"><label>テーマ</label><input id="themeField" value="${escapeHtml(campaignTheme)}"></div><div class="field"><label>用語・禁止事項</label><textarea id="termsField">${escapeHtml(campaignTerms)}</textarea></div><div class="card"><h3>登場人物</h3><p class="hint">このシーンで登場するキャスト</p><div class="chips">${castChips.length?castChips.map(c=>`<button class="chip" data-open-cast="${c.id}">${escapeHtml(c.name)}</button>`).join(""):`<span class="chip">使用キャストなし</span>`}</div></div>`}
+function entityLedgerEntries(){let entries=[];try{const base=JSON.parse(context?.dataFiles?.["campaign.json"]||"{}");entries.push(...(base.entities||[]).map(x=>({category:"既存キャンペーン",name:typeof x==="string"?x:x.ja,tab:"",source:"ゲーム側のcampaign.json"})).filter(x=>x.name))}catch(e){}entries.push(...npcList().map(x=>({category:"キャラクター／NPC",name:castName(x.id,x.name),tab:"cast",focus:x.id,source:"キャスト／エージェント"})));entries.push({category:"同行者",name:castName("gareth","ガレス"),tab:"cast",focus:"gareth",source:"キャスト／エージェント"});for(let i=0;i<extraCompanions;i++){const id=`member_${i+2}`;entries.push({category:"同行者",name:castName(id,`メンバー${i+2}`),tab:"cast",focus:id,source:"キャスト／エージェント"})}entries.push(...monsters.map((x,i)=>({category:"モンスター",name:x.name,tab:"monsters",source:"モンスター"})));entries.push(...items.map((x,i)=>({category:"アイテム",name:x.name,tab:"items",source:"アイテム"})));chapterNodes().filter(n=>n.type==="scene").forEach(n=>{(n.discoveries||[]).map((x,i)=>normalizeDiscoveryFor(n,x,i)).forEach(x=>entries.push({category:"シーン要素",name:x.label,tab:"state",chapter:activeChapter,index:n.index,source:`${chapterNames[activeChapter]||CHAPTERS[activeChapter]?.name||activeChapter}／シーン${n.id}`}))});const seen=new Set();return entries.filter(x=>x.name&&!seen.has(`${x.category}:${x.name}`)&&seen.add(`${x.category}:${x.name}`))}
+function renderWorld(){const image=campaignImage?`<img src="${campaignImage}">`:"キャンペーン画像なし";const castChips=currentSceneCastChips();const ledger=entityLedgerEntries();return `<h2>世界設定</h2><p class="hint">キャンペーンの世界観を設定します。</p><div class="field"><label>キャンペーン画像</label><div class="scene-bg">${image}</div><input type="file" accept="image/*" id="campaignImageInput"></div><div class="field"><label>キャンペーン名</label><input id="campaignName" value="${escapeHtml(campaignName)}"></div><div class="field"><label>世界・ジャンル</label><textarea id="worldField">${escapeHtml(campaignWorld)}</textarea></div><div class="field"><label>テーマ</label><input id="themeField" value="${escapeHtml(campaignTheme)}"></div><div class="field"><label>用語・禁止事項</label><p class="hint">キャンペーン全体の語彙、禁止語、言い換え、文体ルールを記入します。</p><textarea id="termsField">${escapeHtml(campaignTerms)}</textarea></div><div class="card"><h3>エンティティ台帳（現在の登録名）</h3><p class="hint">登録先をクリックすると、該当する編集画面へ移動します。</p><table class="ledger-table"><thead><tr><th>分類</th><th>表示名</th><th>登録先</th></tr></thead><tbody>${ledger.length?ledger.map(x=>`<tr><td>${escapeHtml(x.category)}</td><td>${escapeHtml(x.name)}</td><td>${x.tab?`<button class="sub ledger-link" data-ledger-tab="${x.tab}" data-ledger-focus="${x.focus||""}" data-ledger-chapter="${x.chapter||""}" data-ledger-index="${x.index??""}">${escapeHtml(x.source)}</button>`:escapeHtml(x.source)}</td></tr>`).join(""):`<tr><td colspan="3">まだ登録されていません</td></tr>`}</tbody></table></div><div class="card"><h3>登場人物</h3><p class="hint">このキャンペーンで登場するキャスト</p><div class="chips">${castChips.length?castChips.map(c=>`<button class="chip" data-open-cast="${c.id}">${escapeHtml(c.name)}</button>`).join(""):`<span class="chip">使用キャストなし</span>`}</div></div>`}
 function renderStructure(){const s=scene();const key=sceneKey();const label=s.type==="opening"?"オープニング":s.type==="intermission"?"インターミッション":s.type==="ending"?"エンディング":`シーン${s.id}`;const bg=sceneBackgrounds[key]?`<img src="${sceneBackgrounds[key]}">`:"背景画像なし";const selectedNpcs=new Set(s.npcs||[]);const npcChecks=npcList().map(n=>`<label class="check-row"><input type="checkbox" class="scene-npc" value="${n.id}" ${selectedNpcs.has(n.id)?"checked":""}>${escapeHtml(n.name)}</label>`).join("")||"<p class=\"hint\">キャスト／エージェントでNPCを登録すると、ここに表示されます。</p>";const transitions=(Array.isArray(s.transitions)&&s.transitions.length?s.transitions:[{conditionType:"flag",conditionValue:"",target:""}]).map(normalizeTransition);return `<h2>${label}の設定</h2><p class="hint">このシーンの背景、開始時の説明、登場NPC、次のシーンへの進み方を設定します。</p><div class="field"><label>背景画像</label><div class="scene-bg">${bg}</div><input type="file" accept="image/*" id="sceneBgInput"></div><div class="field"><label>名称</label><input id="sceneName" value="${escapeHtml(s.name)}"></div><div class="field"><label>開始時の説明</label><textarea id="sceneBrief">${escapeHtml(s.brief)}</textarea></div><div class="field"><label>登場NPC</label><p class="hint">キャスト／エージェントで登録したNPCを表示します。登場する場合だけチェックします。GMとメンバーは全シーン共通なので、ここでは指定しません。</p><div class="check-list">${npcChecks}</div></div><div class="field"><label>分岐／接続先</label><p class="hint">条件を選び、条件値と接続先を指定します。条件は6種類に統一します。</p><div class="transition-list">${transitions.map((t,i)=>`<div class="transition-row"><div class="field"><label>条件種別</label><select class="transition-type" data-transition-index="${i}">${TRANSITION_TYPES.map(([id,name])=>`<option value="${id}" ${t.conditionType===id?"selected":""}>${name}</option>`).join("")}</select></div><div class="field"><label>条件値</label><input class="transition-value" data-transition-index="${i}" value="${escapeHtml(t.conditionValue)}" placeholder="例：rail_info / 古い鍵 / rust_eater=defeated"></div><div class="field"><label>移動先</label><select class="transition-target" data-transition-index="${i}"><option value="">選択してください</option>${sceneTargets().map(n=>`<option value="${escapeHtml(sceneRef(n))}" ${t.target===sceneRef(n)?"selected":""}>${escapeHtml(sceneRefLabel(n))}</option>`).join("")}</select></div><button class="sub" data-remove-transition="${i}">削除</button></div>`).join("")}</div><div class="bottom"><button class="sub" id="btnAddTransition">＋ 分岐を追加</button></div></div>`}
 function renderState(){const s=scene();const key=sceneKey();const foldState=discoveryFoldState[key]||{};const discoveries=(s.discoveries||[]).map(normalizeDiscovery);const summary={major:discoveries.filter(x=>x.importance==="major").length,support:discoveries.filter(x=>x.importance==="support").length,flavor:discoveries.filter(x=>x.importance==="flavor").length};return `<h2>シーン要素</h2><p class="hint">シーン内で開示しうる要素台帳です。プレイヤーが見聞きする情報と、ゲーム本体が保持する確定事実を分けて管理します。</p><div class="card"><div class="state-toolbar"><div class="meta-row"><h3>シーン要素</h3><div class="discovery-summary"><span class="chip meta-chip">${discoveries.length}件</span><span class="chip summary-chip">主線 ${summary.major}</span><span class="chip summary-chip">補助 ${summary.support}</span><span class="chip summary-chip">演出 ${summary.flavor}</span></div></div><div class="toolbar-actions"><button class="sub" id="btnAddDiscovery">＋ 要素を追加</button><button class="sub" id="btnSeedDiscoveries">テンプレートを追加</button></div></div><p class="hint">名詞、画像内要素、音や匂い、伏線までここに登録します。発見された要素は、<b>要素名をそのまま</b>シーン遷移の条件や発話ルールの発火条件に書けます。</p>${discoveries.length?discoveries.map((x,i)=>{const collapsed=Boolean(foldState[x.id]);const ordinal=discoveryOrdinalLabel(x.id,i);return `<div class="state-discovery ${collapsed?"collapsed":""}" data-discovery-index="${i}"><div class="card-head"><h3>${escapeHtml(`${ordinal} ${x.label||`発見項目${i+1}`}`)}</h3><div><button class="sub collapse-btn" data-toggle-discovery="${i}">${collapsed?"開く":"閉じる"}</button><button class="sub" data-duplicate-discovery="${i}">複製</button><button class="sub delete-btn" data-remove-discovery="${i}">削除</button></div></div><div class="discovery-summary"><span class="chip summary-chip">${escapeHtml(categoryLabel(x.category))}</span><span class="chip summary-chip">${escapeHtml(importanceLabel(x.importance))}</span><span class="chip summary-chip">${escapeHtml(x.appearances.length?x.appearances.join(" / "):"登場箇所未設定")}</span></div><div class="state-discovery-body"><div class="state-grid"><div class="field"><label>要素名</label><input class="discovery-label" data-discovery-index="${i}" value="${escapeHtml(x.label)}" placeholder="封鎖の木柵"></div><div class="field"><label>種別</label><select class="discovery-category" data-discovery-index="${i}">${DISCOVERY_CATEGORIES.map(([id,label])=>`<option value="${id}" ${x.category===id?"selected":""}>${label}</option>`).join("")}</select></div><div class="field"><label>重要度</label><select class="discovery-importance" data-discovery-index="${i}">${DISCOVERY_IMPORTANCE.map(([id,label])=>`<option value="${id}" ${x.importance===id?"selected":""}>${label}</option>`).join("")}</select></div><div class="field"><label>登場箇所</label><input class="discovery-appearances" data-discovery-index="${i}" value="${escapeHtml(joinList(x.appearances))}" placeholder="開始説明, 画像, 会話"></div><div class="field span-2"><label>表面描写</label><textarea class="discovery-surface" data-discovery-index="${i}" placeholder="プレイヤーが見聞きする情報">${escapeHtml(x.surface)}</textarea></div><div class="field span-2"><label>開示方法</label><textarea class="discovery-trigger" data-discovery-index="${i}" placeholder="木柵を調べる / 画像を拡大して見る">${escapeHtml(x.trigger)}</textarea></div><div class="field"><label>難易度（調べたときのd20判定）</label><select class="discovery-dc" data-discovery-index="${i}">${DC_LEVELS.map(([v,l])=>`<option value="${v}" ${x.dc===v?"selected":""}>${l}</option>`).join("")}</select></div></div><div class="section-divider"><h4>ゲーム連動（通常は既定のままでよい）</h4><p>条件には要素名がそのまま使えます。ここは内部キーや追加フラグが必要な場合だけ設定します。</p></div><div class="state-grid"><div class="field"><label>項目キー（英数字・_）</label><input class="discovery-key" data-discovery-index="${i}" value="${escapeHtml(x.id)}" placeholder="ch1_s2_barrier"></div><div class="field"><label>追加フラグ（カンマ区切り。任意）</label><input class="discovery-flags" data-discovery-index="${i}" value="${escapeHtml(joinList(x.tags))}" placeholder="封鎖の木柵調査済"></div><div class="field span-2"><label>別名（カンマ区切り。プレイヤー入力の照合語。1文字も可）</label><input class="discovery-aliases" data-discovery-index="${i}" value="${escapeHtml(joinList(x.aliases))}" placeholder="柵, 木柵, バリケード"></div><div class="field span-2"><label>確定事実</label><textarea class="discovery-fact" data-discovery-index="${i}" placeholder="第三坑道への通路は内側から封鎖されている">${escapeHtml(x.fact)}</textarea></div></div></div></div>`}).join(""):`<div class="empty-card"><p class="hint">まだシーン要素がありません。まずはテンプレートを追加し、必要な要素だけ残す形が速いです。</p></div>`}</div>`}
 function renderExpression(){const key=sceneKey();const override=sceneOverrides[key]||{};const gmSceneNotes=override.gmSceneNotes??"このシーンでGMが見落としやすい条件、伏せるべき情報、演出上の注意点を記録する。";const rules=(override.dialogueRules||[]).map(normalizeDialogueRule);return `<h2>表現・会話</h2><p class="hint">ここでは、条件付きの発話と会話に紐づくイベント発火、GM向けの補足を管理します。</p><div class="field"><label>GM補足メモ</label><textarea id="gmSceneNotes" placeholder="例：木柵の修繕痕は s2a 調査後まで断定しない。水滴音は緊張感を出すため繰り返し使う。">${escapeHtml(gmSceneNotes)}</textarea></div><div class="card"><div class="state-toolbar"><div class="meta-row"><h3>条件付き発話ルール</h3><div class="discovery-summary"><span class="chip meta-chip">${rules.length}件</span></div></div><div class="toolbar-actions"><button class="sub" id="btnAddDialogueRule">＋ 発話ルールを追加</button></div></div><p class="hint">要素が発見されたら誰が何を言い、必要なら何を発火するかを定義します。条件にはシーン要素の要素名をそのまま書けます。</p><datalist id="discoveryNameList">${(scene().discoveries||[]).map((v,j)=>normalizeDiscovery(v,j)).map(x=>`<option value="${escapeHtml(x.label)}">`).join("")}</datalist>${rules.length?rules.map((rule,i)=>{const meta=dialogueEventMeta(rule.eventType);const options=eventTargetOptions(rule.eventType);const selectedLabel=options.find(option=>option.value===rule.targetId)?.label||rule.targetLabel||"";return `<div class="dialogue-rule" data-dialogue-index="${i}"><div class="card-head"><h3>発話ルール ${i+1}</h3><div><button class="sub" data-duplicate-dialogue="${i}">複製</button><button class="sub delete-btn" data-remove-dialogue="${i}">削除</button></div></div><div class="rule-tags"><span class="chip summary-chip">${escapeHtml(speakerLabel(rule.speaker))}</span><span class="chip summary-chip">${escapeHtml(rule.condition||"常時")}</span><span class="chip summary-chip">${escapeHtml(eventLabel(rule.eventType))}</span></div><div class="dialogue-grid"><div class="field"><label>話者</label><select class="dialogue-speaker" data-dialogue-index="${i}">${DIALOGUE_SPEAKERS.map(([id,label])=>`<option value="${id}" ${rule.speaker===id?"selected":""}>${label}</option>`).join("")}</select></div><div class="field"><label>優先度</label><select class="dialogue-priority" data-dialogue-index="${i}">${DIALOGUE_PRIORITIES.map(([id,label])=>`<option value="${id}" ${rule.priority===id?"selected":""}>${label}</option>`).join("")}</select></div><div class="field span-2"><label>発火条件（要素名をそのまま。AND / OR 可。常時なら空欄）</label><input class="dialogue-condition" data-dialogue-index="${i}" list="discoveryNameList" value="${escapeHtml(rule.condition)}" placeholder="例：封鎖の木柵"></div><div class="field span-2"><label>発言内容</label><textarea class="dialogue-line" data-dialogue-index="${i}" placeholder="調査結果に応じて表示する発言">${escapeHtml(rule.line)}</textarea></div><div class="field"><label>発火イベント</label><select class="dialogue-event-type" data-dialogue-index="${i}">${DIALOGUE_EVENTS.map(([id,label])=>`<option value="${id}" ${rule.eventType===id?"selected":""}>${label}</option>`).join("")}</select></div>${meta.mode==="none"?`<div class="field"><label>${meta.label}</label><div class="readonly-field">対象なし</div></div>`:options.length?`<div class="field"><label>${meta.label}</label><select class="dialogue-target-id" data-dialogue-index="${i}"><option value="">選択してください</option>${options.map(option=>`<option value="${escapeHtml(option.value)}" ${rule.targetId===option.value?"selected":""}>${escapeHtml(option.label)}</option>`).join("")}</select></div>`:`<div class="field"><label>${meta.label}</label><input class="dialogue-target-id" data-dialogue-index="${i}" value="${escapeHtml(rule.targetId)}" placeholder="${escapeHtml(meta.placeholder)}"></div>`}<div class="field span-2"><label>対象表示名 / 補足</label><input class="dialogue-target-label" data-dialogue-index="${i}" value="${escapeHtml(selectedLabel)}" placeholder="必要ならGM向けの表示名を補足"></div><div class="field span-2"><label>イベント補足</label><input class="dialogue-event-notes" data-dialogue-index="${i}" value="${escapeHtml(rule.eventNotes)}" placeholder="数量、演出、例外条件などを補足"></div><div class="field"><label><input type="checkbox" class="dialogue-once" data-dialogue-index="${i}" ${rule.once?"checked":""}> 一度だけ発火</label></div><div class="field"><label><input type="checkbox" class="dialogue-hidden" data-dialogue-index="${i}" ${rule.hiddenUntilTriggered?"checked":""}> 条件を満たすまで候補表示しない</label></div></div></div>`}).join(""):`<div class="empty-card"><p class="hint">まだ発話ルールがありません。必要な会話だけ追加し、状態変化はイベント種別で明示します。</p></div>`}</div>`}
 function castCard(id,name,role,profile,flags,meta="",options={}){const currentName=castName(id,name);const currentProfile=castProfile(id,profile);const currentFlags=castFlagSet(id,role);const image=castImages[id]?`<img src="${castImages[id]}">`:"画像なし";const deleteButton=options.deletable?`<button class="sub delete-btn" data-delete-cast="${id}" data-delete-kind="${options.kind}">削除</button>`:options.fixed?`<button class="sub delete-btn" disabled>固定</button>`:"";return `<div class="card" data-cast-card="${id}"><div class="card-head"><h3><span data-cast-title="${id}">${escapeHtml(currentName)}</span>${meta?`<span class="chip meta-chip">${meta}</span>`:""}</h3>${deleteButton}</div><div class="field"><label>名前</label><input class="cast-name-input" data-cast-name-id="${id}" data-cast-default="${escapeHtml(name)}" value="${escapeHtml(currentName)}"></div><div class="cast-media"><div class="cast-thumb">${image}</div><div class="field cast-file"><label>画像</label><input type="file" accept="image/*" class="cast-image-input" data-cast-id="${id}"></div></div><div class="field"><label>役割・口調</label><textarea class="cast-profile-input" data-cast-profile-id="${id}" data-cast-profile-default="${escapeHtml(profile)}">${escapeHtml(currentProfile)}</textarea></div><div class="field"><label>権限</label><div class="switch-list">${[["chat","自由会話","想定外の質問に返答する",currentFlags.chat],["propose","提案","プレイヤーに行動を提案する",currentFlags.propose],["act","採用前の行動","採用される前に行動する",currentFlags.act],["mutate","状態変更","ゲーム状態を直接変更する",currentFlags.mutate]].map(([key,label,help,on])=>`<div class="switch-row"><span>${label}<small>　${help}</small></span><label class="switch"><input type="checkbox" class="cast-flag-input" data-cast-flag-id="${id}" data-cast-flag-key="${key}" ${on?"checked":""}><span class="slider"></span></label></div>`).join("")}</div></div></div>`}
-function renderCast(){const memberCards=[castCard("gareth","ガレス","メンバー","普通の戦士・用心棒。短く実用的に話す。",{chat:true,propose:true,act:false,mutate:false},"メンバー 1/3",{fixed:true})];for(let i=0;i<extraCompanions;i++){memberCards.push(castCard(`member_${i+2}`,`メンバー${i+2}`,"メンバー","未設定。必要ならメンバーの役割・口調を定義する。",{chat:false,propose:false,act:false,mutate:false},`メンバー ${i+2}/3`,{deletable:true,kind:"member"}))}const npcCards=Array.from({length:npcCount},(_,i)=>castCard(`npc_${i+1}`,`NPC${i+1}`,"NPC","シーンごとに設定するNPC。",{chat:false,propose:false,act:false,mutate:false},`NPC ${i+1}/10`,{deletable:true,kind:"npc"})).join("");return `<h2>キャスト／エージェント</h2><p class="hint">GMは1名固定です。メンバーは固定1名＋追加2名まで、NPCは最大10名まで設定できます。</p>${castCard("gm","GM","GM","ゲームマスター。確定した結果を説明し、プレイヤーを案内する。",{chat:true,propose:true,act:false,mutate:false},"GM固定",{fixed:true})}${memberCards.join("")}<div class="bottom"><button class="sub" id="btnAddCompanion" ${extraCompanions>=2?"disabled":""}>＋ メンバーを追加（${1+extraCompanions}/3）</button></div>${npcCards}<div class="bottom"><button class="sub" id="btnAddNpc" ${npcCount>=10?"disabled":""}>＋ NPCを追加（${npcCount}/10）</button></div>`}
+function renderCast(){const memberCards=[castCard("gareth","ガレス","メンバー","普通の戦士・用心棒。短く実用的に話す。",{chat:true,propose:true,act:false,mutate:false},"メンバー 1/3",{fixed:true})];for(let i=0;i<extraCompanions;i++){memberCards.push(castCard(`member_${i+2}`,`メンバー${i+2}`,"メンバー","未設定。必要ならメンバーの役割・口調を定義する。",{chat:false,propose:false,act:false,mutate:false},`メンバー ${i+2}/3`,{deletable:true,kind:"member"}))}const npcCards=Array.from({length:npcCount},(_,i)=>castCard(`npc_${i+1}`,`NPC${i+1}`,"NPC","シーンごとに設定するNPC。",{chat:false,propose:false,act:false,mutate:false},`NPC ${i+1}/10`,{deletable:true,kind:"npc"})).join("");return `<h2>キャラクター/メンバー</h2><p class="hint">GMは1名固定です。メンバーは固定1名＋追加2名まで、NPCは最大10名まで設定できます。</p>${castCard("gm","GM","GM","ゲームマスター。確定した結果を説明し、プレイヤーを案内する。",{chat:true,propose:true,act:false,mutate:false},"GM固定",{fixed:true})}${memberCards.join("")}<div class="bottom"><button class="sub" id="btnAddCompanion" ${extraCompanions>=2?"disabled":""}>＋ メンバーを追加（${1+extraCompanions}/3）</button></div>${npcCards}<div class="bottom"><button class="sub" id="btnAddNpc" ${npcCount>=10?"disabled":""}>＋ NPCを追加（${npcCount}/10）</button></div>`}
 const DC_LEVELS=[[0,"自動（判定なし）"],[8,"易しい（成功率65%）"],[12,"普通（45%）"],[15,"難しい（30%）"],[18,"最難（15%）"]];
 function renderMonsters(){return `<h2>モンスター</h2><p class="hint">キャンペーン共通のモンスター台帳です。シーン設定タブで「このシーンの敵」として選ぶと、出力時に敵データ（名前・HP）としてゲームへ渡ります。</p>${monsters.map((m,i)=>`<div class="card"><div class="card-head"><h3 data-monster-title="${i}">${escapeHtml(m.name||`モンスター${i+1}`)}</h3><button class="sub delete-btn" data-remove-monster="${i}">削除</button></div><div class="cast-media"><div class="cast-thumb">${m.image?`<img src="${m.image}">`:"画像なし"}</div><div class="field cast-file"><label>画像</label><input type="file" accept="image/*" class="monster-image" data-monster-index="${i}"></div></div><div class="state-grid"><div class="field"><label>名前</label><input class="monster-name" data-monster-index="${i}" value="${escapeHtml(m.name||"")}" placeholder="錆喰い"></div><div class="field"><label>HP</label><input type="number" min="1" class="monster-hp" data-monster-index="${i}" value="${Number(m.hp)||10}"></div><div class="field span-2"><label>行動・演出の指針</label><textarea class="monster-notes" data-monster-index="${i}" placeholder="鉄を喰う獣。音に敏感。倒すより追い払う想定。">${escapeHtml(m.notes||"")}</textarea></div></div></div>`).join("")||`<div class="empty-card"><p class="hint">まだモンスターがいません。「＋ モンスターを追加」から登録します。</p></div>`}<div class="bottom"><button class="sub" id="btnAddMonster">＋ モンスターを追加</button></div>`}
 function bindMonsters(){const sync=()=>{monsters=Array.from(document.querySelectorAll(".monster-name")).map((el,i)=>({...monsters[i],id:`monster_${i+1}`,name:el.value.trim(),hp:Math.max(1,Number(document.querySelector(`.monster-hp[data-monster-index="${i}"]`)?.value)||10),notes:document.querySelector(`.monster-notes[data-monster-index="${i}"]`)?.value||""}));document.querySelectorAll("[data-monster-title]").forEach(h=>{const i=Number(h.dataset.monsterTitle);h.textContent=monsters[i]?.name||`モンスター${i+1}`});saveWorkspaceDraft(true)};document.querySelectorAll(".monster-name,.monster-hp,.monster-notes").forEach(el=>{el.oninput=sync;el.onchange=sync});document.querySelectorAll(".monster-image").forEach(input=>input.onchange=e=>{const idx=Number(e.target.dataset.monsterIndex);handleImageInput(e.target.files?.[0],url=>{monsters=monsters.map((m,i)=>i===idx?{...m,image:url}:m)},"モンスター画像を保存しました")});document.querySelectorAll("[data-remove-monster]").forEach(btn=>btn.onclick=()=>{const idx=Number(btn.dataset.removeMonster);if(!confirm(`${monsters[idx]?.name||"このモンスター"} を削除しますか？`))return;monsters=monsters.filter((_,i)=>i!==idx);saveWorkspaceDraft(true);renderTab()});const add=$("btnAddMonster");if(add)add.onclick=()=>{monsters=[...monsters,{id:`monster_${monsters.length+1}`,name:"",hp:10,notes:""}];saveWorkspaceDraft(true);renderTab()}}
@@ -171,7 +173,7 @@ merged.direction=directionLines.length?`${baseDirection?baseDirection+"\n":""}${
 /* シーン敵: 台帳のモンスターをmock2のenemy形式(name/hp/maxHp)へ変換。未選択は元データ維持、「なし」は削除 */
 if(typeof merged.enemyName==="string"){const mon=monsters.find(m=>m.name===merged.enemyName);if(mon)merged.enemy={...(merged.enemy||{}),name:mon.name,hp:Number(mon.hp)||10,maxHp:Number(mon.hp)||10};else delete merged.enemy}
 delete merged.enemyName;delete merged.type;delete merged.index;delete merged.discoveries;delete merged.transitions;delete merged.dialogueRules;delete merged.gmSceneNotes;return merged});const chapter={...baseChapter,title:baseChapter.title||CHAPTERS[activeChapter].name,scenes};return {campaign,chapter,chapterFile:`${CHAPTERS[activeChapter].file.toLowerCase()}.json`}}
-function renderExport(){const folder="/Users/yasuda_k/Desktop/Terminus/trpg-gm-mock2/public/data";const filename=`${CHAPTERS[activeChapter].file.toLowerCase()}.json`;return `<h2>出力確認</h2><p class="hint">ゲームmockが読み込む campaign.json と章データを確認し、mock側の public/data へ保存します。</p><div class="field"><label>出力フォルダ</label><input id="exportFolder" value="${escapeHtml(folder)}" readonly></div><div class="field"><label>章ファイル</label><input id="exportFile" value="${escapeHtml(filename)}" readonly></div><div class="field"><label>JSONプレビュー</label><textarea class="large" id="exportPreview">${escapeHtml(JSON.stringify(mockCampaignPayload(),null,2))}</textarea></div><div class="bottom"><button class="sub" id="btnRefreshExport">プレビュー更新</button><button id="btnExportCampaign">mock側へ出力</button></div>`}
+function renderExport(){const folder="/Users/yasuda_k/Desktop/Terminus/trpg-gm-mock2/public/data/campaigns/"+tasCampaignId;const filename=`${runtimeChapterId(activeChapter)}.json`;return `<h2>出力確認</h2><p class="hint">キャンペーンIDと章IDを維持したまま、mock側のcampaigns.jsonとキャンペーン別データへ保存します。</p><div class="field"><label>キャンペーンID</label><input value="${escapeHtml(tasCampaignId)}" readonly></div><div class="field"><label>出力フォルダ</label><input id="exportFolder" value="${escapeHtml(folder)}" readonly></div><div class="field"><label>章ファイル</label><input id="exportFile" value="${escapeHtml(filename)}" readonly></div><div class="field"><label>JSONプレビュー</label><textarea class="large" id="exportPreview">${escapeHtml(JSON.stringify(mockCampaignPayload(),null,2))}</textarea></div><div class="bottom"><button class="sub" id="btnRefreshExport">プレビュー更新</button><button id="btnExportCampaign">mock側へ出力</button></div>`}
 const INSTRUCTION_TEMPLATES=[
 {label:"基本形（要素を厚くする）",text:"【主線にしたい要素】を主線にする。調査すると【判明する事実】が分かるようにする。【伏線にしたい要素】を補助の伏線として置き、この時点では正体を断定しない。禁止事項：【書いてはいけないこと・出してはいけない情報】"},
 {label:"会話・イベント中心",text:"【キャラクター名】が【きっかけ】で反応する発話ルールを追加する。【条件となる要素名】の発見後に、GMが【誘導したい行動や場所】へ誘導する発話を発火する。発言はすべて短く、現代語彙を使わない。"},
@@ -261,7 +263,25 @@ saveCampaignFile=()=>{try{const filename=`${sanitizeFilename(campaignName)}.json
 </script>
 <script>
 /* 補助パネルは親要素でイベントを受け、再描画後も切替を維持する。 */
-$("rightBody").onclick=async e=>{if(e.target.closest("#btnSuggest")||e.target.closest("#btnAssistantAI"))return;const mode=e.target.closest("[data-assistant-mode]");if(mode){assistantMode=mode.dataset.assistantMode;assistantAiResult="";saveWorkspaceDraft(true);renderRightPanel();renderValidation();return}};
+$("rightBody").onclick=async e=>{
+  const suggest=e.target.closest("#btnSuggest");
+  if(suggest){
+    const box=$("suggestion");
+    if(box){box.classList.remove("hidden");box.innerHTML=`${promptBlock("codex","Codex")}${promptBlock("claude","Claude")}`;document.querySelectorAll("[data-copy-text]").forEach(btn=>btn.onclick=()=>{navigator.clipboard.writeText(btn.dataset.copyText).then(()=>setStatus("プロンプトをコピーしました")).catch(err=>setStatus("コピーに失敗しました: "+err.message))})}
+    return;
+  }
+  const askAI=e.target.closest("#btnAssistantAI");
+  if(askAI){
+    const instruction=$("assistantInstruction")?.value.trim()||"";
+    askAI.disabled=true;setStatus("AIに相談中…");
+    try{assistantAiResult=await callLLM("あなたはTRPG制作の設計補助です。TASの現在設定を読み取り、未確定事項を勝手に確定せず、改善点と具体案を日本語で整理してください。",[{role:"user",content:`${assistantPrompt("claude")}\n\n追加指示:\n${instruction||"現在の設定について、優先度の高い改善点を整理してください。"}`}],4000);renderRightPanel();renderValidation();}
+    catch(err){assistantAiResult=`AI相談を実行できませんでした。${err.message}`;setStatus("AI相談に失敗しました")}
+    finally{if($("btnAssistantAI"))$("btnAssistantAI").disabled=false}
+    return;
+  }
+  const mode=e.target.closest("[data-assistant-mode]");
+  if(mode){assistantMode=mode.dataset.assistantMode;assistantAiResult="";saveWorkspaceDraft(true);renderRightPanel();renderValidation();return}
+};
 </script>
 <script>
 /* テキストプレイ最小ランタイム: 入力を要素・発話・イベント・遷移へ接続する。 */
@@ -375,6 +395,637 @@ mockCampaignPayload=function(){
   const chapterInfo=CHAPTERS[activeChapter]||{name:currentFreshChapterLabel(),file:`CHAPTER_${String(chapterOrder.indexOf(activeChapter)+1).padStart(2,"0")}`};
   const entities=[...monsters.map(m=>m.name),...items.map(i=>i.name)].filter(Boolean).map(ja=>({ja,note:"TAS台帳から登録"}));
   return {...payload,campaign:{meta:{title:campaignName},style:{world:campaignWorld,theme:campaignTheme,terms:campaignTerms},entities},chapter:{...payload.chapter,title:currentFreshChapterLabel(),scenes:payload.chapter?.scenes||[]},chapterFile:`${chapterInfo.file.toLowerCase()}.json`};
+};
+</script>
+<script>
+/* エクスポート契約v0.2: 表示名と分離した安定ID、構造化style、catalog情報を付与する。 */
+function stableId(value,fallback){const raw=String(value||"").normalize("NFKC").toLowerCase().trim().replace(/[^a-z0-9_-]+/g,"-").replace(/^-+|-+$/g,"");return raw||fallback}
+var tasCampaignId="lanternhill";
+var tasChapterIds={ch1:"chapter_01",ch2:"chapter_02"};
+var baseWorkspaceDraftForStable=workspaceDraft;
+workspaceDraft=function(){return {...baseWorkspaceDraftForStable(),campaignId:tasCampaignId,chapterIds:tasChapterIds}}
+var baseApplyWorkspaceDraftForStable=applyWorkspaceDraft;
+applyWorkspaceDraft=function(data){baseApplyWorkspaceDraftForStable(data);tasCampaignId=stableId(data.campaignId||campaignName,"campaign");tasChapterIds=data.chapterIds&&typeof data.chapterIds==="object"?data.chapterIds:{ch1:"chapter_01",ch2:"chapter_02"};}
+try{const rawStable=localStorage.getItem(DRAFT_KEY);if(rawStable){const parsedStable=JSON.parse(rawStable);const dataStable=parsedStable.data||parsedStable;tasCampaignId=stableId(dataStable.campaignId||campaignName,"campaign");tasChapterIds=dataStable.chapterIds&&typeof dataStable.chapterIds==="object"?dataStable.chapterIds:tasChapterIds}}catch(e){}
+function runtimeChapterId(key){if(!tasChapterIds[key]){const n=Math.max(1,chapterOrder.indexOf(key)+1);tasChapterIds[key]=`chapter_${String(n).padStart(2,"0")}`}return tasChapterIds[key]}
+function runtimeImageName(value){const raw=String(value||"");if(!raw||raw.startsWith("data:"))return "";return raw.replace(/^.*[\\/]/,"")}
+function runtimeAssetId(file){return stableId(String(file).replace(/\\.[^.]+$/,""),"asset")}
+var baseMockCampaignPayloadForContract=mockCampaignPayload;
+mockCampaignPayload=function(){
+  const payload=baseMockCampaignPayloadForContract();
+  const chapterKey=activeChapter;
+  const chapterId=runtimeChapterId(chapterKey);
+  const baseCampaign=payload.campaign||{};
+  const baseStyle=baseCampaign.style||{};
+  const companions=Array.isArray(baseCampaign.companions)&&baseCampaign.companions.length?baseCampaign.companions:[{id:"gareth",name:"ガレス",persona:"寡黙で実用的な戦士。短く話す。"}];
+  const style={...baseStyle,
+    narration:baseStyle.narration||"である調。地の文は短く、確定事実を優先する。",
+    readingLevel:baseStyle.readingLevel||"平易な日本語を使う。",
+    world:campaignWorld,
+    theme:campaignTheme,
+    terms:campaignTerms
+  };
+  const chapter=payload.chapter||{};
+  const firstScene=(chapter.scenes||[])[0]||{};
+  const sceneNodes=chapterNodes().filter(n=>n.type==="scene");
+  const normalizedChapter={...chapter,
+    id:Number(chapter.id)||Number(String(chapterId).replace(/\D/g,""))||1,
+    title:chapter.title||currentFreshChapterLabel(),
+    quest:chapter.quest||firstScene.goal||`${chapter.title||currentFreshChapterLabel()}の目的を達成する。`,
+    intro:chapter.intro||firstScene.brief||"この章の導入を設定してください。",
+    scenes:(chapter.scenes||[]).map((rawScene,index)=>{
+      const node=sceneNodes[index]||{};
+      const key=node.type?nodeKey(node):"";
+      const sceneImage=runtimeImageName(sceneBackgrounds[key]);
+      const npcId=(rawScene.npcs||[])[0];
+      const npcImage=runtimeImageName(npcId&&castImages[npcId]);
+      const monster=monsters.find(m=>m.name&&m.name===rawScene.enemyName);
+      const monsterImage=runtimeImageName(monster?.image);
+      const next={...rawScene};
+      if(sceneImage)next.img=sceneImage;
+      if(npcImage)next.npcSprite=npcImage;
+      if(monsterImage)next.enemy={...(next.enemy||{}),img:monsterImage};
+      delete next.enemyName;
+      return next;
+    })
+  };
+  const campaign={...baseCampaign,
+    meta:{...(baseCampaign.meta||{}),id:tasCampaignId,title:campaignName,version:(baseCampaign.meta||{}).version||"0.2"},
+    style,
+    companions:companions.map(c=>{const image=runtimeImageName(castImages[c.id]);return image?{...c,sprite:image}:{...c}}),
+    image:runtimeImageName(campaignImage)||baseCampaign.image||null
+  };
+  const assets={};
+  const addAsset=(file,kind,usedBy)=>{if(!file)return;const id=runtimeAssetId(file);assets[id]={file,kind,status:"candidate",usedBy:[usedBy]}};
+  addAsset(runtimeImageName(campaignImage),"campaign",`campaign.image`);
+  campaign.companions.forEach(c=>addAsset(c.sprite,"portrait",`campaign.companions.${c.id}.sprite`));
+  normalizedChapter.scenes.forEach((s,i)=>{const base=`${chapterId}.scenes.${s.id||i+1}`;addAsset(s.img,"background",`${base}.img`);addAsset(s.npcSprite,"sprite",`${base}.npcSprite`);addAsset(s.parallax?.sky,"parallax.sky",`${base}.parallax.sky`);addAsset(s.parallax?.fg,"parallax.fg",`${base}.parallax.fg`);addAsset(s.enemy?.img,"enemy",`${base}.enemy.img`);addAsset(s.enemy?.sprite,"sprite",`${base}.enemy.sprite`);(s.secrets||[]).forEach(secret=>{addAsset(secret.img,"popup",`${base}.secrets.${secret.id}.img`);addAsset(secret.bg,"background",`${base}.secrets.${secret.id}.bg`)})});
+  return {...payload,campaign,chapter:normalizedChapter,assets,campaignId:tasCampaignId,chapterId,chapterFile:`${chapterId}.json`};
+}
+var baseCreateNewCampaignForStable=createNewCampaign;
+createNewCampaign=function(){baseCreateNewCampaignForStable();tasCampaignId=stableId(campaignName,"campaign");tasChapterIds={ch1:"chapter_01"};saveWorkspaceDraft(true)};
+if(newCampaignButton)newCampaignButton.onclick=createNewCampaign;
+var baseCreateNewChapterForStable=createNewChapter;
+createNewChapter=function(){baseCreateNewChapterForStable();tasChapterIds[activeChapter]=`chapter_${String(chapterOrder.indexOf(activeChapter)+1).padStart(2,"0")}`;saveWorkspaceDraft(true)};
+if(newChapterButton)newChapterButton.onclick=createNewChapter;
+var baseBindWorldForStable=bindWorld;
+bindWorld=function(){baseBindWorldForStable();const input=$("campaignName");if(input)input.oninput=e=>{campaignName=e.target.value.trim()||DEFAULT_CAMPAIGN_NAME;if(!tasCampaignId||tasCampaignId==="lanternhill"&&freshCampaign)tasCampaignId=stableId(campaignName,"campaign");renderScenes();saveWorkspaceDraft(true);setStatus("キャンペーン名を更新しました")}}
+</script>
+<script>
+var baseBindWorldForLedger=bindWorld;
+bindWorld=function(){baseBindWorldForLedger();document.querySelectorAll("[data-ledger-tab]").forEach(button=>button.onclick=()=>{const tab=button.dataset.ledgerTab;const chapter=button.dataset.ledgerChapter;const index=button.dataset.ledgerIndex;if(chapter&&chapter!==activeChapter){activeChapter=chapter;selectedNode={type:"scene",index:Number(index)||0}}else if(tab==="state"&&index!==""){selectedNode={type:"scene",index:Number(index)||0}}if(tab==="cast")pendingCastFocus=button.dataset.ledgerFocus||null;activeTab=tab;renderScenes();renderAll();setStatus(`${button.textContent}の登録画面へ移動しました`)})}
+</script>
+<script>
+/* シーンに登場するエンティティを、プレイヤー行動の対象チップとして提示する。 */
+function playtestEntityActions(){const s=scene();const actions=[];playtestDiscoveryEntries(s).forEach(d=>{if(d.label)actions.push({label:d.label,action:`${d.label}を調べる`,kind:"調査"})});(s.npcs||[]).forEach(id=>{const name=castName(id,id);if(name)actions.push({label:name,action:`${name}に話しかける`,kind:"会話"})});if(s.enemy?.name)actions.push({label:s.enemy.name,action:`${s.enemy.name}を調べる`,kind:"調査"});const seen=new Set();return actions.filter(x=>!seen.has(x.action)&&seen.add(x.action))}
+var baseRenderPlaytestForEntityChips=renderPlaytest;
+renderPlaytest=function(){const html=baseRenderPlaytestForEntityChips();const chips=playtestEntityActions();const block=`<div class="card entity-action-card"><h3>行動対象</h3><p class="hint">対象を選ぶと、プレイヤーの行動文が入力欄に入ります。</p><div class="chips">${chips.length?chips.map(x=>`<button class="chip play-entity-chip" data-play-object="${escapeHtml(x.action)}"><span class="chip-kind">${escapeHtml(x.kind)}</span> ${escapeHtml(x.label)}</button>`).join(""):`<span class="chip">このシーンの行動対象は未登録です</span>`}</div></div>`;return html.replace('<div class="play-input">',block+'<div class="play-input">')}
+var baseBindPlaytestForEntityChips=bindPlaytest;
+bindPlaytest=function(){baseBindPlaytestForEntityChips();document.querySelectorAll("[data-play-object]").forEach(button=>button.onclick=()=>{const input=$("playInput");if(!input)return;input.value=button.dataset.playObject||"";input.focus()})}
+</script>
+<script>
+/* エンティティ台帳v0.1: 世界設定の参照表から、TASで編集できる共通台帳へ拡張する。 */
+var entityLedger=[];
+const ENTITY_KINDS=[["character","キャラクター"],["npc","NPC"],["place","場所"],["enemy","敵"],["item","アイテム"],["organization","組織"],["lore","伝承"],["custom","その他"]];
+const ENTITY_IMPORTANCE=[["main","主線"],["support","補助"],["background","背景"],["flavor","雰囲気"]];
+const ENTITY_AFFORDANCES=[["inspect","調べる"],["talk","話しかける"],["take","入手する"],["use","使う"],["fight","戦う"]];
+function entityLedgerId(name,index=0){return stableId(name,`entity_${index+1}`)}
+function ensureEntityLedger(){if(entityLedger.length)return entityLedger;let entries=[];try{const base=JSON.parse(context?.dataFiles?.["campaign.json"]||"{}");entries=(base.entities||[]).map((x,i)=>({id:entityLedgerId(x.id||x.ja||x.name,i),name:x.ja||x.name||"",aliases:Array.isArray(x.aliases)?x.aliases:[],kind:x.kind||"custom",importance:x.importance||"background",surface:x.surface||"",truth:x.truth||x.visual||"",affordances:Array.isArray(x.affordances)?x.affordances:["inspect"],image:x.image||""})).filter(x=>x.name)}catch(e){}const add=(entry)=>{if(entry.name&&!entries.some(x=>x.name===entry.name))entries.push({...entry,id:entry.id||entityLedgerId(entry.name,entries.length)})};npcList().forEach(x=>add({name:castName(x.id,x.name),kind:"npc",importance:"support",affordances:["talk","inspect"]}));add({id:"gareth",name:castName("gareth","ガレス"),kind:"character",importance:"support",affordances:["talk","inspect"]});for(let i=0;i<extraCompanions;i++){const id=`member_${i+2}`;add({id,name:castName(id,`メンバー${i+2}`),kind:"character",importance:"support",affordances:["talk","inspect"]})}monsters.forEach(x=>add({id:x.id,name:x.name,kind:"enemy",importance:"support",affordances:["inspect","fight"],image:x.image||""}));items.forEach(x=>add({id:x.id,name:x.name,kind:"item",importance:"support",affordances:["inspect","take","use"],image:x.image||""}));entityLedger=entries;return entityLedger}
+function entityLedgerById(id){return ensureEntityLedger().find(x=>x.id===id)}
+function entityKindLabel(id){return ENTITY_KINDS.find(x=>x[0]===id)?.[1]||id}
+function entityImportanceLabel(id){return ENTITY_IMPORTANCE.find(x=>x[0]===id)?.[1]||id}
+function entityAffordanceLabels(values){return (values||[]).map(id=>ENTITY_AFFORDANCES.find(x=>x[0]===id)?.[1]||id).join("、")}
+var baseWorkspaceDraftForEntityLedger=workspaceDraft;
+workspaceDraft=function(){return {...baseWorkspaceDraftForEntityLedger(),entityLedger:ensureEntityLedger()}}
+var baseApplyWorkspaceDraftForEntityLedger=applyWorkspaceDraft;
+applyWorkspaceDraft=function(data){baseApplyWorkspaceDraftForEntityLedger(data);if(Array.isArray(data.entityLedger))entityLedger=data.entityLedger.map((x,i)=>({...x,id:x.id||entityLedgerId(x.name,i),aliases:Array.isArray(x.aliases)?x.aliases:parseList(x.aliases),affordances:Array.isArray(x.affordances)?x.affordances:["inspect"]}));}
+try{const rawEntityDraft=localStorage.getItem(DRAFT_KEY);if(rawEntityDraft){const parsed=JSON.parse(rawEntityDraft);if(Array.isArray((parsed.data||parsed).entityLedger))entityLedger=(parsed.data||parsed).entityLedger}}catch(e){}
+function renderEntities(){const entries=ensureEntityLedger();return `<h2>エンティティ台帳</h2><p class="hint">キャンペーン全体で使う名前と、プレイヤーが取れる行動対象を定義します。登録しただけではシーンに登場しません。</p><div class="card"><p class="hint">正式名はゲーム内の表示・所持品・判定で使う名前です。別名はプレイヤー入力との照合に使います。</p>${entries.map((x,i)=>`<div class="entity-editor" data-entity-index="${i}"><div class="card-head"><h3>${escapeHtml(x.name||`エンティティ${i+1}`)}</h3><button class="sub delete-btn" data-remove-entity="${i}">削除</button></div><div class="entity-grid"><div class="field"><label>正式名</label><input class="entity-name" data-entity-index="${i}" value="${escapeHtml(x.name)}" placeholder="心石の欠片"></div><div class="field"><label>種別</label><select class="entity-kind" data-entity-index="${i}">${ENTITY_KINDS.map(([id,label])=>`<option value="${id}" ${x.kind===id?"selected":""}>${label}</option>`).join("")}</select></div><div class="field"><label>重要度</label><select class="entity-importance" data-entity-index="${i}">${ENTITY_IMPORTANCE.map(([id,label])=>`<option value="${id}" ${x.importance===id?"selected":""}>${label}</option>`).join("")}</select></div><div class="field"><label>別名（カンマ区切り）</label><input class="entity-aliases" data-entity-index="${i}" value="${escapeHtml((x.aliases||[]).join(", "))}" placeholder="心石, 青い石"></div><div class="field span-2"><label>表層説明</label><textarea class="entity-surface" data-entity-index="${i}" placeholder="プレイヤーが最初に見聞きできる情報">${escapeHtml(x.surface||"")}</textarea></div><div class="field span-2"><label>確定情報（未開示の秘密はシーン要素側で管理）</label><textarea class="entity-truth" data-entity-index="${i}" placeholder="ゲーム側が開示後に扱う確定情報">${escapeHtml(x.truth||"")}</textarea></div><div class="field span-2"><label>プレイヤーが取れる行動</label><div class="entity-affordances">${ENTITY_AFFORDANCES.map(([id,label])=>`<label class="check-row"><input type="checkbox" class="entity-affordance" data-entity-index="${i}" value="${id}" ${(x.affordances||[]).includes(id)?"checked":""}>${label}</label>`).join("")}</div></div><div class="field span-2"><label>画像ファイル名（任意）</label><input class="entity-image" data-entity-index="${i}" value="${escapeHtml(x.image||"")}" placeholder="heartstone_fragment.png"></div></div></div>`).join("")||`<div class="empty-card">まだエンティティがありません。</div>`}</div><div class="bottom"><button class="sub" id="btnAddEntity">＋ エンティティを追加</button></div>`}
+function bindEntities(){const sync=()=>{entityLedger=Array.from(document.querySelectorAll(".entity-editor")).map((card,i)=>{const get=s=>card.querySelector(s)?.value.trim()||"";return {...entityLedger[i],id:entityLedger[i]?.id||entityLedgerId(get(".entity-name"),i),name:get(".entity-name"),kind:get(".entity-kind")||"custom",importance:get(".entity-importance")||"background",aliases:parseList(get(".entity-aliases")),surface:get(".entity-surface"),truth:get(".entity-truth"),affordances:Array.from(card.querySelectorAll(".entity-affordance:checked")).map(x=>x.value),image:get(".entity-image")}});saveWorkspaceDraft(true)};document.querySelectorAll(".entity-name,.entity-kind,.entity-importance,.entity-aliases,.entity-surface,.entity-truth,.entity-affordance,.entity-image").forEach(el=>{el.oninput=sync;el.onchange=sync});document.querySelectorAll("[data-remove-entity]").forEach(btn=>btn.onclick=()=>{const i=Number(btn.dataset.removeEntity);entityLedger=entityLedger.filter((_,j)=>j!==i);saveWorkspaceDraft(true);renderTab()});const add=$("btnAddEntity");if(add)add.onclick=()=>{entityLedger=[...ensureEntityLedger(),{id:entityLedgerId("新しいエンティティ",entityLedger.length),name:"新しいエンティティ",aliases:[],kind:"custom",importance:"background",surface:"",truth:"",affordances:["inspect"],image:""}];saveWorkspaceDraft(true);renderTab()}}
+var baseRenderScenesForEntityLedger=renderScenes;
+renderScenes=function(){baseRenderScenesForEntityLedger();const list=$("sceneList");if(!list||list.querySelector('[data-global="entities"]'))return;const world=list.querySelector('[data-global="world"]');if(!world)return;world.insertAdjacentHTML("afterend",`<button class="global-item ${activeTab==="entities"?"active":""}" data-global="entities">├─ エンティティ台帳</button>`);list.querySelector('[data-global="entities"]').onclick=()=>{activeTab="entities";renderScenes();renderAll()}}
+var baseRenderTabsForEntityLedger=renderTabs;
+renderTabs=function(){baseRenderTabsForEntityLedger();if(activeTab==="entities")$("layerTabs").innerHTML=""}
+var baseRenderTabForEntityLedger=renderTab;
+renderTab=function(){if(activeTab!=="entities"){baseRenderTabForEntityLedger();return}const c=$("tabContent");c.innerHTML=renderEntities();bindEntities()}
+var baseRenderRightPanelForEntityLedger=renderRightPanel;
+renderRightPanel=function(){baseRenderRightPanelForEntityLedger();if(activeTab==="entities"){const target=$("rightBody")?.querySelector(".right-section p");if(target)target.textContent="キャンペーン／エンティティ台帳"}}
+var baseEntityLedgerEntriesForEntityLedger=entityLedgerEntries;
+entityLedgerEntries=function(){return ensureEntityLedger().map(x=>({category:entityKindLabel(x.kind),name:x.name,tab:"entities",focus:x.id,source:"エンティティ台帳"}))}
+var baseMockCampaignPayloadForEntityLedger=mockCampaignPayload;
+mockCampaignPayload=function(){const payload=baseMockCampaignPayloadForEntityLedger();const entities=ensureEntityLedger().map(x=>({id:x.id,ja:x.name,aliases:x.aliases,kind:x.kind,importance:x.importance,surface:x.surface,truth:x.truth,visual:x.image||"",affordances:x.affordances}));payload.campaign={...(payload.campaign||{}),entities};return payload}
+</script>
+<script>
+/* エンティティ台帳は「参照表→詳細入力」の順にし、専門台帳への導線を明示する。 */
+function entityDestination(x){if(x.kind==="character"||x.kind==="npc")return {label:"キャスト／エージェント",tab:"cast",focus:x.id};if(x.kind==="enemy")return {label:"モンスター",tab:"monsters",focus:x.id};if(x.kind==="item")return {label:"アイテム",tab:"items",focus:x.id};return {label:"台帳の詳細",tab:"entities",focus:x.id}}
+var baseRenderEntitiesForIndex=renderEntities;
+renderEntities=function(){const entries=ensureEntityLedger();const indexRows=entries.map((x,i)=>{const dest=entityDestination(x);return `<tr><td>${escapeHtml(entityKindLabel(x.kind))}</td><td><button class="sub entity-index-name" data-entity-destination-tab="${dest.tab}" data-entity-destination-focus="${escapeHtml(dest.focus||"")}">${escapeHtml(x.name||`エンティティ${i+1}`)}</button></td><td>${escapeHtml(entityImportanceLabel(x.importance))}</td><td>${escapeHtml((x.aliases||[]).join("、")||"—")}</td><td>${dest.tab==="entities"?"詳細入力":`<button class="sub entity-destination" data-entity-destination-tab="${dest.tab}" data-entity-destination-focus="${escapeHtml(dest.focus||"")}>${escapeHtml(dest.label)}</button>`}</td></tr>`}).join("");const table=`<div class="card entity-index-card"><div class="card-head"><h3>エンティティ一覧</h3><span class="chip meta-chip">${entries.length}件</span></div><p class="hint">ここは目次です。名前や種別を確認し、専門の登録画面へ移動できます。</p><table class="ledger-table"><thead><tr><th>種別</th><th>正式名</th><th>重要度</th><th>別名</th><th>編集先</th></tr></thead><tbody>${indexRows||'<tr><td colspan="5">まだ登録されていません</td></tr>'}</tbody></table></div>`;return baseRenderEntitiesForIndex().replace('<div class="card">',table+'<div class="card">')}
+var baseBindEntitiesForIndex=bindEntities;
+bindEntities=function(){baseBindEntitiesForIndex();document.querySelectorAll("[data-entity-destination-tab]").forEach(button=>button.onclick=()=>{const tab=button.dataset.entityDestinationTab;const focus=button.dataset.entityDestinationFocus||null;if(tab==="cast")pendingCastFocus=focus;activeTab=tab;renderScenes();renderAll();setStatus(`${button.textContent.trim()}の登録画面へ移動しました`)})}
+</script>
+<script>
+/* 一覧を横長の表ではなく、狭い画面でも読めるカード型の目次へ置き換える。 */
+function renderEntityEditorCard(x,i){return `<div class="entity-editor" data-entity-index="${i}"><div class="card-head"><h3>${escapeHtml(x.name||`エンティティ${i+1}`)}</h3><button class="sub delete-btn" data-remove-entity="${i}">削除</button></div><div class="entity-grid"><div class="field"><label>正式名</label><input class="entity-name" data-entity-index="${i}" value="${escapeHtml(x.name)}" placeholder="心石の欠片"></div><div class="field"><label>種別</label><select class="entity-kind" data-entity-index="${i}">${ENTITY_KINDS.map(([id,label])=>`<option value="${id}" ${x.kind===id?"selected":""}>${label}</option>`).join("")}</select></div><div class="field"><label>重要度</label><select class="entity-importance" data-entity-index="${i}">${ENTITY_IMPORTANCE.map(([id,label])=>`<option value="${id}" ${x.importance===id?"selected":""}>${label}</option>`).join("")}</select></div><div class="field"><label>別名</label><input class="entity-aliases" data-entity-index="${i}" value="${escapeHtml((x.aliases||[]).join(", "))}" placeholder="心石、青い石"></div><div class="field span-2"><label>表層説明</label><textarea class="entity-surface" data-entity-index="${i}" placeholder="プレイヤーが最初に見聞きできる情報">${escapeHtml(x.surface||"")}</textarea></div><div class="field span-2"><label>確定情報</label><textarea class="entity-truth" data-entity-index="${i}" placeholder="開示後に扱う確定情報">${escapeHtml(x.truth||"")}</textarea></div><div class="field span-2"><label>プレイヤーが取れる行動</label><div class="entity-affordances">${ENTITY_AFFORDANCES.map(([id,label])=>`<label class="check-row"><input type="checkbox" class="entity-affordance" data-entity-index="${i}" value="${id}" ${(x.affordances||[]).includes(id)?"checked":""}>${label}</label>`).join("")}</div></div><div class="field span-2"><label>画像ファイル名（任意）</label><input class="entity-image" data-entity-index="${i}" value="${escapeHtml(x.image||"")}" placeholder="heartstone_fragment.png"></div></div></div>`}
+var baseRenderEntitiesForReadableIndex=renderEntities;
+renderEntities=function(){const entries=ensureEntityLedger();const rows=entries.map((x,i)=>{const dest=entityDestination(x);return `<div class="entity-index-row"><div class="entity-index-main"><div class="entity-index-title"><h4>${escapeHtml(x.name||`エンティティ${i+1}`)}</h4><span class="chip summary-chip">${escapeHtml(entityKindLabel(x.kind))}</span></div><div class="entity-index-meta"><span>重要度：${escapeHtml(entityImportanceLabel(x.importance))}</span><span>別名：${escapeHtml((x.aliases||[]).join("、")||"なし")}</span><span>行動：${escapeHtml(entityAffordanceLabels(x.affordances)||"なし")}</span></div></div><div>${dest.tab==="entities"?`<button class="sub entity-destination" data-entity-destination-tab="entities" data-entity-detail-index="${i}">詳細入力</button>`:`<button class="sub entity-destination" data-entity-destination-tab="${dest.tab}" data-entity-destination-focus="${escapeHtml(dest.focus||"")}>${escapeHtml(dest.label)}</button>`}</div></div>`}).join("");return `<h2>エンティティ台帳</h2><p class="hint">まず一覧で対象を確認し、詳細が必要なものだけ下で編集します。キャスト・モンスター・アイテムは専用画面で管理します。</p><div class="card entity-index-card"><div class="card-head"><h3>エンティティ一覧</h3><span class="chip meta-chip">${entries.length}件</span></div><div class="entity-index-list">${rows||`<div class="empty-card">まだ登録されていません。</div>`}</div></div><details class="card entity-details"><summary>台帳の詳細入力（場所・伝承・その他）</summary>${entries.map(renderEntityEditorCard).join("")||`<p class="hint">詳細入力するエンティティはありません。</p>`}</details><div class="bottom"><button class="sub" id="btnAddEntity">＋ エンティティを追加</button></div>`}
+var baseBindEntitiesForReadableIndex=bindEntities;
+bindEntities=function(){baseBindEntitiesForReadableIndex();document.querySelectorAll("[data-entity-detail-index]").forEach(button=>button.onclick=()=>{const details=document.querySelector(".entity-details");if(details)details.open=true;const target=document.querySelector(`[data-entity-index="${button.dataset.entityDetailIndex}"]`);target?.scrollIntoView({behavior:"smooth",block:"center"})})}
+</script>
+<style>
+.section-index-row{display:flex;align-items:center;justify-content:space-between;gap:8px;width:100%;border:1px solid var(--border);border-radius:5px;background:#1b2129;color:var(--text);padding:8px;text-align:left}
+.section-index-row:hover{border-color:var(--accent);background:#222b36}
+</style>
+<script>
+/* 種別ごとの目次を各登録画面の先頭へ置き、一覧から詳細入力へ移動できるようにする。 */
+function insertSectionIndex(html,indexHtml){
+  const marker="</p>";
+  const at=html.indexOf(marker);
+  return at<0?indexHtml+html:html.slice(0,at+marker.length)+indexHtml+html.slice(at+marker.length);
+}
+function sectionIndex(title,rows,emptyMessage){
+  return `<div class="section-index"><div class="section-index-head"><h3>${escapeHtml(title)}</h3><span class="chip meta-chip">${rows.length}件</span></div><p class="hint">一覧から対象を選ぶと、下の詳細入力へ移動します。</p><div class="section-index-list">${rows.length?rows.map(row=>`<button class="section-index-row" data-section-focus="${escapeHtml(row.focus||row.id||"")}"><span class="index-main"><span class="index-name">${escapeHtml(row.name)}</span><span class="index-meta">${escapeHtml(row.meta||"")}</span></span><span class="sub index-jump">詳細へ</span></button>`).join(""):`<div class="section-index-empty">${escapeHtml(emptyMessage)}</div>`}</div></div>`;
+}
+function focusSection(selector,status){
+  const target=document.querySelector(selector);
+  if(!target){setStatus("詳細入力欄が見つかりません");return}
+  target.scrollIntoView({behavior:"smooth",block:"center"});
+  setStatus(status||"詳細入力欄を表示しました");
+}
+function castSectionRows(){
+  const rows=[{id:"gm",name:castName("gm","GM"),meta:"GM・固定"},{id:"gareth",name:castName("gareth","ガレス"),meta:"メンバー・固定"}];
+  for(let i=0;i<extraCompanions;i++){const id=`member_${i+2}`;rows.push({id,name:castName(id,`メンバー${i+2}`),meta:"メンバー"})}
+  npcList().forEach(x=>rows.push({id:x.id,name:castName(x.id,x.name),meta:"NPC"}));
+  return rows;
+}
+function monsterSectionRows(){return monsters.map((x,i)=>({id:String(i),name:x.name||`モンスター${i+1}`,meta:`HP ${Number(x.hp)||10}`}))}
+function itemSectionRows(){return items.map((x,i)=>({id:String(i),name:x.name||`アイテム${i+1}`,meta:x.notes?"説明あり":"未設定"}))}
+function discoverySectionRows(){
+  const s=scene();
+  return (s.discoveries||[]).map((raw,i)=>{const x=normalizeDiscoveryFor(s,raw,i);return {id:String(i),name:x.label||`発見項目${i+1}`,meta:`${categoryLabel(x.category)}・${importanceLabel(x.importance)}`}});
+}
+var baseRenderWorldForSplitLedger=renderWorld;
+renderWorld=function(){
+  const html=baseRenderWorldForSplitLedger();
+  const start=html.indexOf('<div class="card"><h3>エンティティ台帳（現在の登録名）</h3>');
+  if(start<0)return html;
+  const end=html.indexOf('<div class="card"><h3>登場人物</h3>',start);
+  return end<0?html.slice(0,start):html.slice(0,start)+html.slice(end);
+};
+var baseRenderCastForSplitLedger=renderCast;
+renderCast=function(){return insertSectionIndex(baseRenderCastForSplitLedger(),sectionIndex("キャスト一覧",castSectionRows(),"キャストがありません。"))};
+var baseBindCastForSplitLedger=bindCast;
+bindCast=function(){
+  baseBindCastForSplitLedger();
+  document.querySelectorAll('[data-section-focus]').forEach(button=>button.onclick=()=>focusSection(`[data-cast-card="${button.dataset.sectionFocus}"]`,`${button.querySelector(".index-name")?.textContent||"キャスト"}の詳細入力へ移動しました`));
+};
+var baseRenderMonstersForSplitLedger=renderMonsters;
+renderMonsters=function(){return insertSectionIndex(baseRenderMonstersForSplitLedger(),sectionIndex("モンスター一覧",monsterSectionRows(),"モンスターがありません。"))};
+var baseBindMonstersForSplitLedger=bindMonsters;
+bindMonsters=function(){
+  baseBindMonstersForSplitLedger();
+  document.querySelectorAll('[data-section-focus]').forEach(button=>button.onclick=()=>{const i=Number(button.dataset.sectionFocus);focusSection(`.monster-name[data-monster-index="${i}"]`,`${monsters[i]?.name||`モンスター${i+1}`}の詳細入力へ移動しました`)});
+};
+var baseRenderItemsForSplitLedger=renderItems;
+renderItems=function(){return insertSectionIndex(baseRenderItemsForSplitLedger(),sectionIndex("アイテム一覧",itemSectionRows(),"アイテムがありません。"))};
+var baseBindItemsForSplitLedger=bindItems;
+bindItems=function(){
+  baseBindItemsForSplitLedger();
+  document.querySelectorAll('[data-section-focus]').forEach(button=>button.onclick=()=>{const i=Number(button.dataset.sectionFocus);focusSection(`.item-name[data-item-index="${i}"]`,`${items[i]?.name||`アイテム${i+1}`}の詳細入力へ移動しました`)});
+};
+var baseRenderStateForSplitLedger=renderState;
+renderState=function(){return insertSectionIndex(baseRenderStateForSplitLedger(),sectionIndex("シーン要素一覧",discoverySectionRows(),"シーン要素がありません。"))};
+var baseBindStateForSplitLedger=bindState;
+bindState=function(){
+  baseBindStateForSplitLedger();
+  document.querySelectorAll('[data-section-focus]').forEach(button=>button.onclick=()=>{const i=Number(button.dataset.sectionFocus);focusSection(`.state-discovery[data-discovery-index="${i}"]`,`${discoverySectionRows()[i]?.name||"シーン要素"}の詳細入力へ移動しました`)});
+};
+var baseRenderScenesForSplitLedger=renderScenes;
+renderScenes=function(){
+  if(activeTab==="entities")activeTab="world";
+  baseRenderScenesForSplitLedger();
+  const button=$("sceneList")?.querySelector('[data-global="entities"]');
+  if(button)button.remove();
+};
+</script>
+<style>
+.semantic-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.semantic-grid .field{margin:0}.semantic-grid .span-2{grid-column:1 / -1}.semantic-checks{display:flex;gap:6px;flex-wrap:wrap}.semantic-checks .check-row{min-width:0}@media(max-width:700px){.semantic-grid{grid-template-columns:1fr}.semantic-grid .span-2{grid-column:auto}}
+</style>
+<script>
+/* 重要語・概念と物理アイテムを分離し、既存campaign/chapterデータをTASの入力へ移行する。 */
+let concepts=[];
+let initialInventoryIds=[];
+const CONCEPT_SCOPES=[['campaign','キャンペーン全体'],['chapter','チャプター内'],['scene','シーン内']];
+const CONCEPT_ROLES=[['main','メインストーリー'],['support','補助設定'],['ambient','雰囲気・背景'],['unrelated','物語とは無関係']];
+const CONCEPT_USAGES=[['dialogue_only','会話・発話のみ'],['dialogue_condition','会話・条件に使用'],['broad','会話・条件・行動に使用']];
+const ITEM_SCOPES=[['campaign','キャンペーン全体'],['scene','シーンで登場']];
+const ITEM_ACQUISITIONS=[['starting_inventory','初期所持'],['scene','シーンで入手'],['dialogue','会話イベントで付与'],['none','入手方法未設定']];
+const ITEM_CAPABILITIES=[['inspect','調べる'],['take','入手する'],['use','使う'],['give','渡す'],['lose','紛失する']];
+function sourceJson(file){try{return JSON.parse(context?.dataFiles?.[file]||'{}')}catch(e){return {}}}
+function conceptId(name,index=0){const known={'心石':'concept_heartstone'};return known[name]||stableId(name,`concept_${index+1}`)}
+function normalizeConcept(value,index=0){const x=value&&typeof value==='object'?value:{};const name=String(x.name||x.ja||`重要語${index+1}`);return {id:name==='心石'?conceptId(name,index):(x.id||conceptId(name,index)),name,aliases:parseList(x.aliases||[]),scope:x.scope||'campaign',role:x.role||x.narrativeRole||'support',usage:x.usage||'dialogue_condition',storyKey:x.storyKey!==false,surface:x.surface||'',truth:x.truth||x.text||''}}
+function conceptLabels(){return ensureConcepts().map(x=>({value:x.id,label:x.name}))}
+function ensureConcepts(){
+  if(concepts.length)return concepts;
+  const base=sourceJson('campaign.json');
+  const candidates=(base.entities||[]).filter(x=>x&&((x.ja||x.name)==='心石'||String(x.kind||'').match(/概念|伝承|重要語/)));
+  concepts=candidates.map((x,i)=>normalizeConcept({id:x.id||conceptId(x.ja||x.name,i),name:x.ja||x.name,aliases:x.aliases||[],scope:'campaign',role:(x.ja||x.name)==='心石'?'main':'support',usage:(x.ja||x.name)==='心石'?'dialogue_condition':'dialogue_only',storyKey:(x.ja||x.name)==='心石',surface:x.surface,truth:x.truth||x.visual},i));
+  return concepts;
+}
+function itemId(name,index=0){const known={'心石の欠片':'item_heartstone_fragment','ランタン':'item_lantern','ロープ':'item_rope','ナイフ':'item_knife'};return known[name]||stableId(name,`item_${index+1}`)}
+function legacyItemCandidates(){
+  const base=sourceJson('campaign.json');
+  const candidates=[];
+  (base.entities||[]).filter(x=>x&&String(x.kind||'').includes('所持品')).forEach(x=>candidates.push({id:x.id||itemId(x.ja||x.name,candidates.length),name:x.ja||x.name,scope:'campaign',acquisition:'starting_inventory',persistent:true,capabilities:['inspect','use','give','lose'],notes:x.surface||x.visual||''}));
+  const chapterFiles=['chapter_01.json','chapter_02.json'];
+  chapterFiles.forEach(file=>{const chapter=sourceJson(file);(chapter.scenes||[]).forEach(sceneData=>(sceneData.loot||[]).forEach(raw=>{const loot=typeof raw==='string'?{name:raw}:raw||{};if(!loot.name)return;const concept=ensureConcepts().find(x=>loot.name.includes(x.name)||x.name.includes(loot.name));candidates.push({id:itemId(loot.name,candidates.length),name:loot.name,parentConceptId:concept?.id||'',aliases:concept?[concept.name,...concept.aliases]:[],scope:'scene',acquisition:'scene',persistent:false,requires:loot.requires||'',capabilities:['inspect','take','give','lose','use'],notes:'シーン入手品'})}))});
+  return candidates;
+}
+function ensureItems(){
+  if(freshCampaign)return items;
+  const additions=legacyItemCandidates();
+  const byName=new Map(items.filter(x=>x&&x.name).map(x=>[x.name,x]));
+  additions.forEach((x)=>{if(!byName.has(x.name))byName.set(x.name,x)});
+  items=Array.from(byName.values()).map((x,i)=>{const conceptsNow=ensureConcepts();const concept=conceptsNow.find(c=>c.id===x.parentConceptId)||conceptsNow.find(c=>x.name&&x.name.includes(c.name));const aliases=parseList(x.aliases||[]);const mergedAliases=concept?[...new Set([...aliases,concept.name,...concept.aliases])]:aliases;const knownId=itemId(x.name,i);return {...x,id:(['心石の欠片','ランタン','ロープ','ナイフ'].includes(x.name)?knownId:(x.id||knownId)),parentConceptId:concept?.id||'',aliases:mergedAliases,capabilities:Array.isArray(x.capabilities)&&x.capabilities.length?x.capabilities:['inspect']}});
+  items.forEach(x=>{if(x.acquisition==='starting_inventory'&&!initialInventoryIds.includes(x.id))initialInventoryIds.push(x.id)});
+  return items;
+}
+function conceptScopeLabel(id){return CONCEPT_SCOPES.find(x=>x[0]===id)?.[1]||id}
+function conceptRoleLabel(id){return CONCEPT_ROLES.find(x=>x[0]===id)?.[1]||id}
+function conceptUsageLabel(id){return CONCEPT_USAGES.find(x=>x[0]===id)?.[1]||id}
+function itemScopeLabel(id){return ITEM_SCOPES.find(x=>x[0]===id)?.[1]||id}
+function itemAcquisitionLabel(id){return ITEM_ACQUISITIONS.find(x=>x[0]===id)?.[1]||id}
+function renderConcepts(){
+  const list=ensureConcepts();
+  const index=sectionIndex('重要語・概念一覧',list.map((x,i)=>({id:String(i),name:x.name,meta:`${conceptScopeLabel(x.scope)}・${conceptRoleLabel(x.role)}`})),'重要語・概念はまだありません。');
+  const cards=list.map((x,i)=>`<div class="card concept-editor" data-concept-index="${i}"><div class="card-head"><h3>${escapeHtml(x.name||`重要語${i+1}`)}</h3><button class="sub delete-btn" data-remove-concept="${i}">削除</button></div><div class="semantic-grid"><div class="field"><label>正式名</label><input class="concept-name" data-concept-index="${i}" value="${escapeHtml(x.name)}" placeholder="心石"></div><div class="field"><label>別名（カンマ区切り）</label><input class="concept-aliases" data-concept-index="${i}" value="${escapeHtml(x.aliases.join(', '))}" placeholder="青い石"></div><div class="field"><label>使用範囲</label><select class="concept-scope" data-concept-index="${i}">${CONCEPT_SCOPES.map(([id,label])=>`<option value="${id}" ${x.scope===id?'selected':''}>${label}</option>`).join('')}</select></div><div class="field"><label>物語上の関係</label><select class="concept-role" data-concept-index="${i}">${CONCEPT_ROLES.map(([id,label])=>`<option value="${id}" ${x.role===id?'selected':''}>${label}</option>`).join('')}</select></div><div class="field"><label>使用方法</label><select class="concept-usage" data-concept-index="${i}">${CONCEPT_USAGES.map(([id,label])=>`<option value="${id}" ${x.usage===id?'selected':''}>${label}</option>`).join('')}</select></div><div class="field"><label>ストーリーキー</label><label class="check-row"><input type="checkbox" class="concept-story-key" data-concept-index="${i}" ${x.storyKey?'checked':''}>会話・条件のキーとして扱う</label></div><div class="field span-2"><label>表層説明</label><textarea class="concept-surface" data-concept-index="${i}" placeholder="プレイヤーが見聞きできる情報">${escapeHtml(x.surface)}</textarea></div><div class="field span-2"><label>確定情報</label><textarea class="concept-truth" data-concept-index="${i}" placeholder="開示後に扱う情報">${escapeHtml(x.truth)}</textarea></div></div></div>`).join('');
+  return `<h2>重要語・物語概念</h2><p class="hint">キャンペーン全体の会話語、伝承、固有概念、メインストーリーのキーを登録します。ここに登録しても物理アイテムの所持状態は変わりません。</p>${index}${cards||'<div class="empty-card">重要語・概念はまだありません。</div>'}<div class="bottom"><button class="sub" id="btnAddConcept">＋ 重要語を追加</button></div>`;
+}
+function bindConcepts(){
+  const sync=()=>{concepts=Array.from(document.querySelectorAll('.concept-editor')).map((card,i)=>{const get=s=>card.querySelector(s)?.value.trim()||'';return {...concepts[i],id:concepts[i]?.id||conceptId(get('.concept-name'),i),name:get('.concept-name'),aliases:parseList(get('.concept-aliases')),scope:get('.concept-scope')||'campaign',role:get('.concept-role')||'support',usage:get('.concept-usage')||'dialogue_condition',storyKey:Boolean(card.querySelector('.concept-story-key')?.checked),surface:get('.concept-surface'),truth:get('.concept-truth')}});saveWorkspaceDraft(true)};
+  document.querySelectorAll('.concept-name,.concept-aliases,.concept-scope,.concept-role,.concept-usage,.concept-story-key,.concept-surface,.concept-truth').forEach(el=>{el.oninput=sync;el.onchange=sync});
+  document.querySelectorAll('[data-remove-concept]').forEach(btn=>btn.onclick=()=>{const i=Number(btn.dataset.removeConcept);concepts=concepts.filter((_,j)=>j!==i);saveWorkspaceDraft(true);renderTab()});
+  const add=$('btnAddConcept');if(add)add.onclick=()=>{concepts=[...ensureConcepts(),{id:conceptId('新しい重要語',concepts.length),name:'新しい重要語',aliases:[],scope:'campaign',role:'support',usage:'dialogue_condition',storyKey:false,surface:'',truth:''}];saveWorkspaceDraft(true);renderTab()};
+  document.querySelectorAll('[data-section-focus]').forEach(button=>button.onclick=()=>{const i=Number(button.dataset.sectionFocus);document.querySelector(`.concept-editor[data-concept-index="${i}"]`)?.scrollIntoView({behavior:'smooth',block:'center'})});
+}
+function renderSemanticItemCard(x,i){const caps=Array.isArray(x.capabilities)&&x.capabilities.length?x.capabilities:['inspect'];return `<div class="card item-editor" data-item-index="${i}"><div class="card-head"><h3 data-item-title="${i}">${escapeHtml(x.name||`アイテム${i+1}`)}</h3><button class="sub delete-btn" data-remove-item="${i}">削除</button></div><div class="cast-media"><div class="cast-thumb">${x.image?`<img src="${x.image}">`:'画像なし'}</div><div class="field cast-file"><label>画像</label><input type="file" accept="image/*" class="item-image" data-item-index="${i}"></div></div><div class="semantic-grid"><div class="field span-2"><label>正式名</label><input class="item-name" data-item-index="${i}" value="${escapeHtml(x.name||'')}" placeholder="心石の欠片"></div><div class="field"><label>親となる概念</label><select class="item-parent-concept" data-item-index="${i}"><option value="">なし</option>${conceptLabels().map(o=>`<option value="${o.value}" ${x.parentConceptId===o.value?'selected':''}>${escapeHtml(o.label)}</option>`).join('')}</select></div><div class="field"><label>使用範囲</label><select class="item-scope" data-item-index="${i}">${ITEM_SCOPES.map(([id,label])=>`<option value="${id}" ${x.scope===id?'selected':''}>${label}</option>`).join('')}</select></div><div class="field"><label>入手方法</label><select class="item-acquisition" data-item-index="${i}">${ITEM_ACQUISITIONS.map(([id,label])=>`<option value="${id}" ${x.acquisition===id?'selected':''}>${label}</option>`).join('')}</select></div><div class="field"><label>キャンペーン中の扱い</label><label class="check-row"><input type="checkbox" class="item-persistent" data-item-index="${i}" ${x.persistent?'checked':''}>シーンをまたいで使う</label></div><div class="field span-2"><label>可能な操作</label><div class="semantic-checks">${ITEM_CAPABILITIES.map(([id,label])=>`<label class="check-row"><input type="checkbox" class="item-capability" data-item-index="${i}" value="${id}" ${caps.includes(id)?'checked':''}>${label}</label>`).join('')}</div></div><div class="field span-2"><label>別名（カンマ区切り）</label><input class="item-aliases" data-item-index="${i}" value="${escapeHtml((x.aliases||[]).join(', '))}" placeholder="心石、青い石"></div><div class="field span-2"><label>説明・メモ</label><textarea class="item-notes" data-item-index="${i}" placeholder="第三坑道の錠に合う。">${escapeHtml(x.notes||'')}</textarea></div><div class="field"><label>入手条件キー（任意）</label><input class="item-requires" data-item-index="${i}" value="${escapeHtml(x.requires||'')}" placeholder="s3b"></div></div></div>`}
+var baseRenderItemsForSemantic=renderItems;
+renderItems=function(){ensureItems();const list=items;const index=sectionIndex('アイテム一覧',list.map((x,i)=>({id:String(i),name:x.name||`アイテム${i+1}`,meta:`${itemScopeLabel(x.scope||'scene')}・${itemAcquisitionLabel(x.acquisition||'none')}`})),'アイテムはまだありません。');return `<h2>アイテム</h2><p class="hint">物理的に存在し、入手・所持・使用・譲渡・紛失できるものを登録します。会話上の概念は「重要語・物語概念」で管理します。</p>${index}${list.map(renderSemanticItemCard).join('')||'<div class="empty-card">アイテムはまだありません。</div>'}<div class="bottom"><button class="sub" id="btnAddItem">＋ アイテムを追加</button></div>`};
+var baseBindItemsForSemantic=bindItems;
+bindItems=function(){
+  ensureItems();
+  baseBindItemsForSemantic();
+  const sync=()=>{items=Array.from(document.querySelectorAll('.item-editor')).map((card,i)=>{const get=s=>card.querySelector(s)?.value.trim()||'';return {...items[i],id:items[i]?.id||itemId(get('.item-name'),i),name:get('.item-name'),parentConceptId:get('.item-parent-concept'),scope:get('.item-scope')||'scene',acquisition:get('.item-acquisition')||'none',persistent:Boolean(card.querySelector('.item-persistent')?.checked),capabilities:Array.from(card.querySelectorAll('.item-capability:checked')).map(x=>x.value),aliases:parseList(get('.item-aliases')),notes:get('.item-notes'),requires:get('.item-requires')}});initialInventoryIds=items.filter(x=>x.acquisition==='starting_inventory').map(x=>x.id);saveWorkspaceDraft(true)};
+  document.querySelectorAll('.item-name,.item-parent-concept,.item-scope,.item-acquisition,.item-persistent,.item-capability,.item-aliases,.item-notes,.item-requires').forEach(el=>{el.oninput=sync;el.onchange=sync});
+  document.querySelectorAll('[data-section-focus]').forEach(button=>button.onclick=()=>{const i=Number(button.dataset.sectionFocus);document.querySelector(`.item-editor[data-item-index="${i}"]`)?.scrollIntoView({behavior:'smooth',block:'center'})});
+}
+var baseWorkspaceDraftForSemantics=workspaceDraft;
+workspaceDraft=function(){ensureConcepts();ensureItems();return {...baseWorkspaceDraftForSemantics(),concepts,initialInventory:items.filter(x=>x.acquisition==='starting_inventory').map(x=>x.id)}};
+var baseApplyWorkspaceDraftForSemantics=applyWorkspaceDraft;
+applyWorkspaceDraft=function(data){baseApplyWorkspaceDraftForSemantics(data);if(Array.isArray(data.concepts))concepts=data.concepts.map(normalizeConcept);if(Array.isArray(data.initialInventory))initialInventoryIds=data.initialInventory.map(String);};
+try{const rawSemanticDraft=localStorage.getItem(DRAFT_KEY);if(rawSemanticDraft){const parsed=JSON.parse(rawSemanticDraft);const data=parsed.data||parsed;if(Array.isArray(data.concepts))concepts=data.concepts.map(normalizeConcept);if(Array.isArray(data.initialInventory))initialInventoryIds=data.initialInventory.map(String)}}catch(e){}
+var baseCreateNewCampaignForSemantics=createNewCampaign;
+createNewCampaign=function(){concepts=[];initialInventoryIds=[];baseCreateNewCampaignForSemantics()};
+var baseRenderScenesForConcepts=renderScenes;
+renderScenes=function(){if(activeTab==='entities')activeTab='world';baseRenderScenesForConcepts();const list=$('sceneList');if(!list||list.querySelector('[data-global="concepts"]'))return;const cast=list.querySelector('[data-global="cast"]');if(!cast)return;cast.insertAdjacentHTML('beforebegin',`<button class="global-item ${activeTab==='concepts'?'active':''}" data-global="concepts">├─ 重要語・概念</button>`);list.querySelector('[data-global="concepts"]').onclick=()=>{activeTab='concepts';renderScenes();renderAll()}};
+var baseRenderTabsForConcepts=renderTabs;
+renderTabs=function(){baseRenderTabsForConcepts();if(activeTab==='concepts')$('layerTabs').innerHTML=''};
+var baseRenderTabForConcepts=renderTab;
+renderTab=function(){if(activeTab==='concepts'){const c=$('tabContent');c.innerHTML=renderConcepts();bindConcepts();return}baseRenderTabForConcepts()};
+var baseRenderRightPanelForConcepts=renderRightPanel;
+renderRightPanel=function(){baseRenderRightPanelForConcepts();if(activeTab==='concepts'){const target=$('rightBody')?.querySelector('.right-section p');if(target)target.textContent='キャンペーン／重要語・物語概念'}};
+var baseRenderAllForSemantics=renderAll;
+renderAll=function(){ensureConcepts();ensureItems();baseRenderAllForSemantics()};
+var baseMockCampaignPayloadForSemantics=mockCampaignPayload;
+mockCampaignPayload=function(){const payload=baseMockCampaignPayloadForSemantics();ensureConcepts();ensureItems();const campaign={...(payload.campaign||{})};const conceptsOut=concepts.map(x=>({id:x.id,ja:x.name,aliases:x.aliases,kind:'concept',role:x.role,usage:x.usage,scope:x.scope,storyKey:x.storyKey,surface:x.surface,truth:x.truth}));const itemsOut=items.filter(x=>x.name).map(x=>({id:x.id,ja:x.name,aliases:x.aliases||[],kind:'item',parentConceptId:x.parentConceptId||null,scope:x.scope||'scene',acquisition:x.acquisition||'none',persistent:Boolean(x.persistent),capabilities:x.capabilities||['inspect'],requires:x.requires||'',surface:x.notes||'',visual:x.image||''}));const existing=Array.isArray(campaign.entities)?campaign.entities:[];const byName=new Map(existing.filter(x=>x&&(x.ja||x.name)).map(x=>[x.ja||x.name,x]));conceptsOut.forEach(x=>byName.set(x.ja,x));itemsOut.forEach(x=>byName.set(x.ja,x));return {...payload,campaign:{...campaign,concepts:conceptsOut,items:itemsOut,initialInventory:items.filter(x=>x.name&&x.acquisition==='starting_inventory').map(x=>x.name),initialInventoryIds:items.filter(x=>x.name&&x.acquisition==='starting_inventory').map(x=>x.id),entities:Array.from(byName.values())}}};
+</script>
+<style>
+.structure-manager{margin:12px 0}.structure-manager .manager-toolbar{display:flex;gap:7px;flex-wrap:wrap;margin-top:8px}.structure-chapter{border:1px solid var(--border);border-radius:6px;background:#1b2129;padding:10px;margin-top:9px}.structure-chapter-head{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;align-items:center}.structure-chapter-head input,.structure-scene-row input{background:#171c23;border:1px solid var(--border);border-radius:4px;color:var(--text);padding:6px 8px;width:100%}.structure-actions{display:flex;gap:5px;flex-wrap:wrap}.structure-actions button{padding:3px 7px;font-size:11px}.structure-scenes{display:grid;gap:5px;margin:8px 0 0 12px}.structure-scene-row{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:7px;align-items:center;border-top:1px solid var(--border);padding-top:6px}.structure-scene-label{color:var(--dim);font-size:11px}.structure-special{color:var(--dim);font-size:11px;padding:5px 0}.structure-warning{color:var(--warn);font-size:12px;margin:7px 0 0}
+@media(max-width:700px){.structure-chapter-head,.structure-scene-row{grid-template-columns:1fr}.structure-actions{justify-content:flex-start}}
+</style>
+<script>
+/* 世界設定内のキャンペーン構造管理。表示順と編集内容をTAS下書きに保持する。 */
+let structureChapters=null;
+function deepCopyStructure(value){return JSON.parse(JSON.stringify(value||{}))}
+function structureSourceChapter(key){
+  const file=key==='ch2'?'chapter_02.json':'chapter_01.json';
+  const data=sourceJson(file);
+  const fallbackTitle=key==='ch2'?'心石の在処':'廃坑の灯';
+  return {title:data.title||fallbackTitle,scenes:Array.isArray(data.scenes)?deepCopyStructure(data.scenes):deepCopyStructure(key==='ch2'?fallbackScenes.slice(0,2):fallbackScenes),opening:data.opening||{},ending:data.ending||{},intermission:data.intermission||{}};
+}
+function ensureStructureChapters(){
+  if(structureChapters)return structureChapters;
+  if(!Array.isArray(chapterOrder)||!chapterOrder.length)chapterOrder=freshCampaign?['ch1']:['ch1','ch2'];
+  structureChapters={};
+  chapterOrder.forEach((key,index)=>{
+    const source=freshCampaign?{title:chapterNames[key]||`チャプター${index+1}`,scenes:Array.isArray(customChapterScenes[key])?deepCopyStructure(customChapterScenes[key]):[],opening:{},ending:{},intermission:{}}:structureSourceChapter(key);
+    structureChapters[key]=source;
+    if(!chapterNames[key])chapterNames[key]=source.title||`チャプター${index+1}`;
+    collapsedChapters[key]=Boolean(collapsedChapters[key]);
+    if(!CHAPTERS[key])CHAPTERS[key]={name:source.title||`チャプター${index+1}`,file:`CHAPTER_${String(index+1).padStart(2,'0')}`};
+  });
+  return structureChapters;
+}
+var baseChapterDataForStructure=chapterData;
+chapterData=()=>{ensureStructureChapters();return structureChapters[activeChapter]||baseChapterDataForStructure()};
+function structureChapterLabel(key,index){return chapterNames[key]||structureChapters?.[key]?.title||`チャプター${index+1}（未命名）`}
+function structureSceneLabel(node,index){return node.type==='scene'?`シーン${node.id??index+1}`:node.type==='opening'?'オープニング':node.type==='ending'?'エンディング':'インターミッション'}
+function structureReferenceWarnings(key){
+  const removed=structureChapters?.[key]?.scenes||[];const ids=new Set(removed.map(x=>`scene:${x.id}`));const warnings=[];
+  Object.entries(sceneOverrides||{}).forEach(([overrideKey,value])=>{if(!overrideKey.startsWith(`${key}:`)&&JSON.stringify(value).match(/scene:\d+/)){for(const id of ids)if(JSON.stringify(value).includes(id))warnings.push(`${id}への参照`)}});
+  return [...new Set(warnings)];
+}
+function structureSaveAndRender(message){saveWorkspaceDraft(true);renderScenes();renderAll();if(message)setStatus(message)}
+function addManagedScene(key){
+  ensureStructureChapters();const chapter=structureChapters[key];if(!chapter)return;const scenes=chapter.scenes||[];const nextId=scenes.reduce((max,x)=>Math.max(max,Number(x.id)||0),0)+1;scenes.push({id:nextId,name:`シーン${nextId}`,brief:'',goal:'',discoveries:[],exits:[]});chapter.scenes=scenes;activeChapter=key;selectedNode={type:'scene',index:scenes.length-1};activeTab='structure';structureSaveAndRender(`シーン${nextId}を作成しました`)}
+function addManagedChapter(){
+  ensureStructureChapters();let n=chapterOrder.length+1;let key=`ch${n}`;while(chapterOrder.includes(key)){n++;key=`ch${n}`};chapterOrder=[...chapterOrder,key];structureChapters[key]={title:`チャプター${n}`,scenes:[],opening:{},ending:{},intermission:{}};chapterNames[key]=`チャプター${n}`;collapsedChapters[key]=false;CHAPTERS[key]={name:`チャプター${n}`,file:`CHAPTER_${String(n).padStart(2,'0')}`};activeChapter=key;selectedNode={type:'opening'};activeTab='structure';structureSaveAndRender(`チャプター${n}を作成しました`)}
+function renameManagedChapter(key,value){ensureStructureChapters();if(!structureChapters[key])return;const name=value.trim()||'未命名チャプター';structureChapters[key].title=name;chapterNames[key]=name;if(CHAPTERS[key])CHAPTERS[key].name=name;saveWorkspaceDraft(true);renderScenes();setStatus('チャプター名を更新しました')}
+function renameManagedScene(key,index,value){ensureStructureChapters();const item=structureChapters[key]?.scenes?.[index];if(!item)return;const name=value.trim()||`シーン${item.id||index+1}`;item.name=name;sceneOverrides[`${key}:scene:${index}`]={...(sceneOverrides[`${key}:scene:${index}`]||{}),name};saveWorkspaceDraft(true);renderScenes();setStatus('シーン名を更新しました')}
+function moveManagedChapter(key,delta){const i=chapterOrder.indexOf(key),next=i+delta;if(i<0||next<0||next>=chapterOrder.length)return;[chapterOrder[i],chapterOrder[next]]=[chapterOrder[next],chapterOrder[i]];structureSaveAndRender('チャプターの順番を変更しました')}
+function moveManagedScene(key,index,delta){ensureStructureChapters();const scenes=structureChapters[key]?.scenes||[];const next=index+delta;if(next<0||next>=scenes.length)return;[scenes[index],scenes[next]]=[scenes[next],scenes[index]];if(activeChapter===key&&selectedNode.type==='scene'){if(selectedNode.index===index)selectedNode.index=next;else if(selectedNode.index===next)selectedNode.index=index}structureSaveAndRender('シーンの順番を変更しました')}
+function deleteManagedScene(key,index){ensureStructureChapters();const scenes=structureChapters[key]?.scenes||[];if(!scenes[index])return;const label=`シーン${scenes[index].id||index+1}`;scenes.splice(index,1);if(activeChapter===key){selectedNode=scenes.length?{type:'scene',index:Math.min(index,scenes.length-1)}:{type:'opening'}}structureSaveAndRender(`${label}を削除しました`)}
+function deleteManagedChapter(key){ensureStructureChapters();if(chapterOrder.length<=1){alert('チャプターは1つ以上必要です');return}const label=structureChapterLabel(key,chapterOrder.indexOf(key));const warnings=structureReferenceWarnings(key);const suffix=warnings.length?`\n\n参照が見つかりました：${warnings.join('、')}\n削除後に遷移先を確認してください。`:'';if(!confirm(`${label}を削除しますか？${suffix}`))return;chapterOrder=chapterOrder.filter(x=>x!==key);delete structureChapters[key];delete chapterNames[key];delete collapsedChapters[key];delete CHAPTERS[key];if(activeChapter===key){activeChapter=chapterOrder[Math.max(0,chapterOrder.indexOf(key)-1)]||chapterOrder[0];selectedNode={type:'opening'}}structureSaveAndRender(`${label}を削除しました`)}
+function renderStructureManager(){
+  ensureStructureChapters();
+  const cards=chapterOrder.map((key,index)=>{const chapter=structureChapters[key]||{title:'',scenes:[]};const nodes=[{type:'opening',name:'オープニング'},...(chapter.scenes||[]).map((x,i)=>({...x,type:'scene',index:i})),{type:'ending',name:'エンディング'},{type:'intermission',name:'インターミッション'}];const rows=nodes.map((node,i)=>{if(node.type!=='scene')return `<div class="structure-special">${node.type==='opening'?'├─':'└─'} ${structureSceneLabel(node,i)}（固定）</div>`;return `<div class="structure-scene-row"><div><span class="structure-scene-label">├─ ${structureSceneLabel(node,i)}</span><input data-structure-scene-name="${key}" data-structure-scene-index="${node.index}" value="${escapeHtml(node.name||'')}" aria-label="${escapeHtml(node.name||'シーン')}の名称"></div><div class="structure-actions"><button class="sub" data-structure-scene-up="${key}" data-structure-scene-index="${node.index}" ${node.index===0?'disabled':''}>↑</button><button class="sub" data-structure-scene-down="${key}" data-structure-scene-index="${node.index}" ${node.index===(chapter.scenes||[]).length-1?'disabled':''}>↓</button><button class="sub delete-btn" data-structure-scene-delete="${key}" data-structure-scene-index="${node.index}">削除</button></div></div>`}).join('');return `<div class="structure-chapter"><div class="structure-chapter-head"><input data-structure-chapter-name="${key}" value="${escapeHtml(structureChapterLabel(key,index))}" aria-label="チャプター${index+1}の名称"><div class="structure-actions"><button class="sub" data-structure-chapter-up="${key}" ${index===0?'disabled':''}>↑</button><button class="sub" data-structure-chapter-down="${key}" ${index===chapterOrder.length-1?'disabled':''}>↓</button><button class="sub delete-btn" data-structure-chapter-delete="${key}">削除</button></div></div><div class="structure-scenes">${rows}</div><div class="manager-toolbar"><button class="sub" data-structure-add-scene="${key}">＋ シーンを追加</button></div></div>`}).join('');return `<div class="card structure-manager"><h3>チャプター・シーン構成</h3><p class="hint">ここでキャンペーン全体の章とシーンを管理します。名称変更・追加・削除・並べ替えは自動保存されます。オープニング、エンディング、インターミッションは固定ノードです。</p>${cards||'<p class="hint">チャプターがありません。</p>'}<div class="manager-toolbar"><button class="sub" id="btnStructureAddChapter">＋ チャプターを追加</button></div></div>`;
+}
+function bindStructureManager(){
+  document.querySelectorAll('[data-structure-chapter-name]').forEach(input=>input.onchange=e=>renameManagedChapter(e.target.dataset.structureChapterName,e.target.value));
+  document.querySelectorAll('[data-structure-scene-name]').forEach(input=>input.onchange=e=>renameManagedScene(e.target.dataset.structureSceneName,Number(e.target.dataset.structureSceneIndex),e.target.value));
+  document.querySelectorAll('[data-structure-chapter-up]').forEach(b=>b.onclick=()=>moveManagedChapter(b.dataset.structureChapterUp,-1));
+  document.querySelectorAll('[data-structure-chapter-down]').forEach(b=>b.onclick=()=>moveManagedChapter(b.dataset.structureChapterDown,1));
+  document.querySelectorAll('[data-structure-chapter-delete]').forEach(b=>b.onclick=()=>deleteManagedChapter(b.dataset.structureChapterDelete));
+  document.querySelectorAll('[data-structure-add-scene]').forEach(b=>b.onclick=()=>addManagedScene(b.dataset.structureAddScene));
+  document.querySelectorAll('[data-structure-scene-up]').forEach(b=>b.onclick=()=>moveManagedScene(b.dataset.structureSceneUp,Number(b.dataset.structureSceneIndex),-1));
+  document.querySelectorAll('[data-structure-scene-down]').forEach(b=>b.onclick=()=>moveManagedScene(b.dataset.structureSceneDown,Number(b.dataset.structureSceneIndex),1));
+  document.querySelectorAll('[data-structure-scene-delete]').forEach(b=>b.onclick=()=>deleteManagedScene(b.dataset.structureSceneDelete,Number(b.dataset.structureSceneIndex)));
+  const add=$('btnStructureAddChapter');if(add)add.onclick=addManagedChapter;
+}
+var baseRenderWorldForStructure=renderWorld;
+renderWorld=function(){const html=baseRenderWorldForStructure();return html+renderStructureManager()};
+var baseBindWorldForStructure=bindWorld;
+bindWorld=function(){baseBindWorldForStructure();bindStructureManager()};
+var baseWorkspaceDraftForStructure=workspaceDraft;
+workspaceDraft=function(){ensureStructureChapters();return {...baseWorkspaceDraftForStructure(),structureChapters:deepCopyStructure(structureChapters)}};
+var baseApplyWorkspaceDraftForStructure=applyWorkspaceDraft;
+applyWorkspaceDraft=function(data){baseApplyWorkspaceDraftForStructure(data);structureChapters=data.structureChapters&&typeof data.structureChapters==='object'?deepCopyStructure(data.structureChapters):null};
+var baseCreateNewCampaignForStructure=createNewCampaign;
+createNewCampaign=function(){structureChapters=null;baseCreateNewCampaignForStructure()};
+if(newSceneButton)newSceneButton.onclick=()=>addManagedScene(activeChapter);
+if(newChapterButton)newChapterButton.onclick=addManagedChapter;
+var baseRenderAllForStructure=renderAll;
+renderAll=function(){ensureStructureChapters();baseRenderAllForStructure()};
+</script>
+<script>
+/* 世界設定の人物概要は、キャンペーン全体のキャストを表示する。 */
+var baseRenderWorldForCampaignCast=renderWorld;
+renderWorld=function(){
+  const html=baseRenderWorldForCampaignCast();
+  const holder=document.createElement('div');holder.innerHTML=html;
+  const card=[...holder.querySelectorAll('.card')].find(x=>x.querySelector('h3')?.textContent.trim()==='登場人物');
+  if(card){
+    const cast=[{id:'gm',name:castName('gm','GM')},{id:'gareth',name:castName('gareth','ガレス')},...Array.from({length:extraCompanions},(_,i)=>({id:`member_${i+2}`,name:castName(`member_${i+2}`,`メンバー${i+2}`)})),...npcList().map(x=>({id:x.id,name:castName(x.id,x.name)}))];
+    card.querySelector('h3').textContent='キャンペーンのキャラクター/メンバー';
+    const hint=card.querySelector('.hint');if(hint)hint.textContent='このキャンペーンで登録されているキャラクターとメンバーです。';
+    const chips=card.querySelector('.chips');if(chips)chips.innerHTML=cast.map(x=>`<button class="chip" data-open-cast="${escapeHtml(x.id)}">${escapeHtml(x.name)}</button>`).join('')||'<span class="chip">キャスト未登録</span>';
+  }
+  return holder.innerHTML;
+};
+
+/* シーン要素の内部キー・追加フラグは、通常入力から分離する。 */
+var baseRenderStateWithAdvancedFields=renderState;
+renderState=function(){
+  const html=baseRenderStateWithAdvancedFields();
+  const holder=document.createElement('div');holder.innerHTML=html;
+  const divider=holder.querySelector('.section-divider');
+  const grid=divider?.nextElementSibling;
+  if(divider&&grid?.classList.contains('state-grid')){
+    const details=document.createElement('details');details.className='card state-advanced';
+    const summary=document.createElement('summary');summary.textContent='ゲーム連動（詳細設定）';details.append(summary);
+    const note=divider.querySelector('p');if(note)details.append(note);
+    details.append(grid);divider.replaceWith(details);
+  }
+  return holder.innerHTML;
+};
+</script>
+<script>
+/* 左ペインの登録先名称を簡潔にする。 */
+var baseRenderScenesForCharacterLabel=renderScenes;
+renderScenes=function(){
+  baseRenderScenesForCharacterLabel();
+  const castButton=document.querySelector('[data-global="cast"]');
+  if(castButton)castButton.textContent='├─ キャラクター';
+};
+</script>
+<script>
+/* キャラクター画面の見出しを左ペインの名称に統一する。 */
+var baseRenderCastForCharacterLabel=renderCast;
+renderCast=function(){
+  const html=baseRenderCastForCharacterLabel();
+  const holder=document.createElement('div');holder.innerHTML=html;
+  const heading=holder.querySelector('h2');if(heading)heading.textContent='キャラクター';
+  const listHeading=[...holder.querySelectorAll('h3')].find(x=>x.textContent.trim()==='キャスト一覧');if(listHeading)listHeading.textContent='キャラクター一覧';
+  return holder.innerHTML;
+};
+</script>
+<script>
+/* アイテム追加処理を最終的な入力画面へ確実に接続する。 */
+function bindItemAddButton(){
+  const add=$('btnAddItem');
+  if(add)add.onclick=()=>{
+    ensureItems();
+    items=[...items,{id:itemId('新しいアイテム',items.length),name:'新しいアイテム',scope:'scene',acquisition:'none',persistent:false,capabilities:['inspect'],aliases:[],notes:'',requires:'',image:''}];
+    saveWorkspaceDraft(true);renderTab();setStatus('アイテムを追加しました');
+    bindItemAddButton();
+  };
+}
+document.addEventListener('click',event=>{
+  const button=event.target.closest?.('#btnAddItem');
+  if(!button)return;
+  event.preventDefault();event.stopPropagation();
+  ensureItems();
+  items=[...items,{id:itemId('新しいアイテム',items.length),name:'新しいアイテム',scope:'scene',acquisition:'none',persistent:false,capabilities:['inspect'],aliases:[],notes:'',requires:'',image:''}];
+  saveWorkspaceDraft(true);renderTab();setStatus('アイテムを追加しました');
+  normalizeTerminologyInPage();
+},true);
+
+/* 画面上の用語を正式名称へ統一する。データ値・内部IDは変更しない。 */
+function normalizeTerminologyText(value){
+  return String(value??'')
+    .replaceAll('キャスト／エージェント','キャラクター')
+    .replaceAll('キャスト一覧','キャラクター一覧')
+    .replaceAll('キャスト設計','キャラクター設計')
+    .replaceAll('キャンペーンのキャラクター/メンバー','キャンペーンのキャラクター')
+    .replaceAll('登場人物','キャンペーンのキャラクター')
+    .replaceAll('キャスト','キャラクター')
+    .replaceAll('重要語・物語概念','重要語・概念')
+    .replaceAll('シーンの出口・分岐','出口・分岐')
+    .replaceAll('分岐／接続先','出口・分岐')
+    .replaceAll('発見項目','シーン要素');
+}
+function normalizeTerminologyInPage(){
+  const walker=document.createTreeWalker(document.body,NodeFilter.SHOW_TEXT);
+  const nodes=[];while(walker.nextNode())nodes.push(walker.currentNode);
+  nodes.forEach(node=>{node.nodeValue=normalizeTerminologyText(node.nodeValue)});
+  document.body.querySelectorAll('input,textarea,[aria-label],[title]').forEach(el=>{
+    ['placeholder','aria-label','title'].forEach(attr=>{if(el.hasAttribute(attr))el.setAttribute(attr,normalizeTerminologyText(el.getAttribute(attr)))});
+  });
+  bindItemAddButton();
+}
+var baseRenderAllForTerminology=renderAll;
+renderAll=function(){baseRenderAllForTerminology();normalizeTerminologyInPage()};
+normalizeTerminologyInPage();
+</script>
+<script>
+/* 画像フォルダの読み込みと、登録済み画像の再読み込み。 */
+let imageLibraryFiles={};
+let imageLibraryFolderName='';
+let imageAssetRefs={};
+function imageFileKey(name){return String(name||'').split(/[\\/]/).pop().toLowerCase()}
+function imageTargetValue(target){
+  if(target==='campaign')return campaignImage;
+  if(target.startsWith('scene:'))return sceneBackgrounds[target.slice(6)];
+  if(target.startsWith('cast:'))return castImages[target.slice(5)];
+  if(target.startsWith('monster:'))return monsters[Number(target.slice(8))]?.image;
+  if(target.startsWith('item:'))return items[Number(target.slice(5))]?.image;
+  return '';
+}
+function setImageTargetValue(target,url){
+  if(target==='campaign')campaignImage=url;
+  else if(target.startsWith('scene:'))sceneBackgrounds[target.slice(6)]=url;
+  else if(target.startsWith('cast:'))castImages[target.slice(5)]=url;
+  else if(target.startsWith('monster:')){const i=Number(target.slice(8));if(monsters[i])monsters[i].image=url}
+  else if(target.startsWith('item:')){const i=Number(target.slice(5));if(items[i])items[i].image=url}
+}
+function applyLibraryImage(target,file){
+  if(!target||!file)return;
+  imageAssetRefs[target]=file.name;
+  handleImageInput(file,url=>setImageTargetValue(target,url),'画像を再読み込みました');
+  saveWorkspaceDraft(true);
+}
+function decorateImageInputs(){
+  const targets=[];
+  const campaign=$('campaignImageInput');if(campaign)targets.push([campaign,'campaign']);
+  const sceneInput=$('sceneBgInput');if(sceneInput)targets.push([sceneInput,`scene:${sceneKey()}`]);
+  document.querySelectorAll('.cast-image-input').forEach(input=>targets.push([input,`cast:${input.dataset.castId}`]));
+  document.querySelectorAll('.monster-image').forEach(input=>targets.push([input,`monster:${input.dataset.monsterIndex}`]));
+  document.querySelectorAll('.item-image').forEach(input=>targets.push([input,`item:${input.dataset.itemIndex}`]));
+  targets.forEach(([input,target])=>{
+    input.dataset.imageTarget=target;
+    if(input.dataset.imageReloadDecorated)return;
+    input.dataset.imageReloadDecorated='1';
+    const button=document.createElement('button');button.type='button';button.className='sub image-reload-button';button.textContent='画像を再読み込み';button.dataset.imageReloadTarget=target;
+    input.parentElement?.append(button);
+  });
+}
+function imageFolderMarkup(){
+  const names=Object.keys(imageLibraryFiles);
+  return `<div class="card image-library-card"><h3>画像管理</h3><p class="hint">画像フォルダを読み込むと、登録済み画像をファイル名で再読み込みできます。${imageLibraryFolderName?`現在のフォルダ：${escapeHtml(imageLibraryFolderName)}`:'元画像のフォルダは毎回選択してください。'}</p><input id="imageFolderInput" type="file" accept="image/*" webkitdirectory directory multiple><div class="image-library-list">${names.length?names.map(name=>`<span class="chip">${escapeHtml(name)}</span>`).join(''):'<span class="hint">画像フォルダはまだ読み込まれていません。</span>'}</div><button type="button" class="sub" id="btnReloadFolderImages" ${names.length?'':'disabled'}>登録済み画像を再読み込み</button></div>`;
+}
+var baseRenderWorldForImageLibrary=renderWorld;
+renderWorld=function(){return baseRenderWorldForImageLibrary()+imageFolderMarkup()};
+var baseRenderTabForImageLibrary=renderTab;
+renderTab=function(){baseRenderTabForImageLibrary();decorateImageInputs()};
+var baseRenderAllForImageLibrary=renderAll;
+renderAll=function(){baseRenderAllForImageLibrary();decorateImageInputs()};
+var baseWorkspaceDraftForImageLibrary=workspaceDraft;
+workspaceDraft=function(){return {...baseWorkspaceDraftForImageLibrary(),imageAssetRefs}};
+var baseApplyWorkspaceDraftForImageLibrary=applyWorkspaceDraft;
+applyWorkspaceDraft=function(data){baseApplyWorkspaceDraftForImageLibrary(data);imageAssetRefs=data.imageAssetRefs&&typeof data.imageAssetRefs==='object'?data.imageAssetRefs:{}};
+try{const rawImageRefs=localStorage.getItem(DRAFT_KEY);if(rawImageRefs){const parsed=JSON.parse(rawImageRefs);const data=parsed.data||parsed;if(data.imageAssetRefs&&typeof data.imageAssetRefs==='object')imageAssetRefs=data.imageAssetRefs}}catch(e){}
+document.addEventListener('change',event=>{
+  const input=event.target;
+  if(input?.id!=='imageFolderInput')return;
+  const files=Array.from(input.files||[]).filter(file=>file.type.startsWith('image/'));
+  imageLibraryFiles=Object.fromEntries(files.map(file=>[imageFileKey(file.name),file]));
+  imageLibraryFolderName=files[0]?.webkitRelativePath?.split(/[\\/]/)[0]||'選択したフォルダ';
+  renderAll();setStatus(`${files.length}件の画像を読み込みました`);
+},true);
+document.addEventListener('click',event=>{
+  const reload=event.target.closest?.('[data-image-reload-target]');
+  if(reload){
+    event.preventDefault();event.stopPropagation();
+    const target=reload.dataset.imageReloadTarget;const ref=imageAssetRefs[target];const file=imageLibraryFiles[imageFileKey(ref)];
+    if(file)applyLibraryImage(target,file);else document.querySelector(`[data-image-target="${CSS.escape(target)}"]`)?.click();
+    return;
+  }
+  if(event.target.closest?.('#btnReloadFolderImages')){
+    event.preventDefault();event.stopPropagation();
+    const targets=Object.entries(imageAssetRefs);let count=0;
+    targets.forEach(([target,ref])=>{const file=imageLibraryFiles[imageFileKey(ref)];if(file){applyLibraryImage(target,file);count++}});
+    if(!count)setStatus('再読み込みできる登録画像がありません');
+  }
+},true);
+</script>
+<script>
+/* 補助パネルの操作を再描画後も確実に受け付ける。 */
+document.addEventListener('click',async event=>{
+  const suggest=event.target.closest?.('#btnSuggest');
+  if(suggest){
+    event.preventDefault();event.stopPropagation();
+    const box=document.querySelector('#suggestion');
+    if(box){box.classList.remove('hidden');box.innerHTML=`${promptBlock('codex','Codex')}${promptBlock('claude','Claude')}`;box.querySelectorAll('[data-copy-text]').forEach(btn=>btn.onclick=()=>navigator.clipboard.writeText(btn.dataset.copyText).then(()=>setStatus('プロンプトをコピーしました')).catch(err=>setStatus('コピーに失敗しました: '+err.message)))}
+    return;
+  }
+  const askAI=event.target.closest?.('#btnAssistantAI');
+  if(askAI){
+    event.preventDefault();event.stopPropagation();
+    const instruction=document.querySelector('#assistantInstruction')?.value.trim()||'';askAI.disabled=true;setStatus('AIに相談中…');
+    try{assistantAiResult=await callLLM('あなたはTRPG制作の設計補助です。TASの現在設定を読み取り、未確定事項を勝手に確定せず、改善点と具体案を日本語で整理してください。',[{role:'user',content:`${assistantPrompt('claude')}\n\n追加指示:\n${instruction||'現在の設定について、優先度の高い改善点を整理してください。'}`}],4000);renderRightPanel();renderValidation()}
+    catch(err){assistantAiResult=`AI相談を実行できませんでした。${err.message}`;setStatus('AI相談に失敗しました')}
+    finally{if(document.querySelector('#btnAssistantAI'))document.querySelector('#btnAssistantAI').disabled=false}
+    return;
+  }
+  const mode=event.target.closest?.('[data-assistant-mode]');
+  if(mode){event.preventDefault();event.stopPropagation();assistantMode=mode.dataset.assistantMode;assistantAiResult='';saveWorkspaceDraft(true);renderRightPanel();renderValidation()}
+},true);
+</script>
+<script>
+/* 補助AIへ渡す情報を現在の登録先に限定し、未依頼のシーン案を生成しない。 */
+function assistantTargetContext(){
+  const instruction=document.querySelector('#assistantInstruction')?.value||'';
+  if(activeTab==='world')return {label:'世界設定',data:{campaignName,campaignWorld,campaignTheme,campaignTerms}};
+  if(activeTab==='cast'){
+    const all=[{id:'gm',name:castName('gm','GM'),profile:castProfile('gm','')},{id:'gareth',name:castName('gareth','ガレス'),profile:castProfile('gareth','')},...Array.from({length:extraCompanions},(_,i)=>{const id=`member_${i+2}`;return {id,name:castName(id,`メンバー${i+2}`),profile:castProfile(id,'')}}),...npcList().map(x=>({id:x.id,name:castName(x.id,x.name),profile:castProfile(x.id,'')}))];
+    const focus=all.find(x=>x.name&&instruction.includes(x.name));return {label:focus?`キャラクター「${focus.name}」`:'キャラクター一覧',data:focus||all};
+  }
+  if(activeTab==='monsters'){
+    const focus=monsters.find(x=>x.name&&instruction.includes(x.name));return {label:focus?`モンスター「${focus.name}」`:'モンスター一覧',data:focus||monsters};
+  }
+  if(activeTab==='items'){
+    const focus=items.find(x=>x.name&&instruction.includes(x.name));return {label:focus?`アイテム「${focus.name}」`:'アイテム一覧',data:focus||items};
+  }
+  if(activeTab==='concepts'){
+    const list=ensureConcepts();const focus=list.find(x=>x.name&&instruction.includes(x.name));return {label:focus?`重要語・概念「${focus.name}」`:'重要語・概念一覧',data:focus||list};
+  }
+  const current=withSceneOverride(scene());
+  if(activeTab==='state')return {label:`${current.name}のシーン要素`,data:{name:current.name,discoveries:current.discoveries||[]}};
+  if(activeTab==='expression')return {label:`${current.name}の表現・会話`,data:{name:current.name,dialogueRules:sceneOverrides[sceneKey()]?.dialogueRules||[],gmSceneNotes:sceneOverrides[sceneKey()]?.gmSceneNotes||''}};
+  if(activeTab==='structure')return {label:`${current.name}のシーン設定`,data:current};
+  return {label:`${current.name}の設定`,data:current};
+}
+assistantPrompt=function(kind){
+  const target=assistantTargetContext();
+  const roleText=kind==='codex'?'あなたは実装担当のCodexです。':'あなたは設計補助のClaudeです。';
+  const structureNote=activeTab==='structure'?`\n出口・分岐のTAS形式:\n- フィールドは exits[].id / exits[].match（照合語） / exits[].to（実在する scene:<id> または null） / exits[].requires.text / exits[].blockedText / exits[].text を使う。\n- destination、condition、description、scene_complete などの独自フィールドは使わない。\n- 現在の出口が空なら「未設定」と明示し、画面に入力できる1〜2件の案だけを示す。\n- 移動先は現在章に存在するシーンだけを候補にする。\n利用可能な移動先:\n${JSON.stringify(sceneTargets().map(x=>({ref:sceneRef(x),name:x.name})),null,2)}\n`:'\n';
+  return `${roleText}
+
+対象範囲: ${target.label}
+
+重要な制約:
+- 対象範囲の内容だけを確認し、他のシーン・台帳・タブのレビューを勝手に追加しない。
+- 依頼された入力欄にそのまま貼れる具体的な回答を最優先する。
+- 依頼されていないシーン要素、イベント、遷移、設定を新規提案しない。
+- 既存の確定情報を変更せず、不足がある場合は「不足」と明記する。
+- 依頼が「行動・演出の指針」なら、行動・演出の指針だけを短く提示する。
+- JSONは依頼された場合だけ出力する。
+${structureNote}
+
+参照する現在データ:
+${JSON.stringify(target.data,null,2)}
+
+依頼:
+${document.querySelector('#assistantInstruction')?.value.trim()||'この対象の不足点を確認し、入力欄に記入できる具体案を1つ提示してください。'}`.trim();
 };
 </script>
 </html>
