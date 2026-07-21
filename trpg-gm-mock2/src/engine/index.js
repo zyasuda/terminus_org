@@ -1466,7 +1466,21 @@ async function callGm(userContent, extraSystem) {
     try {
       return JSON.parse(cleaned.replace(/\r?\n/g, " "));
     } catch (e2) {
-      return { narration: text || "(応答の解析に失敗)", check: null, state_updates: null, scene_complete: false };
+      // 完全な破損(閉じ括弧の欠落・生成の途中切れ等)でもnarrationの値部分だけは正規表現で救出を試みる。
+      // 救出できないからといって生のJSON断片({"narration":"...等)をそのままプレイヤーに見せない(2026-07-21実害)
+      let salvaged = null;
+      const closed = cleaned.match(/"narration"\s*:\s*"((?:[^"\\]|\\.)*)"/);
+      if (closed) {
+        try { salvaged = JSON.parse(`"${closed[1]}"`); } catch (e3) { /* 救出も失敗 */ }
+      } else {
+        // 閉じ引用符すら無い(生成が途中で途切れた)場合、開始位置から末尾までを素朴にアンエスケープする
+        const open = cleaned.match(/"narration"\s*:\s*"((?:[^"\\]|\\.)*)$/);
+        if (open) salvaged = open[1].replace(/\\n/g, "\n").replace(/\\"/g, '"').replace(/\\\\/g, "\\");
+      }
+      return {
+        narration: salvaged || "……何かの拍子に、言葉がうまくまとまらなかったようだ。",
+        check: null, state_updates: null, scene_complete: false
+      };
     }
   }
 }
