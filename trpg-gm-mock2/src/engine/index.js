@@ -820,7 +820,7 @@ async function resolveAmbushIfNeeded(playerText) {
   return true;
 }
 
-/* ---------------- 戦闘v1: ターン制・決定論(docs/COMBAT_SPEC.md) ----------------
+/* ---------------- 戦闘v1: ターン制・決定論(BORG/TRPG/MockDocs/COMBAT_SPEC.md) ----------------
    進行・ダメージ・弱点・逃走は全てシステムが確定し、LLMは確定結果の描写のみ。
    LLMが落ちても定型文で完走する。戦闘行動以外(調べる・話す)は従来のLLMルートに落ちる */
 const COMBAT_DEFEND_RE = /防御|身を守|守りを固|盾|構え/;
@@ -1019,7 +1019,7 @@ const BACK_RE = /戻る|戻ろ|引き返|退く/;
 const TALK_RE = /話|聞く|聞いて|尋ね|訊|呼びかけ|声をかけ/;
 const SCRIPTED_ATTACK_RE = /攻撃|斬|切りかか|殴|撃つ|叩く|突く|蹴/;
 
-// 主語(誰が)の確定情報抽出(2026-07-21: 動詞+オブジェクトの分類改善、docs/RULE_INVENTORY.md 意図分類表)。
+// 主語(誰が)の確定情報抽出(2026-07-21: 動詞+オブジェクトの分類改善、BORG/TRPG/MockDocs/RULE_INVENTORY.md 意図分類表)。
 // 立ち絵タップは必ず「名前、」を宣言の先頭に挿入するため、この確実な信号をLLMに推測させず直接読む。
 // 残り文字列(rest)を動詞・目的語の判定に使う(分類器に渡すプロンプトも短くなる)
 function extractActor(text) {
@@ -1138,7 +1138,7 @@ async function tryScripted(text) {
   return false;
 }
 
-/* ---------------- 意図分類器(段階2: docs/RULE_INVENTORY.md) ----------------
+/* ---------------- 意図分類器(段階2: BORG/TRPG/MockDocs/RULE_INVENTORY.md) ----------------
    辞書(tryScripted)に漏れた宣言の意図と対象をLLMに「穴埋め」で読み取らせる。
    LLMは分類するだけで、結果の解決(判定・開示・遷移・取得)は常にシステム側。
    分類を誤っても最悪「別のレーンで穏当に処理される」だけで、状態は壊れない */
@@ -1327,7 +1327,7 @@ function systemPrompt(extra) {
     ? `\n# このシーンで入手しうる品(正名)\n${lootNames.join("、")} — プレイヤーが物語上、自然に手に入れる流れになった時だけ、add_items にこの正名をそのまま入れて提案せよ。ここに無い品は入手させない。`
     : "";
   const direction = sc.report ? reportDirection() : sc.direction;
-  // 未識別の敵は、LLMにも本名と正体につながる特徴(trait)を渡さない(名前も③層扱い)。docs/RULE_INVENTORY.md B5
+  // 未識別の敵は、LLMにも本名と正体につながる特徴(trait)を渡さない(名前も③層扱い)。BORG/TRPG/MockDocs/RULE_INVENTORY.md B5
   const unidentifiedNote = "\n【未識別】この敵の正体はまだ分かっていない。上記の名称をそのまま使い、正体・種族・名前を推測して語ってはならない。見えた姿・音・動きだけで描写せよ。";
   // (B4は2026-07-21削除): 交戦中(state.enemy有効)はtryCombatTurnが常に決定論で処理してここに到達しないため、
   // 「交戦中の敵」ブロックは死んだコードだった。ここに残るのは「まだ交戦していない・潜む敵」の描写のみ(生きているLLM経路)
@@ -1379,7 +1379,7 @@ function systemPrompt(extra) {
   // 静的部分を先頭に固めると毎ターンの再処理が変動部分だけで済む(実測: 全再処理31秒→キャッシュ時3秒)
   //
   // 以下のテンプレート文字列はそのままLLMへ送るプロンプト本体(注釈をここに書き足すとトークンが増える)。
-  // docs/RULE_INVENTORY.md のB系IDとの対応は本文の出現順で辿れる:
+  // BORG/TRPG/MockDocs/RULE_INVENTORY.md のB系IDとの対応は本文の出現順で辿れる:
   //   companionブロック→B9、直後の「# ルール」冒頭〜HP提案まで→B7(状態変更提案の制約)、
   //   narration一文→B12(2026-07-21追加、メタ描写禁止)、移動の一文→B3と対、
   //   メタ発言の一文→B10、npcBlock挿入部→B10。個別ルールを増やす前に、まずRULE_INVENTORY.mdへの
@@ -1537,7 +1537,7 @@ export async function sendAction(text) {
       return;
     }
 
-    // 戦闘中は全ての宣言を決定論の1ターンとして解決(docs/COMBAT_SPEC.md)。
+    // 戦闘中は全ての宣言を決定論の1ターンとして解決(BORG/TRPG/MockDocs/COMBAT_SPEC.md)。
     // 定型(攻撃・防御・逃走・弱点)以外は「工夫」として判定つきで試せる。LLMの自由裁量ルートは開かない
     if (state.enemy && await tryCombatTurn(text)) {
       state.pendingFailedCheck = null; state.blockedMove = false;
@@ -1614,7 +1614,7 @@ export async function sendAction(text) {
     }
 
     // 辞書に漏れた宣言はLLM分類器(穴埋め・列挙型)で意図と対象を読み取り、解決はシステムが行う
-    // (docs/RULE_INVENTORY.md 意図分類表)。分類器が落ちたら従来のLLMルートへそのまま流す
+    // (BORG/TRPG/MockDocs/RULE_INVENTORY.md 意図分類表)。分類器が落ちたら従来のLLMルートへそのまま流す
     let gmDirectCue = "";
     const cls = await classifyIntent(text);
     if (cls) {
