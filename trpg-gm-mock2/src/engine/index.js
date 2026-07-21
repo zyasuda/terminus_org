@@ -1019,6 +1019,18 @@ const BACK_RE = /戻る|戻ろ|引き返|退く/;
 const TALK_RE = /話|聞く|聞いて|尋ね|訊|呼びかけ|声をかけ/;
 const SCRIPTED_ATTACK_RE = /攻撃|斬|切りかか|殴|撃つ|叩く|突く|蹴/;
 
+// 主語(誰が)の確定情報抽出(2026-07-21: 動詞+オブジェクトの分類改善、docs/RULE_INVENTORY.md 意図分類表)。
+// 立ち絵タップは必ず「名前、」を宣言の先頭に挿入するため、この確実な信号をLLMに推測させず直接読む。
+// 残り文字列(rest)を動詞・目的語の判定に使う(分類器に渡すプロンプトも短くなる)
+function extractActor(text) {
+  for (const [id, c] of Object.entries(CAST)) {
+    if (text.startsWith(c.name + "、")) {
+      return { actorId: id, actorName: c.name, rest: text.slice(c.name.length + 1).trim() };
+    }
+  }
+  return { actorId: "player", actorName: "あなた", rest: text };
+}
+
 // テキストとsecretのentity/aliasesの照合(開示済み/未開示を指定)。複数ヒットは曖昧なのでnull
 function matchSecretByText(sc, text, wantRevealed) {
   const pool = sc.secrets.filter(s => revealed.has(s.id) === wantRevealed);
@@ -1036,11 +1048,11 @@ function markExamined(entity) {
   if (!(state.examined ||= []).includes(entity)) { state.examined.push(entity); }
 }
 
-async function scriptedExamine(secret) {
+async function scriptedExamine(secret, actorName = "あなた") {
   markExamined(secret.entity);
   const diff = secret.dc || 12;
-  const reason = `${secret.entity}を調べる`;
-  const roll = await requestPlayerRoll(reason, diff, "あなた");
+  const reason = (actorName === "あなた" ? "" : `${actorName}: `) + `${secret.entity}を調べる`;
+  const roll = await requestPlayerRoll(reason, diff, actorName);
   const crit = roll === 20, fumble = roll === 1;
   const ok = crit || (!fumble && roll >= diff);
   await addDice(roll, diff, ok, crit, fumble, reason);
@@ -1099,9 +1111,10 @@ async function tryScripted(text) {
     return true;
   }
   if (EXAMINE_RE.test(text)) {
-    const secret = matchSecretByText(sc, text, false);
-    if (secret) { await scriptedExamine(secret); return true; }
-    const known = matchSecretByText(sc, text, true);
+    const { actorName, rest } = extractActor(text);
+    const secret = matchSecretByText(sc, rest, false);
+    if (secret) { await scriptedExamine(secret, actorName); return true; }
+    const known = matchSecretByText(sc, rest, true);
     if (known) { addGm("改めて確かめる。" + (known.playerText || known.text), "Neutral"); return true; }
     if (gmMode === "scripted") { addGm("特に変わったものは見つからない。", "Neutral"); return true; }
     return false; // hybrid: secretのない対象の描写はLLMの領分
@@ -1130,6 +1143,10 @@ async function tryScripted(text) {
    LLMは分類するだけで、結果の解決(判定・開示・遷移・取得)は常にシステム側。
    分類を誤っても最悪「別のレーンで穏当に処理される」だけで、状態は壊れない */
 async function classifyIntent(text) {
+  // 主語がチップ(立ち絵タップ)由来で確定している場合、LLMに推測させず、残り文字列(rest)だけを
+  // 分類に使う(プロンプトが短くなり、主語の混入で目的語判定がぶれるのも防ぐ)
+  const { actorId, rest } = extractActor(text);
+  const chipActor = actorId !== "player";
   const sc = SCENARIO.scenes[state.sceneIndex];
   const targets = [
     ...sc.secrets.map(s => s.entity),
@@ -1139,7 +1156,7 @@ async function classifyIntent(text) {
     ...(sc.report ? ["マイラ・ヴェイン"] : [])
   ].filter(Boolean);
   const system = `プレイヤーの宣言を分類する。応答は次のJSONのみ(前置き禁止):
-{"intent":"investigate|move|back|talk|talk_gm|take|other","target":"候補から最も近いもの、なければnull","actor":"player|gareth|lydia"}
+{"intent":"investigate|move|back|talk|talk_gm|take|other","target":"候補から最も近いもの、なければnull"${chipActor ? "" : `,"actor":"player|gareth|lydia"`}}
 対象の候補: ${targets.join("、") || "(なし)"}
 基準:
 - investigate: 何かを調べる・見る・聞く・嗅ぐ・観察する
@@ -1151,18 +1168,20 @@ async function classifyIntent(text) {
 - other: どれにも当てはまらない
 targetの規則(厳守):
 - 宣言の中で明示・言い換えされている対象だけを選ぶ。宣言に出てこない対象を推測で補うな。
-- 「周りを見る」「天井を見る」のような漠然とした宣言や、候補に無い物への行動は target=null。
-actorは「リディアに調べてもらう」等の委任があればそのid、なければplayer。`;
+- 「周りを見る」「天井を見る」のような漠然とした宣言や、候補に無い物への行動は target=null。${chipActor ? "" : `\nactorは「リディアに調べてもらう」等の委任があればそのid、なければplayer。`}`;
   try {
-    const data = await callGmApi({ system, messages: [{ role: "user", content: text }], maxTokens: 80 });
+    const data = await callGmApi({ system, messages: [{ role: "user", content: rest }], maxTokens: 80 });
     const raw = data.content && data.content[0] && data.content[0].text || "";
     const m = raw.match(/\{[\s\S]*\}/);
     const parsed = JSON.parse(m ? m[0] : raw);
     const intent = ["investigate", "move", "back", "talk", "talk_gm", "take", "other"].includes(parsed.intent)
       ? parsed.intent : "other";
     const target = targets.includes(parsed.target) ? parsed.target : null;
+    // 主語はチップ由来の確定情報を優先。無ければLLMの読み取りをnormalizeWhoで解決
+    const resolvedActorId = chipActor ? actorId : normalizeWho(parsed.actor, "player");
+    const actorName = CAST[resolvedActorId] ? CAST[resolvedActorId].name : "あなた";
     addNote(`🧭 分類: ${intent}${target ? " → " + target : ""}`);
-    return { intent, target, actor: parsed.actor };
+    return { intent, target, actorId: resolvedActorId, actorName };
   } catch (e) {
     return null; // 分類器が落ちたら従来のLLMルートに委ねる(安全側)
   }
@@ -1604,7 +1623,7 @@ export async function sendAction(text) {
           done(false);
           return;
         }
-        if (hit) { await scriptedExamine(hit); done(true); return; }
+        if (hit) { await scriptedExamine(hit, cls.actorName); done(true); return; }
         // secretのない対象の調査は描写レーン(下のLLM)へ
       } else if (cls.intent === "move") {
         scriptedMoveForward();
@@ -1616,7 +1635,10 @@ export async function sendAction(text) {
         return;
       } else if (cls.intent === "take") {
         const allowed = availableLoot(sc);
-        const item = allowed.find(i => text.includes(i) || (cls.target && (i === cls.target || i.includes(cls.target))));
+        let item = allowed.find(i => text.includes(i) || (cls.target && (i === cls.target || i.includes(cls.target))));
+        // 分類器の対象幻覚ガード(investigateと同様): 対象名が文中に一切現れず、既存の所持品への
+        // 言及があるなら分類器のtargetを信用しない(「ロープを触る」→心石の欠片 のような誤紐付け対策)
+        if (item && !text.includes(item) && state.items.some(i => text.includes(i))) item = null;
         if (item && !state.items.includes(item)) {
           state.items.push(item);
           logSceneEvent(`「${item}」を手に入れた`);
