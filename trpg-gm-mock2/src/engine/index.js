@@ -1297,6 +1297,8 @@ function systemPrompt(extra) {
     .map(s => "・" + s.text);
   const depthTargets = sc.secrets.filter(s => !revealed.has(s.id) && s.entity)
     .map(s => "・" + s.entity + (s.surface ? `(表層: ${s.surface})` : ""));
+  // B1: talk/other等の会話レーン(投機的な投げかけ)が未開示secretsに言及・捏造するのを防ぐ。
+  // 調査のヒット判定自体はscriptedExamineが決定論で処理するため、ここは「会話中に漏れる」経路専用。生きている
   const depthBlock = depthTargets.length
     ? `\n# 深さのある対象(未開示の詳細がシステム側にある)\n以下の対象について語ってよいのは、括弧内の「表層」の範囲まで。対象を指す時は上記の名称を一字一句そのまま使え。\n${depthTargets.join("\n")}\n【厳守】\n・あなたは対象の正体・仕組み・来歴・目的を知らない。それを語るな。\n・表層で説明がつかない時、正体を推測・創作して埋めてはならない(例:「石になっていく」「呪いだ」等、独自の設定をでっち上げるのは禁止)。分からないものは、見えた所作・音・質感だけで描き、分からないまま残せ。\n・「最近」「誰かが」「今も」など、変化や活動の兆候を匂わせる描写も真相の一部である。表層に無ければ、たとえ一言でも判定なしに語ってはならない(例:「最近こすれた跡がある」「誰かが最近触れた形跡」は不可。「古い」「錆びている」等、静的な状態の描写に留めよ)。\n・真相は「判定成功時にシステムが渡した文」だけが根拠。渡されていない限り、対象が何であるか・なぜそうしているかを断定・示唆してはならない。\n・プレイヤーが対象を観察・質問・分析するなど深く知ろうとしたら、地の文で答えを出さず、必ず check を要求せよ(真相はその成功時にのみ解禁される)。\n・その check では、check.targetEntity に上記の名称を一字一句そのまま入れよ。これらの対象以外への判定では targetEntity は null にせよ。\n・判定に失敗しても、対象を破壊・消失させてはならない。`
     : "";
@@ -1306,20 +1308,22 @@ function systemPrompt(extra) {
     ? `\n# このシーンで入手しうる品(正名)\n${lootNames.join("、")} — プレイヤーが物語上、自然に手に入れる流れになった時だけ、add_items にこの正名をそのまま入れて提案せよ。ここに無い品は入手させない。`
     : "";
   const direction = sc.report ? reportDirection() : sc.direction;
-  // 未識別の敵は、LLMにも本名と正体につながる特徴(trait)を渡さない(名前も③層扱い)
+  // 未識別の敵は、LLMにも本名と正体につながる特徴(trait)を渡さない(名前も③層扱い)。docs/RULE_INVENTORY.md B5
   const unidentifiedNote = "\n【未識別】この敵の正体はまだ分かっていない。上記の名称をそのまま使い、正体・種族・名前を推測して語ってはならない。見えた姿・音・動きだけで描写せよ。";
-  const enemyBlock = state.enemy
-    ? `\n# 戦闘中の敵(HP管理はシステム。あなたは変更できない)\n${JSON.stringify({ name: enemyName(state.enemy), hp: state.enemy.hp, maxHp: state.enemy.maxHp })}\n特徴:${state.enemy.identified ? state.enemy.trait : (state.enemy.surface || "暗くてよく見えない")}${state.enemy.identified ? "" : unidentifiedNote}\n【交戦中】この敵は一行と同じ場所におり、交戦状態にある。「いない」「去った」「柵や壁の向こうにいる」など、この場に敵が不在であるかのような語りをしてはならない。敵から離れて戦闘を終えるなら flee_enemy を true で申告せよ。プレイヤーが敵を攻撃したら、必ずcheckで判定を要求せよ。`
-    : (sc.enemy && !state.defeated.includes(sc.enemy.name) && !(state.fled || []).includes(sc.enemy.name)
-        ? `\n# このシーンに潜む敵(まだ交戦していない)\n名前:${sc.enemy.unknownName || sc.enemy.name} / 特徴:${sc.enemy.unknownName ? (sc.enemy.surface || "暗くてよく見えない") : sc.enemy.trait}${sc.enemy.unknownName ? unidentifiedNote : ""}\nプレイヤーが刺激した場合や物語上自然な場合、まず姿・特徴・威嚇を地の文で描写してから engage_enemy を true にして戦闘を開始できる。\n奇襲はシステム専権。敵が潜んでいても、あなたは奇襲成功や先制ダメージを確定してはならない。${sc.enemy.ambush ? `\n奇襲条件:${sc.enemy.ambushTrigger}` : ""}`
-        : "");
+  // (B4は2026-07-21削除): 交戦中(state.enemy有効)はtryCombatTurnが常に決定論で処理してここに到達しないため、
+  // 「交戦中の敵」ブロックは死んだコードだった。ここに残るのは「まだ交戦していない・潜む敵」の描写のみ(生きているLLM経路)
+  const enemyBlock = sc.enemy && !state.defeated.includes(sc.enemy.name) && !(state.fled || []).includes(sc.enemy.name)
+    ? `\n# このシーンに潜む敵(まだ交戦していない)\n名前:${sc.enemy.unknownName || sc.enemy.name} / 特徴:${sc.enemy.unknownName ? (sc.enemy.surface || "暗くてよく見えない") : sc.enemy.trait}${sc.enemy.unknownName ? unidentifiedNote : ""}\nプレイヤーが刺激した場合や物語上自然な場合、まず姿・特徴・威嚇を地の文で描写してから engage_enemy を true にして戦闘を開始できる。\n奇襲はシステム専権。敵が潜んでいても、あなたは奇襲成功や先制ダメージを確定してはならない。${sc.enemy.ambush ? `\n奇襲条件:${sc.enemy.ambushTrigger}` : ""}`
+    : "";
+  // B2: LLM自身が提案したcheckが失敗した時だけ立つ(scriptedExamineの判定失敗はここを通らない)。生きている
   const failedCheckBlock = state.pendingFailedCheck
     ? `\n# 直前に失敗した判定\n${state.pendingFailedCheck.reason} は失敗している。この対象について、真相・正体・仕組み・最近の痕跡・内側/外側の構造などの確定情報を語ってはならない。見えた表層、危険、分からなさだけを描写せよ。`
     : "";
+  // B3: LLMが自ら申告したscene_completeをシステムが却下した時だけ立つ(move意図の決定論遷移はここを通らない)。生きている
   const blockedMoveBlock = state.blockedMove
     ? `\n# 直前の状況\n一行は先へ進もうとしたが、まだ進めない(このシーンに未解決の手がかりが残っている)。先へ進んだ・場所を移った描写をしてはならない。一行をこの場に留めて描写せよ。scene_complete も出すな。`
     : "";
-  // 文体・語彙・世界観はcampaign.jsonから組み立てる(コード直書き禁止の契約、DATA_EXCHANGE.md 6.2)。
+  // B8: 文体・語彙・世界観はcampaign.jsonから組み立てる(コード直書き禁止の契約、DATA_EXCHANGE.md 6.2)。
   // 応答フォーマット・判定ルール・三層の開示制御はエンジンの動作契約なのでコードに残す
   const st = CAMPAIGN.style;
   const styleBlock = [
@@ -1330,16 +1334,17 @@ function systemPrompt(extra) {
     ...(st.extra || []),
     st.world + ((st.forbiddenWords || []).length ? `使ってはならない語の例: ${st.forbiddenWords.join("、")}。` : "")
   ].filter(Boolean).join("\n");
+  // B9: 同行者の人格・掛け合い条件
   const companionLines = Object.entries(CAST).map(([id, c]) => `- ${c.name}(${id}): ${c.persona}`).join("\n");
   const companionIds = Object.keys(CAST).map(id => `"${id}"`).join(" か ");
-  // シーンNPC(依頼人等)の台詞は専用チャネルnpc.sayへ。companion枠に混ざると
+  // B10: シーンNPC(依頼人等)の台詞は専用チャネルnpc.sayへ。companion枠に混ざると
   // normalizeWhoの解決失敗→誤帰属(マイラの台詞がリディア名義になる等)が起きるため、出口を分ける
   const npc = sc.npc;
   const npcBlock = npc
     ? `\n# シーンの人物(同行者ではない)\nこのシーンには${npc.name}がいる。あなたが演じてよいが、${npc.name}の台詞は必ず npc.say に入れよ。companion は同行者(${companionIds})専用であり、${npc.name}の台詞を入れてはならない。\nこのシーンの対話の主役は${npc.name}とプレイヤーである。同行者はプレイヤーに直接話しかけられた時だけ返答し、それ以外は companion を null にせよ。\n`
     : "";
   const npcSchema = npc ? `"npc":{"say":"${npc.name}の一言"}または null,` : "";
-  // これまでの経緯: シーンごとの確定事実の記録(履歴24件切れ対策。特に終盤の報告シーンで章全体を参照できる)
+  // B11: これまでの経緯。シーンごとの確定事実の記録(履歴24件切れ対策。特に終盤の報告シーンで章全体を参照できる)
   const log = state.sceneLog || [];
   const digestLines = SCENARIO.scenes.slice(0, state.sceneIndex + 1).map((s, i) => {
     const events = log.filter(e => e.scene === i).map(e => e.text);
@@ -1353,6 +1358,13 @@ function systemPrompt(extra) {
   // 並び順の契約: 前半=毎ターン不変(文体・依頼・同行者・ルール)、後半=変動(経緯・シーン・状態)。
   // ローカルSLM(Ollama)はプロンプト先頭が前回と一致する部分のKVキャッシュを再利用するため、
   // 静的部分を先頭に固めると毎ターンの再処理が変動部分だけで済む(実測: 全再処理31秒→キャッシュ時3秒)
+  //
+  // 以下のテンプレート文字列はそのままLLMへ送るプロンプト本体(注釈をここに書き足すとトークンが増える)。
+  // docs/RULE_INVENTORY.md のB系IDとの対応は本文の出現順で辿れる:
+  //   companionブロック→B9、直後の「# ルール」冒頭〜HP提案まで→B7(状態変更提案の制約)、
+  //   narration一文→B12(2026-07-21追加、メタ描写禁止)、移動の一文→B3と対、
+  //   メタ発言の一文→B10、npcBlock挿入部→B10。個別ルールを増やす前に、まずRULE_INVENTORY.mdへの
+  //   追記とここでの棚卸しを先にすること(肥大化を可視化する)。
   return `${styleBlock}
 
 # 依頼(プレイヤーの目的)
@@ -1379,6 +1391,7 @@ ${npcBlock}
 - HPの増減はhp_delta(-3〜+2)で提案するだけ。確定するのはシステム。
 - 未開示の真相を勝手に作らない。判定成功時にシステムから情報が渡される。
 - 情景の小物(瓦礫、朽ちた道具等)は自由に肉付けしてよい。ただし新たな通路・出口・人物・入手可能な品を作ってはならない。
+- narrationは世界の情景・出来事だけを書け。「〜が答える」「〜が話す」「〜が静かに頷く」のように、companion/npcの発言行為そのものを説明するのは禁止(その台詞自体が別欄で表示されるため二重表現になる)。プレイヤーが同行者/NPCに話しかけただけで場面に変化がない時は、narrationは短く場の空気を保つだけでよい(例:「坑道に沈黙が落ちる。」)。
 - 一行を現在のシーンの場所から移動させる語りをしてはならない(封鎖や柵の先へ入れる、村へ帰らせる等は禁止)。別の場所へ移る必要がある時は、移動を語らず scene_complete を true で申告せよ(条件を満たさなければシステムが却下し、その場に留まる)。
 - シーンに名のある事物(敵・深さのある対象・入手品・所持品)は、その名称を一字一句そのまま使え。別の類似物に言い換えるな(例:ランタン→松明は不可)。
 - プレイヤーが物語に関係ない品を拾おうとしたら、壊れている・朽ちて使えない・持ち出す価値がない等の理由で自然に退場させよ(add_itemsは提案しない)。
