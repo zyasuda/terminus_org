@@ -1071,7 +1071,7 @@ async function scriptedExamine(secret, actorName = "あなた") {
 function revealFlavor(secret) {
   const names = Object.entries(CAST).map(([id, c]) => `${id}=${c.name}(${c.persona})`).join(" / ");
   callGmApi({
-    system: `ソロTRPGの同行者として一言だけ反応する。日本語のである調・口語。40字以内。応答はJSONのみ: {"who":"gareth または lydia","say":"一言"}\n同行者: ${names}`,
+    system: `ソロTRPGの同行者として一言だけ反応する。日本語のである調・口語。40字以内。応答はJSONのみ: {"who":"gareth または lydia","say":"一言"}\n同行者: ${names}\n注意: この真相は今の調査で初めて分かったことである。以前から知っていたかのような発言、この件についての自分の過去・因縁・関わりを捏造してはならない(例:「俺が守ってたやつだ」等は不可)。初めて知った驚き・所感・示唆に留めよ。`,
     messages: [{ role: "user", content: `たった今、調査でこの真相が分かった:「${secret.playerText || secret.text}」。場に合う方の同行者の、短い反応の一言だけを返せ。` }],
     maxTokens: 80
   }).then(data => {
