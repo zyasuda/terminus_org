@@ -17,7 +17,6 @@ export let CAMPAIGN = null; // campaign.json全体(styleやcompanionsHintをsyst
 export let SCENARIO = null;
 export let CAST = null;
 export let BANTER = null;
-export let CONTENT_SELECTION = null; // {campaignId, chapterId, campaign, chapter}
 
 async function fetchJson(path) {
   const res = await fetch(path);
@@ -65,33 +64,15 @@ function validate(campaign, chapter) {
 }
 
 export async function loadScenarioData() {
-  const catalog = await fetchJson("/data/campaigns.json");
-  if (!Array.isArray(catalog.campaigns) || catalog.campaigns.length === 0) {
-    throw new Error("/data/campaigns.json にキャンペーンがありません");
-  }
-
-  const params = new URLSearchParams(location.search);
-  const requestedCampaign = params.get("campaign") || catalog.defaultCampaign || catalog.campaigns[0].id;
-  const campaignEntry = catalog.campaigns.find(c => c.id === requestedCampaign);
-  if (!campaignEntry) throw new Error(`キャンペーンが見つかりません: ${requestedCampaign}`);
-
-  const requestedChapter = params.get("chapter") || campaignEntry.defaultChapter || campaignEntry.chapters?.[0]?.id;
-  const chapterEntry = (campaignEntry.chapters || []).find(c => c.id === requestedChapter);
-  if (!chapterEntry) throw new Error(`章が見つかりません: ${requestedChapter}`);
-
+  // 章選択: ?chapter=chapter_02 で任意の章を読み込む(TASのchapter_XX.jsonエクスポートに対応)。既定は第1章
+  const requested = new URLSearchParams(location.search).get("chapter") || "";
+  const chapterFile = /^chapter_\d+$/.test(requested) ? `${requested}.json` : "chapter_01.json";
   const [campaign, chapter] = await Promise.all([
-    fetchJson(`/data/${campaignEntry.campaign}`),
-    fetchJson(`/data/${chapterEntry.file}`)
+    fetchJson("/data/campaign.json"),
+    fetchJson(`/data/${chapterFile}`)
   ]);
   validate(campaign, chapter);
   CAMPAIGN = campaign;
-  CONTENT_SELECTION = {
-    catalog,
-    campaignEntry,
-    chapterEntry,
-    campaignId: campaignEntry.id,
-    chapterId: chapterEntry.id
-  };
 
   // companions → CAST(id引きの人格・掛け合い設定)と BANTER(ペア単位のツッコミ定義)へ展開
   CAST = {};
