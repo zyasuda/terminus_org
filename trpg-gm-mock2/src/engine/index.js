@@ -10,7 +10,7 @@ import {
   takeStagnationCue as buildStagnationCue
 } from "../state.js";
 import { callGmApi } from "../llm.js";
-import { CAST, BANTER, SCENARIO, CAMPAIGN, loadScenarioData } from "../scenario.js";
+import { CAST, BANTER, SCENARIO, CAMPAIGN, CONTENT_SELECTION, loadScenarioData } from "../scenario.js";
 import { pushChat, clearChat, setStore, getSnapshot } from "./store.js";
 
 function reportDirection() {
@@ -46,21 +46,36 @@ const TOKEN_RATE = { in: 3.0, out: 15.0, usdToJpy: 155 };
    閉じる・PCがスリープする等)であり、押し忘れれば意味がないため。
    代わりに、状態が変わるたびにlocalStorageへ黙って自動保存し、
    次に開いた時は自動で続きから再開する。「最初から」は保存も消す。 */
-const SAVE_KEY = "terminus_save_v1_mock2";
+function saveKey() {
+  const campaignId = CONTENT_SELECTION?.campaignId || "default";
+  const chapterId = CONTENT_SELECTION?.chapterId || "chapter_01";
+  return `terminus_save_v2_mock2_${campaignId}_${chapterId}`;
+}
+const LEGACY_SAVE_KEY = "terminus_save_v1_mock2";
 
 function saveGame() {
   try {
-    localStorage.setItem(SAVE_KEY, JSON.stringify({ state, chron, history, revealed: [...revealed] }));
+    localStorage.setItem(saveKey(), JSON.stringify({ state, chron, history, revealed: [...revealed] }));
   } catch (e) { /* 容量超過・プライベートモード等で失敗してもプレイは止めない */ }
 }
 function loadGame() {
   try {
-    const raw = localStorage.getItem(SAVE_KEY);
+    let raw = localStorage.getItem(saveKey());
+    // 旧版の固定キーは、初期キャンペーンだけ一度だけ読み替える。
+    if (!raw && CONTENT_SELECTION?.campaignId === "lanternhill" && CONTENT_SELECTION?.chapterId === "chapter_01") {
+      raw = localStorage.getItem(LEGACY_SAVE_KEY);
+      if (raw) localStorage.setItem(saveKey(), raw);
+    }
     return raw ? JSON.parse(raw) : null;
   } catch (e) { return null; }
 }
 function clearSave() {
-  try { localStorage.removeItem(SAVE_KEY); } catch (e) { /* no-op */ }
+  try {
+    localStorage.removeItem(saveKey());
+    if (CONTENT_SELECTION?.campaignId === "lanternhill" && CONTENT_SELECTION?.chapterId === "chapter_01") {
+      localStorage.removeItem(LEGACY_SAVE_KEY);
+    }
+  } catch (e) { /* no-op */ }
 }
 
 // シーン説明の表示先(UI_REDESIGN.md: 下パネルは会話専用、主画面は演出専用):
@@ -190,12 +205,28 @@ export async function boot() {
   const partySlots = (CAMPAIGN.companions || [])
     .filter(c => c.sprite).slice(0, 4)
     .map((c, i) => ({ ...slotOrder[i], who: c.id, img: c.sprite, name: c.name }));
-  setStore({ gmMode, partySlots, gmSprite: CAMPAIGN.gmSprite || "gm_mascot.png" }); // GMモード(hybrid/scripted/llm)の現在値をUIへ
+  setStore({
+    gmMode,
+    partySlots,
+    gmSprite: CAMPAIGN.gmSprite || "gm_mascot.png",
+    contentCatalog: CONTENT_SELECTION.catalog.campaigns,
+    selectedCampaignId: CONTENT_SELECTION.campaignId,
+    selectedChapterId: CONTENT_SELECTION.chapterId,
+    selectedCampaignTitle: CONTENT_SELECTION.campaignEntry.title,
+    selectedChapterTitle: CONTENT_SELECTION.chapterEntry.title
+  }); // GMモードと現在のコンテンツをUIへ
   const saved = loadGame();
   if (saved && saved.state && Array.isArray(saved.chron)) {
     try { restoreGame(saved); return; } catch (e) { /* 壊れた保存は無視して新規開始 */ }
   }
   resetGame();
+}
+
+export function switchContent(campaignId, chapterId) {
+  const params = new URLSearchParams();
+  params.set("campaign", campaignId);
+  params.set("chapter", chapterId);
+  window.location.search = params.toString();
 }
 
 export function resetGame() {
@@ -609,6 +640,14 @@ function applyUpdatesLogged(u, opts, cause) {
 
 // whoの正規化: モデルはid("lydia")ではなく名前("リディア"や"リディア(同行者)")を返すことがある。
 // 名前からidを引き、どうしても解決できない時だけfallbackを使う(誤帰属でキャラが入れ替わるのを防ぐ)
+// キャラのgender(male/female/none)から一人称・語尾の制約を機械的に生成する。
+// キャラごとに手書きする代わりにここで一元管理し、書き漏れ(片方だけ指定漏れ等)を構造的に防ぐ
+function genderToneRule(gender) {
+  if (gender === "male") return " 一人称は男性的なもの(俺・僕等)。「〜わ」「〜のよ」「〜かしら」「〜ね」等の女性的な語尾は使わない。";
+  if (gender === "female") return " 一人称は女性的なもの(私・あたし等)。「〜だぜ」「〜だろ」等の乱暴な男性的語尾は使わない。";
+  return ""; // none/未指定: 制約なし
+}
+
 function normalizeWho(w, fallback) {
   if (CAST[w]) return w;
   const s = String(w || "");
@@ -1069,7 +1108,8 @@ async function scriptedExamine(secret, actorName = "あなた") {
 // 開示直後に同行者が短く反応する(彩り)。callGmApiを直接使い、会話履歴を汚さない・待たない。
 // 数秒遅れて一言が届く形になるが、テンポは止めない(2026-07-17(8): 決定論化で語りが定型文だけになった対策)
 function revealFlavor(secret) {
-  const names = Object.entries(CAST).map(([id, c]) => `${id}=${c.name}(${c.persona})`).join(" / ");
+  const names = Object.entries(CAST)
+    .map(([id, c]) => `${id}=${c.name}(${c.persona}${genderToneRule(c.gender)})`).join(" / ");
   callGmApi({
     system: `ソロTRPGの同行者として一言だけ反応する。日本語のである調・口語。40字以内。応答はJSONのみ: {"who":"gareth または lydia","say":"一言"}\n同行者: ${names}\n注意: この真相は今の調査で初めて分かったことである。以前から知っていたかのような発言、この件についての自分の過去・因縁・関わりを捏造してはならない(例:「俺が守ってたやつだ」等は不可)。初めて知った驚き・所感・示唆に留めよ。`,
     messages: [{ role: "user", content: `たった今、調査でこの真相が分かった:「${secret.playerText || secret.text}」。場に合う方の同行者の、短い反応の一言だけを返せ。` }],
@@ -1353,8 +1393,11 @@ function systemPrompt(extra) {
     ...(st.extra || []),
     st.world + ((st.forbiddenWords || []).length ? `使ってはならない語の例: ${st.forbiddenWords.join("、")}。` : "")
   ].filter(Boolean).join("\n");
-  // B9: 同行者の人格・掛け合い条件
-  const companionLines = Object.entries(CAST).map(([id, c]) => `- ${c.name}(${id}): ${c.persona}`).join("\n");
+  // B9: 同行者の人格・掛け合い条件。一人称・語尾はgender(male/female/none)から自動生成する
+  // (2026-07-22: キャラごとに手書きすると増やし忘れる事故が起きた。リディアの一人称指定漏れで
+  // ガレスの「俺」が漏れて出た実例あり。以後は性別属性から機械的に導出し、書き漏れを構造的に防ぐ)
+  const companionLines = Object.entries(CAST)
+    .map(([id, c]) => `- ${c.name}(${id}): ${c.persona}${genderToneRule(c.gender)}`).join("\n");
   const companionIds = Object.keys(CAST).map(id => `"${id}"`).join(" か ");
   // B10: シーンNPC(依頼人等)の台詞は専用チャネルnpc.sayへ。companion枠に混ざると
   // normalizeWhoの解決失敗→誤帰属(マイラの台詞がリディア名義になる等)が起きるため、出口を分ける
