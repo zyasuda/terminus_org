@@ -42,7 +42,8 @@ function validate(campaign, chapter) {
     });
   }
   if (!chapter.quest) errs.push("chapter.quest がない");
-  if (!chapter.intro) errs.push("chapter.intro がない");
+  // intro/endingはnull運用(TAS_導入終端ノード出力仕様_null運用_2026-07-22): 未作成ならnullでよく、
+  // 文字列(旧形式)またはオブジェクト(id/name/brief/goal/npc/exits、新形式)のどちらでも受け付ける
   if (!Array.isArray(chapter.scenes) || chapter.scenes.length === 0) {
     errs.push("chapter.scenes が空");
   } else {
@@ -108,7 +109,8 @@ export async function loadScenarioData() {
   SCENARIO = {
     title: chapter.title,
     quest: chapter.quest,
-    intro: chapter.intro,
+    intro: chapter.intro || null, // null/文字列(旧形式)/オブジェクト(新形式)のいずれか
+    ending: chapter.ending || null, // 章末ノード。null運用(2026-07-22)
     reference: chapter.reference,
     scenes: chapter.scenes,
     flagRules: chapter.flagRules || {} // 章末のworldFlags導出ルール(BORG Inbox flags仕様調整依頼 2026-07-22)

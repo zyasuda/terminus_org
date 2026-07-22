@@ -250,13 +250,30 @@ export function resetGame() {
   // curtain: 依頼ポップアップの間は背景(シーン・パネル・キャラ)を幕で隠し、「はじめる」で開ける。
   // パネルは全部閉じた状態から開幕シーケンス(dismissPopup参照)が始まる。
   // GMペット(ダイス先輩)の自己紹介もシーケンス内(シーン説明のフェードイン後)で行う
+  //
+  // opening/introはnull運用(TAS_導入終端ノード出力仕様_null運用_2026-07-22):
+  // null=未作成(ポップアップを出さない)、文字列=旧形式、オブジェクト(exits[]あり)=新形式。
+  // 新形式の場合、"はじめる"の後はシーン0へ直行せず、intro.exits[]の解決を待つ(sendAction側で処理)
+  const intro = SCENARIO.intro;
+  const introIsObject = intro && typeof intro === "object";
+  state.pendingIntro = introIsObject;
+  const popups = [];
+  if (CAMPAIGN.opening) {
+    popups.push({ kind: "intro", title: CAMPAIGN.opening.name || "オープニング", body: CAMPAIGN.opening.brief || CAMPAIGN.opening.text || "", img: "locked_iron_gate.jpg" });
+  }
+  if (introIsObject) {
+    popups.push({ kind: "intro", title: intro.name || "依頼", body: intro.brief || "", img: "locked_iron_gate.jpg" });
+  } else if (typeof intro === "string" && intro) {
+    popups.push({ kind: "intro", title: "依頼", body: intro, img: "locked_iron_gate.jpg" });
+  }
   setStore({
-    diceLog: [], popups: [{ kind: "intro", title: "依頼", body: SCENARIO.intro, img: "locked_iron_gate.jpg" }],
+    diceLog: [], popups,
     overlay: { text: "", seq: 0 }, curtain: true,
     leftPanelOpen: false, rightPanelOpen: false, underPanelOpen: false
   });
   setSceneInfo();
-  const openingBrief = SCENARIO.intro + "\n\n" + SCENARIO.scenes[0].brief;
+  const introNarration = introIsObject ? (intro.brief || "") : (typeof intro === "string" && intro ? intro : "");
+  const openingBrief = introIsObject ? introNarration : (introNarration ? introNarration + "\n\n" : "") + SCENARIO.scenes[0].brief;
   history.push({ role: "user", content: "【システム】セッションが始まった。" });
   history.push({ role: "assistant", content: JSON.stringify({ narration: openingBrief, companion: null, npc: null, check: null, state_updates: null, engage_enemy: false, flee_enemy: false, scene_complete: false, meta_request: null }) });
   renderDebug();
@@ -1325,6 +1342,12 @@ function advanceScene(targetIndex) {
     if (state.chapterEnded) return; // 終幕後にLLMが再度scene_completeを申告しても二重記録しない
     state.chapterEnded = true;
     captureWorldFlags();
+    // chapter.ending/campaign.endingはnull運用(TAS_導入終端ノード出力仕様_null運用_2026-07-22):
+    // 未作成(null)なら何も再生せず、従来通りの定型文にフォールバックする
+    const chapterEnding = SCENARIO.ending;
+    if (chapterEnding) addGm(chapterEnding.brief || chapterEnding.text || "", "Neutral");
+    const campaignEnding = CAMPAIGN.ending;
+    if (campaignEnding) addGm(campaignEnding.brief || campaignEnding.text || "", "Neutral");
     addNote("—— 物語は決着した。おつかれさま。「最初から」で別の選択を試せる ——");
   }
 }
@@ -1653,6 +1676,28 @@ export async function sendAction(text) {
   state.turn++;
   addPlayer(text);
   recordVerb(text); // 述語を頻度辞書へ記録(動詞チップの学習)
+
+  // 導入ノード(intro)がオブジェクト形式(exits[]あり)の間は、シーンロジックより先に
+  // intro.exits[]の解決を試みる(null運用: TAS_導入終端ノード出力仕様_null運用_2026-07-22)
+  if (state.pendingIntro) {
+    const intro = SCENARIO.intro;
+    const exit = resolveExit(intro, text);
+    if (!exit) {
+      addGm(intro.blockedText || "どう答えるか、はっきりしない。別の言い方を試してくれ。", "Neutral");
+    } else if (!requiresMet(exit.requires)) {
+      addGm(exit.blockedText || "まだ準備ができていない。", "Neutral");
+    } else {
+      state.pendingIntro = false;
+      const targetIdx = exit.to === null || exit.to === undefined ? 0 : resolveExitTargetIndex(exit.to);
+      if (exit.arrivalText) addGm(exit.arrivalText, "Neutral");
+      advanceScene(targetIdx >= 0 ? targetIdx : 0);
+    }
+    busy = false;
+    setStore({ busy: false });
+    renderDebug();
+    return;
+  }
+
   applySceneStateUpdates(text); // 宣言文中の条件語句からflag_setを発火(プレイヤーの選択によるフラグ確定)
 
   const normalizedText = text.trim();
