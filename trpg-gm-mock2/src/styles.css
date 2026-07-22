@@ -678,6 +678,11 @@ body {
 #rightPanel h2 { font-size: 1em; opacity: .85; margin-bottom: 4px; }
 #rightPanel h2 .tag { display: block; opacity: .7; font-weight: 400; font-size: .85em; }
 #rightPanel pre { white-space: pre-wrap; word-break: break-all; font-size: .95em; }
+.contentSelector { display: grid; gap: 5px; margin-bottom: 12px; }
+.contentSelector label { font-size: .82em; opacity: .75; }
+.contentSelector select { width: 100%; min-height: 32px; padding: 4px 6px; color: #151720; background: rgba(255,255,255,.9); border: 1px solid rgba(192,202,243,.5); border-radius: 4px; }
+.contentSelector select:disabled { opacity: .6; }
+.selectorHint { font-size: .75em; line-height: 1.4; opacity: .65; }
 .secretRow { display: flex; gap: 6px; font-size: .9em; padding: 3px 0; }
 .secretRow.locked { opacity: .6; }
 

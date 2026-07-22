@@ -25,6 +25,7 @@ export function useEngine() {
     toggleGmMode: engine.toggleGmMode,
     toggleLeftPanel: engine.toggleLeftPanel,
     toggleRightPanel: engine.toggleRightPanel,
-    toggleUnderPanel: engine.toggleUnderPanel
+    toggleUnderPanel: engine.toggleUnderPanel,
+    switchContent: engine.switchContent
   };
 }

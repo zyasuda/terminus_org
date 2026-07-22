@@ -37,7 +37,12 @@ let snapshot = {
   partySlots: [],       // 同行者の立ち絵スロット {slot, who, img, flip}[]。campaign.jsonのcompanions[].spriteから起動時に組み立てる
   gmSprite: "gm_mascot.png", // GMペットの画像。campaign.jsonのgmSpriteで差し替え可
   curtain: false,       // 新規開始の依頼ポップアップ中は背景を幕で隠す。「はじめる」でfalseになり背景が現れる
-  apiViewText: "(まだ通信なし)"
+  apiViewText: "(まだ通信なし)",
+  contentCatalog: [],
+  selectedCampaignId: "",
+  selectedChapterId: "",
+  selectedCampaignTitle: "",
+  selectedChapterTitle: ""
 };
 let listeners = new Set();
 let nextId = 1;

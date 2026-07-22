@@ -29,6 +29,7 @@ export default function App() {
   const touchStartRef = useRef({ x: 0, y: 0, panel: null });
   // GMの語りの表示分担: 最新1件=主画面のペットの吹き出し、履歴=左パネル、下パネルは会話(プレイヤー・仲間)専用
   const gmLog = eng.chat.filter(e => e.kind === "msg" && e.cls === "gm");
+  const selectedCampaign = eng.contentCatalog.find(c => c.id === eng.selectedCampaignId);
 
   // GMペットの位置(ステージに対する%座標、ペット中心基準)。ドラッグで4隅など自由に配置でき、端末に保存される
   const [petPos, setPetPos] = useState(() => {
@@ -320,6 +321,32 @@ export default function App() {
 
         {/* 右パネル(Figma 15:105): 状態・持ち物・メニュー・デバッグ情報 */}
         <div id="rightPanel" className={eng.rightPanelOpen ? "open" : ""}>
+          <div className="panelTitle">キャンペーン選択</div>
+          <section className="contentSelector">
+            <label htmlFor="campaignSelect">キャンペーン</label>
+            <select
+              id="campaignSelect"
+              value={eng.selectedCampaignId}
+              disabled={!eng.contentCatalog.length || eng.busy}
+              onChange={e => {
+                const next = eng.contentCatalog.find(c => c.id === e.target.value);
+                if (next) eng.switchContent(next.id, next.defaultChapter || next.chapters?.[0]?.id);
+              }}
+            >
+              {!eng.contentCatalog.length && <option value="">読み込み中…</option>}
+              {eng.contentCatalog.map(c => <option key={c.id} value={c.id}>{c.title}</option>)}
+            </select>
+            <label htmlFor="chapterSelect">章</label>
+            <select
+              id="chapterSelect"
+              value={eng.selectedChapterId}
+              disabled={!selectedCampaign || eng.busy}
+              onChange={e => eng.switchContent(eng.selectedCampaignId, e.target.value)}
+            >
+              {(selectedCampaign?.chapters || []).map(c => <option key={c.id} value={c.id}>{c.title}</option>)}
+            </select>
+            <div className="selectorHint">切り替えると、このキャンペーンの保存データを読み込んで再起動します。</div>
+          </section>
           <div className="panelTitle">状態</div>
           <div className="hpbar">
             HP
