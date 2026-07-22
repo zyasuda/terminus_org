@@ -15,7 +15,9 @@ export function initialState() {
            spotted: null, // 奇襲察知に成功して「発見済み・未交戦」の敵名。次の宣言で仕掛ける/追い払う/やり過ごすを選ぶ
            fled: [], // 退散・逃走で戦闘を終えた敵名。再出現させない(「潜む敵」プロンプトからも除外)
            examined: [], // 一度でも判定を振った調査対象のentity名。開示前でも名詞チップに出す(2タップで再挑戦できるように)
-           sceneLog: [] // {scene, text}[] 各シーンで確定した出来事の記録。プロンプトに「これまでの経緯」として常時注入する長期記憶
+           sceneLog: [], // {scene, text}[] 各シーンで確定した出来事の記録。プロンプトに「これまでの経緯」として常時注入する長期記憶
+           flags: {}, // プレイヤーの選択で確定したフラグ(scenes[].stateUpdatesのflag_set由来。例: heartstone_choice)
+           flagsFired: [] // 発火済みのstateUpdates識別子("シーン番号:配列index")。onceの重複発火を防ぐ
          };
 }
 

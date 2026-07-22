@@ -1300,16 +1300,53 @@ function checkEnemyDown() {
 }
 
 // world_flagsの受け渡しスタブ(DATA_EXCHANGE.md 未決2。TAS MVPが生成する第2章と接続するための受け皿)。
+// chapter.flagRulesを上から順に評価し、章に依存しない汎用ロジックでworldFlagsを導出する
+// (BORG Inbox「flags宣言の宣言的マッピングとgameOverText仕様調整依頼 2026-07-22」で合意した形式)。
+// 条件語彙: defeated(敵の正名)/revealed(secret id)/itemsInclude(品の正名)/else(既定値)
+function evaluateFlagRules() {
+  const rules = SCENARIO.flagRules || {};
+  const result = {};
+  for (const [flagName, ruleList] of Object.entries(rules)) {
+    for (const rule of ruleList || []) {
+      if (rule.else) { result[flagName] = rule.value; break; }
+      const cond = rule.if || {};
+      const matched =
+        (cond.defeated === undefined || state.defeated.includes(cond.defeated)) &&
+        (cond.revealed === undefined || revealed.has(cond.revealed)) &&
+        (cond.itemsInclude === undefined || state.items.includes(cond.itemsInclude));
+      if (matched) { result[flagName] = rule.value; break; }
+    }
+  }
+  return result;
+}
+
+// campaign.style.gameOverTextがあれば章ごとの文言、無ければ汎用フォールバック(BORG Inbox仕様調整依頼 2026-07-22)
+function gameOverText() {
+  return `HPが0になった。${(CAMPAIGN.style && CAMPAIGN.style.gameOverText) || "君は力尽きた。"}——ゲームオーバー。`;
+}
+
+// scenes[].stateUpdates(type:"flag_set")を評価する。conditionの語句が宣言文に含まれていたら
+// flagをvalueに確定させる(TASの発話ルール「状態値を設定」由来。secrets.aliasesと同じ単純な部分一致)。
+// onceのものはstate.flagsFiredで二重発火を防ぐ
+function applySceneStateUpdates(text) {
+  const sc = SCENARIO.scenes[state.sceneIndex];
+  (sc.stateUpdates || []).forEach((u, idx) => {
+    if (u.type !== "flag_set") return;
+    const key = `${state.sceneIndex}:${idx}`;
+    state.flagsFired = state.flagsFired || [];
+    if (u.once && state.flagsFired.includes(key)) return;
+    if (u.condition && !text.includes(u.condition)) return;
+    state.flags = state.flags || {};
+    state.flags[u.flag] = u.value;
+    if (u.once) state.flagsFired.push(key);
+    addNote(`🚩 ${u.flag} = ${JSON.stringify(u.value)}`);
+  });
+}
+
 // 章の結末をstate.worldFlagsへ書き出す(saveGame経由でセーブに残る)。
-// 値の導出はこの章に固有のロジック(reportDirectionと同様、宣言的なデータ化は未決6で検討)。
-// heartstone_choice(渡した/隠した/砕いた)は報告シーンの会話からは機械的に確定できないため未設定のまま。
+// flagRules由来(世界状態から導出)とstate.flags由来(プレイヤーの選択でapplySceneStateUpdatesが確定させた値)を統合する
 function captureWorldFlags() {
-  const guardianDown = state.defeated.includes("灯の番人");
-  state.worldFlags = {
-    guardian_fate: guardianDown ? "撃破" : (revealed.has("s3a") ? "対話" : "回避"),
-    learned_heartstone: revealed.has("s3b"),
-    guardian_alive: !guardianDown
-  };
+  state.worldFlags = { ...evaluateFlagRules(), ...(state.flags || {}) };
   addNote("🏁 章の結末を記録した(world_flags): " + JSON.stringify(state.worldFlags));
   renderDebug();
 }
@@ -1564,6 +1601,7 @@ export async function sendAction(text) {
   state.turn++;
   addPlayer(text);
   recordVerb(text); // 述語を頻度辞書へ記録(動詞チップの学習)
+  applySceneStateUpdates(text); // 宣言文中の条件語句からflag_setを発火(プレイヤーの選択によるフラグ確定)
 
   const normalizedText = text.trim();
   const fp = stateFingerprint();
@@ -1609,7 +1647,7 @@ export async function sendAction(text) {
       state.pendingFailedCheck = null; state.blockedMove = false;
       state.lastAction = { text: normalizedText, fingerprint: fp, hadCheck: true };
       state.noProgressTurns = 0;
-      if (state.hp <= 0) addNote("HPが0になった。君は坑道の闇に倒れた——ゲームオーバー。");
+      if (state.hp <= 0) addNote(gameOverText());
       renderDebug();
       return;
     }
@@ -1642,7 +1680,7 @@ export async function sendAction(text) {
           pushEncounterPopup();
           await tryCombatTurn(text);
           state.lastAction = { text: normalizedText, fingerprint: fp, hadCheck: true };
-          if (state.hp <= 0) addNote("HPが0になった。君は坑道の闇に倒れた——ゲームオーバー。");
+          if (state.hp <= 0) addNote(gameOverText());
           renderDebug();
           return;
         }
@@ -1870,7 +1908,7 @@ export async function sendAction(text) {
     renderDebug();
 
     if (state.hp <= 0) {
-      addNote("HPが0になった。君は坑道の闇に倒れた——ゲームオーバー。");
+      addNote(gameOverText());
     } else if (r.scene_complete) {
       advanceScene();
       renderDebug();

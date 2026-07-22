@@ -9,6 +9,21 @@
     "heartstone_choice"
   ],
   "intro": "山の中に、古い炭鉱がある。夜になると、そこに灯りが揺れて見えるという。君はその調査を頼まれた。戦士のガレスと、機械にくわしいリディアといっしょに、日が暮れる前に炭鉱の入り口に着いた。",
+  "flagRules": {
+    "guardian_fate": [
+      { "if": { "defeated": "灯の番人" }, "value": "撃破" },
+      { "if": { "revealed": "s3a" }, "value": "対話" },
+      { "else": true, "value": "回避" }
+    ],
+    "learned_heartstone": [
+      { "if": { "revealed": "s3b" }, "value": true },
+      { "else": true, "value": false }
+    ],
+    "guardian_alive": [
+      { "if": { "defeated": "灯の番人" }, "value": false },
+      { "else": true, "value": true }
+    ]
+  },
   "reference": {
     "genre": "ミステリ / ロー・ファンタジー",
     "themes": [
@@ -225,7 +240,12 @@
       "npc": {
         "id": "myra",
         "name": "マイラ・ヴェイン"
-      }
+      },
+      "stateUpdates": [
+        { "type": "flag_set", "flag": "heartstone_choice", "value": "渡した", "condition": "渡す", "once": true },
+        { "type": "flag_set", "flag": "heartstone_choice", "value": "隠した", "condition": "隠す", "once": true },
+        { "type": "flag_set", "flag": "heartstone_choice", "value": "砕いた", "condition": "砕く", "once": true }
+      ]
     }
   ]
 }

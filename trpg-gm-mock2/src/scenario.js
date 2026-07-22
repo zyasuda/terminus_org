@@ -110,6 +110,7 @@ export async function loadScenarioData() {
     quest: chapter.quest,
     intro: chapter.intro,
     reference: chapter.reference,
-    scenes: chapter.scenes
+    scenes: chapter.scenes,
+    flagRules: chapter.flagRules || {} // 章末のworldFlags導出ルール(BORG Inbox flags仕様調整依頼 2026-07-22)
   };
 }
