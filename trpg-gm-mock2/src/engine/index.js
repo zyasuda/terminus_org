@@ -239,6 +239,10 @@ export function switchContent(campaignId, chapterId) {
 export function resetGame() {
   clearSave();
   state = initialState();
+  // campaign.initialInventoryがあればそれを初期所持品にする(無ければinitialState()の既定値のまま)
+  if (Array.isArray(CAMPAIGN.initialInventory) && CAMPAIGN.initialInventory.length) {
+    state.items = [...CAMPAIGN.initialInventory];
+  }
   history = [];
   revealed = new Set();
   chron = [];
@@ -1173,7 +1177,10 @@ function requiresMet(requires) {
 }
 // 宣言文とexits[].matchの部分一致で出口を選ぶ。配列の先頭から順に評価し、最初に一致したものを採用
 function resolveExit(sc, text) {
-  return (sc.exits || []).find(exit => (exit.match || []).some(m => text.includes(m))) || null;
+  const exit = (sc.exits || []).find(e => (e.match || []).some(m => text.includes(m))) || null;
+  // TASの出力は到達時説明を exit.text として出すため、mock2の契約(arrivalText)へ正規化する
+  if (exit && !exit.arrivalText && exit.text) exit.arrivalText = exit.text;
+  return exit;
 }
 // TASの移動先表記("scene:1"、数値、文字列id)をシーン配列のindexに解決する
 function resolveExitTargetIndex(to) {
@@ -1525,6 +1532,7 @@ function systemPrompt(extra) {
     st.readingLevel,
     st.goodExample ? `良い例:「${st.goodExample}」` : "",
     st.badExample ? `悪い例:「${st.badExample}」` : "",
+    st.terms || "", // TASの「用語・禁止事項」入力(自由記述。forbiddenWordsとは別枠)
     ...(st.extra || []),
     st.world + ((st.forbiddenWords || []).length ? `使ってはならない語の例: ${st.forbiddenWords.join("、")}。` : "")
   ].filter(Boolean).join("\n");
