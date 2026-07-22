@@ -1164,7 +1164,7 @@ async function tryScripted(text) {
   if (sc.report) {
     // 報告シーンは会話が本体。hybridではLLMに任せ、scriptedでは定型で章を締める
     if (gmMode !== "scripted") return false;
-    addGm("マイラに見聞きしたことを伝えた。報告はすんだ。", "Neutral");
+    addGm(`${(sc.npc && sc.npc.name) || "依頼人"}に見聞きしたことを伝えた。報告はすんだ。`, "Neutral");
     advanceScene();
     return true;
   }
@@ -1216,7 +1216,7 @@ async function classifyIntent(text) {
     ...availableLoot(sc),
     ...Object.values(CAST).map(c => c.name),
     ...(state.enemy ? [enemyName(state.enemy)] : []),
-    ...(sc.report ? ["マイラ・ヴェイン"] : [])
+    ...(sc.report && sc.npc ? [sc.npc.name] : [])
   ].filter(Boolean);
   const system = `プレイヤーの宣言を分類する。応答は次のJSONのみ(前置き禁止):
 {"intent":"investigate|move|back|talk|talk_gm|take|other","target":"候補から最も近いもの、なければnull"${chipActor ? "" : `,"actor":"player|gareth|lydia"`}}
