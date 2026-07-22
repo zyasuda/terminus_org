@@ -10,7 +10,7 @@ import {
   takeStagnationCue as buildStagnationCue
 } from "../state.js";
 import { callGmApi } from "../llm.js";
-import { CAST, BANTER, SCENARIO, CAMPAIGN, CONTENT_SELECTION, loadScenarioData } from "../scenario.js";
+import { CAST, BANTER, SCENARIO, CAMPAIGN, loadScenarioData } from "../scenario.js";
 import { pushChat, clearChat, setStore, getSnapshot } from "./store.js";
 
 function reportDirection() {
@@ -46,36 +46,21 @@ const TOKEN_RATE = { in: 3.0, out: 15.0, usdToJpy: 155 };
    閉じる・PCがスリープする等)であり、押し忘れれば意味がないため。
    代わりに、状態が変わるたびにlocalStorageへ黙って自動保存し、
    次に開いた時は自動で続きから再開する。「最初から」は保存も消す。 */
-function saveKey() {
-  const campaignId = CONTENT_SELECTION?.campaignId || "default";
-  const chapterId = CONTENT_SELECTION?.chapterId || "chapter_01";
-  return `terminus_save_v2_mock2_${campaignId}_${chapterId}`;
-}
-const LEGACY_SAVE_KEY = "terminus_save_v1_mock2";
+const SAVE_KEY = "terminus_save_v1_mock2";
 
 function saveGame() {
   try {
-    localStorage.setItem(saveKey(), JSON.stringify({ state, chron, history, revealed: [...revealed] }));
+    localStorage.setItem(SAVE_KEY, JSON.stringify({ state, chron, history, revealed: [...revealed] }));
   } catch (e) { /* 容量超過・プライベートモード等で失敗してもプレイは止めない */ }
 }
 function loadGame() {
   try {
-    let raw = localStorage.getItem(saveKey());
-    // 旧版の固定キーは、初期キャンペーンだけ一度だけ読み替える。
-    if (!raw && CONTENT_SELECTION?.campaignId === "lanternhill" && CONTENT_SELECTION?.chapterId === "chapter_01") {
-      raw = localStorage.getItem(LEGACY_SAVE_KEY);
-      if (raw) localStorage.setItem(saveKey(), raw);
-    }
+    const raw = localStorage.getItem(SAVE_KEY);
     return raw ? JSON.parse(raw) : null;
   } catch (e) { return null; }
 }
 function clearSave() {
-  try {
-    localStorage.removeItem(saveKey());
-    if (CONTENT_SELECTION?.campaignId === "lanternhill" && CONTENT_SELECTION?.chapterId === "chapter_01") {
-      localStorage.removeItem(LEGACY_SAVE_KEY);
-    }
-  } catch (e) { /* no-op */ }
+  try { localStorage.removeItem(SAVE_KEY); } catch (e) { /* no-op */ }
 }
 
 // シーン説明の表示先(UI_REDESIGN.md: 下パネルは会話専用、主画面は演出専用):
@@ -205,28 +190,12 @@ export async function boot() {
   const partySlots = (CAMPAIGN.companions || [])
     .filter(c => c.sprite).slice(0, 4)
     .map((c, i) => ({ ...slotOrder[i], who: c.id, img: c.sprite, name: c.name }));
-  setStore({
-    gmMode,
-    partySlots,
-    gmSprite: CAMPAIGN.gmSprite || "gm_mascot.png",
-    contentCatalog: CONTENT_SELECTION.catalog.campaigns,
-    selectedCampaignId: CONTENT_SELECTION.campaignId,
-    selectedChapterId: CONTENT_SELECTION.chapterId,
-    selectedCampaignTitle: CONTENT_SELECTION.campaignEntry.title,
-    selectedChapterTitle: CONTENT_SELECTION.chapterEntry.title
-  }); // GMモードと現在のコンテンツをUIへ
+  setStore({ gmMode, partySlots, gmSprite: CAMPAIGN.gmSprite || "gm_mascot.png" }); // GMモード(hybrid/scripted/llm)の現在値をUIへ
   const saved = loadGame();
   if (saved && saved.state && Array.isArray(saved.chron)) {
     try { restoreGame(saved); return; } catch (e) { /* 壊れた保存は無視して新規開始 */ }
   }
   resetGame();
-}
-
-export function switchContent(campaignId, chapterId) {
-  const params = new URLSearchParams();
-  params.set("campaign", campaignId);
-  params.set("chapter", chapterId);
-  window.location.search = params.toString();
 }
 
 export function resetGame() {
