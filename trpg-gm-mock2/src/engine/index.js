@@ -1147,9 +1147,55 @@ function revealFlavor(secret) {
   }).catch(() => {});
 }
 
-function scriptedMoveForward() {
+// requires: completeRequiresと同じ語彙(secretsAny/secretsAll)をexits単位でも使う
+function requiresMet(requires) {
+  if (!requires) return true;
+  if (requires.secretsAny && !requires.secretsAny.some(id => revealed.has(id))) return false;
+  if (requires.secretsAll && !requires.secretsAll.every(id => revealed.has(id))) return false;
+  return true;
+}
+// 宣言文とexits[].matchの部分一致で出口を選ぶ。配列の先頭から順に評価し、最初に一致したものを採用
+function resolveExit(sc, text) {
+  return (sc.exits || []).find(exit => (exit.match || []).some(m => text.includes(m))) || null;
+}
+// TASの移動先表記("scene:1"、数値、文字列id)をシーン配列のindexに解決する
+function resolveExitTargetIndex(to) {
+  const key = String(to).replace(/^scene:/, "");
+  return SCENARIO.scenes.findIndex(s => String(s.id) === key);
+}
+
+function scriptedMoveForward(text) {
   const sc = SCENARIO.scenes[state.sceneIndex];
   if (state.enemy) { addGm(`${enemyName(state.enemy)}が行く手をふさいでいる。`, "Fear"); return; }
+  if (Array.isArray(sc.exits) && sc.exits.length) {
+    const exit = resolveExit(sc, text || "");
+    if (!exit) {
+      addGm(sc.blockedText || "どちらへ向かうか、はっきりしない。別の言い方を試してくれ。", "Neutral");
+      return;
+    }
+    if (!requiresMet(exit.requires)) {
+      addGm(exit.blockedText || sc.blockedText || "まだ進めない。", "Neutral");
+      return;
+    }
+    if (exit.to === null || exit.to === undefined) {
+      addGm(exit.arrivalText || exit.blockedText || "この先には進めない。", "Neutral");
+      return;
+    }
+    if (exit.to === "end" || exit.to === "ending") {
+      if (exit.arrivalText) addGm(exit.arrivalText, "Neutral");
+      advanceScene(SCENARIO.scenes.length); // 範囲外indexでadvanceSceneの終幕分岐に入る
+      return;
+    }
+    const targetIdx = resolveExitTargetIndex(exit.to);
+    if (targetIdx === -1) {
+      addGm("行き先が見つからない(データ不整合)。", "Neutral");
+      return;
+    }
+    if (exit.arrivalText) addGm(exit.arrivalText, "Neutral");
+    advanceScene(targetIdx);
+    return;
+  }
+  // exits未定義のシーン(後方互換): 従来通り配列の次の要素へ
   if (!sceneCompleteAllowed(sc)) {
     addGm(sc.blockedText || "これより先へは、まだ進めない。何かを見落としている気がする。", "Neutral");
     return;
@@ -1186,7 +1232,7 @@ async function tryScripted(text) {
     addGm("今は戻らない。依頼がまだ残っている。", "Neutral");
     return true;
   }
-  if (MOVE_RE.test(text)) { scriptedMoveForward(); return true; }
+  if (MOVE_RE.test(text)) { scriptedMoveForward(text); return true; }
   const who = Object.keys(CAST).find(id => text.includes(CAST[id].name));
   if (who && TALK_RE.test(text)) {
     if (gmMode !== "scripted") return false; // 自由会話はこの製品の柱なのでhybridではLLMへ
@@ -1251,9 +1297,11 @@ targetの規則(厳守):
 }
 
 // シーン遷移の実行(LLM経路・scripted経路の両方から使う)。最終シーンなら章を締める
-function advanceScene() {
-  if (state.sceneIndex < SCENARIO.scenes.length - 1) {
-    state.sceneIndex++;
+// targetIndexを渡すとexits[]の任意遷移先へジャンプする(未指定なら従来通り次のシーン)
+function advanceScene(targetIndex) {
+  const idx = targetIndex !== undefined ? targetIndex : state.sceneIndex + 1;
+  if (idx >= 0 && idx < SCENARIO.scenes.length) {
+    state.sceneIndex = idx;
     state.sceneTalkTurns = 0; // talkTurnsMin条件(報告シーン等)のカウンタはシーンごとにリセット
     setSceneBackdrop(SCENARIO.scenes[state.sceneIndex]);
     state.enemy = null;
@@ -1366,6 +1414,10 @@ function availableLoot(sc) {
    LLMのscene_complete申告を却下する。goal文の解釈をLLM任せにしない(クロニクル2026-07-12で
    条件未達のままシーン遷移し、未開示秘密が回収不能になった破綻への対策) */
 function sceneCompleteAllowed(sc) {
+  // exits[]を持つシーンは行き先が複数(または特定の1つ)になりうるため、
+  // LLMの自己申告(scene_complete)による「配列の次へ」進行を許可しない。
+  // 移動は必ずmove意図→scriptedMoveForwardのexits解決を経由させる
+  if (Array.isArray(sc.exits) && sc.exits.length) return false;
   const req = sc.completeRequires;
   if (!req) return true;
   if (req.secretsAny && !req.secretsAny.some(id => revealed.has(id))) return false;
@@ -1744,7 +1796,7 @@ export async function sendAction(text) {
         if (hit) { await scriptedExamine(hit, cls.actorName); done(true); return; }
         // secretのない対象の調査は描写レーン(下のLLM)へ
       } else if (cls.intent === "move") {
-        scriptedMoveForward();
+        scriptedMoveForward(text);
         done(false);
         return;
       } else if (cls.intent === "back") {
