@@ -150,9 +150,11 @@ async function callGemini(payload) {
         system_instruction: { parts: [{ text: payload.system || "" }] },
         contents,
         generationConfig: {
-          // 思考モデル対策: 思考トークンがmaxOutputTokensを消費するため上限を大きめに取り、思考は最小化する
+          // 思考モデル対策: 思考トークンがmaxOutputTokensを消費するため上限を大きめに取り、思考は最小化する。
+          // thinkingBudget:0はgemini-3.5系以降で「Request contains an invalid argument」になるため
+          // (2026-07-21確認)、新旧モデル共通で通るthinkingLevel:"minimal"を使う
           maxOutputTokens: Math.max((payload.max_tokens || 1000) * 4, 4000),
-          thinkingConfig: { thinkingBudget: 0 },
+          thinkingConfig: { thinkingLevel: "minimal" },
           // GMの応答は常にJSONを要求している(R4-9)ため、JSON出力を強制する
           responseMimeType: "application/json"
         }
