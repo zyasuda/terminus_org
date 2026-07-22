@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updated": "2026-07-14",
+  "updated": "2026-07-22",
   "assets": {
     "mine_entrance": {
       "file": "mine_entrance.jpg",
@@ -253,6 +253,162 @@
       "source": "imagegen",
       "promptVersion": 1,
       "notes": "手がかりを指し示す調査・遺工向けの差分。"
+    },
+    "portrait_gareth_alt-png": {
+      "file": "portrait_gareth_alt.png",
+      "kind": "portrait",
+      "status": "candidate",
+      "usedBy": [
+        "campaign.companions.gareth.sprite"
+      ],
+      "width": 1024,
+      "height": 1536,
+      "format": "png",
+      "bytes": 1612476
+    },
+    "portrait_lydia_alt-png": {
+      "file": "portrait_lydia_alt.png",
+      "kind": "portrait",
+      "status": "candidate",
+      "usedBy": [
+        "campaign.companions.lydia.sprite"
+      ],
+      "width": 1024,
+      "height": 1536,
+      "format": "png",
+      "bytes": 1914828
+    },
+    "mine_entrance-jpg": {
+      "file": "mine_entrance.jpg",
+      "kind": "background",
+      "status": "candidate",
+      "usedBy": [
+        "chapter_01.scenes.1.img"
+      ],
+      "width": 1376,
+      "height": 768,
+      "format": "jpg",
+      "bytes": 848347
+    },
+    "s1_sky-jpg": {
+      "file": "s1_sky.jpg",
+      "kind": "parallax.sky",
+      "status": "candidate",
+      "usedBy": [
+        "chapter_01.scenes.1.parallax.sky"
+      ],
+      "width": 2400,
+      "height": 1080,
+      "format": "jpg",
+      "bytes": 419968
+    },
+    "s1_foreground-png": {
+      "file": "s1_foreground.png",
+      "kind": "parallax.fg",
+      "status": "candidate",
+      "usedBy": [
+        "chapter_01.scenes.1.parallax.fg"
+      ],
+      "width": 1920,
+      "height": 1080,
+      "format": "png",
+      "bytes": 3110287
+    },
+    "s2_junction-jpg": {
+      "file": "s2_junction.jpg",
+      "kind": "background",
+      "status": "candidate",
+      "usedBy": [
+        "chapter_01.scenes.2.img"
+      ],
+      "width": 1920,
+      "height": 1080,
+      "format": "jpg",
+      "bytes": 473530
+    },
+    "rust_eater-jpg": {
+      "file": "rust_eater.jpg",
+      "kind": "enemy",
+      "status": "candidate",
+      "usedBy": [
+        "chapter_01.scenes.2.enemy.img"
+      ],
+      "width": 1376,
+      "height": 768,
+      "format": "jpg",
+      "bytes": 784832
+    },
+    "s2_rust_eater-png": {
+      "file": "s2_rust_eater.png",
+      "kind": "sprite",
+      "status": "candidate",
+      "usedBy": [
+        "chapter_01.scenes.2.enemy.sprite"
+      ],
+      "width": 1536,
+      "height": 1024,
+      "format": "png",
+      "bytes": 1194094
+    },
+    "s3_chamber-jpg": {
+      "file": "s3_chamber.jpg",
+      "kind": "background",
+      "status": "candidate",
+      "usedBy": [
+        "chapter_01.scenes.3.img"
+      ],
+      "width": 1920,
+      "height": 1080,
+      "format": "jpg",
+      "bytes": 64454
+    },
+    "s3_guardian-png": {
+      "file": "s3_guardian.png",
+      "kind": "sprite",
+      "status": "candidate",
+      "usedBy": [
+        "chapter_01.scenes.3.enemy.sprite"
+      ],
+      "width": 1024,
+      "height": 1536,
+      "format": "png",
+      "bytes": 1698379
+    },
+    "s4_village_square-jpg": {
+      "file": "s4_village_square.jpg",
+      "kind": "background",
+      "status": "candidate",
+      "usedBy": [
+        "chapter_01.scenes.4.img"
+      ],
+      "width": 1920,
+      "height": 1080,
+      "format": "jpg",
+      "bytes": 426314
+    },
+    "s4_myra_room-jpg": {
+      "file": "s4_myra_room.jpg",
+      "kind": "background",
+      "status": "candidate",
+      "usedBy": [
+        "chapter_01.scenes.5.img"
+      ],
+      "width": 1920,
+      "height": 1080,
+      "format": "jpg",
+      "bytes": 370852
+    },
+    "s4_myra-png": {
+      "file": "s4_myra.png",
+      "kind": "sprite",
+      "status": "candidate",
+      "usedBy": [
+        "chapter_01.scenes.5.npcSprite"
+      ],
+      "width": 1024,
+      "height": 1536,
+      "format": "png",
+      "bytes": 1705052
     }
   }
 }
