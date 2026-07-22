@@ -13,8 +13,15 @@ import { callGmApi } from "../llm.js";
 import { CAST, BANTER, SCENARIO, CAMPAIGN, CONTENT_SELECTION, loadScenarioData } from "../scenario.js";
 import { pushChat, clearChat, setStore, getSnapshot } from "./store.js";
 
+// campaign.json の cast[](NPC台帳)から、このシーンのNPCの一般情報(public)を引く。
+// cast[].direction はここでは使わない: 「青く脈打つ石」等、未開示secretの内容そのものを
+// 含む演出指示があり、無条件でプロンプトに注入すると開示前の秘密がLLMに漏れる
+// (2026-07-22)。秘密の開示状態とdirectionを紐づける仕組みができるまでは、
+// 既存の状態ガード付きロジック(下記)がその役割を担う
 function reportDirection() {
-  let d = "依頼人マイラ・ヴェインを演じよ。実利的だが村人思いに見える元行商人。";
+  const npc = sceneNpc();
+  const npcCast = npc && (CAMPAIGN.cast || []).find(c => c.id === npc.id);
+  let d = npcCast ? `${npcCast.name}を演じよ。${npcCast.public}。` : "依頼人を演じよ。";
   d += state.defeated.includes("灯の番人")
     ? "『番人を倒した』という報告には、一瞬の落胆を見せてから取り繕い、労をねぎらわせよ。"
     : "坑道の奥にいた『誰か』の話には、身を乗り出すほどの関心を見せよ。";
@@ -22,7 +29,7 @@ function reportDirection() {
     d += "『青く脈打つ石』や『番人の動力』に話が及んだら、抑えきれない関心を一瞬見せ、すぐに取り繕え。この動揺の理由を説明してはならない。";
   }
   // 報告の脱線防止(2026-07-17(9) T28-32: 帳簿・年貢などの捏造で報告が締まらなくなった)
-  d += "マイラの関心は坑道の報告だけにある。帳簿・書類・別の依頼など、新しい品や話題を発明してはならない。話が逸れたら報告に引き戻せ。";
+  d += `${npc ? npc.name : "依頼人"}の関心は坑道の報告だけにある。帳簿・書類・別の依頼など、新しい品や話題を発明してはならない。話が逸れたら報告に引き戻せ。`;
   return d;
 }
 
