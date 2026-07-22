@@ -640,12 +640,28 @@ function applyUpdatesLogged(u, opts, cause) {
 
 // whoの正規化: モデルはid("lydia")ではなく名前("リディア"や"リディア(同行者)")を返すことがある。
 // 名前からidを引き、どうしても解決できない時だけfallbackを使う(誤帰属でキャラが入れ替わるのを防ぐ)
-// キャラのgender(male/female/none)から一人称・語尾の制約を機械的に生成する。
+// キャラのgender(male/female/none)から語尾の制約を機械的に生成する(一人称の厳密指定は別途firstPerson)。
 // キャラごとに手書きする代わりにここで一元管理し、書き漏れ(片方だけ指定漏れ等)を構造的に防ぐ
 function genderToneRule(gender) {
-  if (gender === "male") return " 一人称は男性的なもの(俺・僕等)。「〜わ」「〜のよ」「〜かしら」「〜ね」等の女性的な語尾は使わない。";
-  if (gender === "female") return " 一人称は女性的なもの(私・あたし等)。「〜だぜ」「〜だろ」等の乱暴な男性的語尾は使わない。";
+  if (gender === "male") return " 「〜わ」「〜のよ」「〜かしら」「〜ね」等の女性的な語尾は使わない。";
+  if (gender === "female") return " 「〜だぜ」「〜だろ」等の乱暴な男性的語尾は使わない。";
   return ""; // none/未指定: 制約なし
+}
+// 一人称: firstPersonが明示されていればその一語に固定(gender由来のカテゴリより優先・厳密)。
+// 未指定ならgenderのカテゴリ表現(男性的なもの/女性的なもの)まで下げる
+function firstPersonRule(c) {
+  if (c.firstPerson) return ` 一人称は「${c.firstPerson}」で統一せよ。`;
+  if (c.gender === "male") return " 一人称は男性的なもの(俺・僕等)。";
+  if (c.gender === "female") return " 一人称は女性的なもの(私・あたし等)。";
+  return "";
+}
+// 呼称・二人称: プレイヤーを呼ぶ時の語をaddressTermで固定する(未指定なら制約なし、名前呼びも可のまま)
+function addressTermRule(c) {
+  return c.addressTerm ? ` プレイヤーを二人称で呼ぶ時は「${c.addressTerm}」で統一せよ(名前で呼ぶ場面ではそちらでもよい)。` : "";
+}
+// キャラの発話ルール一式(一人称・語尾・呼称)をまとめて生成する
+function voiceRule(c) {
+  return firstPersonRule(c) + genderToneRule(c.gender) + addressTermRule(c);
 }
 
 function normalizeWho(w, fallback) {
@@ -1109,7 +1125,7 @@ async function scriptedExamine(secret, actorName = "あなた") {
 // 数秒遅れて一言が届く形になるが、テンポは止めない(2026-07-17(8): 決定論化で語りが定型文だけになった対策)
 function revealFlavor(secret) {
   const names = Object.entries(CAST)
-    .map(([id, c]) => `${id}=${c.name}(${c.persona}${genderToneRule(c.gender)})`).join(" / ");
+    .map(([id, c]) => `${id}=${c.name}(${c.persona}${voiceRule(c)})`).join(" / ");
   callGmApi({
     system: `ソロTRPGの同行者として一言だけ反応する。日本語のである調・口語。40字以内。応答はJSONのみ: {"who":"gareth または lydia","say":"一言"}\n同行者: ${names}\n注意: この真相は今の調査で初めて分かったことである。以前から知っていたかのような発言、この件についての自分の過去・因縁・関わりを捏造してはならない(例:「俺が守ってたやつだ」等は不可)。初めて知った驚き・所感・示唆に留めよ。`,
     messages: [{ role: "user", content: `たった今、調査でこの真相が分かった:「${secret.playerText || secret.text}」。場に合う方の同行者の、短い反応の一言だけを返せ。` }],
@@ -1393,11 +1409,11 @@ function systemPrompt(extra) {
     ...(st.extra || []),
     st.world + ((st.forbiddenWords || []).length ? `使ってはならない語の例: ${st.forbiddenWords.join("、")}。` : "")
   ].filter(Boolean).join("\n");
-  // B9: 同行者の人格・掛け合い条件。一人称・語尾はgender(male/female/none)から自動生成する
+  // B9: 同行者の人格・掛け合い条件。一人称・語尾・呼称はvoiceRule()で自動生成する
   // (2026-07-22: キャラごとに手書きすると増やし忘れる事故が起きた。リディアの一人称指定漏れで
-  // ガレスの「俺」が漏れて出た実例あり。以後は性別属性から機械的に導出し、書き漏れを構造的に防ぐ)
+  // ガレスの「俺」が漏れて出た実例あり。以後はgender/firstPerson/addressTermから機械的に導出し、書き漏れを構造的に防ぐ)
   const companionLines = Object.entries(CAST)
-    .map(([id, c]) => `- ${c.name}(${id}): ${c.persona}${genderToneRule(c.gender)}`).join("\n");
+    .map(([id, c]) => `- ${c.name}(${id}): ${c.persona}${voiceRule(c)}`).join("\n");
   const companionIds = Object.keys(CAST).map(id => `"${id}"`).join(" か ");
   // B10: シーンNPC(依頼人等)の台詞は専用チャネルnpc.sayへ。companion枠に混ざると
   // normalizeWhoの解決失敗→誤帰属(マイラの台詞がリディア名義になる等)が起きるため、出口を分ける

@@ -58,6 +58,8 @@
       "id": "gareth",
       "name": "ガレス",
       "gender": "male",
+      "firstPerson": "俺",
+      "addressTerm": "あんた",
       "persona": "寡黙で仲間思いの戦士。気が早く先走りがち。学のある話は苦手。礼を言うのが下手。口調は武骨でぶっきらぼう。",
       "retortDrive": 2,
       "quirks": [
@@ -114,6 +116,8 @@
       "id": "lydia",
       "name": "リディア",
       "gender": "female",
+      "firstPerson": "私",
+      "addressTerm": "あなた",
       "persona": "遺工に明るい斥候。慎重で理屈っぽい皮肉屋。ガレスの後始末をよくしている。話が長い。",
       "retortDrive": 5,
       "quirks": [
