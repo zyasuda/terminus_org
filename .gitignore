@@ -24,3 +24,7 @@ TAS/rust/**/target/
 
 # 個人管理のプレイセッション記録(ユーザーが手元で管理、gitでは追跡しない)
 chronicles/
+
+# TAS側で個別に管理(mock2リポジトリでは追跡しない)
+TAS/server.cjs
+trpg-gm-mock2/images/Gemini_Generated_Image_8tyb3c8tyb3c8tyb.png
