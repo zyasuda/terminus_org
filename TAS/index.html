@@ -1574,9 +1574,30 @@ renderExport=function(){
   holder.innerHTML=baseRenderExportForContractDiagnostics();
   const checks=exportContractDiagnostics(mockCampaignPayload());
   const card=document.createElement('div');card.className='card export-diagnostics';
-  card.innerHTML=`<h3>出力前チェック</h3><p class="hint">このチェックはTAS内の入力漏れ・参照切れを確認します。警告があってもJSONの書き出し自体は可能です。</p><ul class="validation">${checks.map(x=>`<li class="${x.level==='ok'?'':' '+x.level}">${escapeHtml(x.text)}</li>`).join('')}</ul>`;
+  card.innerHTML=`<h3>出力前チェック</h3><p class="hint">TAS内の入力漏れに加え、「ゲーム側基準で検証」でmock2へ書き込む直前と同じ検証を実行できます。</p><ul class="validation">${checks.map(x=>`<li class="${x.level==='ok'?'':' '+x.level}">${escapeHtml(x.text)}</li>`).join('')}</ul><div class="bottom"><button class="sub" id="btnServerValidate">ゲーム側基準で検証</button></div><ul class="validation" id="serverValidationResults"></ul>`;
   holder.querySelector('.field')?.before(card);
   return holder.innerHTML;
+};
+async function runServerOutputValidation(button){
+  const results=$("serverValidationResults");
+  if(isLocalFile()){setStatus('ローカルファイルではゲーム側検証を実行できません。node server.cjsで起動してください');return}
+  button.disabled=true;
+  if(results)results.innerHTML='<li>ゲーム側基準で検証中…</li>';
+  try{
+    const response=await fetch('/api/validate-campaign',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(mockCampaignPayload())});
+    const data=await response.json();
+    if(!response.ok||data.error)throw new Error(data.error?.message||`HTTP ${response.status}`);
+    const messages=data.valid?[{level:'ok',text:'ゲーム側基準の検証に合格しました。'}]:(data.errors||[]).map(text=>({level:'error',text}));
+    if(results)results.innerHTML=messages.map(message=>`<li class="${message.level==='ok'?'':' '+message.level}">${escapeHtml(message.text)}</li>`).join('');
+    setStatus(data.valid?'ゲーム側基準の検証に合格しました':'ゲーム側基準の検証で問題が見つかりました');
+  }catch(error){if(results)results.innerHTML=`<li class="error">${escapeHtml('検証に失敗しました: '+error.message)}</li>`;setStatus('ゲーム側検証に失敗しました')}
+  finally{button.disabled=false}
+}
+var baseBindExportForServerValidation=bindExport;
+bindExport=function(){
+  baseBindExportForServerValidation();
+  const button=$("btnServerValidate");
+  if(button)button.onclick=()=>runServerOutputValidation(button);
 };
 </script>
 <script>

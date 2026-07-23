@@ -114,6 +114,10 @@ try {
   const validation = await validationResponse.json();
   assert.equal(validationResponse.status, 200, "出力前検証APIが応答しません");
   assert.equal(validation.valid, true, "統合出力がサーバー検証を通りません: " + (validation.errors || []).join(" / "));
+  await page.evaluate(() => { activeTab = "export"; renderAll(); });
+  await page.locator("#btnServerValidate").click();
+  await page.locator("#serverValidationResults").waitFor();
+  assert.match(await page.locator("#serverValidationResults").textContent(), /合格/, "画面からゲーム側基準の検証を実行できません");
 
   // チャプターイントロを入力した場合も、旧チェーンと統合層で同じ出力になることを確認する。
   const introOutputs = await page.evaluate(() => {
