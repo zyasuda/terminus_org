@@ -105,6 +105,21 @@ try {
   const normalized = normalizePayload(outputs.unified);
   assert.deepEqual(normalized, normalizedLegacy, "統合版と現行版の出力が一致しません");
 
+  // チャプターイントロを入力した場合も、旧チェーンと統合層で同じ出力になることを確認する。
+  const introOutputs = await page.evaluate(() => {
+    const key = nodeKey({ type: "opening", id: "opening" });
+    const before = sceneOverrides[key];
+    sceneOverrides[key] = { ...(before || {}), brief: "統合テスト用イントロ" };
+    const result = {
+      legacy: window.__tasOutputPipelines.legacy().chapter?.intro,
+      unified: window.__tasOutputPipelines.unified().chapter?.intro
+    };
+    if (before === undefined) delete sceneOverrides[key];
+    else sceneOverrides[key] = before;
+    return result;
+  });
+  assert.deepEqual(introOutputs, { legacy: "統合テスト用イントロ", unified: "統合テスト用イントロ" }, "チャプターイントロの統合出力が一致しません");
+
   if (process.argv.includes("--update")) {
     fs.mkdirSync(path.dirname(baselinePath), { recursive: true });
     fs.writeFileSync(baselinePath, JSON.stringify(normalized, null, 2) + "\n", "utf8");

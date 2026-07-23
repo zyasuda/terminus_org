@@ -1634,11 +1634,72 @@ function unifiedNormalizeEncounters(payload){
   });
   return {...payload,chapter:{...payload.chapter,scenes}};
 }
+function unifiedNormalizeChapterIntro(payload){
+  const chapter=payload?.chapter||{};
+  const openingOverride=sceneOverrides[nodeKey({type:'opening',id:'opening'})]||{};
+  const authoredIntro=String(openingOverride.brief||'').trim();
+  const existingIntro=typeof chapter.intro==='string'?chapter.intro.trim():'';
+  return {...payload,chapter:{...chapter,intro:authoredIntro||existingIntro||null}};
+}
+function unifiedApplyFlagContract(payload){
+  ensureFlagConfig();
+  const campaign={...(payload?.campaign||{}),flags:flagDeclarations};
+  const style={...(campaign.style||{})};
+  if(gameOverText.trim())style.gameOverText=gameOverText.trim();
+  else delete style.gameOverText;
+  campaign.style=style;
+  const chapter={...(payload?.chapter||{})};
+  const rules=flagRulesForChapter();
+  const declaredOut=Array.isArray(chapter.flagsOut)?chapter.flagsOut:[];
+  chapter.flagsOut=[...new Set([...declaredOut,...Object.keys(rules)])];
+  chapter.flagRules=rules;
+  const nodes=chapterNodes().filter(node=>node.type==='scene');
+  chapter.scenes=(chapter.scenes||[]).map((raw,index)=>{
+    const node=nodes[index];
+    const dialogue=(node&&sceneOverrides[nodeKey(node)]?.dialogueRules||[]).map(normalizeDialogueRule);
+    const stateUpdates=dialogue.filter(rule=>rule.eventType==='flag_set').map(rule=>{
+      const match=String(rule.targetId||'').match(/^([^=]+)=(.*)$/);
+      return match?{type:'flag_set',flag:match[1].trim(),value:match[2].trim(),condition:rule.condition||'',once:rule.once!==false}:null;
+    }).filter(Boolean);
+    return stateUpdates.length?{...raw,stateUpdates}:raw;
+  });
+  return {...payload,campaign,chapter};
+}
+function unifiedNormalizeRuntimeIds(payload){
+  const source=flagChapterSource(activeChapter);
+  const sourceScenes=Array.isArray(source.scenes)?source.scenes:[];
+  if(!Array.isArray(payload?.chapter?.scenes))return payload;
+  const scenes=payload.chapter.scenes.map((sceneData,index)=>{
+    const oldSecrets=sourceScenes[index]?.secrets||[];
+    const next={...sceneData};
+    if(Array.isArray(next.secrets)&&oldSecrets.length)next.secrets=next.secrets.map((secret,secretIndex)=>({...secret,id:oldSecrets[secretIndex]?.id||secret.id}));
+    if(Array.isArray(next.exits))next.exits=next.exits.map(exit=>{
+      const ref=String(exit.to??'').match(/^scene:(\d+)$/);
+      return ref?{...exit,to:Number(ref[1])}:exit;
+    });
+    return next;
+  });
+  return {...payload,chapter:{...payload.chapter,scenes}};
+}
+function unifiedRemoveUnusedTheme(payload){
+  if(!payload?.campaign)return payload;
+  const campaign={...payload.campaign};
+  delete campaign.theme;
+  if(campaign.style){campaign.style={...campaign.style};delete campaign.style.theme}
+  return {...payload,campaign};
+}
 function mockCampaignPayloadUnified(){
-  /* 遭遇設定は旧チェーンの直前から取り出し、この統合層で確定する。
+  /* フラグ契約以降の処理は旧チェーンの直前から取り出し、この統合層で確定する。
      他の層も同じ手順で順番にここへ移す。 */
-  const source=baseMockCampaignPayloadForEncounters();
-  return cloneOutputValue(unifiedNormalizeAssets(unifiedNormalizeCompanions(unifiedNormalizeEncounters(source))));
+  const source=baseMockCampaignPayloadForFlagContract();
+  let normalized=unifiedApplyFlagContract(source);
+  normalized=unifiedNormalizeRuntimeIds(normalized);
+  normalized=unifiedRemoveUnusedTheme(normalized);
+  normalized=unifiedNormalizeChapterIntro(normalized);
+  normalized=unifiedNormalizeEncounters(normalized);
+  normalized=unifiedNormalizeCompanions(normalized);
+  normalized=unifiedNormalizeAssets(normalized);
+  return cloneOutputValue(normalized);
 }
 window.__tasOutputPipelines={
   legacy:()=>cloneOutputValue(legacyMockCampaignPayloadForUnified()),
