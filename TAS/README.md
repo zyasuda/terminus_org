@@ -79,7 +79,7 @@ node tests/tas-chain-compatibility-harness.mjs --update
 node tests/tas-output-pipeline-static-check.mjs
 ```
 
-旧チェーンは現在、互換性比較用の入口としてのみ残しています。静的ガードと互換性ハーネスが通った後に、段階的な削除を検討します。
+旧出力チェーンは統合済みで、現在は統合経路と実運用経路の一致を静的ガードと回帰ハーネスで確認します。
 
 なお、`exportPayload()` はゲーム側へ渡す最終JSONではありません。AI補助・下書き参照・新規キャンペーンの入力用スナップショットとして使用します。ゲーム側へ出力する最終経路は、`mockCampaignPayloadUnified()` と `window.__tasOutputPipelines.active()` です。
 

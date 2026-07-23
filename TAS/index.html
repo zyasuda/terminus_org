@@ -1531,8 +1531,7 @@ async function loadCampaignFiles(fileList){
 }
 </script>
 <script>
-/* 出力チェーン統合の移行点。現行出力を保持したまま、統合版の比較入口を用意する。 */
-var legacyMockCampaignPayloadForUnified=mockCampaignPayload;
+/* 出力チェーン統合後の最終出力を正規化する。 */
 function cloneOutputValue(value){return value&&typeof value==='object'?JSON.parse(JSON.stringify(value)):value}
 function unifiedNormalizeAssets(payload){
   const assets=payload?.assets&&typeof payload.assets==='object'?payload.assets:{};
@@ -1775,11 +1774,10 @@ function mockCampaignPayloadUnified(){
   return cloneOutputValue(normalized);
 }
 window.__tasOutputPipelines={
-  legacy:()=>cloneOutputValue(legacyMockCampaignPayloadForUnified()),
   unified:()=>cloneOutputValue(mockCampaignPayloadUnified()),
   active:()=>cloneOutputValue(mockCampaignPayload())
 };
-/* 統合版を実運用の出力経路へ昇格する。旧経路は上記の比較入口に保持する。 */
+/* 統合版を実運用の出力経路へ昇格する。 */
 mockCampaignPayload=mockCampaignPayloadUnified;
 </script>
 </html>
