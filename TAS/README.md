@@ -49,7 +49,7 @@ node tests/tas-companion-output-contract.mjs
 
 ## 自動検証・コミット
 
-互換性ハーネスを含む全検証は、`node scripts/tas-check-and-commit.mjs`でまとめて実行できます。通常実行ではコミットしません。
+互換性ハーネス、静的ガード、サーバー構文チェックを含む全検証は、`node scripts/tas-check-and-commit.mjs`でまとめて実行できます。通常実行ではコミットしません。
 
 検証後にコミットする場合は`--commit`、pushまで行う場合は`--commit --push`を明示します。TAS以外の変更が作業ツリーにある場合は、巻き込み防止のため自動中止します。
 

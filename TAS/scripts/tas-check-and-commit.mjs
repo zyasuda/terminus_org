@@ -47,7 +47,13 @@ function checkInlineSyntax() {
   console.log("PASS: inline JavaScript syntax");
 }
 
+function checkServerSyntax() {
+  run(process.execPath, ["--check", "server.cjs"]);
+  console.log("PASS: server JavaScript syntax");
+}
+
 const tests = [
+  "tests/tas-output-pipeline-static-check.mjs",
   "tests/tas-chain-compatibility-harness.mjs",
   "tests/tas-companion-output-contract.mjs",
   "tests/tas-fresh-campaign-output-contract.mjs",
@@ -56,6 +62,7 @@ const tests = [
 
 try {
   checkInlineSyntax();
+  checkServerSyntax();
   for (const test of tests) run(process.execPath, [test]);
   run("git", ["diff", "--check"]);
   console.log("PASS: git diff --check");
