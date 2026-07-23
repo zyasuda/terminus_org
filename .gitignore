@@ -21,3 +21,6 @@ design/*.psd
 
 # Rust build artifacts
 TAS/rust/**/target/
+
+# 個人管理のプレイセッション記録(ユーザーが手元で管理、gitでは追跡しない)
+chronicles/
