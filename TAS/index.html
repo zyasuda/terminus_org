@@ -1279,17 +1279,6 @@ var baseSceneGenerationPromptWithoutTheme=sceneGenerationPrompt;
 sceneGenerationPrompt=function(instruction){return baseSceneGenerationPromptWithoutTheme(instruction).replace(/\\nテーマ: [^\\n]*/g,'')};
 </script>
 <script>
-/* mock2の現行契約(chapter.intro:string)へ、TASのチャプター・オープニングを接続する。 */
-var baseMockCampaignPayloadForChapterIntro=mockCampaignPayload;
-mockCampaignPayload=function(){
-  const payload=baseMockCampaignPayloadForChapterIntro();
-  const chapter=payload.chapter||{};
-  const opening=chapterNodes().find(n=>n.type==='opening');
-  const openingOverride=sceneOverrides[nodeKey({type:'opening',id:'opening'})]||{};
-  const authoredIntro=String(openingOverride.brief||'').trim();
-  const existingIntro=typeof chapter.intro==='string'?chapter.intro.trim():'';
-  return {...payload,chapter:{...chapter,intro:authoredIntro||existingIntro||null}};
-};
 </script>
 <script>
 /* テキストプレイAI: mock2のGMプロンプト契約を、TAS内の安全な会話確認用に移植する。 */
