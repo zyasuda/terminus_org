@@ -81,6 +81,8 @@ node tests/tas-output-pipeline-static-check.mjs
 
 旧チェーンは現在、互換性比較用の入口としてのみ残しています。静的ガードと互換性ハーネスが通った後に、段階的な削除を検討します。
 
+なお、`exportPayload()` はゲーム側へ渡す最終JSONではありません。AI補助・下書き参照・新規キャンペーンの入力用スナップショットとして使用します。ゲーム側へ出力する最終経路は、`mockCampaignPayloadUnified()` と `window.__tasOutputPipelines.active()` です。
+
 起動時にコンテキスト（BORGの `CAMPAIGN_01.md` と `AI_DESIGN.md`）が自動で読み込まれ、画面左上に表示されます。
 
 ## 基本の流れ
