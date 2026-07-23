@@ -1637,6 +1637,30 @@ function unifiedNormalizeCompanions(payload){
   }):asset.usedBy}])):payload.assets;
   return {...payload,campaign:{...campaign,companions,entities,castAttributes:attributes},assets};
 }
+function unifiedNormalizeSemantics(payload){
+  ensureConcepts();
+  ensureItems();
+  const campaign={...(payload?.campaign||{})};
+  const conceptsOut=concepts.map(entry=>({
+    id:entry.id,ja:entry.name,aliases:entry.aliases,kind:'concept',role:entry.role,
+    usage:entry.usage,scope:entry.scope,storyKey:entry.storyKey,surface:entry.surface,truth:entry.truth
+  }));
+  const itemsOut=items.filter(entry=>entry.name).map(entry=>({
+    id:entry.id,ja:entry.name,aliases:entry.aliases||[],kind:'item',parentConceptId:entry.parentConceptId||null,
+    scope:entry.scope||'scene',acquisition:entry.acquisition||'none',persistent:Boolean(entry.persistent),
+    capabilities:entry.capabilities||['inspect'],requires:entry.requires||'',surface:entry.notes||'',visual:entry.image||''
+  }));
+  const existing=Array.isArray(campaign.entities)?campaign.entities:[];
+  const byName=new Map(existing.filter(entry=>entry&&(entry.ja||entry.name)).map(entry=>[entry.ja||entry.name,entry]));
+  conceptsOut.forEach(entry=>byName.set(entry.ja,entry));
+  itemsOut.forEach(entry=>byName.set(entry.ja,entry));
+  return {...payload,campaign:{
+    ...campaign,concepts:conceptsOut,items:itemsOut,
+    initialInventory:items.filter(entry=>entry.name&&entry.acquisition==='starting_inventory').map(entry=>entry.name),
+    initialInventoryIds:items.filter(entry=>entry.name&&entry.acquisition==='starting_inventory').map(entry=>entry.id),
+    entities:Array.from(byName.values())
+  }};
+}
 function unifiedNormalizeEncounters(payload){
   if(!Array.isArray(payload?.chapter?.scenes))return payload;
   const nodes=chapterNodes().filter(node=>node.type==='scene');
@@ -1719,10 +1743,11 @@ function unifiedRemoveUnusedTheme(payload){
   return {...payload,campaign};
 }
 function mockCampaignPayloadUnified(){
-  /* 同行者変換以降の処理は旧チェーンの直前から取り出し、この統合層で確定する。
+  /* 概念・アイテム変換以降の処理は旧チェーンの直前から取り出し、この統合層で確定する。
      他の層も同じ手順で順番にここへ移す。 */
-  const source=baseMockCampaignPayloadForCastAttributes();
-  let normalized=unifiedNormalizeCompanions(source);
+  const source=baseMockCampaignPayloadForSemantics();
+  let normalized=unifiedNormalizeSemantics(source);
+  normalized=unifiedNormalizeCompanions(normalized);
   normalized=unifiedNormalizeSceneNpcs(normalized);
   normalized=unifiedApplyFlagContract(normalized);
   normalized=unifiedNormalizeRuntimeIds(normalized);
