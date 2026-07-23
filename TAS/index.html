@@ -457,60 +457,6 @@ try{const rawStable=localStorage.getItem(DRAFT_KEY);if(rawStable){const parsedSt
 function runtimeChapterId(key){if(!tasChapterIds[key]){const n=Math.max(1,chapterOrder.indexOf(key)+1);tasChapterIds[key]=`chapter_${String(n).padStart(2,"0")}`}return tasChapterIds[key]}
 function runtimeImageName(value){const raw=String(value||"");if(!raw||raw.startsWith("data:"))return "";return raw.replace(/^.*[\\/]/,"")}
 function runtimeAssetId(file){return stableId(String(file).replace(/\\.[^.]+$/,""),"asset")}
-function legacyContractPayload(){
-  const payload=buildBaseMockCampaignPayload();
-  const chapterKey=activeChapter;
-  const chapterId=runtimeChapterId(chapterKey);
-  const baseCampaign=payload.campaign||{};
-  const baseStyle=baseCampaign.style||{};
-  const companions=Array.isArray(baseCampaign.companions)&&baseCampaign.companions.length?baseCampaign.companions:[{id:"member_1",name:"ガレス",persona:"寡黙で実用的な戦士。短く話す。"}];
-  const style={...baseStyle,
-    narration:baseStyle.narration||"である調。地の文は短く、確定事実を優先する。",
-    readingLevel:baseStyle.readingLevel||"平易な日本語を使う。",
-    world:campaignWorld,
-    theme:campaignTheme,
-    terms:campaignTerms
-  };
-  const chapter=payload.chapter||{};
-  const firstScene=(chapter.scenes||[])[0]||{};
-  const sceneNodes=chapterNodes().filter(n=>n.type==="scene");
-  const normalizedChapter={...chapter,
-    id:Number(chapter.id)||Number(String(chapterId).replace(/\D/g,""))||1,
-    title:chapter.title||currentFreshChapterLabel(),
-    quest:chapter.quest||firstScene.goal||`${chapter.title||currentFreshChapterLabel()}の目的を達成する。`,
-    intro:chapter.intro||firstScene.brief||"この章の導入を設定してください。",
-    scenes:(chapter.scenes||[]).map((rawScene,index)=>{
-      const node=sceneNodes[index]||{};
-      const key=node.type?nodeKey(node):"";
-      const sceneImage=runtimeImageName(sceneBackgrounds[key]);
-      const npcId=(rawScene.npcs||[])[0];
-      const npcImage=runtimeImageName(npcId&&castImages[npcId]);
-      const monster=monsters.find(m=>m.name&&m.name===rawScene.enemyName);
-      const monsterImage=runtimeImageName(monster?.image);
-      const skyImage=runtimeImageName(sceneOverrides[key]?.parallaxSky||rawScene.parallax?.sky);
-      const next={...rawScene};
-      if(sceneImage)next.img=sceneImage;
-      if(skyImage)next.parallax={...(next.parallax||{}),sky:skyImage};
-      delete next.parallaxSky;
-      if(npcImage)next.npcSprite=npcImage;
-      if(monsterImage){next.enemy={...(next.enemy||{}),sprite:monsterImage};delete next.enemy.img;}
-      delete next.enemyName;
-      return next;
-    })
-  };
-  const campaign={...baseCampaign,
-    meta:{...(baseCampaign.meta||{}),id:tasCampaignId,title:campaignName,version:(baseCampaign.meta||{}).version||"0.2"},
-    style,
-    companions:companions.map(c=>{const image=runtimeImageName(castImages[c.id]);return image?{...c,sprite:image}:{...c}}),
-    image:runtimeImageName(campaignImage)||baseCampaign.image||null
-  };
-  const assets={};
-  const addAsset=(file,kind,usedBy)=>{if(!file)return;const id=runtimeAssetId(file);assets[id]={file,kind,status:"candidate",usedBy:[usedBy]}};
-  addAsset(runtimeImageName(campaignImage),"campaign",`campaign.image`);
-  campaign.companions.forEach(c=>addAsset(c.sprite,"portrait",`campaign.companions.${c.id}.sprite`));
-  normalizedChapter.scenes.forEach((s,i)=>{const base=`${chapterId}.scenes.${s.id||i+1}`;addAsset(s.img,"background",`${base}.img`);addAsset(s.npcSprite,"sprite",`${base}.npcSprite`);addAsset(s.parallax?.sky,"parallax.sky",`${base}.parallax.sky`);addAsset(s.parallax?.fg,"parallax.fg",`${base}.parallax.fg`);addAsset(s.enemy?.sprite,"sprite",`${base}.enemy.sprite`);(s.secrets||[]).forEach(secret=>{addAsset(secret.img,"popup",`${base}.secrets.${secret.id}.img`);addAsset(secret.bg,"background",`${base}.secrets.${secret.id}.bg`)})});
-  return {...payload,campaign,chapter:normalizedChapter,assets,campaignId:tasCampaignId,chapterId,chapterFile:`${chapterId}.json`};
-}
 var baseCreateNewCampaignForStable=createNewCampaign;
 createNewCampaign=function(){baseCreateNewCampaignForStable();tasCampaignId=stableId(campaignName,"campaign");tasChapterIds={ch1:"chapter_01"};saveWorkspaceDraft(true)};
 if(newCampaignButton)newCampaignButton.onclick=createNewCampaign;
