@@ -116,7 +116,10 @@ try {
   assert.equal(validation.valid, true, "統合出力がサーバー検証を通りません: " + (validation.errors || []).join(" / "));
   await page.evaluate(() => { activeTab = "export"; renderAll(); });
   await page.locator("#btnServerValidate").click();
-  await page.locator("#serverValidationResults").waitFor();
+  await page.waitForFunction(() => {
+    const text = document.querySelector("#serverValidationResults")?.textContent || "";
+    return /合格|問題が見つかりました/.test(text);
+  });
   assert.match(await page.locator("#serverValidationResults").textContent(), /合格/, "画面からゲーム側基準の検証を実行できません");
 
   // チャプターイントロを入力した場合も、旧チェーンと統合層で同じ出力になることを確認する。
