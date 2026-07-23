@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 /*
  * TAS 出力チェーン互換性ハーネス。
- * 現行のmockCampaignPayloadチェーンを正規化した基準出力と比較し、
- * 将来のチェーン統合でゲーム側契約が変わっていないことを確認する。
+ * 統合出力と実運用出力を正規化した基準出力と比較し、
+ * 旧チェーン整理後もゲーム側契約が変わっていないことを確認する。
  *
  * 初回の基準更新（意図した仕様変更時だけ）:
  *   node tests/tas-chain-compatibility-harness.mjs --update
@@ -102,10 +102,9 @@ try {
     unified: window.__tasOutputPipelines.unified(),
     active: window.__tasOutputPipelines.active()
   }));
-  const normalizedLegacy = normalizePayload(outputs.legacy);
   const normalized = normalizePayload(outputs.unified);
-  assert.deepEqual(normalized, normalizedLegacy, "統合版と現行版の出力が一致しません");
   assert.deepEqual(normalizePayload(outputs.active), normalized, "実運用の出力が統合パイプラインを通っていません");
+  assert.ok(outputs.legacy && typeof outputs.legacy === "object", "旧出力比較入口を呼び出せません");
   const validationResponse = await fetch(baseUrl + "/api/validate-campaign", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -122,20 +121,20 @@ try {
   });
   assert.match(await page.locator("#serverValidationResults").textContent(), /合格/, "画面からゲーム側基準の検証を実行できません");
 
-  // チャプターイントロを入力した場合も、旧チェーンと統合層で同じ出力になることを確認する。
+  // チャプターイントロを入力した場合も、統合層と実運用で同じ出力になることを確認する。
   const introOutputs = await page.evaluate(() => {
     const key = nodeKey({ type: "opening", id: "opening" });
     const before = sceneOverrides[key];
     sceneOverrides[key] = { ...(before || {}), brief: "統合テスト用イントロ" };
     const result = {
-      legacy: window.__tasOutputPipelines.legacy().chapter?.intro,
-      unified: window.__tasOutputPipelines.unified().chapter?.intro
+      unified: window.__tasOutputPipelines.unified().chapter?.intro,
+      active: window.__tasOutputPipelines.active().chapter?.intro
     };
     if (before === undefined) delete sceneOverrides[key];
     else sceneOverrides[key] = before;
     return result;
   });
-  assert.deepEqual(introOutputs, { legacy: "統合テスト用イントロ", unified: "統合テスト用イントロ" }, "チャプターイントロの統合出力が一致しません");
+  assert.deepEqual(introOutputs, { unified: "統合テスト用イントロ", active: "統合テスト用イントロ" }, "チャプターイントロの統合出力が実運用へ反映されていません");
 
   // シーンNPCを指定した場合も、統合経路と実運用経路の変換結果が一致することを確認する。
   const npcOutputs = await page.evaluate(() => {
