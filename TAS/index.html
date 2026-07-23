@@ -443,18 +443,6 @@ renderRightPanel=function(){
   const target=$("rightBody")?.querySelector(".right-section p");
   if(target&&!["world","cast","monsters","items","rules","export"].includes(activeTab))target.textContent=`${currentFreshChapterLabel()} / ${scene().type==="scene"?`シーン${scene().id}「${scene().name}」`:scene().name}`;
 };
-var baseMockCampaignPayloadForFresh=mockCampaignPayload;
-mockCampaignPayload=function(){
-  const payload=baseMockCampaignPayloadForFresh();
-  if(!freshCampaign)return payload;
-  const chapterInfo=CHAPTERS[activeChapter]||{name:currentFreshChapterLabel(),file:`CHAPTER_${String(chapterOrder.indexOf(activeChapter)+1).padStart(2,"0")}`};
-  const entities=[...monsters.map(m=>m.name),...items.map(i=>i.name)].filter(Boolean).map(ja=>({ja,note:"TAS台帳から登録"}));
-  /* 新規キャンペーンでは、既存campaign.jsonのcompanionsを使わず、
-     キャラクター画面の入力値から同行者を組み立てる。 */
-  const authoredCompanions=exportPayload()?.casts?.companions||[];
-  const companions=authoredCompanions.map(entry=>({id:entry.id,name:entry.name,persona:entry.profile,flags:entry.flags,image:entry.image}));
-  return {...payload,campaign:{...(payload.campaign||{}),meta:{...(payload.campaign?.meta||{}),title:campaignName},style:{...(payload.campaign?.style||{}),world:campaignWorld,theme:campaignTheme,terms:campaignTerms},companions,entities},chapter:{...payload.chapter,title:currentFreshChapterLabel(),scenes:payload.chapter?.scenes||[]},chapterFile:`${chapterInfo.file.toLowerCase()}.json`};
-};
 </script>
 <script>
 /* エクスポート契約v0.2: 表示名と分離した安定ID、構造化style、catalog情報を付与する。 */
@@ -469,9 +457,8 @@ try{const rawStable=localStorage.getItem(DRAFT_KEY);if(rawStable){const parsedSt
 function runtimeChapterId(key){if(!tasChapterIds[key]){const n=Math.max(1,chapterOrder.indexOf(key)+1);tasChapterIds[key]=`chapter_${String(n).padStart(2,"0")}`}return tasChapterIds[key]}
 function runtimeImageName(value){const raw=String(value||"");if(!raw||raw.startsWith("data:"))return "";return raw.replace(/^.*[\\/]/,"")}
 function runtimeAssetId(file){return stableId(String(file).replace(/\\.[^.]+$/,""),"asset")}
-var baseMockCampaignPayloadForContract=mockCampaignPayload;
-mockCampaignPayload=function(){
-  const payload=baseMockCampaignPayloadForContract();
+function legacyContractPayload(){
+  const payload=buildBaseMockCampaignPayload();
   const chapterKey=activeChapter;
   const chapterId=runtimeChapterId(chapterKey);
   const baseCampaign=payload.campaign||{};
