@@ -1558,6 +1558,8 @@ function unifiedNormalizeCompanions(payload){
     const slotId=companionAuthoringId(entry,index);
     const authoring=companionAuthoringFields(entry,index);
     const normalized={...entry,id:slotId,...authoring};
+    if(!normalized.addressTerm&&(entry.addressTerm||entry.addressing))normalized.addressTerm=String(entry.addressTerm||entry.addressing);
+    delete normalized.addressing;
     if(Array.isArray(normalized.banter))normalized.banter=normalized.banter.map(rule=>({...rule,to:companionSlotByRef.get(rule.to)||rule.to}));
     attributes[slotId]={...castAttribute(slotId),...authoring};
     return normalized;

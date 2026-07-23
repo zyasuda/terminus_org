@@ -84,6 +84,7 @@ try {
   assert.equal(lydia?.gender, "female");
   assert.equal(lydia?.firstPerson, "私は");
   assert.equal(lydia?.addressTerm, "あなた");
+  assert.equal(lydia?.addressing, undefined, "旧addressingキーが残っています");
   assert.equal(lydiaEntity?.ja, "リディア");
   assert.equal(roundTrip?.castNames?.member_1, "ガレス");
   assert.equal(roundTrip?.castNames?.member_2, "リディア");

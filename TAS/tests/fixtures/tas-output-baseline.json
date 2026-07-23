@@ -30,10 +30,34 @@
     "flags": {},
     "entities": [
       {
-        "id": "member_1",
-        "ja": "ガレス",
-        "kind": "character",
+        "id": "entity_4",
+        "ja": "作業札",
+        "kind": "秘密の器",
+        "importance": "background"
+      },
+      {
+        "id": "entity_5",
+        "ja": "トロッコ軌道",
+        "kind": "秘密の器",
+        "importance": "background"
+      },
+      {
+        "id": "entity_6",
+        "ja": "封鎖柵",
+        "kind": "秘密の器",
+        "importance": "background"
+      },
+      {
+        "id": "monster_1",
+        "ja": "錆喰い",
+        "kind": "enemy",
         "importance": "support"
+      },
+      {
+        "id": "entity_8",
+        "ja": "灯の番人",
+        "kind": "秘密の器/敵(非敵対)",
+        "importance": "background"
       },
       {
         "id": "concept_heartstone",
@@ -42,15 +66,21 @@
         "importance": ""
       },
       {
+        "id": "entity_10",
+        "ja": "マイラ・ヴェイン",
+        "kind": "キャスト",
+        "importance": "background"
+      },
+      {
         "id": "npc_1",
         "ja": "NPC1",
         "kind": "npc",
         "importance": "support"
       },
       {
-        "id": "monster_1",
-        "ja": "錆喰い",
-        "kind": "enemy",
+        "id": "member_1",
+        "ja": "ガレス",
+        "kind": "character",
         "importance": "support"
       }
     ]
@@ -63,8 +93,8 @@
     "scenes": [
       {
         "id": 1,
-        "name": "坑道の入り口",
-        "brief": "古いレールと薄汚れた木の札がある。奥の方から何かしらの金属音が聞こえる。",
+        "name": "坑道の入口前",
+        "brief": "古いレールと木札がある。奥から金属音が聞こえる。",
         "completeRequires": {},
         "enemy": null,
         "exits": [
@@ -84,7 +114,7 @@
         "secrets": [
           {
             "id": "ch1_s1_item_1",
-            "entity": "木の札",
+            "entity": "作業札",
             "aliases": [
               "札",
               "板",
@@ -94,7 +124,7 @@
           },
           {
             "id": "ch1_s1_item_2",
-            "entity": "レール",
+            "entity": "トロッコ軌道",
             "aliases": [
               "軌道",
               "線路"
@@ -118,25 +148,18 @@
           {
             "id": "ch1_s2_item_1",
             "entity": "封鎖の木柵",
-            "aliases": [
-              "柵",
-              "板"
-            ]
+            "aliases": []
           },
           {
             "id": "ch1_s2_item_2",
-            "entity": "油の匂い",
-            "aliases": [
-              "匂い",
-              "油",
-              "臭い"
-            ]
+            "entity": "柵の周辺に漂う匂い",
+            "aliases": []
           }
         ]
       },
       {
         "id": 3,
-        "name": "灯りの部屋",
+        "name": "坑道の最奥",
         "brief": "ランタンを持つ人影がこちらを向く。",
         "completeRequires": {},
         "enemy": null,
@@ -157,8 +180,18 @@
       },
       {
         "id": 4,
-        "name": "村にもどる",
+        "name": "村への帰還",
         "brief": "村の広場。マイラの家に灯りがともる。",
+        "completeRequires": {},
+        "enemy": null,
+        "exits": [],
+        "loot": [],
+        "secrets": []
+      },
+      {
+        "id": 5,
+        "name": "マイラの部屋",
+        "brief": "マイラが報告を待っている。",
         "completeRequires": {},
         "enemy": null,
         "exits": [],
