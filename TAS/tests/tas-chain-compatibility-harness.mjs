@@ -99,11 +99,13 @@ try {
   await page.goto(baseUrl, { waitUntil: "domcontentloaded" });
   const outputs = await page.evaluate(() => ({
     legacy: window.__tasOutputPipelines.legacy(),
-    unified: window.__tasOutputPipelines.unified()
+    unified: window.__tasOutputPipelines.unified(),
+    active: window.__tasOutputPipelines.active()
   }));
   const normalizedLegacy = normalizePayload(outputs.legacy);
   const normalized = normalizePayload(outputs.unified);
   assert.deepEqual(normalized, normalizedLegacy, "統合版と現行版の出力が一致しません");
+  assert.deepEqual(normalizePayload(outputs.active), normalized, "実運用の出力が統合パイプラインを通っていません");
 
   // チャプターイントロを入力した場合も、旧チェーンと統合層で同じ出力になることを確認する。
   const introOutputs = await page.evaluate(() => {

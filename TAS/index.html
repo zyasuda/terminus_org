@@ -1838,7 +1838,8 @@ function mockCampaignPayloadUnified(){
 }
 window.__tasOutputPipelines={
   legacy:()=>cloneOutputValue(legacyMockCampaignPayloadForUnified()),
-  unified:()=>cloneOutputValue(mockCampaignPayloadUnified())
+  unified:()=>cloneOutputValue(mockCampaignPayloadUnified()),
+  active:()=>cloneOutputValue(mockCampaignPayload())
 };
 /* 統合版を実運用の出力経路へ昇格する。旧経路は上記の比較入口に保持する。 */
 mockCampaignPayload=mockCampaignPayloadUnified;
