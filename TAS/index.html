@@ -1605,24 +1605,37 @@ function unifiedNormalizeAssets(payload){
   return {...payload,assets:normalized};
 }
 function unifiedNormalizeCompanions(payload){
-  const campaign=payload?.campaign&&typeof payload.campaign==='object'?payload.campaign:{};
-  const source=Array.isArray(campaign.companions)?campaign.companions:[];
-  const refs=new Map();
-  const companions=source.map((entry,index)=>{
-    const id='member_'+(index+1);
-    refs.set(entry?.id,id);refs.set(entry?.name,id);
-    return {...entry,id};
+  if(!payload?.campaign)return payload;
+  const ids=['gm',...Array.from({length:Math.max(1,extraCompanions+1)},(_,index)=>`member_${index+1}`),...npcList().map(entry=>entry.id)];
+  const attributes=Object.fromEntries(ids.map(id=>[id,castAttribute(id)]));
+  const campaign={...payload.campaign};
+  const sourceCompanions=campaign.companions||[];
+  const companionSlotByRef=new Map();
+  sourceCompanions.forEach((entry,index)=>{
+    const slotId=companionAuthoringId(entry,index);
+    companionSlotByRef.set(entry?.id,slotId);
+    companionSlotByRef.set(entry?.name,slotId);
   });
+  const companions=sourceCompanions.map((entry,index)=>{
+    const slotId=companionAuthoringId(entry,index);
+    const authoring=companionAuthoringFields(entry,index);
+    const normalized={...entry,id:slotId,...authoring};
+    if(Array.isArray(normalized.banter))normalized.banter=normalized.banter.map(rule=>({...rule,to:companionSlotByRef.get(rule.to)||rule.to}));
+    attributes[slotId]={...castAttribute(slotId),...authoring};
+    return normalized;
+  });
+  const companionBySlot=new Map(companions.map(entry=>[entry.id,entry]));
   const entities=Array.isArray(campaign.entities)?campaign.entities.map(entry=>{
-    const id=refs.get(entry?.id)||refs.get(entry?.ja)||refs.get(entry?.name);
-    return id?{...entry,id}:entry;
+    const slotId=companionSlotByRef.get(entry?.id)||companionSlotByRef.get(entry?.ja)||companionSlotByRef.get(entry?.name);
+    const companion=slotId?companionBySlot.get(slotId):null;
+    return slotId?{...entry,id:slotId,ja:companion?.name||entry.ja||entry.name}:entry;
   }):campaign.entities;
-  const assets=payload?.assets&&typeof payload.assets==='object'?Object.fromEntries(Object.entries(payload.assets).map(([id,asset])=>[id,{...asset,usedBy:Array.isArray(asset?.usedBy)?asset.usedBy.map(ref=>{
+  const assets=payload.assets&&typeof payload.assets==='object'?Object.fromEntries(Object.entries(payload.assets).map(([assetId,asset])=>[assetId,{...asset,usedBy:Array.isArray(asset?.usedBy)?asset.usedBy.map(ref=>{
     const match=String(ref).match(/^campaign\.companions\.([^\.]+)\.sprite$/);
-    const next=match?refs.get(match[1]):null;
-    return next?'campaign.companions.'+next+'.sprite':ref;
+    const slotId=match?companionSlotByRef.get(match[1]):null;
+    return slotId?`campaign.companions.${slotId}.sprite`:ref;
   }):asset.usedBy}])):payload.assets;
-  return {...payload,campaign:{...campaign,companions,entities},assets};
+  return {...payload,campaign:{...campaign,companions,entities,castAttributes:attributes},assets};
 }
 function unifiedNormalizeEncounters(payload){
   if(!Array.isArray(payload?.chapter?.scenes))return payload;
@@ -1706,16 +1719,16 @@ function unifiedRemoveUnusedTheme(payload){
   return {...payload,campaign};
 }
 function mockCampaignPayloadUnified(){
-  /* シーンNPC変換以降の処理は旧チェーンの直前から取り出し、この統合層で確定する。
+  /* 同行者変換以降の処理は旧チェーンの直前から取り出し、この統合層で確定する。
      他の層も同じ手順で順番にここへ移す。 */
-  const source=baseMockCampaignPayloadForNpcShape();
-  let normalized=unifiedNormalizeSceneNpcs(source);
+  const source=baseMockCampaignPayloadForCastAttributes();
+  let normalized=unifiedNormalizeCompanions(source);
+  normalized=unifiedNormalizeSceneNpcs(normalized);
   normalized=unifiedApplyFlagContract(normalized);
   normalized=unifiedNormalizeRuntimeIds(normalized);
   normalized=unifiedRemoveUnusedTheme(normalized);
   normalized=unifiedNormalizeChapterIntro(normalized);
   normalized=unifiedNormalizeEncounters(normalized);
-  normalized=unifiedNormalizeCompanions(normalized);
   normalized=unifiedNormalizeAssets(normalized);
   return cloneOutputValue(normalized);
 }
