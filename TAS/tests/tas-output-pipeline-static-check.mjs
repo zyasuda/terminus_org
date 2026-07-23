@@ -19,6 +19,9 @@ const assignmentIndex = source.lastIndexOf(finalAssignment);
 
 assert.ok(unifiedIndex >= 0, "統合出力関数が見つかりません");
 assert.ok(assignmentIndex > unifiedIndex, "統合出力関数が実運用へ昇格されていません");
+assert.equal((source.match(/function mockCampaignPayloadUnified\(\)/g) || []).length, 1, "統合出力関数が重複しています");
+assert.equal((source.match(/mockCampaignPayload=function/g) || []).length, 0, "旧mockCampaignPayload代入ラッパーが残っています");
+assert.equal((source.match(/baseMockCampaignPayload/g) || []).length, 0, "旧mockCampaignPayload基底参照が残っています");
 assert.ok(source.includes("legacy:()=>cloneOutputValue(legacyMockCampaignPayloadForUnified())"), "旧チェーンの比較入口がありません");
 assert.ok(source.includes("unified:()=>cloneOutputValue(mockCampaignPayloadUnified())"), "統合チェーンの比較入口がありません");
 assert.ok(source.includes("active:()=>cloneOutputValue(mockCampaignPayload())"), "実運用出力の比較入口がありません");
