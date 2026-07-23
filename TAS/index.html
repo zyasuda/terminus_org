@@ -1624,11 +1624,21 @@ function unifiedNormalizeCompanions(payload){
   }):asset.usedBy}])):payload.assets;
   return {...payload,campaign:{...campaign,companions,entities},assets};
 }
+function unifiedNormalizeEncounters(payload){
+  if(!Array.isArray(payload?.chapter?.scenes))return payload;
+  const nodes=chapterNodes().filter(node=>node.type==='scene');
+  const scenes=payload.chapter.scenes.map((raw,index)=>{
+    const node=nodes[index];
+    const encounters=(node?.encounters||raw.encounters||[]).map(normalizeEncounter);
+    return encounters.length?{...raw,encounters}:raw;
+  });
+  return {...payload,chapter:{...payload.chapter,scenes}};
+}
 function mockCampaignPayloadUnified(){
-  /* 第1段階では、既存チェーンの結果を統合版の入力として受け取る。
-     この入口を固定してから、各変換処理を順番にここへ移す。 */
-  const legacy=legacyMockCampaignPayloadForUnified();
-  return cloneOutputValue(unifiedNormalizeAssets(unifiedNormalizeCompanions(legacy)));
+  /* 遭遇設定は旧チェーンの直前から取り出し、この統合層で確定する。
+     他の層も同じ手順で順番にここへ移す。 */
+  const source=baseMockCampaignPayloadForEncounters();
+  return cloneOutputValue(unifiedNormalizeAssets(unifiedNormalizeCompanions(unifiedNormalizeEncounters(source))));
 }
 window.__tasOutputPipelines={
   legacy:()=>cloneOutputValue(legacyMockCampaignPayloadForUnified()),
