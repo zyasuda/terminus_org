@@ -30,12 +30,12 @@ let campaignTheme="";
 let assistantMode="prompt";let assistantAiResult="";
 const DRAFT_KEY="tas_campaign_draft_v1";const $=id=>document.getElementById(id);let context=null;let activeTab="world";let activeChapter="ch1";let selectedNode={type:"scene",index:0};let history=[];let draft="";let review="";let rightPanelEnabled=false;const DEFAULT_CAMPAIGN_NAME="ランタンヒル年代記";const DEFAULT_CAMPAIGN_WORLD="ミステリ / ロー・ファンタジー。静かで神秘的、少し切ない。";const DEFAULT_CAMPAIGN_TERMS="現代語彙を避ける。\n禁止語：懐中電灯、電灯、モーター、エンジン、電池、メートル\n言い換えが必要な場合は、世界観に合う平易な表現を使う。";let campaignName=DEFAULT_CAMPAIGN_NAME;let campaignImage="";let campaignWorld=DEFAULT_CAMPAIGN_WORLD;let campaignTerms=DEFAULT_CAMPAIGN_TERMS;let extraCompanions=0;let npcCount=1;let monsters=[];let items=[];let castImages={};let castNames={};let castProfiles={};let castFlags={};let castAttributes={};let sceneBackgrounds={};let sceneOverrides={};let discoveryFoldState={};let pendingCastFocus=null;let collapsedCampaign=false;let collapsedChapters={ch1:false,ch2:false};
 const fallbackScenes=[{id:1,name:"坑道の入口前",brief:"古いレールと木札がある。奥から金属音が聞こえる。",goal:"札とレールを確認し、奥へ進む",discoveries:["作業札","トロッコ軌道"]},{id:2,name:"分かれ道",brief:"封鎖の木柵と左右の坑道。奥に灯りが揺れる。",goal:"第三坑道へ入る手段を見つける",discoveries:["封鎖の木柵","油の匂い"]},{id:3,name:"坑道の最奥",brief:"ランタンを持つ人影がこちらを向く。",goal:"灯りの主と決着する",discoveries:["灯りの主の正体","動力と坑道維持"]},{id:4,name:"村への帰還",brief:"村の広場。マイラの家に灯りがともる。",goal:"マイラの家へ入る",discoveries:[]},{id:5,name:"マイラの部屋",brief:"マイラが報告を待っている。",goal:"見聞きしたことを報告する",discoveries:[]}];
-let freshCampaign=false;let customChapterScenes={ch1:[],ch2:[]};let chapterNames={ch1:"",ch2:""};let chapterOrder=["ch1"];
+let freshCampaign=false;let customChapterScenes={ch1:[],ch2:[]};let chapterNames={ch1:"",ch2:""};let chapterOrder=["ch1"];let exportFileViews=[];let exportFileIndex=0;
 let chapterData=()=>{if(freshCampaign)return {title:activeChapter==="ch2"?"新しい章":"新しい章",scenes:Array.isArray(customChapterScenes[activeChapter])?customChapterScenes[activeChapter]:[]};try{const file=activeChapter==="ch2"?"chapter_02.json":"chapter_01.json";const raw=context?.dataFiles?.[file]||context?.dataFiles?.["chapter_01.json"];if(raw)return JSON.parse(raw)}catch(e){}return {title:activeChapter==="ch2"?"心石の在処":"廃坑の灯",scenes:activeChapter==="ch2"?fallbackScenes.slice(0,2):fallbackScenes}};
 const currentScenes=()=>chapterData().scenes||fallbackScenes;
 const nodeKey=(n,chapter=activeChapter)=>`${chapter}:${n.type}:${n.index??n.type}`;
 const withSceneOverride=n=>{const merged={...n,...(sceneOverrides[nodeKey(n)]||{})};const discoveries=Array.isArray(merged.discoveries)?merged.discoveries:Array.isArray(merged.secrets)?merged.secrets:null;const {secrets,...rest}=merged;return discoveries?{...rest,discoveries:discoveries.map((x,i)=>normalizeDiscoveryFor(merged,x,i))}:rest};
-const chapterNodes=()=>{const d=chapterData();return [{type:"opening",id:"opening",name:"オープニング",brief:d.opening?.brief||d.intro||"依頼と今回の目的を提示する。",goal:d.opening?.goal||"依頼を受け、坑道へ向かう目的を理解する。"},...currentScenes().map((s,index)=>({...s,type:"scene",index,name:s.name||fallbackScenes[index]?.name||`シーン${s.id??index+1}`})),{type:"ending",id:"ending",name:"エンディング",brief:d.ending?.brief||"依頼の結果を締めくくり、章の余韻を残す。",goal:d.ending?.goal||"今回の依頼を報告し、章の成果を確定する。"},{type:"intermission",id:"intermission",name:"インターミッション",brief:d.intermission?.brief||"章と章の間をつなぐ。次の依頼や世界の変化を整理する。",goal:d.intermission?.goal||"次章への持ち越し情報を確定する。"}].map(withSceneOverride)};
+const chapterNodes=()=>{const d=chapterData();return [{type:"opening",id:"opening",name:"イントロ",brief:d.opening?.brief||d.intro||"依頼と今回の目的を提示する。",goal:d.opening?.goal||"依頼を受け、坑道へ向かう目的を理解する。"},...currentScenes().map((s,index)=>({...s,type:"scene",index,name:s.name||fallbackScenes[index]?.name||`シーン${s.id??index+1}`})),{type:"ending",id:"ending",name:"アウトロ",brief:d.ending?.brief||"依頼の結果を締めくくり、章の余韻を残す。",goal:d.ending?.goal||"今回の依頼を報告し、章の成果を確定する。"},{type:"intermission",id:"intermission",name:"インターミッション",brief:d.intermission?.brief||"章と章の間をつなぐ。次の依頼や世界の変化を整理する。",goal:d.intermission?.goal||"次章への持ち越し情報を確定する。"}].map(withSceneOverride)};
 const scene=()=>chapterNodes().find(n=>n.type===selectedNode.type&&n.index===selectedNode.index)||chapterNodes()[0];
 const sceneKey=()=>nodeKey(selectedNode);
 const sceneRef=n=>n.type==="scene"?`scene:${n.id}`:n.type;
@@ -89,7 +89,7 @@ const normalizeDialogueRule=(value,index)=>{const rule=value&&typeof value==="ob
 const normalizeDiscoveryFor=(n,value,index)=>{if(value&&typeof value==="object"){const label=value.label??value.name??value.entity??value.id??`発見項目${index+1}`;return {id:value.id||discoveryKey(label,index,n),label,category:value.category||"object",importance:value.importance||"support",appearances:parseList(value.appearances||value.sources||[]),surface:value.surface??value.summary??"",trigger:value.trigger??value.condition??value.revealCondition??"",fact:value.fact??value.text??"",tags:parseList(value.tags||value.flags||[]),aliases:parseList(value.aliases||[]),dc:Number(value.dc)||0};}const label=String(value??`発見項目${index+1}`);return {id:discoveryKey(label,index,n),label,category:"object",importance:"support",appearances:[],surface:"",trigger:"",fact:"",tags:[],aliases:[],dc:0};};
 const normalizeDiscovery=(value,index)=>normalizeDiscoveryFor(scene(),value,index);
 const defaultCastProfile=(id,fallback)=>({gm:"ゲームマスター。確定した結果を説明し、プレイヤーを案内する。",gareth:"普通の戦士・用心棒。短く実用的に話す。"}[id]||fallback);
-const castAttribute=(id)=>({gender:(castAttributes[id]?.gender||"unspecified"),firstPerson:String(castAttributes[id]?.firstPerson||""),addressTerm:String(castAttributes[id]?.addressing||castAttributes[id]?.addressTerm||"")});
+const castAttribute=(id)=>{const value=castAttributes[id]||{};const addressTerm=String(value.addressTerm||value.addressing||"");return {gender:value.gender||"unspecified",firstPerson:String(value.firstPerson||""),addressTerm};};
 const castGenderLabel=id=>CAST_GENDERS.find(x=>x[0]===id)?.[1]||"未設定";
 const defaultCastFlags=(id,role)=>role==="GM"||id==="gareth"?{chat:true,propose:true,act:false,mutate:false}:{chat:false,propose:false,act:false,mutate:false};
 const castName=(id,fallback)=>castNames[id]||fallback;
@@ -103,12 +103,29 @@ document.addEventListener("click",event=>{const button=event.target.closest?.("#
 function currentSceneCastChips(){const s=scene();const members=[{id:"gareth",name:castName("gareth","ガレス")},...Array.from({length:extraCompanions},(_,i)=>{const id=`member_${i+2}`;return {id,name:castName(id,`メンバー${i+2}`)}})];const npcs=(s.npcs||[]).map(id=>({id,name:castName(id,id.toUpperCase())}));return [...members,...npcs]}
 function workspaceDraft(){return {campaignName,campaignImage,campaignWorld,campaignTerms,freshCampaign,customChapterScenes,chapterNames,chapterOrder,activeChapter,selectedNode,extraCompanions,npcCount,monsters,items,castImages,castNames,castProfiles,castFlags,castAttributes,sceneBackgrounds,sceneOverrides,discoveryFoldState,rightPanelEnabled,assistantMode,collapsedCampaign,collapsedChapters}}
 function applyWorkspaceDraft(data){campaignName=typeof data.campaignName==="string"?data.campaignName:campaignName;campaignImage=typeof data.campaignImage==="string"?data.campaignImage:"";campaignWorld=typeof data.campaignWorld==="string"?data.campaignWorld:campaignWorld;campaignTerms=typeof data.campaignTerms==="string"?data.campaignTerms:campaignTerms;freshCampaign=Boolean(data.freshCampaign);customChapterScenes=data.customChapterScenes&&typeof data.customChapterScenes==="object"?data.customChapterScenes:{ch1:[],ch2:[]};chapterNames=data.chapterNames&&typeof data.chapterNames==="object"?data.chapterNames:{ch1:"",ch2:""};chapterOrder=Array.isArray(data.chapterOrder)&&data.chapterOrder.length?data.chapterOrder:(freshCampaign?["ch1"]:["ch1","ch2"]);activeChapter=data.activeChapter||activeChapter;selectedNode=data.selectedNode||selectedNode;extraCompanions=Number(data.extraCompanions||0);npcCount=Number(data.npcCount||1);monsters=Array.isArray(data.monsters)?data.monsters:[];items=Array.isArray(data.items)?data.items:[];castImages=data.castImages||{};castNames=data.castNames||{};castProfiles=data.castProfiles||{};castFlags=data.castFlags||{};castAttributes=data.castAttributes&&typeof data.castAttributes==="object"?data.castAttributes:{};sceneBackgrounds=data.sceneBackgrounds||{};sceneOverrides=data.sceneOverrides||{};discoveryFoldState=data.discoveryFoldState||{};rightPanelEnabled=Boolean(data.rightPanelEnabled);collapsedCampaign=Boolean(data.collapsedCampaign);collapsedChapters=data.collapsedChapters||collapsedChapters}
-function saveWorkspaceDraft(silent=false){try{const draftData=workspaceDraft();let serialized=JSON.stringify(draftData);let mediaOmitted=false;if(serialized.length>4500000){draftData.campaignImage="";draftData.castImages={};draftData.sceneBackgrounds={};draftData.mediaOmitted=true;serialized=JSON.stringify(draftData);mediaOmitted=true}try{localStorage.setItem(DRAFT_KEY,serialized)}catch(storageError){draftData.campaignImage="";draftData.castImages={};draftData.sceneBackgrounds={};draftData.mediaOmitted=true;localStorage.setItem(DRAFT_KEY,JSON.stringify(draftData));mediaOmitted=true}if(!silent)setStatus(mediaOmitted?"下書きを保存しました（容量対策のため画像は除外）":"下書きをブラウザに保存しました")}catch(e){setStatus("下書き保存に失敗しました: "+e.message)}}
+function saveWorkspaceDraft(silent=false){try{const draftData=workspaceDraft();let mediaOmitted=false;try{localStorage.setItem(DRAFT_KEY,JSON.stringify(draftData))}catch(storageError){const refOnly=value=>{const text=String(value||"");return text.startsWith("data:")?"":value};const compact={...draftData,campaignImage:refOnly(draftData.campaignImage),castImages:Object.fromEntries(Object.entries(draftData.castImages||{}).map(([k,v])=>[k,refOnly(v)])),sceneBackgrounds:Object.fromEntries(Object.entries(draftData.sceneBackgrounds||{}).map(([k,v])=>[k,refOnly(v)])),mediaOmitted:true};localStorage.setItem(DRAFT_KEY,JSON.stringify(compact));mediaOmitted=true}if(!silent)setStatus(mediaOmitted?"下書きを保存しました（画像データが大きい場合は、サーバー上の画像参照を使用してください）":"下書きをブラウザに保存しました")}catch(e){setStatus("下書き保存に失敗しました: "+e.message)}}
 function loadWorkspaceDraft(){try{const raw=localStorage.getItem(DRAFT_KEY);if(!raw)return;applyWorkspaceDraft(JSON.parse(raw))}catch(e){setStatus("下書き復元に失敗しました: "+e.message)}}
 const applyWorkspaceDraftBase=applyWorkspaceDraft;applyWorkspaceDraft=data=>{applyWorkspaceDraftBase(data);assistantMode=data.assistantMode==="ai"?"ai":"prompt"};
 function sanitizeFilename(name){const ascii=String(name||"").normalize("NFKD").replace(/[^\x20-\x7E]/g,"").replace(/[^a-zA-Z0-9_-]+/g,"_").replace(/^_+|_+$/g,"").toLowerCase();return ascii||"tas_campaign_data"}
 function saveCampaignFile(){try{const suggested=`${sanitizeFilename(campaignName)}.json`;const entered=prompt("保存ファイル名を入力してください（英数字・-_ 推奨）",suggested);if(entered===null){setStatus("保存をキャンセルしました");return}const filename=`${sanitizeFilename(entered.replace(/\.json$/i,""))}.json`;const payload={version:1,savedAt:new Date().toISOString(),data:workspaceDraft()};const blob=new Blob([JSON.stringify(payload,null,2)],{type:"application/json"});const url=URL.createObjectURL(blob);const link=document.createElement("a");link.href=url;link.download=filename;link.click();URL.revokeObjectURL(url);saveWorkspaceDraft();setStatus(`キャンペーンデータを保存しました: ${filename}`)}catch(e){setStatus("保存に失敗しました: "+e.message)}}
-function loadCampaignFile(file){if(!file)return;const reader=new FileReader();reader.onload=()=>{try{const parsed=JSON.parse(reader.result);applyWorkspaceDraft(parsed.data||parsed);saveWorkspaceDraft();renderScenes();renderAll();setStatus("キャンペーンデータを読み込みました")}catch(e){setStatus("読込に失敗しました: "+e.message)}};reader.readAsText(file)}
+function importedAssetRef(value){const raw=String(value||"").trim();if(!raw||raw.startsWith("data:")||raw.startsWith("http")||raw.startsWith("/"))return raw;return `/images/${raw.split(/[\\/]/).pop()}`}
+function gamePayloadToWorkspaceDraft(raw){
+  const payload=raw&&typeof raw==="object"?(raw.data&&typeof raw.data==="object"?raw.data:raw):{};
+  const campaign=payload.campaign&&typeof payload.campaign==="object"?payload.campaign:{};
+  const chapter=payload.chapter&&typeof payload.chapter==="object"?payload.chapter:(Array.isArray(payload.chapters)?payload.chapters[0]:payload);
+  if(!campaign.meta&&!campaign.style&&!Array.isArray(chapter.scenes))return null;
+  const scenes=Array.isArray(chapter.scenes)?chapter.scenes:[];
+  const companions=Array.isArray(campaign.companions)?campaign.companions:[];
+  const castNames={};const castProfiles={};const castImages={};const castAttributes={};
+  companions.forEach(c=>{if(!c||!c.id)return;castNames[c.id]=c.name||c.id;castProfiles[c.id]=c.persona||c.profile||"";if(c.sprite||c.image)castImages[c.id]=importedAssetRef(c.sprite||c.image);if(c.gender||c.firstPerson||c.addressTerm)castAttributes[c.id]={gender:c.gender||"unspecified",firstPerson:c.firstPerson||"",addressTerm:c.addressTerm||""}});
+  const monsters=[];const seenMonsters=new Set();scenes.forEach(s=>{const e=s&&s.enemy;if(e&&e.name&&!seenMonsters.has(e.name)){seenMonsters.add(e.name);const image=importedAssetRef(e.sprite||e.img);const monster={...e};delete monster.img;delete monster.sprite;if(image)monster.image=image;monsters.push(monster)}});
+  const items=Array.isArray(campaign.items)?campaign.items.map(item=>({...item,name:item.name||item.ja||item.id||"",image:importedAssetRef(item.image||item.img)})).filter(item=>item.name):[];
+  const sceneBackgrounds={};scenes.forEach((s,i)=>{if(s&&s.img)sceneBackgrounds[`ch1:scene:${i}`]=importedAssetRef(s.img)});
+  const sceneOverrides={"ch1:opening:opening":{brief:typeof chapter.intro==="string"?chapter.intro:(chapter.intro?.brief||""),goal:chapter.intro?.goal||""}};
+  scenes.forEach((s,i)=>{const key=`ch1:scene:${i}`;const image=sceneBackgrounds[key];const sky=importedAssetRef(s?.parallax?.sky);if(image||sky)sceneOverrides[key]={...(image?{img:image}:{}),...(sky?{parallaxSky:sky}:{})};});
+  return {campaignName:campaign.meta?.title||campaign.title||payload.title||"",campaignImage:importedAssetRef(campaign.image||campaign.img),campaignWorld:campaign.style?.world||campaign.world||"",campaignTerms:campaign.style?.terms||campaign.terms||"",freshCampaign:true,customChapterScenes:{ch1:scenes},chapterNames:{ch1:chapter.title||"チャプター1"},chapterOrder:["ch1"],activeChapter:"ch1",selectedNode:{type:"opening"},extraCompanions:Math.max(0,companions.filter(c=>c.id&&c.id!=="gareth").length),npcCount:Math.max(1,Array.isArray(chapter.scenes?.[0]?.npcs)?chapter.scenes[0].npcs.length:1),monsters,items,castImages,castNames,castProfiles,castAttributes,sceneBackgrounds,sceneOverrides,rightPanelEnabled:false,collapsedCampaign:false,collapsedChapters:{ch1:false},campaignId:payload.campaignId||campaign.meta?.id||"campaign",chapterIds:{ch1:payload.chapterId||"chapter_01"}};
+}
+function loadCampaignFile(file){if(!file)return;const reader=new FileReader();reader.onload=()=>{try{const parsed=JSON.parse(reader.result);const source=parsed.data||parsed;const draft=source.campaign||source.chapter||Array.isArray(source.chapters)||Array.isArray(source.scenes)?gamePayloadToWorkspaceDraft(parsed):null;applyWorkspaceDraft(draft||source);saveWorkspaceDraft();renderScenes();renderAll();setStatus(draft?"ゲーム出力JSONをTASへ読み込みました":"キャンペーンデータを読み込みました")}catch(e){setStatus("読込に失敗しました: "+e.message)}};reader.readAsText(file)}
 function currentValidationMessages(){const s=scene();if(activeTab==="world")return [campaignName?"キャンペーン名があります":"キャンペーン名が未設定",campaignWorld?"世界・ジャンルがあります":"世界・ジャンルが未設定"];if(activeTab==="cast")return [npcList().length?`NPC ${npcList().length}件を確認できます`:"NPCは未登録です",castName("gm","GM")?"GM設定を確認できます":"GM設定を確認してください"];if(activeTab==="rules")return ["共通ルールを確認できます"];if(activeTab==="structure")return [s.name?"シーン名があります":"シーン名が未設定",s.brief?"開始時の説明があります":"開始時の説明が未設定",(Array.isArray(s.exits)&&s.exits.some(x=>x.to!==""))||(Array.isArray(s.transitions)&&s.transitions.some(t=>t.target))?"シーンの出口が設定されています":"シーンの出口が未設定です"];if(activeTab==="state")return [Array.isArray(s.discoveries)&&s.discoveries.length?`シーン要素 ${s.discoveries.length}件を登録済み`:"シーン要素が未登録です"];if(activeTab==="expression")return [sceneOverrides[sceneKey()]?.dialogueRules?.length?`発話ルール ${sceneOverrides[sceneKey()].dialogueRules.length}件を登録済み`:"条件付き発話ルールは未登録です"];if(activeTab==="playtest")return [s.name?"プレイ対象のシーン名があります":"プレイ対象のシーン名が未設定",s.brief?"開始時の説明があります":"開始時の説明が未設定"];return [s.name?"名称があります":"名称が未設定"]}
 /* 設計デバッグ: 参照切れ(タイポで発火しない事故)と未参照要素を検出する */
 function sceneConditionTokens(condition){return String(condition||"").split(/\s+(?:AND|OR)\s+/i).map(v=>v.trim().replace(/^(flag|discovery|item|npc|scene|battle):/i,"")).filter(Boolean)}
@@ -134,7 +151,7 @@ function renderWorld(){const image=campaignImage?`<img src="${campaignImage}">`:
 function renderStructure(){const s=scene();const key=sceneKey();const label=s.type==="opening"?"オープニング":s.type==="intermission"?"インターミッション":s.type==="ending"?"エンディング":`シーン${s.id}`;const bg=sceneBackgrounds[key]?`<img src="${sceneBackgrounds[key]}">`:"背景画像なし";const selectedNpcs=new Set(s.npcs||[]);const npcChecks=npcList().map(n=>`<label class="check-row"><input type="checkbox" class="scene-npc" value="${n.id}" ${selectedNpcs.has(n.id)?"checked":""}>${escapeHtml(n.name)}</label>`).join("")||"<p class=\"hint\">キャスト／エージェントでNPCを登録すると、ここに表示されます。</p>";const transitions=(Array.isArray(s.transitions)&&s.transitions.length?s.transitions:[{conditionType:"flag",conditionValue:"",target:""}]).map(normalizeTransition);return `<h2>${label}の設定</h2><p class="hint">このシーンの背景、開始時の説明、登場NPC、次のシーンへの進み方を設定します。</p><div class="field"><label>背景画像</label><div class="scene-bg">${bg}</div><input type="file" accept="image/*" id="sceneBgInput"></div><div class="field"><label>名称</label><input id="sceneName" value="${escapeHtml(s.name)}"></div><div class="field"><label>開始時の説明</label><textarea id="sceneBrief">${escapeHtml(s.brief)}</textarea></div><div class="field"><label>登場NPC</label><p class="hint">キャスト／エージェントで登録したNPCを表示します。登場する場合だけチェックします。GMとメンバーは全シーン共通なので、ここでは指定しません。</p><div class="check-list">${npcChecks}</div></div><div class="field"><label>分岐／接続先</label><p class="hint">条件を選び、条件値と接続先を指定します。条件は6種類に統一します。</p><div class="transition-list">${transitions.map((t,i)=>`<div class="transition-row"><div class="field"><label>条件種別</label><select class="transition-type" data-transition-index="${i}">${TRANSITION_TYPES.map(([id,name])=>`<option value="${id}" ${t.conditionType===id?"selected":""}>${name}</option>`).join("")}</select></div><div class="field"><label>条件値</label><input class="transition-value" data-transition-index="${i}" value="${escapeHtml(t.conditionValue)}" placeholder="例：rail_info / 古い鍵 / rust_eater=defeated"></div><div class="field"><label>移動先</label><select class="transition-target" data-transition-index="${i}"><option value="">選択してください</option>${sceneTargets().map(n=>`<option value="${escapeHtml(sceneRef(n))}" ${t.target===sceneRef(n)?"selected":""}>${escapeHtml(sceneRefLabel(n))}</option>`).join("")}</select></div><button class="sub" data-remove-transition="${i}">削除</button></div>`).join("")}</div><div class="bottom"><button class="sub" id="btnAddTransition">＋ 分岐を追加</button></div></div>`}
 function renderState(){const s=scene();const key=sceneKey();const foldState=discoveryFoldState[key]||{};const discoveries=(s.discoveries||[]).map(normalizeDiscovery);const summary={major:discoveries.filter(x=>x.importance==="major").length,support:discoveries.filter(x=>x.importance==="support").length,flavor:discoveries.filter(x=>x.importance==="flavor").length};return `<h2>シーン要素</h2><p class="hint">シーン内で開示しうる要素台帳です。プレイヤーが見聞きする情報と、ゲーム本体が保持する確定事実を分けて管理します。</p><div class="card"><div class="state-toolbar"><div class="meta-row"><h3>シーン要素</h3><div class="discovery-summary"><span class="chip meta-chip">${discoveries.length}件</span><span class="chip summary-chip">主線 ${summary.major}</span><span class="chip summary-chip">補助 ${summary.support}</span><span class="chip summary-chip">演出 ${summary.flavor}</span></div></div><div class="toolbar-actions"><button class="sub" id="btnAddDiscovery">＋ 要素を追加</button><button class="sub" id="btnSeedDiscoveries">テンプレートを追加</button></div></div><p class="hint">名詞、画像内要素、音や匂い、伏線までここに登録します。発見された要素は、<b>要素名をそのまま</b>シーン遷移の条件や発話ルールの発火条件に書けます。</p>${discoveries.length?discoveries.map((x,i)=>{const collapsed=Boolean(foldState[x.id]);const ordinal=discoveryOrdinalLabel(x.id,i);return `<div class="state-discovery ${collapsed?"collapsed":""}" data-discovery-index="${i}"><div class="card-head"><h3>${escapeHtml(`${ordinal} ${x.label||`発見項目${i+1}`}`)}</h3><div><button class="sub collapse-btn" data-toggle-discovery="${i}">${collapsed?"開く":"閉じる"}</button><button class="sub" data-duplicate-discovery="${i}">複製</button><button class="sub delete-btn" data-remove-discovery="${i}">削除</button></div></div><div class="discovery-summary"><span class="chip summary-chip">${escapeHtml(categoryLabel(x.category))}</span><span class="chip summary-chip">${escapeHtml(importanceLabel(x.importance))}</span><span class="chip summary-chip">${escapeHtml(x.appearances.length?x.appearances.join(" / "):"登場箇所未設定")}</span></div><div class="state-discovery-body"><div class="state-grid"><div class="field"><label>要素名</label><input class="discovery-label" data-discovery-index="${i}" value="${escapeHtml(x.label)}" placeholder="封鎖の木柵"></div><div class="field"><label>種別</label><select class="discovery-category" data-discovery-index="${i}">${DISCOVERY_CATEGORIES.map(([id,label])=>`<option value="${id}" ${x.category===id?"selected":""}>${label}</option>`).join("")}</select></div><div class="field"><label>重要度</label><select class="discovery-importance" data-discovery-index="${i}">${DISCOVERY_IMPORTANCE.map(([id,label])=>`<option value="${id}" ${x.importance===id?"selected":""}>${label}</option>`).join("")}</select></div><div class="field"><label>登場箇所</label><input class="discovery-appearances" data-discovery-index="${i}" value="${escapeHtml(joinList(x.appearances))}" placeholder="開始説明, 画像, 会話"></div><div class="field span-2"><label>表面描写</label><textarea class="discovery-surface" data-discovery-index="${i}" placeholder="プレイヤーが見聞きする情報">${escapeHtml(x.surface)}</textarea></div><div class="field span-2"><label>開示方法</label><textarea class="discovery-trigger" data-discovery-index="${i}" placeholder="木柵を調べる / 画像を拡大して見る">${escapeHtml(x.trigger)}</textarea></div><div class="field"><label>難易度（調べたときのd20判定）</label><select class="discovery-dc" data-discovery-index="${i}">${DC_LEVELS.map(([v,l])=>`<option value="${v}" ${x.dc===v?"selected":""}>${l}</option>`).join("")}</select></div></div><div class="section-divider"><h4>ゲーム連動（通常は既定のままでよい）</h4><p>条件には要素名がそのまま使えます。ここは内部キーや追加フラグが必要な場合だけ設定します。</p></div><div class="state-grid"><div class="field"><label>項目キー（英数字・_）</label><input class="discovery-key" data-discovery-index="${i}" value="${escapeHtml(x.id)}" placeholder="ch1_s2_barrier"></div><div class="field"><label>追加フラグ（カンマ区切り。任意）</label><input class="discovery-flags" data-discovery-index="${i}" value="${escapeHtml(joinList(x.tags))}" placeholder="封鎖の木柵調査済"></div><div class="field span-2"><label>別名（カンマ区切り。プレイヤー入力の照合語。1文字も可）</label><input class="discovery-aliases" data-discovery-index="${i}" value="${escapeHtml(joinList(x.aliases))}" placeholder="柵, 木柵, バリケード"></div><div class="field span-2"><label>確定事実</label><textarea class="discovery-fact" data-discovery-index="${i}" placeholder="第三坑道への通路は内側から封鎖されている">${escapeHtml(x.fact)}</textarea></div></div></div></div>`}).join(""):`<div class="empty-card"><p class="hint">まだシーン要素がありません。まずはテンプレートを追加し、必要な要素だけ残す形が速いです。</p></div>`}</div>`}
 function renderExpression(){const key=sceneKey();const override=sceneOverrides[key]||{};const gmSceneNotes=override.gmSceneNotes??"このシーンでGMが見落としやすい条件、伏せるべき情報、演出上の注意点を記録する。";const rules=(override.dialogueRules||[]).map(normalizeDialogueRule);return `<h2>表現・会話</h2><p class="hint">ここでは、条件付きの発話と会話に紐づくイベント発火、GM向けの補足を管理します。</p><div class="field"><label>GM補足メモ</label><textarea id="gmSceneNotes" placeholder="例：木柵の修繕痕は s2a 調査後まで断定しない。水滴音は緊張感を出すため繰り返し使う。">${escapeHtml(gmSceneNotes)}</textarea></div><div class="card"><div class="state-toolbar"><div class="meta-row"><h3>条件付き発話ルール</h3><div class="discovery-summary"><span class="chip meta-chip">${rules.length}件</span></div></div><div class="toolbar-actions"><button class="sub" id="btnAddDialogueRule">＋ 発話ルールを追加</button></div></div><p class="hint">要素が発見されたら誰が何を言い、必要なら何を発火するかを定義します。条件にはシーン要素の要素名をそのまま書けます。</p><datalist id="discoveryNameList">${(scene().discoveries||[]).map((v,j)=>normalizeDiscovery(v,j)).map(x=>`<option value="${escapeHtml(x.label)}">`).join("")}</datalist>${rules.length?rules.map((rule,i)=>{const meta=dialogueEventMeta(rule.eventType);const options=eventTargetOptions(rule.eventType);const selectedLabel=options.find(option=>option.value===rule.targetId)?.label||rule.targetLabel||"";return `<div class="dialogue-rule" data-dialogue-index="${i}"><div class="card-head"><h3>発話ルール ${i+1}</h3><div><button class="sub" data-duplicate-dialogue="${i}">複製</button><button class="sub delete-btn" data-remove-dialogue="${i}">削除</button></div></div><div class="rule-tags"><span class="chip summary-chip">${escapeHtml(speakerLabel(rule.speaker))}</span><span class="chip summary-chip">${escapeHtml(rule.condition||"常時")}</span><span class="chip summary-chip">${escapeHtml(eventLabel(rule.eventType))}</span></div><div class="dialogue-grid"><div class="field"><label>話者</label><select class="dialogue-speaker" data-dialogue-index="${i}">${DIALOGUE_SPEAKERS.map(([id,label])=>`<option value="${id}" ${rule.speaker===id?"selected":""}>${label}</option>`).join("")}</select></div><div class="field"><label>優先度</label><select class="dialogue-priority" data-dialogue-index="${i}">${DIALOGUE_PRIORITIES.map(([id,label])=>`<option value="${id}" ${rule.priority===id?"selected":""}>${label}</option>`).join("")}</select></div><div class="field span-2"><label>発火条件（要素名をそのまま。AND / OR 可。常時なら空欄）</label><input class="dialogue-condition" data-dialogue-index="${i}" list="discoveryNameList" value="${escapeHtml(rule.condition)}" placeholder="例：封鎖の木柵"></div><div class="field span-2"><label>発言内容</label><textarea class="dialogue-line" data-dialogue-index="${i}" placeholder="調査結果に応じて表示する発言">${escapeHtml(rule.line)}</textarea></div><div class="field"><label>発火イベント</label><select class="dialogue-event-type" data-dialogue-index="${i}">${DIALOGUE_EVENTS.map(([id,label])=>`<option value="${id}" ${rule.eventType===id?"selected":""}>${label}</option>`).join("")}</select></div>${meta.mode==="none"?`<div class="field"><label>${meta.label}</label><div class="readonly-field">対象なし</div></div>`:options.length?`<div class="field"><label>${meta.label}</label><select class="dialogue-target-id" data-dialogue-index="${i}"><option value="">選択してください</option>${options.map(option=>`<option value="${escapeHtml(option.value)}" ${rule.targetId===option.value?"selected":""}>${escapeHtml(option.label)}</option>`).join("")}</select></div>`:`<div class="field"><label>${meta.label}</label><input class="dialogue-target-id" data-dialogue-index="${i}" value="${escapeHtml(rule.targetId)}" placeholder="${escapeHtml(meta.placeholder)}"></div>`}<div class="field span-2"><label>対象表示名 / 補足</label><input class="dialogue-target-label" data-dialogue-index="${i}" value="${escapeHtml(selectedLabel)}" placeholder="必要ならGM向けの表示名を補足"></div><div class="field span-2"><label>イベント補足</label><input class="dialogue-event-notes" data-dialogue-index="${i}" value="${escapeHtml(rule.eventNotes)}" placeholder="数量、演出、例外条件などを補足"></div><div class="field"><label><input type="checkbox" class="dialogue-once" data-dialogue-index="${i}" ${rule.once?"checked":""}> 一度だけ発火</label></div><div class="field"><label><input type="checkbox" class="dialogue-hidden" data-dialogue-index="${i}" ${rule.hiddenUntilTriggered?"checked":""}> 条件を満たすまで候補表示しない</label></div></div></div>`}).join(""):`<div class="empty-card"><p class="hint">まだ発話ルールがありません。必要な会話だけ追加し、状態変化はイベント種別で明示します。</p></div>`}</div>`}
-function castCard(id,name,role,profile,flags,meta="",options={}){const currentName=castName(id,name);const currentProfile=castProfile(id,profile);const currentFlags=castFlagSet(id,role);const attrs=castAttribute(id);const image=castImages[id]?`<img src="${castImages[id]}">`:"画像なし";const deleteButton=options.deletable?`<button class="sub delete-btn" data-delete-cast="${id}" data-delete-kind="${options.kind}">削除</button>`:options.fixed?`<button class="sub delete-btn" disabled>固定</button>`:"";return `<div class="card" data-cast-card="${id}"><div class="card-head"><h3><span data-cast-title="${id}">${escapeHtml(currentName)}</span>${meta?`<span class="chip meta-chip">${meta}</span>`:""}</h3>${deleteButton}</div><div class="field"><label>名前</label><input class="cast-name-input" data-cast-name-id="${id}" data-cast-default="${escapeHtml(name)}" value="${escapeHtml(currentName)}"></div><div class="cast-media"><div class="cast-thumb">${image}</div><div class="field cast-file"><label>画像</label><input type="file" accept="image/*" class="cast-image-input" data-cast-id="${id}"></div></div><div class="semantic-grid cast-attributes"><div class="field"><label>性別属性</label><select class="cast-gender-input" data-cast-attribute-id="${id}">${CAST_GENDERS.map(([value,label])=>`<option value="${value}" ${attrs.gender===value?"selected":""}>${label}</option>`).join("")}</select><p class="hint">発話の自動決定には使わず、設定上の属性として保持します。</p></div><div class="field"><label>一人称</label><input class="cast-first-person-input" data-cast-attribute-id="${id}" value="${escapeHtml(attrs.firstPerson)}" placeholder="例：俺、私、ぼく"></div><div class="field"><label>呼称・二人称</label><input class="cast-addressing-input" data-cast-attribute-id="${id}" value="${escapeHtml(attrs.addressing)}" placeholder="例：お前、あなた、君"></div><div class="field span-2"><label>発話ルール・性別語彙の指定</label><textarea class="cast-speech-rules-input" data-cast-attribute-id="${id}" placeholder="例：男性語。短く言い切る。過度な女性語・現代語彙は使わない。">${escapeHtml(attrs.speechRules)}</textarea></div></div><div class="field"><label>役割・口調</label><textarea class="cast-profile-input" data-cast-profile-id="${id}" data-cast-profile-default="${escapeHtml(profile)}">${escapeHtml(currentProfile)}</textarea></div><div class="field"><label>権限</label><div class="switch-list">${[["chat","自由会話","想定外の質問に返答する",currentFlags.chat],["propose","提案","プレイヤーに行動を提案する",currentFlags.propose],["act","採用前の行動","採用される前に行動する",currentFlags.act],["mutate","状態変更","ゲーム状態を直接変更する",currentFlags.mutate]].map(([key,label,help,on])=>`<div class="switch-row"><span>${label}<small>　${help}</small></span><label class="switch"><input type="checkbox" class="cast-flag-input" data-cast-flag-id="${id}" data-cast-flag-key="${key}" ${on?"checked":""}><span class="slider"></span></label></div>`).join("")}</div></div></div>`}
+function castCard(id,name,role,profile,flags,meta="",options={}){const currentName=castName(id,name);const currentProfile=castProfile(id,profile);const currentFlags=castFlagSet(id,role);const attrs=castAttribute(id);const image=castImages[id]?`<img src="${castImages[id]}">`:"画像なし";const deleteButton=options.deletable?`<button class="sub delete-btn" data-delete-cast="${id}" data-delete-kind="${options.kind}">削除</button>`:options.fixed?`<button class="sub delete-btn" disabled>固定</button>`:"";return `<div class="card" data-cast-card="${id}"><div class="card-head"><h3><span data-cast-title="${id}">${escapeHtml(currentName)}</span>${meta?`<span class="chip meta-chip">${meta}</span>`:""}</h3>${deleteButton}</div><div class="field"><label>名前</label><input class="cast-name-input" data-cast-name-id="${id}" data-cast-default="${escapeHtml(name)}" value="${escapeHtml(currentName)}"></div><div class="cast-media"><div class="cast-thumb">${image}</div><div class="field cast-file"><label>画像</label><input type="file" accept="image/*" class="cast-image-input" data-cast-id="${id}"></div></div><div class="semantic-grid cast-attributes"><div class="field"><label>性別属性</label><select class="cast-gender-input" data-cast-attribute-id="${id}">${CAST_GENDERS.map(([value,label])=>`<option value="${value}" ${attrs.gender===value?"selected":""}>${label}</option>`).join("")}</select><p class="hint">発話の自動決定には使わず、設定上の属性として保持します。</p></div><div class="field"><label>一人称</label><input class="cast-first-person-input" data-cast-attribute-id="${id}" value="${escapeHtml(attrs.firstPerson)}" placeholder="例：俺、私、ぼく"></div><div class="field"><label>呼称・二人称</label><input class="cast-addressing-input" data-cast-attribute-id="${id}" value="${escapeHtml(attrs.addressTerm)}" placeholder="例：お前、あなた、君"></div><div class="field span-2"><label>発話ルール・性別語彙の指定</label><textarea class="cast-speech-rules-input" data-cast-attribute-id="${id}" placeholder="例：男性語。短く言い切る。過度な女性語・現代語彙は使わない。">${escapeHtml(attrs.speechRules)}</textarea></div></div><div class="field"><label>役割・口調</label><textarea class="cast-profile-input" data-cast-profile-id="${id}" data-cast-profile-default="${escapeHtml(profile)}">${escapeHtml(currentProfile)}</textarea></div><div class="field"><label>権限</label><div class="switch-list">${[["chat","自由会話","想定外の質問に返答する",currentFlags.chat],["propose","提案","プレイヤーに行動を提案する",currentFlags.propose],["act","採用前の行動","採用される前に行動する",currentFlags.act],["mutate","状態変更","ゲーム状態を直接変更する",currentFlags.mutate]].map(([key,label,help,on])=>`<div class="switch-row"><span>${label}<small>　${help}</small></span><label class="switch"><input type="checkbox" class="cast-flag-input" data-cast-flag-id="${id}" data-cast-flag-key="${key}" ${on?"checked":""}><span class="slider"></span></label></div>`).join("")}</div></div></div>`}
 function renderCast(){const memberCards=[castCard("gareth","ガレス","メンバー","普通の戦士・用心棒。短く実用的に話す。",{chat:true,propose:true,act:false,mutate:false},"メンバー 1/3",{fixed:true})];for(let i=0;i<extraCompanions;i++){memberCards.push(castCard(`member_${i+2}`,`メンバー${i+2}`,"メンバー","未設定。必要ならメンバーの役割・口調を定義する。",{chat:false,propose:false,act:false,mutate:false},`メンバー ${i+2}/3`,{deletable:true,kind:"member"}))}const npcCards=Array.from({length:npcCount},(_,i)=>castCard(`npc_${i+1}`,`NPC${i+1}`,"NPC","シーンごとに設定するNPC。",{chat:false,propose:false,act:false,mutate:false},`NPC ${i+1}/10`,{deletable:true,kind:"npc"})).join("");return `<h2>キャラクター/メンバー</h2><p class="hint">GMは1名固定です。メンバーは固定1名＋追加2名まで、NPCは最大10名まで設定できます。</p>${castCard("gm","GM","GM","ゲームマスター。確定した結果を説明し、プレイヤーを案内する。",{chat:true,propose:true,act:false,mutate:false},"GM固定",{fixed:true})}${memberCards.join("")}<div class="bottom"><button class="sub" id="btnAddCompanion" ${extraCompanions>=2?"disabled":""}>＋ メンバーを追加（${1+extraCompanions}/3）</button></div>${npcCards}<div class="bottom"><button class="sub" id="btnAddNpc" ${npcCount>=10?"disabled":""}>＋ NPCを追加（${npcCount}/10）</button></div>`}
 const DC_LEVELS=[[0,"自動（判定なし）"],[8,"易しい（成功率65%）"],[12,"普通（45%）"],[15,"難しい（30%）"],[18,"最難（15%）"]];
 function renderMonsters(){return `<h2>モンスター</h2><p class="hint">キャンペーン共通のモンスター台帳です。シーン設定タブで「このシーンの敵」として選ぶと、出力時に敵データ（名前・HP）としてゲームへ渡ります。</p>${monsters.map((m,i)=>`<div class="card"><div class="card-head"><h3 data-monster-title="${i}">${escapeHtml(m.name||`モンスター${i+1}`)}</h3><button class="sub delete-btn" data-remove-monster="${i}">削除</button></div><div class="cast-media"><div class="cast-thumb">${m.image?`<img src="${m.image}">`:"画像なし"}</div><div class="field cast-file"><label>画像</label><input type="file" accept="image/*" class="monster-image" data-monster-index="${i}"></div></div><div class="state-grid"><div class="field"><label>名前</label><input class="monster-name" data-monster-index="${i}" value="${escapeHtml(m.name||"")}" placeholder="錆喰い"></div><div class="field"><label>HP</label><input type="number" min="1" class="monster-hp" data-monster-index="${i}" value="${Number(m.hp)||10}"></div><div class="field span-2"><label>行動・演出の指針</label><textarea class="monster-notes" data-monster-index="${i}" placeholder="鉄を喰う獣。音に敏感。倒すより追い払う想定。">${escapeHtml(m.notes||"")}</textarea></div></div></div>`).join("")||`<div class="empty-card"><p class="hint">まだモンスターがいません。「＋ モンスターを追加」から登録します。</p></div>`}<div class="bottom"><button class="sub" id="btnAddMonster">＋ モンスターを追加</button></div>`}
@@ -152,12 +169,24 @@ function mockCampaignPayload(){const baseCampaign=JSON.parse(context?.dataFiles?
 const entityNames=new Set((campaign.entities||[]).map(e=>e.ja));
 const extraEntities=[...monsters.map(m=>m.name),...items.map(x=>x.name)].filter(n=>n&&!entityNames.has(n)).map(n=>({ja:n,note:"TAS台帳から自動登録"}));
 if(extraEntities.length)campaign.entities=[...(campaign.entities||[]),...extraEntities];const scenes=chapterNodes().filter(n=>n.type==="scene").map((node,i)=>{const original=baseChapter.scenes?.[i]||{};const override=sceneOverrides[nodeKey(node)]||{};const merged={...original,...node,...override};if(Array.isArray(node.discoveries)){merged.secrets=node.discoveries.map((raw,j)=>{const d=normalizeDiscoveryFor(node,raw,j);const old=(original.secrets||[]).find(o=>o.id===d.id)||{};return {...old,id:d.id||`s${node.id}_${j+1}`,entity:d.label||old.entity||`発見項目${j+1}`,aliases:d.aliases.length?d.aliases:old.aliases||[],dc:d.dc||undefined,surface:d.surface||old.surface||d.trigger||"",text:d.fact||old.text||d.label||old.entity||"",trigger:d.trigger||old.trigger||"",category:d.category||old.category||"object",importance:d.importance||old.importance||"support",appearances:d.appearances||old.appearances||[],tags:d.tags||old.tags||[]}})}
-/* TASの遷移条件をmock2の進行ゲート(completeRequires.secretsAny)へ変換する。
+/* TASの遷移条件をmock2の進行ゲートへ変換する。
    条件トークン(発見済み名・項目キー・要素名・別名)をsecret idへ引き当てる。
-   ponytail: AND条件もsecretsAny(いずれか1つ)へ緩和して出力する。mock2側がsecretsAllに対応したら分けて出す */
+   OR条件はsecretsAny、AND条件はsecretsAllへ出力する。 */
 const secretIdByToken={};(merged.secrets||[]).forEach(s=>{secretIdByToken[s.id]=s.id;if(s.entity&&!secretIdByToken[s.entity])secretIdByToken[s.entity]=s.id;[...(s.tags||[]),...(s.aliases||[])].forEach(t=>{if(t&&!secretIdByToken[t])secretIdByToken[t]=s.id})});
-const secretsAny=[...new Set((merged.transitions||[]).flatMap(t=>String(t.requires??t.conditionValue??"").split(/\s+(?:AND|OR)\s+/i)).map(v=>v.trim().replace(/^(flag|discovery|item|npc|scene|battle):/i,"")).filter(Boolean).map(token=>secretIdByToken[token]).filter(Boolean))];
-if(secretsAny.length)merged.completeRequires={...(merged.completeRequires||{}),secretsAny};
+const transitionConditions=(merged.transitions||[]).map(t=>String(t.requires??t.conditionValue??"").trim()).filter(Boolean);
+const conditionText=transitionConditions.join(" ");
+const conditionTokens=[...new Set(transitionConditions.flatMap(value=>value.split(/\s+(?:AND|OR)\s+/i)).map(v=>v.trim().replace(/^(flag|discovery|item|npc|scene|battle):/i,"")).filter(Boolean).map(token=>secretIdByToken[token]).filter(Boolean))];
+const hasAnd=/\s+AND\s+/i.test(conditionText);
+const hasOr=/\s+OR\s+/i.test(conditionText);
+const completeRequires={...(merged.completeRequires||{})};
+delete completeRequires.secretsAny;
+delete completeRequires.secretsAll;
+if(conditionTokens.length){
+  /* mock2のcompleteRequiresはAny/Allを別キーで表現する。AND/OR混在は
+     現行契約でそのまま表現できないため、条件未達による早期進行を避けてAllにする。 */
+  completeRequires[hasOr&&!hasAnd?"secretsAny":"secretsAll"]=conditionTokens;
+}
+if(conditionTokens.length||Object.keys(merged.completeRequires||{}).some(key=>key!=="secretsAny"&&key!=="secretsAll"))merged.completeRequires=completeRequires;
 /* v0.2: TASの出口設定をmock2のscenes[].exitsへ変換する。未設定の旧transitionsは互換変換する。 */
 const configuredExits=Array.isArray(merged.exits)?merged.exits.map(normalizeExit):(merged.transitions||[]).map(transitionToExit);
 const exitSecretId=(token)=>secretIdByToken[String(token||"").trim().replace(/^(flag|discovery|item|npc|scene|battle):/i,"")];
@@ -259,6 +288,13 @@ renderStructure=()=>{const s=scene();const key=sceneKey();const label=s.type==="
 bindStructure=()=>{const input=$("sceneBgInput");const key=sceneKey();const update=(field,value)=>{sceneOverrides[key]={...(sceneOverrides[key]||{}),[field]:value};saveWorkspaceDraft(true);renderScenes();renderRightPanel();renderValidation()};const collectExits=()=>Array.from(document.querySelectorAll(".exit-row")).map((row,i)=>normalizeExit({id:row.querySelector(`.exit-id[data-exit-index="${i}"]`)?.value.trim()||`exit_${i+1}`,match:row.querySelector(`.exit-match[data-exit-index="${i}"]`)?.value||"",to:(()=>{const v=row.querySelector(`.exit-target[data-exit-index="${i}"]`)?.value||"";return v==="__dead_end__"?null:v})(),requires:{text:row.querySelector(`.exit-requires[data-exit-index="${i}"]`)?.value.trim()||""},blockedText:row.querySelector(`.exit-blocked[data-exit-index="${i}"]`)?.value||"",text:row.querySelector(`.exit-text[data-exit-index="${i}"]`)?.value||""}));const updateExits=()=>update("exits",collectExits());const name=$("sceneName"),brief=$("sceneBrief");if(name)name.oninput=e=>update("name",e.target.value);if(brief)brief.oninput=e=>update("brief",e.target.value);document.querySelectorAll(".scene-npc").forEach(box=>box.onchange=()=>{update("npcs",Array.from(document.querySelectorAll(".scene-npc:checked")).map(x=>x.value));setStatus("登場NPCを更新しました")});const enemySel=$("sceneEnemy");if(enemySel)enemySel.onchange=e=>{update("enemyName",e.target.value);setStatus(e.target.value?`敵を設定しました: ${e.target.value}`:"敵を外しました")};document.querySelectorAll(".exit-id,.exit-match,.exit-target,.exit-requires,.exit-blocked,.exit-text").forEach(el=>{el.oninput=updateExits;el.onchange=updateExits});document.querySelectorAll("[data-remove-exit]").forEach(btn=>btn.onclick=()=>{const idx=Number(btn.dataset.removeExit);update("exits",sceneExits().filter((_,i)=>i!==idx));renderTab()});const addBtn=$("btnAddExit");if(addBtn)addBtn.onclick=()=>{update("exits",[...sceneExits(),normalizeExit({id:`exit_${sceneExits().length+1}`,match:[],to:"",requires:{text:""}})]);renderTab()};if(input)input.onchange=e=>handleImageInput(e.target.files?.[0],url=>{sceneBackgrounds[key]=url},"背景画像を保存しました")};
 </script>
 <script>
+/* シーン全景とは分離してSKY画像だけを入力する。TAS上では重ねて表示しない。 */
+var baseRenderStructureForSky=renderStructure;
+renderStructure=function(){const holder=document.createElement("div");holder.innerHTML=baseRenderStructureForSky();const bgInput=holder.querySelector("#sceneBgInput");if(bgInput){const key=sceneKey();const sky=scene().parallax?.sky||sceneOverrides[key]?.parallaxSky||"";const field=document.createElement("details");field.className="field sky-parallax-field";field.open=Boolean(sky);field.innerHTML=`<summary>SKY画像（パララックス）</summary><p class="hint">ゲーム側で空・遠景レイヤーとして使用します。TAS画面では背景画像と重ねて表示しません。</p><div class="scene-bg">${sky?`<img src="${escapeHtml(importedAssetRef(sky))}">`:"SKY画像なし"}</div><input type="file" accept="image/*" id="sceneSkyInput">`;bgInput.closest(".field")?.after(field)}return holder.innerHTML};
+var baseBindStructureForSky=bindStructure;
+bindStructure=function(){baseBindStructureForSky();const input=$("sceneSkyInput");const key=sceneKey();if(input)input.onchange=e=>handleImageInput(e.target.files?.[0],url=>{sceneOverrides[key]={...(sceneOverrides[key]||{}),parallaxSky:url}},"SKY画像を保存しました")};
+</script>
+<script>
 /* 補助パネルの利用方法を、プロンプト出力とAI実行から切り替える。 */
 renderRightPanel=()=>{const s=scene();let ps=null;try{ps=playtestRuntime}catch(e){}
 const stateChips=a=>a.length?a.map(x=>`<span class="chip summary-chip">${escapeHtml(x)}</span>`).join(""):`なし`;
@@ -270,7 +306,7 @@ renderAll();
 </body>
 <script>
 // ブラウザ標準の prompt に依存せず、キャンペーン名をファイル名として保存する。
-saveCampaignFile=()=>{try{const filename=`${sanitizeFilename(campaignName)}.json`;const payload={version:1,savedAt:new Date().toISOString(),data:workspaceDraft()};const blob=new Blob([JSON.stringify(payload,null,2)],{type:"application/json"});const url=URL.createObjectURL(blob);const link=document.createElement("a");link.href=url;link.download=filename;document.body.appendChild(link);link.click();link.remove();setTimeout(()=>URL.revokeObjectURL(url),0);saveWorkspaceDraft();setStatus(`キャンペーンデータを保存しました: ${filename}`)}catch(error){setStatus(`保存に失敗しました: ${error.message}`)}};
+saveCampaignFile=()=>{try{const filename=`${sanitizeFilename(campaignName)}.json`;const payload={version:1,savedAt:new Date().toISOString(),data:localDraftSnapshot()};const blob=new Blob([JSON.stringify(payload,null,2)],{type:"application/json"});const url=URL.createObjectURL(blob);const link=document.createElement("a");link.href=url;link.download=filename;document.body.appendChild(link);link.click();link.remove();setTimeout(()=>URL.revokeObjectURL(url),0);saveWorkspaceDraft();setStatus(`キャンペーンデータを保存しました（画像本体は含めず、ファイル名のみ保存）: ${filename}`)}catch(error){setStatus(`保存に失敗しました: ${error.message}`)}};
 </script>
 <script>
 /* 補助パネルは親要素でイベントを受け、再描画後も切替を維持する。 */
@@ -452,10 +488,13 @@ mockCampaignPayload=function(){
       const npcImage=runtimeImageName(npcId&&castImages[npcId]);
       const monster=monsters.find(m=>m.name&&m.name===rawScene.enemyName);
       const monsterImage=runtimeImageName(monster?.image);
+      const skyImage=runtimeImageName(sceneOverrides[key]?.parallaxSky||rawScene.parallax?.sky);
       const next={...rawScene};
       if(sceneImage)next.img=sceneImage;
+      if(skyImage)next.parallax={...(next.parallax||{}),sky:skyImage};
+      delete next.parallaxSky;
       if(npcImage)next.npcSprite=npcImage;
-      if(monsterImage)next.enemy={...(next.enemy||{}),img:monsterImage};
+      if(monsterImage){next.enemy={...(next.enemy||{}),sprite:monsterImage};delete next.enemy.img;}
       delete next.enemyName;
       return next;
     })
@@ -739,13 +778,22 @@ function ensureStructureChapters(){
 var baseChapterDataForStructure=chapterData;
 chapterData=()=>{ensureStructureChapters();return structureChapters[activeChapter]||baseChapterDataForStructure()};
 function structureChapterLabel(key,index){return chapterNames[key]||structureChapters?.[key]?.title||`チャプター${index+1}（未命名）`}
-function structureSceneLabel(node,index){return node.type==='scene'?`シーン${node.id??index+1}`:node.type==='opening'?'オープニング':node.type==='ending'?'エンディング':'インターミッション'}
+function structureSceneLabel(node,index){return node.type==='scene'?`シーン${node.id??index+1}`:node.type==='opening'?'オープニング':node.type==='ending'?'アウトロ':'インターミッション'}
 function structureReferenceWarnings(key){
   const removed=structureChapters?.[key]?.scenes||[];const ids=new Set(removed.map(x=>`scene:${x.id}`));const warnings=[];
   Object.entries(sceneOverrides||{}).forEach(([overrideKey,value])=>{if(!overrideKey.startsWith(`${key}:`)&&JSON.stringify(value).match(/scene:\d+/)){for(const id of ids)if(JSON.stringify(value).includes(id))warnings.push(`${id}への参照`)}});
   return [...new Set(warnings)];
 }
-function structureSaveAndRender(message){saveWorkspaceDraft(true);renderScenes();renderAll();if(message)setStatus(message)}
+function structureSaveAndRender(message){
+  // 見本キャンペーンも、構成を変更した時点で編集用データへ移行する。
+  // これを行わないと、削除・並べ替えが一時表示だけになり、左ペインや再読込で元に戻る。
+  if(!freshCampaign){
+    freshCampaign=true;
+    customChapterScenes=Object.fromEntries(chapterOrder.map(key=>[key,deepCopyStructure(structureChapters?.[key]?.scenes||[])]));
+    chapterNames=Object.fromEntries(chapterOrder.map((key,index)=>[key,chapterNames[key]||structureChapters?.[key]?.title||`チャプター${index+1}`]));
+  }
+  saveWorkspaceDraft(true);renderScenes();renderAll();if(message)setStatus(message)
+}
 function addManagedScene(key){
   ensureStructureChapters();const chapter=structureChapters[key];if(!chapter)return;const scenes=chapter.scenes||[];const nextId=scenes.reduce((max,x)=>Math.max(max,Number(x.id)||0),0)+1;scenes.push({id:nextId,name:`シーン${nextId}`,brief:'',goal:'',discoveries:[],exits:[]});chapter.scenes=scenes;activeChapter=key;selectedNode={type:'scene',index:scenes.length-1};activeTab='structure';structureSaveAndRender(`シーン${nextId}を作成しました`)}
 function addManagedChapter(){
@@ -758,7 +806,7 @@ function deleteManagedScene(key,index){ensureStructureChapters();const scenes=st
 function deleteManagedChapter(key){ensureStructureChapters();if(chapterOrder.length<=1){alert('チャプターは1つ以上必要です');return}const label=structureChapterLabel(key,chapterOrder.indexOf(key));const warnings=structureReferenceWarnings(key);const suffix=warnings.length?`\n\n参照が見つかりました：${warnings.join('、')}\n削除後に遷移先を確認してください。`:'';if(!confirm(`${label}を削除しますか？${suffix}`))return;chapterOrder=chapterOrder.filter(x=>x!==key);delete structureChapters[key];delete chapterNames[key];delete collapsedChapters[key];delete CHAPTERS[key];if(activeChapter===key){activeChapter=chapterOrder[Math.max(0,chapterOrder.indexOf(key)-1)]||chapterOrder[0];selectedNode={type:'opening'}}structureSaveAndRender(`${label}を削除しました`)}
 function renderStructureManager(){
   ensureStructureChapters();
-  const cards=chapterOrder.map((key,index)=>{const chapter=structureChapters[key]||{title:'',scenes:[]};const nodes=[{type:'opening',name:'オープニング'},...(chapter.scenes||[]).map((x,i)=>({...x,type:'scene',index:i})),{type:'ending',name:'エンディング'},{type:'intermission',name:'インターミッション'}];const rows=nodes.map((node,i)=>{if(node.type!=='scene')return `<div class="structure-special">${node.type==='opening'?'├─':'└─'} ${structureSceneLabel(node,i)}（固定）</div>`;return `<div class="structure-scene-row"><div><span class="structure-scene-label">├─ ${structureSceneLabel(node,i)}</span><input data-structure-scene-name="${key}" data-structure-scene-index="${node.index}" value="${escapeHtml(node.name||'')}" aria-label="${escapeHtml(node.name||'シーン')}の名称"></div><div class="structure-actions"><button class="sub" data-structure-scene-up="${key}" data-structure-scene-index="${node.index}" ${node.index===0?'disabled':''}>↑</button><button class="sub" data-structure-scene-down="${key}" data-structure-scene-index="${node.index}" ${node.index===(chapter.scenes||[]).length-1?'disabled':''}>↓</button><button class="sub delete-btn" data-structure-scene-delete="${key}" data-structure-scene-index="${node.index}">削除</button></div></div>`}).join('');return `<div class="structure-chapter"><div class="structure-chapter-head"><input data-structure-chapter-name="${key}" value="${escapeHtml(structureChapterLabel(key,index))}" aria-label="チャプター${index+1}の名称"><div class="structure-actions"><button class="sub" data-structure-chapter-up="${key}" ${index===0?'disabled':''}>↑</button><button class="sub" data-structure-chapter-down="${key}" ${index===chapterOrder.length-1?'disabled':''}>↓</button><button class="sub delete-btn" data-structure-chapter-delete="${key}">削除</button></div></div><div class="structure-scenes">${rows}</div><div class="manager-toolbar"><button class="sub" data-structure-add-scene="${key}">＋ シーンを追加</button></div></div>`}).join('');return `<div class="card structure-manager"><h3>チャプター・シーン構成</h3><p class="hint">ここでキャンペーン全体の章とシーンを管理します。名称変更・追加・削除・並べ替えは自動保存されます。オープニング、エンディング、インターミッションは固定ノードです。</p>${cards||'<p class="hint">チャプターがありません。</p>'}<div class="manager-toolbar"><button class="sub" id="btnStructureAddChapter">＋ チャプターを追加</button></div></div>`;
+  const cards=chapterOrder.map((key,index)=>{const chapter=structureChapters[key]||{title:'',scenes:[]};const nodes=[{type:'opening',name:'オープニング'},...(chapter.scenes||[]).map((x,i)=>({...x,type:'scene',index:i})),{type:'ending',name:'アウトロ'},{type:'intermission',name:'インターミッション'}];const rows=nodes.map((node,i)=>{if(node.type!=='scene')return `<div class="structure-special">${node.type==='opening'?'├─':'└─'} ${structureSceneLabel(node,i)}（固定）</div>`;return `<div class="structure-scene-row"><div><span class="structure-scene-label">├─ ${structureSceneLabel(node,i)}</span><input data-structure-scene-name="${key}" data-structure-scene-index="${node.index}" value="${escapeHtml(node.name||'')}" aria-label="${escapeHtml(node.name||'シーン')}の名称"></div><div class="structure-actions"><button class="sub" data-structure-scene-up="${key}" data-structure-scene-index="${node.index}" ${node.index===0?'disabled':''}>↑</button><button class="sub" data-structure-scene-down="${key}" data-structure-scene-index="${node.index}" ${node.index===(chapter.scenes||[]).length-1?'disabled':''}>↓</button><button class="sub delete-btn" data-structure-scene-delete="${key}" data-structure-scene-index="${node.index}">削除</button></div></div>`}).join('');return `<div class="structure-chapter"><div class="structure-chapter-head"><input data-structure-chapter-name="${key}" value="${escapeHtml(structureChapterLabel(key,index))}" aria-label="チャプター${index+1}の名称"><div class="structure-actions"><button class="sub" data-structure-chapter-up="${key}" ${index===0?'disabled':''}>↑</button><button class="sub" data-structure-chapter-down="${key}" ${index===chapterOrder.length-1?'disabled':''}>↓</button><button class="sub delete-btn" data-structure-chapter-delete="${key}">削除</button></div></div><div class="structure-scenes">${rows}</div><div class="manager-toolbar"><button class="sub" data-structure-add-scene="${key}">＋ シーンを追加</button></div></div>`}).join('');return `<div class="card structure-manager"><h3>チャプター・シーン構成</h3><p class="hint">ここでキャンペーン全体の章とシーンを管理します。名称変更・追加・削除・並べ替えは自動保存されます。イントロ、アウトロ、インターミッションは固定ノードです。</p>${cards||'<p class="hint">チャプターがありません。</p>'}<div class="manager-toolbar"><button class="sub" id="btnStructureAddChapter">＋ チャプターを追加</button></div></div>`;
 }
 function bindStructureManager(){
   document.querySelectorAll('[data-structure-chapter-name]').forEach(input=>input.onchange=e=>renameManagedChapter(e.target.dataset.structureChapterName,e.target.value));
@@ -808,14 +856,20 @@ var baseRenderStateWithAdvancedFields=renderState;
 renderState=function(){
   const html=baseRenderStateWithAdvancedFields();
   const holder=document.createElement('div');holder.innerHTML=html;
-  const divider=holder.querySelector('.section-divider');
-  const grid=divider?.nextElementSibling;
-  if(divider&&grid?.classList.contains('state-grid')){
-    const details=document.createElement('details');details.className='card state-advanced';
-    const summary=document.createElement('summary');summary.textContent='ゲーム連動（詳細設定）';details.append(summary);
-    const note=divider.querySelector('p');if(note)details.append(note);
-    details.append(grid);divider.replaceWith(details);
-  }
+  holder.querySelectorAll('.state-discovery').forEach(card=>{
+    const grids=[...card.querySelectorAll('.state-grid')];
+    const divider=card.querySelector('.section-divider');
+    const aliasField=card.querySelector('.discovery-aliases')?.closest('.field');
+    const surfaceField=card.querySelector('.discovery-surface')?.closest('.field');
+    if(aliasField&&surfaceField&&grids[0])grids[0].insertBefore(aliasField,surfaceField);
+    const advancedGrid=grids[1];
+    if(divider&&advancedGrid){
+      const details=document.createElement('details');details.className='card state-advanced';
+      const summary=document.createElement('summary');summary.textContent='ゲーム連動（詳細設定）';details.append(summary);
+      const note=divider.querySelector('p');if(note)details.append(note);
+      details.append(advancedGrid);divider.replaceWith(details);
+    }
+  });
   return holder.innerHTML;
 };
 </script>
@@ -870,6 +924,7 @@ function normalizeTerminologyText(value){
     .replaceAll('登場人物','キャンペーンのキャラクター')
     .replaceAll('キャスト','キャラクター')
     .replaceAll('重要語・物語概念','重要語・概念')
+    .replaceAll('エンディング','アウトロ')
     .replaceAll('シーンの出口・分岐','出口・分岐')
     .replaceAll('分岐／接続先','出口・分岐')
     .replaceAll('発見項目','シーン要素');
@@ -888,11 +943,72 @@ renderAll=function(){baseRenderAllForTerminology();normalizeTerminologyInPage()}
 normalizeTerminologyInPage();
 </script>
 <script>
-/* 画像フォルダの読み込みと、登録済み画像の再読み込み。 */
+/* 画像フォルダの読み込みと、登録済み画像の復元。 */
 let imageLibraryFiles={};
 let imageLibraryFolderName='';
 let imageAssetRefs={};
 function imageFileKey(name){return String(name||'').split(/[\\/]/).pop().toLowerCase()}
+function imageFilename(value){return String(value||'').split(/[\\/]/).pop()}
+function localImageValue(target,value){const registered=imageAssetRefs[target];if(registered)return imageFilename(registered);const raw=String(value||'');return raw.startsWith('data:')?'':imageFilename(raw)}
+function localDraftSnapshot(){
+  const data=JSON.parse(JSON.stringify(workspaceDraft()));
+  // ローカル保存では、現在有効なチャプターだけを正本として保持する。
+  // 削除済みチャプターの編集途中データを残すと、次回保存・出力時に復活するため。
+  const activeChapterKeys=Array.isArray(data.chapterOrder)&&data.chapterOrder.length
+    ? [...new Set(data.chapterOrder)]
+    : [data.activeChapter||'ch1'];
+  const activeChapterSet=new Set(activeChapterKeys);
+  const filterChapterMap=value=>Object.fromEntries(Object.entries(value||{}).filter(([key])=>activeChapterSet.has(key)));
+  const filterScopedMap=value=>Object.fromEntries(Object.entries(value||{}).filter(([key])=>activeChapterKeys.some(chapterKey=>key===chapterKey||key.startsWith(`${chapterKey}:`))));
+  data.customChapterScenes=filterChapterMap(data.customChapterScenes);
+  data.chapterNames=filterChapterMap(data.chapterNames);
+  data.collapsedChapters=filterChapterMap(data.collapsedChapters);
+  if(data.chapterIds)data.chapterIds=filterChapterMap(data.chapterIds);
+  if(data.structureChapters)data.structureChapters=filterChapterMap(data.structureChapters);
+  if(data.flagRulesByChapter)data.flagRulesByChapter=filterChapterMap(data.flagRulesByChapter);
+  data.sceneOverrides=filterScopedMap(data.sceneOverrides);
+  data.sceneBackgrounds=filterScopedMap(data.sceneBackgrounds);
+  data.discoveryFoldState=filterScopedMap(data.discoveryFoldState);
+  if(!activeChapterSet.has(data.activeChapter))data.activeChapter=activeChapterKeys[0];
+  // 初期所持品は items[].acquisition から導出できるため、ローカル保存では二重管理しない。
+  // mock2向けの campaign.initialInventory / initialInventoryIds は出力時に従来どおり生成する。
+  delete data.initialInventory;
+  data.campaignImage=localImageValue('campaign',data.campaignImage);
+  data.castImages=Object.fromEntries(Object.entries(data.castImages||{}).map(([id,value])=>[id,localImageValue(`cast:${id}`,value)]).filter(([,value])=>value));
+  data.sceneBackgrounds=Object.fromEntries(Object.entries(data.sceneBackgrounds||{}).map(([key,value])=>[key,localImageValue(`scene:${key}`,value)]).filter(([,value])=>value));
+  data.monsters=(data.monsters||[]).map((monster,index)=>{const next={...monster};const image=localImageValue(`monster:${index}`,monster.image||monster.sprite||monster.img);delete next.img;delete next.sprite;if(image)next.image=image;else delete next.image;return next});
+  data.items=(data.items||[]).map((item,index)=>{const next={...item};const image=localImageValue(`item:${index}`,item.image);if(image)next.image=image;else delete next.image;return next});
+  const monsterImages=new Map((data.monsters||[]).filter(monster=>monster.name&&monster.image).map(monster=>[monster.name,monster.image]));
+  data.customChapterScenes=Object.fromEntries(Object.entries(data.customChapterScenes||{}).map(([chapterKey,scenes])=>[chapterKey,(Array.isArray(scenes)?scenes:[]).map((scene,index)=>{const next={...scene};if(next.img)next.img=localImageValue(`scene:${chapterKey}:scene:${index}`,next.img);if(next.enemy){const enemy={...next.enemy};const image=monsterImages.get(enemy.name)||localImageValue(`monster:${(data.monsters||[]).findIndex(monster=>monster.name===enemy.name)}`,enemy.sprite||enemy.img);delete enemy.img;delete enemy.sprite;if(image)enemy.sprite=image;next.enemy=enemy}if(next.parallax?.sky){next.parallax={...next.parallax,sky:localImageValue(`scene:${chapterKey}:sky:${index}`,next.parallax.sky)}}return next})]));
+  // シーンに登場する敵もローカル保存用のモンスター台帳へ同期する。
+  // 手入力した台帳を優先し、不足している敵だけシーン設定から補完する。
+  const savedMonsters=Array.isArray(data.monsters)?data.monsters:[];
+  const monsterByName=new Map(savedMonsters.filter(monster=>monster?.name).map(monster=>[monster.name,monster]));
+  Object.values(data.customChapterScenes||{}).forEach(scenes=>{
+    (Array.isArray(scenes)?scenes:[]).forEach(scene=>{
+      const sourceEnemy=scene?.enemy||(scene?.enemyName?{name:scene.enemyName}:null);
+      if(!sourceEnemy?.name)return;
+      const existing=monsterByName.get(sourceEnemy.name);
+      const sourceImage=sourceEnemy.sprite||sourceEnemy.img||'';
+      if(!existing){
+        const next={...sourceEnemy,id:sourceEnemy.id||`monster_${savedMonsters.length+1}`};
+        delete next.img;delete next.sprite;
+        if(sourceImage)next.image=sourceImage;
+        savedMonsters.push(next);monsterByName.set(next.name,next);
+        if(next.image)monsterImages.set(next.name,next.image);
+        return;
+      }
+      Object.entries(sourceEnemy).forEach(([key,value])=>{
+        if(key==='name'||key==='img'||key==='sprite')return;
+        if(existing[key]===undefined)existing[key]=value;
+      });
+      if(!existing.image&&sourceImage){existing.image=sourceImage;monsterImages.set(existing.name,sourceImage)}
+    });
+  });
+  data.monsters=savedMonsters;
+  data.imageAssetRefs=Object.fromEntries(Object.entries(data.imageAssetRefs||{}).map(([target,value])=>[target,imageFilename(value)]).filter(([,value])=>value));
+  return data;
+}
 function imageTargetValue(target){
   if(target==='campaign')return campaignImage;
   if(target.startsWith('scene:'))return sceneBackgrounds[target.slice(6)];
@@ -911,7 +1027,7 @@ function setImageTargetValue(target,url){
 function applyLibraryImage(target,file){
   if(!target||!file)return;
   imageAssetRefs[target]=file.name;
-  handleImageInput(file,url=>setImageTargetValue(target,url),'画像を再読み込みました');
+  handleImageInput(file,url=>setImageTargetValue(target,url),'登録済み画像を復元しました');
   saveWorkspaceDraft(true);
 }
 function decorateImageInputs(){
@@ -925,13 +1041,15 @@ function decorateImageInputs(){
     input.dataset.imageTarget=target;
     if(input.dataset.imageReloadDecorated)return;
     input.dataset.imageReloadDecorated='1';
-    const button=document.createElement('button');button.type='button';button.className='sub image-reload-button';button.textContent='画像を再読み込み';button.dataset.imageReloadTarget=target;
+    const button=document.createElement('button');button.type='button';button.className='sub image-reload-button';button.textContent='登録済み画像を復元';button.dataset.imageReloadTarget=target;
     input.parentElement?.append(button);
   });
 }
 function imageFolderMarkup(){
   const names=Object.keys(imageLibraryFiles);
-  return `<div class="card image-library-card"><h3>画像管理</h3><p class="hint">画像フォルダを読み込むと、登録済み画像をファイル名で再読み込みできます。${imageLibraryFolderName?`現在のフォルダ：${escapeHtml(imageLibraryFolderName)}`:'元画像のフォルダは毎回選択してください。'}</p><input id="imageFolderInput" type="file" accept="image/*" webkitdirectory directory multiple><div class="image-library-list">${names.length?names.map(name=>`<span class="chip">${escapeHtml(name)}</span>`).join(''):'<span class="hint">画像フォルダはまだ読み込まれていません。</span>'}</div><button type="button" class="sub" id="btnReloadFolderImages" ${names.length?'':'disabled'}>登録済み画像を再読み込み</button></div>`;
+  const folderText=imageLibraryFolderName?`画像フォルダ：${escapeHtml(imageLibraryFolderName)}`:'画像フォルダ：未指定';
+  const countText=names.length?`読み込み済み：${names.length}件`:'画像フォルダを選択してください';
+  return `<div class="card image-library-card"><h3>画像管理</h3><p class="hint">${folderText}<br>${countText}</p><input id="imageFolderInput" type="file" accept="image/*" webkitdirectory directory multiple></div>`;
 }
 var baseRenderWorldForImageLibrary=renderWorld;
 renderWorld=function(){return baseRenderWorldForImageLibrary()+imageFolderMarkup()};
@@ -942,10 +1060,20 @@ renderAll=function(){baseRenderAllForImageLibrary();decorateImageInputs()};
 var baseWorkspaceDraftForImageLibrary=workspaceDraft;
 workspaceDraft=function(){return {...baseWorkspaceDraftForImageLibrary(),imageAssetRefs}};
 var baseApplyWorkspaceDraftForImageLibrary=applyWorkspaceDraft;
-applyWorkspaceDraft=function(data){baseApplyWorkspaceDraftForImageLibrary(data);imageAssetRefs=data.imageAssetRefs&&typeof data.imageAssetRefs==='object'?data.imageAssetRefs:{}};
+applyWorkspaceDraft=function(data){
+  baseApplyWorkspaceDraftForImageLibrary(data);
+  imageAssetRefs=data.imageAssetRefs&&typeof data.imageAssetRefs==='object'?data.imageAssetRefs:{};
+  campaignImage=importedAssetRef(campaignImage);
+  castImages=Object.fromEntries(Object.entries(castImages||{}).map(([id,value])=>[id,importedAssetRef(value)]));
+  sceneBackgrounds=Object.fromEntries(Object.entries(sceneBackgrounds||{}).map(([key,value])=>[key,importedAssetRef(value)]));
+  monsters=(monsters||[]).map(monster=>{const next={...monster};const image=importedAssetRef(monster.image||monster.sprite||monster.img);delete next.img;delete next.sprite;if(image)next.image=image;return next});
+  items=(items||[]).map(item=>({...item,...(item.image?{image:importedAssetRef(item.image)}:{})}));
+  customChapterScenes=Object.fromEntries(Object.entries(customChapterScenes||{}).map(([chapterKey,scenes])=>[chapterKey,(Array.isArray(scenes)?scenes:[]).map(scene=>{if(!scene?.enemy)return scene;const next={...scene,enemy:{...scene.enemy}};const image=importedAssetRef(scene.enemy.sprite||scene.enemy.img);delete next.enemy.img;delete next.enemy.sprite;if(image)next.enemy.sprite=image;return next})]));
+};
 try{const rawImageRefs=localStorage.getItem(DRAFT_KEY);if(rawImageRefs){const parsed=JSON.parse(rawImageRefs);const data=parsed.data||parsed;if(data.imageAssetRefs&&typeof data.imageAssetRefs==='object')imageAssetRefs=data.imageAssetRefs}}catch(e){}
 document.addEventListener('change',event=>{
   const input=event.target;
+  if(input?.dataset?.imageTarget&&input.files?.[0]){imageAssetRefs[input.dataset.imageTarget]=input.files[0].name;saveWorkspaceDraft(true)}
   if(input?.id!=='imageFolderInput')return;
   const files=Array.from(input.files||[]).filter(file=>file.type.startsWith('image/'));
   imageLibraryFiles=Object.fromEntries(files.map(file=>[imageFileKey(file.name),file]));
@@ -959,12 +1087,6 @@ document.addEventListener('click',event=>{
     const target=reload.dataset.imageReloadTarget;const ref=imageAssetRefs[target];const file=imageLibraryFiles[imageFileKey(ref)];
     if(file)applyLibraryImage(target,file);else document.querySelector(`[data-image-target="${CSS.escape(target)}"]`)?.click();
     return;
-  }
-  if(event.target.closest?.('#btnReloadFolderImages')){
-    event.preventDefault();event.stopPropagation();
-    const targets=Object.entries(imageAssetRefs);let count=0;
-    targets.forEach(([target,ref])=>{const file=imageLibraryFiles[imageFileKey(ref)];if(file){applyLibraryImage(target,file);count++}});
-    if(!count)setStatus('再読み込みできる登録画像がありません');
   }
 },true);
 </script>
@@ -995,7 +1117,7 @@ document.addEventListener('click',async event=>{
 /* 補助AIへ渡す情報を現在の登録先に限定し、未依頼のシーン案を生成しない。 */
 function assistantTargetContext(){
   const instruction=document.querySelector('#assistantInstruction')?.value||'';
-  if(activeTab==='world')return {label:'世界設定',data:{campaignName,campaignWorld,campaignTheme,campaignTerms}};
+  if(activeTab==='world')return {label:'世界設定',data:{campaignName,campaignWorld,campaignTerms}};
   if(activeTab==='cast'){
     const all=[{id:'gm',name:castName('gm','GM'),profile:castProfile('gm','')},{id:'gareth',name:castName('gareth','ガレス'),profile:castProfile('gareth','')},...Array.from({length:extraCompanions},(_,i)=>{const id=`member_${i+2}`;return {id,name:castName(id,`メンバー${i+2}`),profile:castProfile(id,'')}}),...npcList().map(x=>({id:x.id,name:castName(x.id,x.name),profile:castProfile(x.id,'')}))];
     const focus=all.find(x=>x.name&&instruction.includes(x.name));return {label:focus?`キャラクター「${focus.name}」`:'キャラクター一覧',data:focus||all};
@@ -1030,6 +1152,7 @@ assistantPrompt=function(kind){
 - 既存の確定情報を変更せず、不足がある場合は「不足」と明記する。
 - 依頼が「行動・演出の指針」なら、行動・演出の指針だけを短く提示する。
 - JSONは依頼された場合だけ出力する。
+- 回答はMarkdown記法を使わず、見出し記号・箇条書き記号・強調記号を使わないプレーンテキストで書く。
 ${structureNote}
 
 参照する現在データ:
@@ -1089,7 +1212,7 @@ var baseApplyWorkspaceDraftForFlagContract=applyWorkspaceDraft;applyWorkspaceDra
 var baseMockCampaignPayloadForFlagContract=mockCampaignPayload;mockCampaignPayload=function(){ensureFlagConfig();const payload=baseMockCampaignPayloadForFlagContract();const campaign={...(payload.campaign||{}),flags:flagDeclarations};const style={...(campaign.style||{})};if(gameOverText.trim())style.gameOverText=gameOverText.trim();else delete style.gameOverText;campaign.style=style;const chapter={...(payload.chapter||{})};const rules=flagRulesForChapter();const declaredOut=Array.isArray(chapter.flagsOut)?chapter.flagsOut:[];chapter.flagsOut=[...new Set([...declaredOut,...Object.keys(rules)])];chapter.flagRules=rules;const nodes=chapterNodes().filter(n=>n.type==='scene');chapter.scenes=(chapter.scenes||[]).map((raw,index)=>{const node=nodes[index];const dialogue=(node&&sceneOverrides[nodeKey(node)]?.dialogueRules||[]).map(normalizeDialogueRule);const updates=dialogue.filter(rule=>rule.eventType==='flag_set').map(rule=>{const match=String(rule.targetId||'').match(/^([^=]+)=(.*)$/);if(!match)return null;return {type:'flag_set',flag:match[1].trim(),value:match[2].trim(),condition:rule.condition||"",once:rule.once!==false}}).filter(Boolean);return updates.length?{...raw,stateUpdates:updates}:raw});return {...payload,campaign,chapter}};
 var baseExportPayloadForFlagContract=exportPayload;exportPayload=function(){const payload=baseExportPayloadForFlagContract();ensureFlagConfig();const style={...((payload.campaign||{}).style||{})};if(gameOverText.trim())style.gameOverText=gameOverText.trim();else delete style.gameOverText;return {...payload,campaign:{...(payload.campaign||{}),flags:flagDeclarations,style},chapters:(payload.chapters||[]).map(ch=>{const key=Object.entries(tasChapterIds||{}).find(([,id])=>id===ch.id)?.[0]||ch.id;return {...ch,flagsOut:Object.keys(flagRulesByChapter[key]||{}),flagRules:flagRulesByChapter[key]||{}}})}};
 /* 出力画面の再描画後も、保存ボタンの処理を確実に再接続する。 */
-async function runMockExport(button){button.disabled=true;setStatus("mock側へ出力中…");try{if(isLocalFile())throw new Error("ローカルファイルでは出力できません。node server.cjs で起動してください");const payload=mockCampaignPayload();const res=await fetch("/api/export-campaign",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(payload)});const data=await res.json();if(!res.ok||data.error)throw new Error(data.error?.message||res.status);setStatus(`mock側へ出力しました: ${data.saved.join(", ")}`)}catch(e){setStatus(`出力失敗: ${e.message}`)}finally{button.disabled=false}}
+async function runMockExport(button){button.disabled=true;setStatus("mock側へ出力中…");try{if(isLocalFile())throw new Error("ローカルファイルでは出力できません。node server.cjs で起動してください");const payload=mockCampaignPayload();const res=await fetch("/api/export-campaign",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(payload)});const data=await res.json();if(!res.ok||data.error)throw new Error(data.error?.message||res.status);const savedFiles=Array.isArray(data.files)&&data.files.length?data.files:Array.isArray(data.saved)&&data.saved.length?data.saved.map(path=>({path,content:""})):[{path:`${payload.campaignId||"campaign"}/campaign.json`,content:""},{path:payload.chapterFile||"chapter_01.json",content:""}];exportFileViews=savedFiles;exportFileIndex=0;setStatus(`mock側へ出力しました: ${(data.saved||[]).join(", ")}`);renderTab()}catch(e){setStatus(`出力失敗: ${e.message}`)}finally{button.disabled=false}}
 window.__tasRunMockExport=runMockExport;
 bindExport=function(){const preview=$("exportPreview"),refresh=$("btnRefreshExport"),button=$("btnExportCampaign");if(!preview||!refresh||!button)return;refresh.onclick=()=>{preview.value=JSON.stringify(mockCampaignPayload(),null,2)};button.onclick=()=>runMockExport(button)};
 var baseRenderTabForFlagExport=renderTab;renderTab=function(){baseRenderTabForFlagExport();if(activeTab==='export')bindExport()};
@@ -1137,5 +1260,234 @@ renderPlaytest=function(){return baseRenderPlaytestForAi().replace('<button id="
 var baseBindPlaytestForAi=bindPlaytest;
 bindPlaytest=function(){baseBindPlaytestForAi();const button=$("sendPlayAi"),input=$("playInput"),key=playtestKey(),n=scene();if(!button||!input)return;const append=(type,text)=>{playtestLog(key,type,text);const line=document.createElement("p");line.className=`msg ${type==="user"?"user":"system"}`;line.textContent=text;$("chat")?.appendChild(line);if($("chat"))$("chat").scrollTop=$("chat").scrollHeight};button.onclick=async()=>{const text=input.value.trim();if(!text)return;button.disabled=true;append("user",`プレイヤー：${text}`);input.value="";setStatus("AIが応答を作成中…");try{const system="あなたはソロTRPGのゲームマスターです。指定されたJSON形式だけで応答してください。未開示情報の捏造は禁止です。";const messages=[{role:"user",content:tasPlaytestAiPrompt(n)},...tasPlaytestAiHistory(key)];const result=await callLLM(system,messages,1200);append("system",tasFormatPlaytestAiReply(tasParsePlaytestAiReply(result)));setStatus("AI会話を記録しました")}catch(error){append("system",`AI会話を実行できませんでした：${error.message}`);setStatus("AI会話に失敗しました")}finally{button.disabled=false;renderRightPanel();renderValidation()}}};
 if(activeTab==="playtest")renderTab();
+</script>
+<script>
+/* 呼称・二人称は画面用addressingとゲーム出力用addressTermを同時に保持する。 */
+document.addEventListener('input',event=>{
+  const input=event.target.closest?.('.cast-addressing-input');
+  if(!input)return;
+  const id=input.dataset.castAttributeId;
+  if(!id)return;
+  const value=input.value.trim();
+  castAttributes[id]={...(castAttributes[id]||{}),addressing:value,addressTerm:value};
+  saveWorkspaceDraft(true);
+});
+</script>
+<style>
+.exit-row{grid-template-columns:minmax(120px,1fr) minmax(160px,1.25fr) minmax(180px,1.4fr) auto;align-items:end}
+.exit-row>.field:nth-child(4){grid-column:1 / 4}
+.exit-row>button[data-remove-exit]{grid-column:4;grid-row:2;align-self:end;white-space:nowrap}
+.exit-row>.field:nth-child(6){grid-column:1 / 3}
+.exit-row>.field:nth-child(7){grid-column:3 / 5}
+.exit-condition-list{display:grid;gap:6px}
+.exit-condition-item{display:flex;gap:6px;align-items:center}
+.exit-condition-item select{flex:1;min-width:0}
+.sky-parallax-field{padding:10px 12px}
+.sky-parallax-field summary{cursor:pointer;color:var(--accent);font-weight:700}
+.sky-parallax-field[open] summary{margin-bottom:8px}
+@media(max-width:900px){.exit-row{grid-template-columns:1fr}.exit-row>.field:nth-child(4),.exit-row>button[data-remove-exit],.exit-row>.field:nth-child(6),.exit-row>.field:nth-child(7){grid-column:auto;grid-row:auto}.exit-row>button[data-remove-exit]{justify-self:start}}
+</style>
+<script>
+/* シーン要素の基本情報とゲーム連動の詳細設定を分離する。 */
+var baseRenderStateForDetails=renderState;
+renderState=function(){const holder=document.createElement("div");holder.innerHTML=baseRenderStateForDetails();holder.querySelectorAll(".state-discovery").forEach(card=>{const grids=[...card.querySelectorAll(".state-grid")];const divider=card.querySelector(".section-divider");const aliasField=card.querySelector(".discovery-aliases")?.closest(".field");const surfaceField=card.querySelector(".discovery-surface")?.closest(".field");if(aliasField&&surfaceField&&grids[0])grids[0].insertBefore(aliasField,surfaceField);if(divider&&grids[1]){const details=document.createElement("details");details.className="section-divider game-link-details";details.open=false;details.innerHTML="<summary>ゲーム連動（詳細設定）</summary><p class=\"hint\">通常は変更不要です。内部キー、追加フラグ、ゲームが保持する確定事実を設定します。</p>";details.appendChild(grids[1]);divider.replaceWith(details)}});return holder.innerHTML};
+if(activeTab==="state")renderTab();
+</script>
+<style>
+.game-link-details{padding-top:10px}
+.game-link-details>summary{cursor:pointer;color:var(--accent);font-weight:700}
+.game-link-details[open]>summary{margin-bottom:8px}
+.state-advanced>summary{cursor:pointer;color:var(--accent);font-weight:700;padding:2px 0}
+.state-advanced[open]>summary{margin-bottom:8px}
+.export-files{border-top:1px solid var(--border);padding:10px 0 0;margin-top:10px}
+.export-files h3{color:var(--accent);font-size:13px;margin:0 0 4px}
+.export-files ul{margin:0;padding-left:20px;color:var(--dim);font-size:12px}
+</style>
+<script>
+/* mock側へ出力したファイルを、TAS上で1件ずつ確認する。 */
+function renderSavedExportFiles(){
+  if(!exportFileViews.length)return '<div class="export-files"><p class="hint">「mock側へ出力」を実行すると、書き出したファイル名を表示します。</p></div>';
+  const names=exportFileViews.map(file=>String(file.path||'').split(/[\\/]/).pop()).filter(Boolean);
+  return `<div class="export-files"><h3>出力済みファイル</h3><ul>${names.map(name=>`<li>${escapeHtml(name)}</li>`).join('')}</ul></div>`;
+}
+var baseRenderExportForSavedFiles=renderExport;
+renderExport=function(){const holder=document.createElement('div');holder.innerHTML=baseRenderExportForSavedFiles();const viewer=document.createElement('div');viewer.innerHTML=renderSavedExportFiles();holder.querySelector('.bottom')?.after(viewer);return holder.innerHTML};
+var baseBindExportForSavedFiles=bindExport;
+bindExport=function(){baseBindExportForSavedFiles()};
+if(activeTab==='export')renderTab();
+</script>
+<script>
+/* 画面上の呼称を「イントロ」に統一する。データ上のtype/openingやchapter.introは変更しない。 */
+function normalizeIntroLabelsInPage(){
+  const walker=document.createTreeWalker(document.body,NodeFilter.SHOW_TEXT);
+  const nodes=[];let node;
+  while(node=walker.nextNode())nodes.push(node);
+  nodes.forEach(text=>{if(text.nodeValue.includes('オープニング'))text.nodeValue=text.nodeValue.replaceAll('オープニング','イントロ')});
+  document.querySelectorAll('input,textarea').forEach(input=>{if(input.value==='オープニング')input.value='イントロ'});
+}
+var baseRenderAllForIntroLabels=renderAll;
+renderAll=function(){baseRenderAllForIntroLabels();normalizeIntroLabelsInPage()};
+var baseRenderTabForIntroLabels=renderTab;
+renderTab=function(){baseRenderTabForIntroLabels();normalizeIntroLabelsInPage()};
+normalizeIntroLabelsInPage();
+</script>
+<script>
+/* 補助パネルで、現在のAIバックエンドと実モデル名を表示する。 */
+function updateAssistantModelLabel(){
+  const usage=document.querySelector('#rightBody .switch-row');
+  if(!usage)return;
+  let label=usage.parentElement.querySelector('.assistant-model-label');
+  if(!label){label=document.createElement('p');label.className='hint assistant-model-label';usage.parentElement.insertBefore(label,usage.nextSibling)}
+  label.textContent=assistantMode==='ai'
+    ? `使用モデル：${context?.model||'未取得'}${context?.backend?`（${context.backend}）`:''}`
+    : 'AI未使用（プロンプトのみ）';
+}
+var baseRenderRightPanelForModelLabel=renderRightPanel;
+renderRightPanel=function(){baseRenderRightPanelForModelLabel();updateAssistantModelLabel()};
+updateAssistantModelLabel();
+</script>
+<script>
+/* 削除済みのテーマ仕様を、補助AI・生成AIのプロンプトへ渡さない。 */
+function removeDeletedThemeFromPrompt(value){
+  return String(value||'').replace(/^\s*テーマ\s*[:：].*\n?/gm,'').replace(/campaignTheme/g,'');
+}
+var baseCallLLMWithoutDeletedTheme=callLLM;
+callLLM=async function(system,messages,max_tokens){
+  const cleanMessages=(messages||[]).map(message=>({...message,content:removeDeletedThemeFromPrompt(message.content)}));
+  return baseCallLLMWithoutDeletedTheme(removeDeletedThemeFromPrompt(system),cleanMessages,max_tokens);
+};
+</script>
+<script>
+/* 補助AIの回答をプレーンテキストで表示し、全文コピーを提供する。 */
+function markdownToPlainText(value){
+  return String(value||'')
+    .replace(/```(?:[a-zA-Z0-9_-]+)?\s*([\s\S]*?)```/g,'$1')
+    .replace(/^\s{0,3}#{1,6}\s*/gm,'')
+    .replace(/^\s{0,3}>\s?/gm,'')
+    .replace(/^\s*[-*+]\s+/gm,'')
+    .replace(/^\s*\d+[.)]\s+/gm,'')
+    .replace(/\[([^\]]+)\]\([^\)]+\)/g,'$1')
+    .replace(/\*\*([^*]+)\*\*/g,'$1')
+    .replace(/__([^_]+)__/g,'$1')
+    .replace(/\*([^*]+)\*/g,'$1')
+    .replace(/_([^_]+)_/g,'$1')
+    .replace(/`([^`]+)`/g,'$1')
+    .replace(/^\s*[-*_]{3,}\s*$/gm,'')
+    .replace(/\n{3,}/g,'\n\n')
+    .trim();
+}
+function decorateAssistantAiOutput(){
+  const output=document.querySelector('#assistantAiOutput');
+  if(!output)return;
+  output.textContent=markdownToPlainText(output.textContent);
+  if(output.previousElementSibling?.classList.contains('assistant-copy-all'))return;
+  const copy=document.createElement('button');
+  copy.type='button';copy.className='icon-btn assistant-copy-all';copy.textContent='⧉';
+  copy.title='回答をすべてコピー';copy.setAttribute('aria-label','回答をすべてコピー');
+  copy.onclick=()=>navigator.clipboard.writeText(output.textContent).then(()=>setStatus('AI回答をすべてコピーしました')).catch(error=>setStatus(`コピーに失敗しました: ${error.message}`));
+  output.parentElement.insertBefore(copy,output);
+}
+var baseRenderRightPanelForPlainAi=renderRightPanel;
+renderRightPanel=function(){baseRenderRightPanelForPlainAi();decorateAssistantAiOutput()};
+decorateAssistantAiOutput();
+</script>
+<script>
+/* addressTermを正本にし、旧addressingは読み込み時に移行して保存しない。 */
+function normalizeAddressTermState(){
+  castAttributes=Object.fromEntries(Object.entries(castAttributes||{}).map(([id,attrs])=>{
+    const next={...attrs,addressTerm:String(attrs?.addressTerm||attrs?.addressing||'')};
+    delete next.addressing;
+    return [id,next];
+  }));
+  document.querySelectorAll('.cast-addressing-input').forEach(input=>{const id=input.dataset.castAttributeId;if(id)input.value=castAttributes[id]?.addressTerm||''});
+}
+var baseApplyWorkspaceDraftForAddressTerm=applyWorkspaceDraft;
+applyWorkspaceDraft=function(data){baseApplyWorkspaceDraftForAddressTerm(data);normalizeAddressTermState()};
+var baseWorkspaceDraftForAddressTerm=workspaceDraft;
+workspaceDraft=function(){const data=baseWorkspaceDraftForAddressTerm();data.castAttributes=Object.fromEntries(Object.entries(data.castAttributes||{}).map(([id,attrs])=>{const next={...attrs,addressTerm:String(attrs?.addressTerm||attrs?.addressing||'')};delete next.addressing;return [id,next]}));return data};
+document.addEventListener('input',event=>{const input=event.target.closest?.('.cast-addressing-input');if(!input)return;const id=input.dataset.castAttributeId;if(!id)return;castAttributes[id]={...(castAttributes[id]||{}),addressTerm:input.value.trim()};delete castAttributes[id].addressing;saveWorkspaceDraft(true)});
+var baseRenderAllForAddressTerm=renderAll;
+renderAll=function(){baseRenderAllForAddressTerm();normalizeAddressTermState()};
+var baseRenderTabForAddressTerm=renderTab;
+renderTab=function(){baseRenderTabForAddressTerm();normalizeAddressTermState()};
+var baseCastCardForAddressTerm=castCard;
+castCard=function(...args){return baseCastCardForAddressTerm(...args).replace(/(<input class="cast-addressing-input" data-cast-attribute-id="([^"]+)" value=")[^"]*(")/,(_,prefix,id,suffix)=>`${prefix}${escapeHtml(castAttribute(id).addressTerm)}${suffix}`)};
+tasPlaytestCompanions=function(){return ["gareth",...Array.from({length:extraCompanions},(_,i)=>`member_${i+2}`)].map(id=>{const attrs=castAttribute(id);const name=castName(id,id);const voice=[attrs.gender?`性別属性:${attrs.gender}`:"",attrs.firstPerson?`一人称:${attrs.firstPerson}`:"",attrs.addressTerm?`呼称:${attrs.addressTerm}`:""].filter(Boolean).join(" / ");return `- ${name}(${id}): ${castProfile(id,"役割・口調は未設定")}${voice?` / ${voice}`:""}`}).join("\n")};
+normalizeAddressTermState();
+</script>
+<script>
+/* エンカウンター契約 v0.1 試作。ゲーム側未実装でもTASに保存・出力できる形にする。 */
+const ENCOUNTER_TYPES=[['normal','通常遭遇'],['conditional','条件付き遭遇'],['optional','任意遭遇'],['random','ランダム遭遇']];
+const ENCOUNTER_TIMINGS=[['scene_enter','シーン開始時'],['player_action','プレイヤーの行動時'],['turn_start','ターン開始時'],['movement','移動時'],['after_check','判定後']];
+function normalizeEncounter(value,index=0){
+  const x=value&&typeof value==='object'?value:{};
+  const type=ENCOUNTER_TYPES.some(([id])=>id===x.type)?x.type:'normal';
+  const numberOrNull=value=>value===null||value===undefined||value===''?null:Math.max(0,Number(value)||0);
+  return {
+    id:String(x.id||`encounter_${index+1}`),type,
+    monsterId:String(x.monsterId||x.enemyId||''),monsterName:String(x.monsterName||x.enemyName||''),
+    triggerTerms:parseList(x.triggerTerms||x.triggers||x.trigger||''),
+    requiredElements:parseList(x.requiredElements||x.requires?.elements||x.requires||''),
+    requiredOperator:x.requiredOperator==='any'||x.requires?.operator==='any'?'any':'all',
+    probability:numberOrNull(x.probability),
+    timing:ENCOUNTER_TIMINGS.some(([id])=>id===x.timing)?x.timing:'scene_enter',
+    maxOccurrences:numberOrNull(x.maxOccurrences??x.maxCount),
+    blockedBy:parseList(x.blockedBy||x.preventedBy||''),
+    onsetText:String(x.onsetText||x.text||x.description||''),
+    notes:String(x.notes||'')
+  };
+}
+function sceneEncounters(){return (scene().encounters||[]).map(normalizeEncounter)}
+function encounterMonsterOptions(selected){return `<option value="">選択してください</option>${monsters.filter(x=>x.name).map(x=>{const id=String(x.id||x.name);return `<option value="${escapeHtml(id)}" ${selected===id?'selected':''}>${escapeHtml(x.name)}${x.id?`（${escapeHtml(x.id)}）`:''}</option>`}).join('')}`}
+function encounterDiscoveryNames(){return (scene().discoveries||[]).map((x,i)=>normalizeDiscoveryFor(scene(),x,i).label).filter(Boolean)}
+function renderEncounterCard(enc,index){
+  const typeLabel=ENCOUNTER_TYPES.find(([id])=>id===enc.type)?.[1]||'通常遭遇';
+  const selectedMonster=monsters.find(x=>String(x.id||x.name)===enc.monsterId||x.name===enc.monsterName);
+  const monsterName=selectedMonster?.name||enc.monsterName||'対象未設定';
+  return `<details class="card encounter-card" open><summary>遭遇${index+1}：${escapeHtml(typeLabel)} ／ ${escapeHtml(monsterName)}</summary><div class="encounter-grid" data-encounter-index="${index}">
+    <div class="field"><label>遭遇種別</label><select class="encounter-type" data-encounter-index="${index}">${ENCOUNTER_TYPES.map(([id,label])=>`<option value="${id}" ${enc.type===id?'selected':''}>${label}</option>`).join('')}</select></div>
+    <div class="field"><label>対象モンスター</label><select class="encounter-monster" data-encounter-index="${index}">${encounterMonsterOptions(enc.monsterId||selectedMonster?.id||selectedMonster?.name||'')}</select></div>
+    <div class="field span-2"><label>トリガーする語句（カンマ区切り）</label><input class="encounter-trigger-terms" data-encounter-index="${index}" value="${escapeHtml(enc.triggerTerms.join(', '))}" placeholder="踏み込む, 殻を調べる"></div>
+    <div class="field span-2"><label>必要なシーン要素（カンマ区切り）</label><input class="encounter-required-elements" data-encounter-index="${index}" list="encounterDiscoveryNameList" value="${escapeHtml(enc.requiredElements.join(', '))}" placeholder="気配, 殻の散らばり"></div>
+    <div class="field"><label>必要なシーン要素の条件</label><select class="encounter-required-operator" data-encounter-index="${index}"><option value="all" ${enc.requiredOperator==='all'?'selected':''}>すべて必要（AND）</option><option value="any" ${enc.requiredOperator==='any'?'selected':''}>いずれか（OR）</option></select></div>
+    <div class="field"><label>判定タイミング</label><select class="encounter-timing" data-encounter-index="${index}">${ENCOUNTER_TIMINGS.map(([id,label])=>`<option value="${id}" ${enc.timing===id?'selected':''}>${label}</option>`).join('')}</select></div>
+    <div class="field"><label>遭遇確率（%）</label><input type="number" min="0" max="100" class="encounter-probability" data-encounter-index="${index}" value="${enc.probability??''}" placeholder="例：25"><p class="hint">ランダム遭遇だけで使用します。</p></div>
+    <div class="field"><label>最大遭遇回数</label><input type="number" min="1" class="encounter-max-occurrences" data-encounter-index="${index}" value="${enc.maxOccurrences??''}" placeholder="空欄なら制限なし"></div>
+    <div class="field span-2"><label>発生禁止条件（カンマ区切り）</label><input class="encounter-blocked-by" data-encounter-index="${index}" value="${escapeHtml(enc.blockedBy.join(', '))}" placeholder="灯の番人を撃破済み, encounter_done"></div>
+    <div class="field span-2"><label>遭遇時の演出</label><textarea class="encounter-onset-text" data-encounter-index="${index}" placeholder="暗がりから錆喰いが飛び出してくる。">${escapeHtml(enc.onsetText)}</textarea></div>
+    <div class="field span-2"><label>GM補足メモ</label><textarea class="encounter-notes" data-encounter-index="${index}" placeholder="この遭遇を発生させる意図や例外条件">${escapeHtml(enc.notes)}</textarea></div>
+    <div class="field"><label>移動識別子</label><input class="encounter-id" data-encounter-index="${index}" value="${escapeHtml(enc.id)}" placeholder="encounter_s2_rust_eater"></div>
+    <div class="field encounter-actions"><button class="sub delete-btn" data-remove-encounter="${index}">削除</button></div>
+  </div></details>`;
+}
+function renderEncounterSection(){
+  const encounters=sceneEncounters();
+  const names=encounterDiscoveryNames();
+  return `<div class="card encounter-section"><h3>エンカウンター設定</h3><p class="hint">このシーンで敵との遭遇が発生する条件を設定します。通常・条件付き・任意・ランダムを同じ一覧で管理できます。現在はTASで保存・ゲーム側JSONへ出力する試作段階です。</p><datalist id="encounterDiscoveryNameList">${names.map(name=>`<option value="${escapeHtml(name)}">`).join('')}</datalist>${encounters.length?encounters.map(renderEncounterCard).join(''):`<div class="empty-card"><p class="hint">遭遇設定はありません。敵が登場するシーンだけ追加してください。</p></div>`}<div class="bottom"><button class="sub" id="btnAddEncounter">＋ 遭遇を追加</button></div></div>`;
+}
+function collectEncounters(){
+  return Array.from(document.querySelectorAll('.encounter-card')).map((card,index)=>normalizeEncounter({
+    id:card.querySelector(`.encounter-id[data-encounter-index="${index}"]`)?.value.trim(),
+    type:card.querySelector(`.encounter-type[data-encounter-index="${index}"]`)?.value,
+    monsterId:card.querySelector(`.encounter-monster[data-encounter-index="${index}"]`)?.value,
+    monsterName:card.querySelector(`.encounter-monster[data-encounter-index="${index}"] option:checked`)?.textContent?.replace(/（[^）]*）$/,'')||'',
+    triggerTerms:card.querySelector(`.encounter-trigger-terms[data-encounter-index="${index}"]`)?.value,
+    requiredElements:card.querySelector(`.encounter-required-elements[data-encounter-index="${index}"]`)?.value,
+    requiredOperator:card.querySelector(`.encounter-required-operator[data-encounter-index="${index}"]`)?.value,
+    timing:card.querySelector(`.encounter-timing[data-encounter-index="${index}"]`)?.value,
+    probability:card.querySelector(`.encounter-probability[data-encounter-index="${index}"]`)?.value,
+    maxOccurrences:card.querySelector(`.encounter-max-occurrences[data-encounter-index="${index}"]`)?.value,
+    blockedBy:card.querySelector(`.encounter-blocked-by[data-encounter-index="${index}"]`)?.value,
+    onsetText:card.querySelector(`.encounter-onset-text[data-encounter-index="${index}"]`)?.value,
+    notes:card.querySelector(`.encounter-notes[data-encounter-index="${index}"]`)?.value
+  },index));
+}
+function saveEncounters(value){const key=sceneKey();sceneOverrides[key]={...(sceneOverrides[key]||{}),encounters:value};saveWorkspaceDraft(true);renderScenes();renderRightPanel();renderValidation()}
+var baseRenderStructureForEncounters=renderStructure;
+renderStructure=function(){const holder=document.createElement('div');holder.innerHTML=baseRenderStructureForEncounters();const anchor=[...holder.querySelectorAll('.field')].find(field=>field.querySelector('#sceneEnemy'));if(anchor&&!holder.querySelector('.enemy-encounter-group')){const group=document.createElement('div');group.className='card enemy-encounter-group';const heading=document.createElement('h3');heading.textContent='敵・遭遇設定';const hint=document.createElement('p');hint.className='hint';hint.textContent='基本敵はこのシーンに直接登場する敵、遭遇設定は条件付き・任意・ランダムに発生する敵を設定します。';const source=document.createElement('div');source.innerHTML=renderEncounterSection();const sourceSection=source.firstElementChild;const section=document.createElement('details');section.className='encounter-section encounter-subsection';section.open=Boolean(sceneEncounters().length);const summary=document.createElement('summary');summary.textContent='遭遇条件（encounters[]）';const body=document.createElement('div');body.className='encounter-subsection-body';body.innerHTML=sourceSection.innerHTML;body.querySelector('h3')?.remove();body.querySelector('p.hint')?.remove();section.append(summary,body);anchor.before(group);group.append(heading,hint,anchor,section)}return holder.innerHTML};
+var baseBindStructureForEncounters=bindStructure;
+bindStructure=function(){baseBindStructureForEncounters();const section=document.querySelector('.encounter-section');if(!section)return;const update=()=>saveEncounters(collectEncounters());section.querySelectorAll('input,select,textarea').forEach(input=>{input.oninput=update;input.onchange=update});section.querySelectorAll('[data-remove-encounter]').forEach(button=>button.onclick=()=>{saveEncounters(sceneEncounters().filter((_,i)=>i!==Number(button.dataset.removeEncounter)));renderTab()});const add=section.querySelector('#btnAddEncounter');if(add)add.onclick=()=>{saveEncounters([...sceneEncounters(),normalizeEncounter({id:`encounter_${sceneEncounters().length+1}`,type:'conditional'},sceneEncounters().length)]);renderTab()};};
+var baseMockCampaignPayloadForEncounters=mockCampaignPayload;
+mockCampaignPayload=function(){const payload=baseMockCampaignPayloadForEncounters();if(Array.isArray(payload.chapter?.scenes)){const nodes=chapterNodes().filter(n=>n.type==='scene');payload.chapter.scenes=payload.chapter.scenes.map((raw,index)=>{const node=nodes[index];const encounters=(node?.encounters||raw.encounters||[]).map(normalizeEncounter);return encounters.length?{...raw,encounters}:raw})}return payload};
 </script>
 </html>
