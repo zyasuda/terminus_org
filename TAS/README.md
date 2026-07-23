@@ -37,6 +37,36 @@ node server.cjs
 
 ブラウザで http://localhost:8799 を開く。終了は `Ctrl + C`。
 
+## 回帰テスト
+
+同行者のID・発話属性・エンティティ台帳・画像参照が、TASの出力JSONで一致することを確認します。
+
+```bash
+node tests/tas-companion-output-contract.mjs
+```
+
+このテストは一時サーバーを起動して出力プレビューだけを確認します。`mock側へ出力`は押さないため、mock2のデータを書き換えません。
+
+新規キャンペーン作成後のデータ引き継ぎは、次のテストで確認できます。現在は、同行者・アイテム・初期所持品・フラグ宣言が出力に残ることを検査します。
+
+```bash
+node tests/tas-fresh-campaign-output-contract.mjs
+```
+
+シーン完了条件の`secretsAny`（OR）／`secretsAll`（AND）の維持は、次で確認できます。
+
+```bash
+node tests/tas-complete-requires-contract.mjs
+```
+
+11重の出力関数チェーンを統合する前後の互換性は、基準出力との比較ハーネスで確認します。
+通常は基準を更新せずに実行し、仕様変更を承認した場合だけ`--update`を使用します。
+
+```bash
+node tests/tas-chain-compatibility-harness.mjs
+node tests/tas-chain-compatibility-harness.mjs --update
+```
+
 起動時にコンテキスト（BORGの `CAMPAIGN_01.md` と `AI_DESIGN.md`）が自動で読み込まれ、画面左上に表示されます。
 
 ## 画面の見方

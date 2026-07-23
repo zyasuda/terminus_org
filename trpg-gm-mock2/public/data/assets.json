@@ -20,15 +20,6 @@
         "chapter_01.scenes.1.secrets.s1b.img"
       ]
     },
-    "rust_eater_popup": {
-      "file": "rust_eater.jpg",
-      "kind": "popup",
-      "status": "approved",
-      "usedBy": [
-        "chapter_01.scenes.2.enemy.img"
-      ],
-      "notes": "旧プレゼン用画像。s2_rust_eater.png(スプライト)承認済みのため、表示はスプライト優先に変更(2026-07-12)。スプライトが無い敵のフォールバック用に残置"
-    },
     "locked_iron_gate": {
       "file": "locked_iron_gate.jpg",
       "kind": "legacy",
@@ -304,10 +295,11 @@
     },
     "s1_foreground-png": {
       "file": "s1_foreground.png",
-      "kind": "parallax.fg",
+      "kind": "background",
       "status": "candidate",
       "usedBy": [
-        "chapter_01.scenes.1.parallax.fg"
+        "chapter_01.scenes.1.parallax.fg",
+        "chapter_01.scenes.1.img"
       ],
       "width": 1920,
       "height": 1080,
@@ -325,18 +317,6 @@
       "height": 1080,
       "format": "jpg",
       "bytes": 473530
-    },
-    "rust_eater-jpg": {
-      "file": "rust_eater.jpg",
-      "kind": "enemy",
-      "status": "candidate",
-      "usedBy": [
-        "chapter_01.scenes.2.enemy.img"
-      ],
-      "width": 1376,
-      "height": 768,
-      "format": "jpg",
-      "bytes": 784832
     },
     "s2_rust_eater-png": {
       "file": "s2_rust_eater.png",
@@ -367,7 +347,8 @@
       "kind": "sprite",
       "status": "candidate",
       "usedBy": [
-        "chapter_01.scenes.3.enemy.sprite"
+        "chapter_01.scenes.3.enemy.sprite",
+        "chapter_01.scenes.3.npcSprite"
       ],
       "width": 1024,
       "height": 1536,

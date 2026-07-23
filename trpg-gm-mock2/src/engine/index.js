@@ -834,8 +834,8 @@ function identifyEnemy() {
   state.enemy.identified = true;
   addNote(`⚔ 正体が判明: ${state.enemy.name}`);
   renderDebug(); // スプライトの実体化(シルエット解除)を、GM応答を待たずすぐ始める
-  // エンカウント時と同じくスプライト優先(旧img=プレゼン用画像はスプライトが無い敵のフォールバック)
-  const revealImg = state.enemy.sprite || state.enemy.img;
+  // 敵画像は透過スプライトのみを使用する。
+  const revealImg = state.enemy.sprite;
   if (revealImg) pushPopup({ kind: "reveal", title: "正体判明", body: state.enemy.name, img: revealImg, sprite: !!state.enemy.sprite });
   return `\n# 正体判明\n交戦して、相手の正体が「${state.enemy.name}」だと分かった。以後この名で呼んでよい。`;
 }

@@ -83,7 +83,6 @@
         "maxHp": 5,
         "surface": "レールの錆を食べる、犬くらいの大きさの虫のような魔物だ。縄張りに入ると、おどして襲ってくる。",
         "trait": "レールの錆を食べる、犬くらいの大きさの虫のような魔物だ。縄張りに入ると、おどして襲ってくる。光が苦手だ。",
-        "img": "rust_eater.jpg",
         "sprite": "s2_rust_eater.png",
         "ambush": true,
         "ambushDc": 12,
