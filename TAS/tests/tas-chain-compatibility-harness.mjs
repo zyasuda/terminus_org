@@ -105,6 +105,10 @@ try {
   const normalized = normalizePayload(outputs.unified);
   assert.deepEqual(normalizePayload(outputs.active), normalized, "実運用の出力が統合パイプラインを通っていません");
   assert.ok(outputs.legacy && typeof outputs.legacy === "object", "旧出力比較入口を呼び出せません");
+  assert.equal(outputs.active.campaign?.theme, undefined, "削除済みのcampaign.themeが再出力されています");
+  assert.equal(outputs.active.campaign?.style?.theme, undefined, "削除済みのcampaign.style.themeが再出力されています");
+  assert.ok(!(outputs.active.campaign?.companions || []).some(entry => /^(gareth|lydia)$/.test(entry.id)), "旧同行者IDが再出力されています");
+  assert.ok((outputs.active.chapter?.scenes || []).every(scene => !Object.hasOwn(scene, "enemyName") && !Object.hasOwn(scene, "parallaxSky")), "TAS内部項目がゲーム側JSONへ漏れています");
   const validationResponse = await fetch(baseUrl + "/api/validate-campaign", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
