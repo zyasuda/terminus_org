@@ -1243,9 +1243,6 @@ renderStructure=function(){const holder=document.createElement('div');holder.inn
 var baseBindStructureForExitLabels=bindStructure;
 bindStructure=function(){baseBindStructureForExitLabels();bindExitConditionEditors()};
 if(activeTab==='structure')renderTab();
-/* TASのシーンNPC選択をmock2のnpc形式へ変換する。 */
-var baseMockCampaignPayloadForNpcShape=mockCampaignPayload;
-mockCampaignPayload=function(){const payload=baseMockCampaignPayloadForNpcShape();if(Array.isArray(payload.chapter?.scenes)){const nodes=chapterNodes().filter(n=>n.type==='scene');payload.chapter.scenes=payload.chapter.scenes.map((sceneData,index)=>{const node=nodes[index]||{};const npcId=(sceneData.npcs||node.npcs||[])[0];if(!npcId)return sceneData;const npc=npcList().find(x=>x.id===npcId);if(!npc)return sceneData;const sprite=runtimeImageName(castImages[npcId]);const next={...sceneData,npc:{id:npc.id,name:npc.name}};if(sprite)next.npcSprite=sprite;delete next.npcs;return next})}return payload};
 </script>
 <script>
 /* 世界状態契約v0.1: campaign.flags / chapter.flagsOut + flagRules / style.gameOverText */
@@ -1787,7 +1784,8 @@ function unifiedNormalizeSceneNpcs(payload){
   const nodes=chapterNodes().filter(node=>node.type==='scene');
   const scenes=payload.chapter.scenes.map((sceneData,index)=>{
     const node=nodes[index]||{};
-    const npcId=(sceneData.npcs||node.npcs||[])[0];
+    const authoredNpcs=sceneOverrides[nodeKey(node)]?.npcs;
+    const npcId=(sceneData.npcs||authoredNpcs||node.npcs||[])[0];
     if(!npcId)return sceneData;
     const npc=npcList().find(entry=>entry.id===npcId);
     if(!npc)return sceneData;
