@@ -1668,6 +1668,73 @@ function unifiedNormalizeEntityLedger(payload){
   }));
   return {...payload,campaign:{...(payload?.campaign||{}),entities}};
 }
+function unifiedNormalizeFreshCampaign(payload){
+  if(!freshCampaign)return payload;
+  const chapterInfo=CHAPTERS[activeChapter]||{name:currentFreshChapterLabel(),file:`CHAPTER_${String(chapterOrder.indexOf(activeChapter)+1).padStart(2,'0')}`};
+  const entities=[...monsters.map(entry=>entry.name),...items.map(entry=>entry.name)].filter(Boolean).map(ja=>({ja,note:'TAS台帳から登録'}));
+  const authoredCompanions=exportPayload()?.casts?.companions||[];
+  const companions=authoredCompanions.map(entry=>({id:entry.id,name:entry.name,persona:entry.profile,flags:entry.flags,image:entry.image}));
+  return {...payload,
+    campaign:{...(payload.campaign||{}),meta:{...(payload.campaign?.meta||{}),title:campaignName},style:{...(payload.campaign?.style||{}),world:campaignWorld,theme:campaignTheme,terms:campaignTerms},companions,entities},
+    chapter:{...payload.chapter,title:currentFreshChapterLabel(),scenes:payload.chapter?.scenes||[]},
+    chapterFile:`${chapterInfo.file.toLowerCase()}.json`
+  };
+}
+function unifiedNormalizeOutputContract(payload){
+  const chapterKey=activeChapter;
+  const chapterId=runtimeChapterId(chapterKey);
+  const baseCampaign=payload?.campaign||{};
+  const baseStyle=baseCampaign.style||{};
+  const companions=Array.isArray(baseCampaign.companions)&&baseCampaign.companions.length?baseCampaign.companions:[{id:'member_1',name:'ガレス',persona:'寡黙で実用的な戦士。短く話す。'}];
+  const style={...baseStyle,narration:baseStyle.narration||'である調。地の文は短く、確定事実を優先する。',readingLevel:baseStyle.readingLevel||'平易な日本語を使う。',world:campaignWorld,theme:campaignTheme,terms:campaignTerms};
+  const chapter=payload?.chapter||{};
+  const firstScene=(chapter.scenes||[])[0]||{};
+  const sceneNodes=chapterNodes().filter(node=>node.type==='scene');
+  const normalizedChapter={...chapter,
+    id:Number(chapter.id)||Number(String(chapterId).replace(/\D/g,''))||1,
+    title:chapter.title||currentFreshChapterLabel(),
+    quest:chapter.quest||firstScene.goal||`${chapter.title||currentFreshChapterLabel()}の目的を達成する。`,
+    intro:chapter.intro||firstScene.brief||'この章の導入を設定してください。',
+    scenes:(chapter.scenes||[]).map((rawScene,index)=>{
+      const node=sceneNodes[index]||{};
+      const key=node.type?nodeKey(node):'';
+      const sceneImage=runtimeImageName(sceneBackgrounds[key]);
+      const npcId=(rawScene.npcs||[])[0];
+      const npcImage=runtimeImageName(npcId&&castImages[npcId]);
+      const monster=monsters.find(entry=>entry.name&&entry.name===rawScene.enemyName);
+      const monsterImage=runtimeImageName(monster?.image);
+      const skyImage=runtimeImageName(sceneOverrides[key]?.parallaxSky||rawScene.parallax?.sky);
+      const next={...rawScene};
+      if(sceneImage)next.img=sceneImage;
+      if(skyImage)next.parallax={...(next.parallax||{}),sky:skyImage};
+      delete next.parallaxSky;
+      if(npcImage)next.npcSprite=npcImage;
+      if(monsterImage){next.enemy={...(next.enemy||{}),sprite:monsterImage};delete next.enemy.img}
+      delete next.enemyName;
+      return next;
+    })
+  };
+  const campaign={...baseCampaign,
+    meta:{...(baseCampaign.meta||{}),id:tasCampaignId,title:campaignName,version:(baseCampaign.meta||{}).version||'0.2'},
+    style,
+    companions:companions.map(entry=>{const image=runtimeImageName(castImages[entry.id]);return image?{...entry,sprite:image}:{...entry}}),
+    image:runtimeImageName(campaignImage)||baseCampaign.image||null
+  };
+  const assets={};
+  const addAsset=(file,kind,usedBy)=>{if(!file)return;const id=runtimeAssetId(file);assets[id]={file,kind,status:'candidate',usedBy:[usedBy]}};
+  addAsset(runtimeImageName(campaignImage),'campaign','campaign.image');
+  campaign.companions.forEach(entry=>addAsset(entry.sprite,'portrait',`campaign.companions.${entry.id}.sprite`));
+  normalizedChapter.scenes.forEach((sceneData,index)=>{
+    const base=`${chapterId}.scenes.${sceneData.id||index+1}`;
+    addAsset(sceneData.img,'background',`${base}.img`);
+    addAsset(sceneData.npcSprite,'sprite',`${base}.npcSprite`);
+    addAsset(sceneData.parallax?.sky,'parallax.sky',`${base}.parallax.sky`);
+    addAsset(sceneData.parallax?.fg,'parallax.fg',`${base}.parallax.fg`);
+    addAsset(sceneData.enemy?.sprite,'sprite',`${base}.enemy.sprite`);
+    (sceneData.secrets||[]).forEach(secret=>{addAsset(secret.img,'popup',`${base}.secrets.${secret.id}.img`);addAsset(secret.bg,'background',`${base}.secrets.${secret.id}.bg`)});
+  });
+  return {...payload,campaign,chapter:normalizedChapter,assets,campaignId:tasCampaignId,chapterId,chapterFile:`${chapterId}.json`};
+}
 function unifiedNormalizeEncounters(payload){
   if(!Array.isArray(payload?.chapter?.scenes))return payload;
   const nodes=chapterNodes().filter(node=>node.type==='scene');
@@ -1750,10 +1817,12 @@ function unifiedRemoveUnusedTheme(payload){
   return {...payload,campaign};
 }
 function mockCampaignPayloadUnified(){
-  /* エンティティ台帳変換以降の処理は旧チェーンの直前から取り出し、この統合層で確定する。
+  /* 新規キャンペーン・出力契約以降の処理は旧チェーンの直前から取り出し、この統合層で確定する。
      他の層も同じ手順で順番にここへ移す。 */
-  const source=baseMockCampaignPayloadForEntityLedger();
-  let normalized=unifiedNormalizeEntityLedger(source);
+  const source=baseMockCampaignPayloadForFresh();
+  let normalized=unifiedNormalizeFreshCampaign(source);
+  normalized=unifiedNormalizeOutputContract(normalized);
+  normalized=unifiedNormalizeEntityLedger(normalized);
   normalized=unifiedNormalizeSemantics(normalized);
   normalized=unifiedNormalizeCompanions(normalized);
   normalized=unifiedNormalizeSceneNpcs(normalized);
