@@ -614,8 +614,6 @@ renderTab=function(){if(activeTab!=="entities"){baseRenderTabForEntityLedger();r
 var baseRenderRightPanelForEntityLedger=renderRightPanel;
 renderRightPanel=function(){baseRenderRightPanelForEntityLedger();if(activeTab==="entities"){const target=$("rightBody")?.querySelector(".right-section p");if(target)target.textContent="キャンペーン／エンティティ台帳"}}
 entityLedgerEntries=function(){return ensureEntityLedger().map(x=>({category:entityKindLabel(x.kind),name:x.name,tab:"entities",focus:x.id,source:"エンティティ台帳"}))}
-var baseMockCampaignPayloadForEntityLedger=mockCampaignPayload;
-mockCampaignPayload=function(){const payload=baseMockCampaignPayloadForEntityLedger();const entities=ensureEntityLedger().map(x=>({id:x.id,ja:x.name,aliases:x.aliases,kind:x.kind,importance:x.importance,surface:x.surface,truth:x.truth,visual:x.image||"",affordances:x.affordances}));payload.campaign={...(payload.campaign||{}),entities};return payload}
 </script>
 <script>
 /* エンティティ台帳は「参照表→詳細入力」の順にし、専門台帳への導線を明示する。 */
