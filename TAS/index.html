@@ -1661,6 +1661,13 @@ function unifiedNormalizeSemantics(payload){
     entities:Array.from(byName.values())
   }};
 }
+function unifiedNormalizeEntityLedger(payload){
+  const entities=ensureEntityLedger().map(entry=>({
+    id:entry.id,ja:entry.name,aliases:entry.aliases,kind:entry.kind,importance:entry.importance,
+    surface:entry.surface,truth:entry.truth,visual:entry.image||'',affordances:entry.affordances
+  }));
+  return {...payload,campaign:{...(payload?.campaign||{}),entities}};
+}
 function unifiedNormalizeEncounters(payload){
   if(!Array.isArray(payload?.chapter?.scenes))return payload;
   const nodes=chapterNodes().filter(node=>node.type==='scene');
@@ -1743,10 +1750,11 @@ function unifiedRemoveUnusedTheme(payload){
   return {...payload,campaign};
 }
 function mockCampaignPayloadUnified(){
-  /* 概念・アイテム変換以降の処理は旧チェーンの直前から取り出し、この統合層で確定する。
+  /* エンティティ台帳変換以降の処理は旧チェーンの直前から取り出し、この統合層で確定する。
      他の層も同じ手順で順番にここへ移す。 */
-  const source=baseMockCampaignPayloadForSemantics();
-  let normalized=unifiedNormalizeSemantics(source);
+  const source=baseMockCampaignPayloadForEntityLedger();
+  let normalized=unifiedNormalizeEntityLedger(source);
+  normalized=unifiedNormalizeSemantics(normalized);
   normalized=unifiedNormalizeCompanions(normalized);
   normalized=unifiedNormalizeSceneNpcs(normalized);
   normalized=unifiedApplyFlagContract(normalized);
