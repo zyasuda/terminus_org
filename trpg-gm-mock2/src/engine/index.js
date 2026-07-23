@@ -429,7 +429,7 @@ const addGmNarration = (t, emotion) => {
 const addPlayer = t => { chron.push({ t: state.turn, ts: Date.now(), kind: "player", text: t }); addMsg("player", t); };
 const addNote = t => { chron.push({ t: state.turn, ts: Date.now(), kind: "sys", text: t }); addMsg("sysnote", t); };
 function highlightPortrait(who) {
-  setStore({ activePortrait: who === "lydia" ? "lydia" : "gareth" });
+  setStore({ activePortrait: who });
 }
 // セリフのサニタイズ: 表示側が「」で包むため、モデルが入れてくるカギ括弧やJSON断片(,」等)を除去する。
 // 「A」「B」,」のような複数文連結は最初の一文だけ残す(2026-07-17(9) T25-32)。
@@ -446,8 +446,8 @@ function sanitizeSay(t) {
     .replace(/\s{2,}/g, " ")
     .replace(/^[\s"':,{}、]+/, "").replace(/[\s"':{},、]+$/, "").trim();
 }
-const addCompanion = (t, who = "gareth") => {
-  const name = (CAST[who] && CAST[who].name) || "ガレス";
+const addCompanion = (t, who = Object.keys(CAST)[0]) => {
+  const name = (CAST[who] && CAST[who].name) || who;
   t = sanitizeSay(t);
   if (!t) return;
   chron.push({ t: state.turn, ts: Date.now(), kind: "companion", who, text: t });
@@ -903,6 +903,41 @@ async function resolveAmbushIfNeeded(playerText) {
   return true;
 }
 
+// TASの「エンカウンター設定」(2026-07-23実装)の受け皿。scenes[].encountersがあれば
+// こちらを使い(旧enemy.ambushの正規表現ヒューリスティックは使わない)、無ければ従来通り
+// resolveAmbushIfNeededにフォールバックする(既存データへの後方互換)。
+// timingフィールド(scene_enter/turn_start/movement/player_action/after_check)は、
+// このゲームがターン/移動フェーズを独立に持たないため、現状は区別せず毎回の宣言時に評価する。
+function encounterRequiredElementsMet(enc, sc) {
+  const need = enc.requiredElements || [];
+  if (!need.length) return true;
+  const revealedLabels = sc.secrets.filter(s => revealed.has(s.id)).flatMap(s => [s.entity, ...(s.aliases || [])]);
+  const hit = label => revealedLabels.includes(label);
+  return enc.requiredOperator === "any" ? need.some(hit) : need.every(hit);
+}
+
+async function resolveEncounterIfNeeded(playerText, sc) {
+  for (const enc of sc.encounters) {
+    if (!sc.enemy || enc.monsterName !== sc.enemy.name) continue; // 対応するモンスター定義(scenes[].enemy)が無ければ扱えない
+    if (state.defeated.includes(sc.enemy.name) || (state.fled || []).includes(sc.enemy.name)) continue;
+    if ((enc.blockedBy || []).some(n => state.defeated.includes(n) || (state.fled || []).includes(n))) continue;
+    const count = (state.encounterCounts || {})[enc.id] || 0;
+    if (enc.maxOccurrences != null && count >= enc.maxOccurrences) continue;
+    if (!encounterRequiredElementsMet(enc, sc)) continue;
+    if ((enc.triggerTerms || []).length && !enc.triggerTerms.some(t => playerText.includes(t))) continue;
+    if (enc.type === "random" && !(Math.random() * 100 < (enc.probability ?? 100))) continue;
+
+    state.encounterCounts = state.encounterCounts || {};
+    state.encounterCounts[enc.id] = count + 1;
+    engageEnemy(sc.enemy);
+    addGm(`${enemyName(state.enemy)}が現れた。${enc.onsetText || state.enemy.surface || state.enemy.trait || ""}`, "Fear");
+    addNote(`⚔ エンカウンター発生:${enc.id}`);
+    pushEncounterPopup();
+    return true;
+  }
+  return false;
+}
+
 /* ---------------- 戦闘v1: ターン制・決定論(BORG/TRPG/MockDocs/COMBAT_SPEC.md) ----------------
    進行・ダメージ・弱点・逃走は全てシステムが確定し、LLMは確定結果の描写のみ。
    LLMが落ちても定型文で完走する。戦闘行動以外(調べる・話す)は従来のLLMルートに落ちる */
@@ -1154,8 +1189,9 @@ async function scriptedExamine(secret, actorName = "あなた") {
 function revealFlavor(secret) {
   const names = Object.entries(CAST)
     .map(([id, c]) => `${id}=${c.name}(${c.persona}${voiceRule(c)})`).join(" / ");
+  const whoIds = Object.keys(CAST).join(" または ");
   callGmApi({
-    system: `ソロTRPGの同行者として一言だけ反応する。日本語のである調・口語。40字以内。応答はJSONのみ: {"who":"gareth または lydia","say":"一言"}\n同行者: ${names}\n注意: この真相は今の調査で初めて分かったことである。以前から知っていたかのような発言、この件についての自分の過去・因縁・関わりを捏造してはならない(例:「俺が守ってたやつだ」等は不可)。初めて知った驚き・所感・示唆に留めよ。`,
+    system: `ソロTRPGの同行者として一言だけ反応する。日本語のである調・口語。40字以内。応答はJSONのみ: {"who":"${whoIds}","say":"一言"}\n同行者: ${names}\n注意: この真相は今の調査で初めて分かったことである。以前から知っていたかのような発言、この件についての自分の過去・因縁・関わりを捏造してはならない(例:「俺が守ってたやつだ」等は不可)。初めて知った驚き・所感・示唆に留めよ。`,
     messages: [{ role: "user", content: `たった今、調査でこの真相が分かった:「${secret.playerText || secret.text}」。場に合う方の同行者の、短い反応の一言だけを返せ。` }],
     maxTokens: 80
   }).then(data => {
@@ -1289,7 +1325,7 @@ async function classifyIntent(text) {
     ...(sc.report && sc.npc ? [sc.npc.name] : [])
   ].filter(Boolean);
   const system = `プレイヤーの宣言を分類する。応答は次のJSONのみ(前置き禁止):
-{"intent":"investigate|move|back|talk|talk_gm|take|other","target":"候補から最も近いもの、なければnull"${chipActor ? "" : `,"actor":"player|gareth|lydia"`}}
+{"intent":"investigate|move|back|talk|talk_gm|take|other","target":"候補から最も近いもの、なければnull"${chipActor ? "" : `,"actor":"player|${Object.keys(CAST).join("|")}"`}}
 対象の候補: ${targets.join("、") || "(なし)"}
 基準:
 - investigate: 何かを調べる・見る・聞く・嗅ぐ・観察する
@@ -1574,7 +1610,7 @@ function systemPrompt(extra) {
 
 # 依頼(プレイヤーの目的)
 ${SCENARIO.quest}
-プレイヤーが目的を見失って停滞している時のみ、ガレスの台詞や語りで自然に思い出させてよい。
+プレイヤーが目的を見失って停滞している時のみ、同行者の台詞や語りで自然に思い出させてよい。
 
 # 同行者(あなたが演じる)。全員、プレイヤーと同じ情報しか知らない——未開示の真相・演出指示・「深さのある対象」の注釈を台詞に反映させてはならない。
 ${companionLines}
@@ -1604,7 +1640,7 @@ ${npcBlock}
 - 同行者に行動を任せた宣言(「リディアに調べてもらう」等)の判定は、check.actor にその同行者のid(${companionIds})を入れよ。プレイヤー自身の行動なら "player"。
 - emotion は今回の語りの空気。"Happy","Angry","Fear","Sad","Neutral" から必ず1つ選ぶ(迷ったら "Neutral")。
 - 応答は必ず次のJSONのみ。前置きやコードフェンス禁止:
-{"narration":"地の文","emotion":"Neutral","companion":{"who":"gareth または lydia","say":"その一言","aside":false}または null,${npcSchema}"check":{"reason":"何の判定か","difficulty":8,"targetEntity":"深さのある対象の正名 または null","actor":"player か 同行者のid"}または null,"state_updates":{"hp_delta":0,"enemy_hp_delta":0,"add_items":[],"remove_items":[]}または null,"engage_enemy":false,"flee_enemy":false,"scene_complete":false,"meta_request":{"topic":"何を求められたか"}または null}
+{"narration":"地の文","emotion":"Neutral","companion":{"who":"${Object.keys(CAST).join(" または ")}","say":"その一言","aside":false}または null,${npcSchema}"check":{"reason":"何の判定か","difficulty":8,"targetEntity":"深さのある対象の正名 または null","actor":"player か 同行者のid"}または null,"state_updates":{"hp_delta":0,"enemy_hp_delta":0,"add_items":[],"remove_items":[]}または null,"engage_enemy":false,"flee_enemy":false,"scene_complete":false,"meta_request":{"topic":"何を求められたか"}または null}
 ${digestBlock}
 # 現在のシーン(${state.sceneIndex + 1}/${SCENARIO.scenes.length})
 ${sc.brief}
@@ -1737,7 +1773,10 @@ export async function sendAction(text) {
   }
 
   try {
-    const ambushed = await resolveAmbushIfNeeded(text);
+    const scForEncounter = SCENARIO.scenes[state.sceneIndex];
+    const ambushed = (Array.isArray(scForEncounter.encounters) && scForEncounter.encounters.length && !state.enemy)
+      ? await resolveEncounterIfNeeded(text, scForEncounter)
+      : await resolveAmbushIfNeeded(text);
     if (ambushed) {
       state.pendingFailedCheck = null; state.blockedMove = false;
       state.lastAction = { text: normalizedText, fingerprint: fp, hadCheck: true };

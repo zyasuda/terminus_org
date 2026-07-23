@@ -6,7 +6,7 @@ let snapshot = {
   diceLog: [],         // 文字列[](新しい順)
   sceneBg: "linear-gradient(135deg, #151720 0%, #1e2230 100%)",
   parallax: null,       // {sky, fg} パララックス素材(D-027: シーン1のみ試作)。nullなら単層背景
-  activePortrait: "gareth",
+  activePortrait: "",
   fx: "",              // ""|"crit"|"fumble" (旧CSS演出。USE_PHASER_FX=false時のフォールバック)
   shakeSeq: 0,          // shakeクラス再トリガー用のカウンタ
   phaserFx: { type: "", seq: 0 }, // Phaser演出のトリガー {type:'dice'|'crit'|'fumble', seq, roll?, ok?, crit?, fumble?}

@@ -18,7 +18,8 @@ export function initialState() {
            sceneLog: [], // {scene, text}[] 各シーンで確定した出来事の記録。プロンプトに「これまでの経緯」として常時注入する長期記憶
            flags: {}, // プレイヤーの選択で確定したフラグ(scenes[].stateUpdatesのflag_set由来。例: heartstone_choice)
            flagsFired: [], // 発火済みのstateUpdates識別子("シーン番号:配列index")。onceの重複発火を防ぐ
-           pendingIntro: false // 導入ノード(intro)がオブジェクト形式の間、exits[]解決待ちであることを示す
+           pendingIntro: false, // 導入ノード(intro)がオブジェクト形式の間、exits[]解決待ちであることを示す
+           encounterCounts: {} // 発生済みエンカウント回数 {encounterId: count}。maxOccurrencesの上限判定に使う
          };
 }
 
