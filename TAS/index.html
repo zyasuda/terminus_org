@@ -1641,6 +1641,23 @@ function unifiedNormalizeChapterIntro(payload){
   const existingIntro=typeof chapter.intro==='string'?chapter.intro.trim():'';
   return {...payload,chapter:{...chapter,intro:authoredIntro||existingIntro||null}};
 }
+function unifiedNormalizeSceneNpcs(payload){
+  if(!Array.isArray(payload?.chapter?.scenes))return payload;
+  const nodes=chapterNodes().filter(node=>node.type==='scene');
+  const scenes=payload.chapter.scenes.map((sceneData,index)=>{
+    const node=nodes[index]||{};
+    const npcId=(sceneData.npcs||node.npcs||[])[0];
+    if(!npcId)return sceneData;
+    const npc=npcList().find(entry=>entry.id===npcId);
+    if(!npc)return sceneData;
+    const sprite=runtimeImageName(castImages[npcId]);
+    const next={...sceneData,npc:{id:npc.id,name:npc.name}};
+    if(sprite)next.npcSprite=sprite;
+    delete next.npcs;
+    return next;
+  });
+  return {...payload,chapter:{...payload.chapter,scenes}};
+}
 function unifiedApplyFlagContract(payload){
   ensureFlagConfig();
   const campaign={...(payload?.campaign||{}),flags:flagDeclarations};
@@ -1689,10 +1706,11 @@ function unifiedRemoveUnusedTheme(payload){
   return {...payload,campaign};
 }
 function mockCampaignPayloadUnified(){
-  /* フラグ契約以降の処理は旧チェーンの直前から取り出し、この統合層で確定する。
+  /* シーンNPC変換以降の処理は旧チェーンの直前から取り出し、この統合層で確定する。
      他の層も同じ手順で順番にここへ移す。 */
-  const source=baseMockCampaignPayloadForFlagContract();
-  let normalized=unifiedApplyFlagContract(source);
+  const source=baseMockCampaignPayloadForNpcShape();
+  let normalized=unifiedNormalizeSceneNpcs(source);
+  normalized=unifiedApplyFlagContract(normalized);
   normalized=unifiedNormalizeRuntimeIds(normalized);
   normalized=unifiedRemoveUnusedTheme(normalized);
   normalized=unifiedNormalizeChapterIntro(normalized);

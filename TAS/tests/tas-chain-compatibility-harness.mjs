@@ -120,6 +120,24 @@ try {
   });
   assert.deepEqual(introOutputs, { legacy: "統合テスト用イントロ", unified: "統合テスト用イントロ" }, "チャプターイントロの統合出力が一致しません");
 
+  // シーンNPCを指定した場合も、npc/npcSpriteへの変換結果が一致することを確認する。
+  const npcOutputs = await page.evaluate(() => {
+    const npc = npcList()[0];
+    const node = chapterNodes().find(entry => entry.type === "scene");
+    if (!npc || !node) return null;
+    const key = nodeKey(node);
+    const before = sceneOverrides[key];
+    sceneOverrides[key] = { ...(before || {}), npcs: [npc.id] };
+    const result = {
+      legacy: window.__tasOutputPipelines.legacy().chapter?.scenes?.[0]?.npc || null,
+      unified: window.__tasOutputPipelines.unified().chapter?.scenes?.[0]?.npc || null
+    };
+    if (before === undefined) delete sceneOverrides[key];
+    else sceneOverrides[key] = before;
+    return result;
+  });
+  if (npcOutputs) assert.deepEqual(npcOutputs.legacy, npcOutputs.unified, "シーンNPCの統合出力が一致しません");
+
   if (process.argv.includes("--update")) {
     fs.mkdirSync(path.dirname(baselinePath), { recursive: true });
     fs.writeFileSync(baselinePath, JSON.stringify(normalized, null, 2) + "\n", "utf8");
