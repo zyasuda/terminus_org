@@ -106,6 +106,14 @@ try {
   const normalized = normalizePayload(outputs.unified);
   assert.deepEqual(normalized, normalizedLegacy, "統合版と現行版の出力が一致しません");
   assert.deepEqual(normalizePayload(outputs.active), normalized, "実運用の出力が統合パイプラインを通っていません");
+  const validationResponse = await fetch(baseUrl + "/api/validate-campaign", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(outputs.active)
+  });
+  const validation = await validationResponse.json();
+  assert.equal(validationResponse.status, 200, "出力前検証APIが応答しません");
+  assert.equal(validation.valid, true, "統合出力がサーバー検証を通りません: " + (validation.errors || []).join(" / "));
 
   // チャプターイントロを入力した場合も、旧チェーンと統合層で同じ出力になることを確認する。
   const introOutputs = await page.evaluate(() => {

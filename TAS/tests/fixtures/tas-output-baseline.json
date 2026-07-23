@@ -30,12 +30,6 @@
     "flags": {},
     "entities": [
       {
-        "id": "npc_1",
-        "ja": "NPC1",
-        "kind": "npc",
-        "importance": "support"
-      },
-      {
         "id": "member_1",
         "ja": "ガレス",
         "kind": "character",
@@ -46,6 +40,18 @@
         "ja": "心石",
         "kind": "concept",
         "importance": ""
+      },
+      {
+        "id": "npc_1",
+        "ja": "NPC1",
+        "kind": "npc",
+        "importance": "support"
+      },
+      {
+        "id": "monster_1",
+        "ja": "錆喰い",
+        "kind": "enemy",
+        "importance": "support"
       }
     ]
   },
@@ -57,8 +63,8 @@
     "scenes": [
       {
         "id": 1,
-        "name": "坑道の入口前",
-        "brief": "古いレールと木札がある。奥から金属音が聞こえる。",
+        "name": "坑道の入り口",
+        "brief": "古いレールと薄汚れた木の札がある。奥の方から何かしらの金属音が聞こえる。",
         "completeRequires": {},
         "enemy": null,
         "exits": [
@@ -78,7 +84,7 @@
         "secrets": [
           {
             "id": "ch1_s1_item_1",
-            "entity": "作業札",
+            "entity": "木の札",
             "aliases": [
               "札",
               "板",
@@ -88,7 +94,7 @@
           },
           {
             "id": "ch1_s1_item_2",
-            "entity": "トロッコ軌道",
+            "entity": "レール",
             "aliases": [
               "軌道",
               "線路"
@@ -130,7 +136,7 @@
       },
       {
         "id": 3,
-        "name": "坑道の最奥",
+        "name": "灯りの部屋",
         "brief": "ランタンを持つ人影がこちらを向く。",
         "completeRequires": {},
         "enemy": null,
@@ -151,18 +157,8 @@
       },
       {
         "id": 4,
-        "name": "村への帰還",
+        "name": "村にもどる",
         "brief": "村の広場。マイラの家に灯りがともる。",
-        "completeRequires": {},
-        "enemy": null,
-        "exits": [],
-        "loot": [],
-        "secrets": []
-      },
-      {
-        "id": 5,
-        "name": "マイラの部屋",
-        "brief": "マイラが報告を待っている。",
         "completeRequires": {},
         "enemy": null,
         "exits": [],

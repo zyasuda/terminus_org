@@ -464,6 +464,20 @@ const server = http.createServer(async (req, res) => {
   }
 
   // TASで確認したキャンペーンデータをゲームmockのpublic/dataへ反映する
+  if (req.method === "POST" && req.url === "/api/validate-campaign") {
+    try {
+      const payload = JSON.parse(await readBody(req));
+      if (!payload.campaign || !payload.chapter) {
+        return json(400, { error: { message: "campaign / chapter が必要です" } });
+      }
+      const errors = validateCampaignData(payload.campaign, payload.chapter);
+      return json(200, { valid: errors.length === 0, errors });
+    } catch (e) {
+      return json(400, { error: { message: e.message } });
+    }
+  }
+
+  // TASで確認したキャンペーンデータをゲームmockのpublic/dataへ反映する
   if (req.method === "POST" && req.url === "/api/export-campaign") {
     try {
       const payload = JSON.parse(await readBody(req));
