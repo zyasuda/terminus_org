@@ -1271,8 +1271,6 @@ window.__tasRunMockExport=runMockExport;
 bindExport=function(){const preview=$("exportPreview"),refresh=$("btnRefreshExport"),button=$("btnExportCampaign");if(!preview||!refresh||!button)return;refresh.onclick=()=>{preview.value=JSON.stringify(mockCampaignPayload(),null,2)};button.onclick=()=>runMockExport(button)};
 var baseRenderTabForFlagExport=renderTab;renderTab=function(){baseRenderTabForFlagExport();if(activeTab==='export')bindExport()};
 document.addEventListener("click",event=>{const button=event.target.closest?.("#btnExportCampaign");if(button&&!button.onclick)runMockExport(button)});
-/* mock2の既存IDとTAS下書きの自動生成IDを接続し、出力時の整合性を保つ。 */
-var baseMockCampaignPayloadForRuntimeIds=mockCampaignPayload;mockCampaignPayload=function(){const payload=baseMockCampaignPayloadForRuntimeIds();const source=flagChapterSource(activeChapter);const sourceScenes=Array.isArray(source.scenes)?source.scenes:[];if(Array.isArray(payload.chapter?.scenes)){payload.chapter.scenes=payload.chapter.scenes.map((s,i)=>{const oldSecrets=sourceScenes[i]?.secrets||[];const next={...s};if(Array.isArray(next.secrets)&&oldSecrets.length)next.secrets=next.secrets.map((secret,j)=>({...secret,id:oldSecrets[j]?.id||secret.id}));if(Array.isArray(next.exits))next.exits=next.exits.map(exit=>{const ref=String(exit.to??'').match(/^scene:(\d+)$/);return ref?{...exit,to:Number(ref[1])}:exit});return next})}return payload};
 if(activeTab==='world')renderTab();
 </script>
 <script>
