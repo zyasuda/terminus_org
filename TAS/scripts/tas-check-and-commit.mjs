@@ -57,7 +57,9 @@ const tests = [
   "tests/tas-chain-compatibility-harness.mjs",
   "tests/tas-companion-output-contract.mjs",
   "tests/tas-fresh-campaign-output-contract.mjs",
-  "tests/tas-complete-requires-contract.mjs"
+  "tests/tas-complete-requires-contract.mjs",
+  "tests/tas-entity-draft-adopt-contract.mjs",
+  "tests/tas-workspace-render-chain-harness.mjs"
 ];
 
 try {

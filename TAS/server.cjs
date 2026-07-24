@@ -377,11 +377,24 @@ function validateCampaignData(campaign, chapter) {
   return errs;
 }
 
+// 上限はBORG「TAS画像素材分類表」記載の最大画素(SKY 2400x1080)を透過PNG+base64でも
+// 十分収まる余裕を見て設定。上限超過時は即座に接続を切り、メモリへの無制限蓄積を防ぐ
+const MAX_REQUEST_BYTES = 25 * 1024 * 1024;
 function readBody(req) {
-  return new Promise(resolve => {
+  return new Promise((resolve, reject) => {
     let body = "";
-    req.on("data", c => { body += c; });
+    let bytes = 0;
+    req.on("data", c => {
+      bytes += c.length;
+      if (bytes > MAX_REQUEST_BYTES) {
+        req.destroy();
+        reject(new Error(`リクエストボディが上限(${MAX_REQUEST_BYTES / (1024 * 1024)}MB)を超えています`));
+        return;
+      }
+      body += c;
+    });
     req.on("end", () => resolve(body));
+    req.on("error", reject);
   });
 }
 
@@ -550,7 +563,12 @@ const server = http.createServer(async (req, res) => {
     fs.readFile(path.join(__dirname, name), (err, data) => {
       if (err) { res.writeHead(404); res.end(`${name} が見つかりません`); return; }
       const type = name.endsWith(".js") ? "text/javascript; charset=utf-8" : "text/html; charset=utf-8";
-      res.writeHead(200, { "Content-Type": type });
+      res.writeHead(200, {
+        "Content-Type": type,
+        "Cache-Control": "no-store, no-cache, must-revalidate",
+        "Pragma": "no-cache",
+        "Expires": "0"
+      });
       res.end(data);
     });
     return;
