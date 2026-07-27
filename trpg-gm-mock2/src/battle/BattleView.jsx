@@ -55,9 +55,13 @@ const makeGrid = seed => {
 
 const rollD20 = () => 1 + Math.floor(Math.random() * 20);
 
+// 手番の開始時点を控えておき、「やり直す」で丸ごと戻せるようにする。
+// 状態はすべて作り直して差し替えているので、参照を持っておくだけで十分
+const snapshotOf = s => ({ units: s.units, coins: s.coins, purse: s.purse, hasMoved: false, log: s.log });
+
 const initialState = (seed = Number(params().get("seed")) || (Date.now() & 0xffff)) => {
   const units = makeUnits();
-  return {
+  const base = {
     seed,
     grid: makeGrid(seed),
     units,
@@ -68,6 +72,7 @@ const initialState = (seed = Number(params().get("seed")) || (Date.now() & 0xfff
     purse: 0,         // 拾ったコインの数
     log: ["戦闘開始。"]
   };
+  return { ...base, snapshot: snapshotOf(base) };
 };
 
 const alive = (units, side) => units.some(u => u.side === side && u.hp > 0);
@@ -96,10 +101,13 @@ export default function BattleView() {
     for (let i = 1; i <= s.order.length; i++) {
       const next = (s.turn + i) % s.order.length;
       const u = s.units.find(x => x.id === s.order[next]);
-      if (u && u.hp > 0) return { ...s, turn: next, hasMoved: false };
+      if (u && u.hp > 0) return { ...s, turn: next, hasMoved: false, snapshot: snapshotOf(s) };
     }
     return s;
   });
+
+  // 手番の開始時点へ戻す。移動した位置も、途中で拾ったコインも元通りになる
+  const undoTurn = () => setState(s => ({ ...s, ...s.snapshot }));
 
   // 結果を先に確定させてから、演出と状態更新をそれぞれ行う。
   // 演出は見た目だけで、確定した結果を変えない
@@ -200,6 +208,9 @@ export default function BattleView() {
   });
 
   const status = !partyAlive ? "敗北" : !enemyAlive ? "勝利" : null;
+  // 手番開始時から何も変わっていなければ、やり直すものが無い(参照が同じかで判る)
+  const canUndo = playerTurn &&
+    (state.units !== state.snapshot.units || state.coins !== state.snapshot.coins);
 
   return (
     <div style={S.page}>
@@ -230,8 +241,10 @@ export default function BattleView() {
         <div style={S.row}>
           <button style={S.btn} onClick={() => sceneRef.current?.rotate(-1)}>◀ 視点</button>
           <button style={S.btn} onClick={() => sceneRef.current?.rotate(1)}>視点 ▶</button>
+          <button style={S.btn} disabled={!canUndo} onClick={undoTurn}>やり直す</button>
           <button style={S.btn} disabled={!playerTurn} onClick={endTurn}>ターン終了</button>
-          <button style={S.btn} onClick={() => setState(initialState())}>最初から</button>
+          {/* 押し間違えると戦闘がやり直しになるので、他のボタンから離す */}
+          <button style={{ ...S.btn, marginLeft: "auto" }} onClick={() => setState(initialState())}>最初から</button>
         </div>
 
         <div style={S.hint}>
