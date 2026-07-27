@@ -84,16 +84,16 @@ export default function BattleView() {
   const sceneRef = useRef(null);
   const [state, setState] = useState(initialState);
   // 演出の見た目調整用。ゲームの状態ではないので「やり直す」「最初から」の対象外
-  const [fogOn, setFogOn] = useState(true);
+  const [fogOn, setFogOn] = useState(false);
   const [fogLevel, setFogLevel] = useState(1);
-  const [dustOn, setDustOn] = useState(true);
+  const [dustOn, setDustOn] = useState(false);
   const [rainOn, setRainOn] = useState(false);
-  const [wallsOn, setWallsOn] = useState(true);
+  const [wallsOn, setWallsOn] = useState(false);
   const [bgColor, setBgColor] = useState("#161a22");
   const [lightPreset, setLightPreset] = useState("night");
-  const [lanternsOn, setLanternsOn] = useState(true);
-  const [obstaclesOn, setObstaclesOn] = useState(true);
-  const [waterOn, setWaterOn] = useState(true);
+  const [lanternsOn, setLanternsOn] = useState(false);
+  const [obstaclesOn, setObstaclesOn] = useState(false);
+  const [waterOn, setWaterOn] = useState(false);
 
   const { grid, units, order, turn, hasMoved, coins } = state;
   const active = units.find(u => u.id === order[turn] && u.hp > 0) || null;
