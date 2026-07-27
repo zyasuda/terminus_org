@@ -129,6 +129,23 @@ export function scatterObstacles(grid, rng, { pillars = 5, rubble = 6, keepClear
   return grid;
 }
 
+/* ---------------- 立ち位置の高さ ---------------- */
+
+// そのマスに立ったときの足元の高さ。乗り越えられる瓦礫(0.25〜0.75)の上に立つ。
+// 柱(1.0)は進入できないので、ユニットの立ち位置として現れることはない。
+// cell.height(地形の高さ)は未使用だが、使い始めたらここへ足せばよい
+export function elevationAt(grid, x, y) {
+  const c = cellAt(grid, x, y);
+  return c && c.obstacle && c.obstacle.height < 1 ? c.obstacle.height : 0;
+}
+
+// 攻撃側から見た高低差の段数。0.25を1段と数え、-3〜+3に収める。
+// 上を取っていれば正、下から攻めていれば負になる
+export function heightSteps(grid, attacker, target) {
+  const d = elevationAt(grid, attacker.x, attacker.y) - elevationAt(grid, target.x, target.y);
+  return Math.max(-3, Math.min(3, Math.round(d * 4)));
+}
+
 /* ---------------- 隣接・距離 ---------------- */
 
 // 近接攻撃の射程は8方向隣接のみ(リーチ武器は保留)。自分自身は隣接に含めない
@@ -218,15 +235,20 @@ export function turnOrder(units) {
 // 命中・ダメージ・包囲倍率をここで確定し、「何が起きたか」だけを返す。
 // roll は d20 を返す関数(テストでは固定値を注入する)。
 // 返り値はそのままGMの語り・画面演出・ログの入力になる(この層は文言を持たない)。
-export function resolveMelee({ attacker, target, units = [], roll }) {
+export function resolveMelee({ attacker, target, units = [], roll, grid = null }) {
   if (attacker.hp <= 0) return { ok: false, reason: "attacker_down" };
   if (target.hp <= 0) return { ok: false, reason: "target_down" };
   if (!isAdjacent(attacker, target)) return { ok: false, reason: "not_adjacent" };
 
+  // 高低差。上を取れば当てやすく、下から攻めれば当てにくい。
+  // 補正はDCではなく出目に足す。こうしないと「出目20はクリティカル、1はファンブル」
+  // という取り決めが崩れる(補正で20を超えてもクリティカルにはしない)
+  const steps = grid ? heightSteps(grid, attacker, target) : 0;
+
   const d20 = roll();
   const crit = d20 === 20, fumble = d20 === 1;
   const dc = target.defenseDc ?? 12;
-  const hit = crit || (!fumble && d20 >= dc);
+  const hit = crit || (!fumble && d20 + steps >= dc);
 
   const surround = adjacentAllies(units, target, attacker.side).length;
   const multiplier = surroundMultiplier(surround);
@@ -234,9 +256,13 @@ export function resolveMelee({ attacker, target, units = [], roll }) {
   // 四捨五入で1のまま消えてしまい、囲んでいる実感が出なかった。3を基準にすると
   // 1人3 / 2人4 / 3人5 / 4人6 と一段ずつ増えて手応えが分かる
   const base = attacker.atk ?? 3;
-  const damage = hit ? Math.round((crit ? base * 2 : base) * multiplier) : 0;
+  // 2段(0.5)以上の高低差は威力にも効く。1段程度の段差は当てやすさだけに留める
+  const heightDamage = steps >= 2 ? 1 : steps <= -2 ? -1 : 0;
+  const damage = hit
+    ? Math.max(1, Math.round((crit ? base * 2 : base) * multiplier) + heightDamage)
+    : 0;
 
-  return { ok: true, d20, dc, hit, crit, fumble, surround, multiplier, damage };
+  return { ok: true, d20, dc, hit, crit, fumble, surround, multiplier, damage, steps, heightDamage };
 }
 
 /* ---------------- 敵の行動選択(Phase 1の仮置き) ---------------- */

@@ -8,7 +8,8 @@ import {
   createGrid, isWalkable, inBounds, cellAt,
   isAdjacent, movePointsFor, reachableCells,
   surroundMultiplier, adjacentAllies, turnOrder, resolveMelee,
-  chooseEnemyAction, makeRng, scatterObstacles, occupiedBy, pathTo
+  chooseEnemyAction, makeRng, scatterObstacles, occupiedBy, pathTo,
+  elevationAt, heightSteps
 } from "./core.js";
 
 const near = (a, b) => Math.abs(a - b) < 1e-9;
@@ -246,6 +247,76 @@ const near = (a, b) => Math.abs(a - b) < 1e-9;
     resolveMelee({ attacker: atk, target: foe, units: [atk, ally2, ally3, ally4, foe], roll: () => 12 }).damage,
     6, "4人で囲むと6"
   );
+}
+
+/* --- 高低差 --- */
+{
+  // 平らな盤面に高さの違う瓦礫を手で置く。近接は8方向隣接でしか成立しないので、
+  // 比較したい高さはすべて (0,0) の隣に並べる
+  const g = createGrid(Array(4).fill("...."));
+  const put = (x, y, h) => { cellAt(g, x, y).obstacle = { height: h }; };
+  put(1, 0, 0.25);   // (0,0)から見て1段
+  put(0, 1, 0.5);    // 2段
+  put(1, 1, 0.75);   // 3段(斜め隣)
+
+  assert.equal(elevationAt(g, 0, 0), 0, "何も無ければ0");
+  assert.equal(elevationAt(g, 0, 1), 0.5, "瓦礫の上に立つ");
+  assert.equal(elevationAt(g, 9, 9), 0, "盤外は0");
+
+  // 柱(1.0)は進入できないので立ち位置の高さにはならない
+  cellAt(g, 3, 3).obstacle = { height: 1 };
+  cellAt(g, 3, 3).walkable = false;
+  assert.equal(elevationAt(g, 3, 3), 0);
+
+  const at = (x, y) => ({ x, y });
+  assert.equal(heightSteps(g, at(1, 1), at(0, 0)), 3, "0.75の差は3段");
+  assert.equal(heightSteps(g, at(0, 0), at(1, 1)), -3, "下から見上げれば-3段");
+  assert.equal(heightSteps(g, at(1, 0), at(0, 0)), 1, "0.25の差は1段");
+  assert.equal(heightSteps(g, at(0, 1), at(0, 1)), 0, "同じ高さなら0");
+
+  /* --- 高低差が命中とダメージに効く --- */
+  const mk = (id, side, x, y) => ({ id, side, x, y, hp: 10, atk: 3, defenseDc: 12 });
+
+  // 同じ高さ: 出目11なら外れ、12なら命中
+  const flat = { attacker: mk("a", "party", 0, 3), target: mk("b", "enemy", 1, 3), grid: g };
+  assert.equal(resolveMelee({ ...flat, roll: () => 11 }).hit, false);
+  assert.equal(resolveMelee({ ...flat, roll: () => 12 }).hit, true);
+
+  // 1段高い所から: 出目11でも届く(補正+1)。威力は変わらない
+  const high1 = { attacker: mk("a", "party", 1, 0), target: mk("b", "enemy", 0, 0), grid: g };
+  const h1 = resolveMelee({ ...high1, roll: () => 11 });
+  assert.equal(h1.steps, 1);
+  assert.equal(h1.hit, true, "1段高いと出目11でも当たる");
+  assert.equal(h1.heightDamage, 0, "1段程度では威力は変わらない");
+  assert.equal(h1.damage, 3);
+
+  // 2段高い所から: 命中補正に加えて威力も+1
+  const high2 = { attacker: mk("a", "party", 0, 1), target: mk("b", "enemy", 0, 0), grid: g };
+  const h2 = resolveMelee({ ...high2, roll: () => 12 });
+  assert.equal(h2.steps, 2);
+  assert.equal(h2.heightDamage, 1);
+  assert.equal(h2.damage, 4, "3 + 1");
+
+  // 2段低い所から: 当てにくく、威力も-1
+  const low2 = { attacker: mk("a", "party", 0, 0), target: mk("b", "enemy", 0, 1), grid: g };
+  assert.equal(resolveMelee({ ...low2, roll: () => 12 }).hit, false, "下からだと出目12では届かない");
+  const l2 = resolveMelee({ ...low2, roll: () => 14 });
+  assert.equal(l2.steps, -2);
+  assert.equal(l2.heightDamage, -1);
+  assert.equal(l2.damage, 2, "3 - 1");
+
+  // 補正で下がってもダメージは1未満にならない
+  const weak = { attacker: { ...mk("a", "party", 0, 0), atk: 1 }, target: mk("b", "enemy", 1, 1), grid: g };
+  assert.ok(resolveMelee({ ...weak, roll: () => 20 }).damage >= 1, "命中したら最低1");
+
+  // クリティカル・ファンブルは補正込みの値ではなく素の出目で決まる
+  const critLow = resolveMelee({ ...low2, roll: () => 20 });
+  assert.ok(critLow.crit, "下からでも出目20はクリティカル");
+  const fumbleHigh = resolveMelee({ ...high2, roll: () => 1 });
+  assert.ok(fumbleHigh.fumble && !fumbleHigh.hit, "上からでも出目1はファンブル");
+
+  // gridを渡さなければ高低差は効かない(既存の呼び出しを壊さない)
+  assert.equal(resolveMelee({ attacker: mk("a", "party", 0, 1), target: mk("b", "enemy", 0, 0), roll: () => 12 }).steps, 0);
 }
 
 /* --- 敵の行動選択(仮置きAI) --- */

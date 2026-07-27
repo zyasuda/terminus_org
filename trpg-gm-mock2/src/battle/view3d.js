@@ -10,6 +10,7 @@
    ========================================================= */
 
 import * as THREE from "three";
+import { elevationAt } from "./core.js";
 
 const TILE = 0.92;       // 床タイルの一辺(セル間にわずかな目地を残す)
 const TILE_H = 0.25;     // 床の厚み(1キューブ=4層の1層ぶん)
@@ -248,7 +249,8 @@ export function createBattleScene(container, grid) {
         coinMeshes.set(c.id, m);
       }
       const [wx, wz] = worldOf(c.x, c.y);
-      m.position.set(wx, COIN_R, wz);     // 立てた状態で地面に接する高さ
+      // 立てた状態で足元に接する高さ。瓦礫の上で倒れたならその上に落ちる
+      m.position.set(wx, elevationAt(grid, c.x, c.y) + COIN_R, wz);
     }
     for (const [id, m] of coinMeshes) {          // 拾われたコインは消す
       if (!seen.has(id)) {
@@ -275,7 +277,10 @@ export function createBattleScene(container, grid) {
 
       const [wx, wz] = worldOf(u.x, u.y);
       const h = u.height ?? 2;
-      g.position.set(wx, 0, wz);   // 各パーツは自分の高さに配置済みなので足元を合わせる
+      // 瓦礫のマスでは、その上に立つ(足元の高さぶん持ち上げる)。
+      // 0固定にしていた頃は瓦礫の箱にめり込んで見えていた
+      const e = elevationAt(grid, u.x, u.y);
+      g.position.set(wx, e, wz);
       // 攻撃できる相手は自身を光らせる。足元のマスを塗っても本体に隠れて見えないため
       const glow = targetIds.includes(u.id) ? COLOR.target : 0x000000;
       for (const mat of g.userData.mats) {
@@ -285,7 +290,7 @@ export function createBattleScene(container, grid) {
       g.visible = true;
       if (u.id === activeId) {
         marker.visible = true;
-        marker.position.set(wx, h + 0.5, wz);
+        marker.position.set(wx, e + h + 0.5, wz);
       }
     }
     if (!activeId) marker.visible = false;
@@ -321,27 +326,29 @@ export function createBattleScene(container, grid) {
   }
 
   // ダメージ値を浮かび上がらせる(外れは0)
-  function floatDamage(wx, wz, text, color) {
+  function floatDamage(wx, wz, text, color, elev = 0) {
     const num = damageSprite(text, color);
-    num.position.set(wx, 1.3, wz);
+    const y0 = elev + 1.3;
+    num.position.set(wx, y0, wz);
     scene.add(num);
-    effects.push({ kind: "float", obj: num, t: 0, dur: 0.85, y0: 1.3 });
+    effects.push({ kind: "float", obj: num, t: 0, dur: 0.85, y0 });
   }
 
-  function spawnRing(wx, wz, color, dur, weak) {
+  function spawnRing(wx, wz, color, dur, weak, elev = 0) {
     const ring = new THREE.Mesh(ringGeo, new THREE.MeshBasicMaterial({
       color, transparent: true, side: THREE.DoubleSide, depthTest: false
     }));
     ring.rotation.x = -Math.PI / 2;
-    ring.position.set(wx, 0.15, wz);
+    ring.position.set(wx, elev + 0.15, wz);
     scene.add(ring);
     effects.push({ kind: "ring", obj: ring, t: 0, dur, weak });
   }
 
   function playHit(x, y, { crit = false, damage = 0, unitId = null } = {}) {
     const [wx, wz] = worldOf(x, y);
-    spawnRing(wx, wz, crit ? 0xffd76a : 0xff8f6a, crit ? 0.5 : 0.36, false);
-    floatDamage(wx, wz, String(damage), crit ? "#ffd76a" : "#ffffff");
+    const e = elevationAt(grid, x, y);   // 瓦礫の上なら演出もその高さで出す
+    spawnRing(wx, wz, crit ? 0xffd76a : 0xff8f6a, crit ? 0.5 : 0.36, false, e);
+    floatDamage(wx, wz, String(damage), crit ? "#ffd76a" : "#ffffff", e);
 
     const g = unitId && unitMeshes.get(unitId);
     if (g) effects.push({ kind: "flash", mats: g.userData.mats, t: 0, dur: 0.28, color: crit ? 0xffd76a : 0xffffff });
@@ -351,8 +358,9 @@ export function createBattleScene(container, grid) {
 
   function playMiss(x, y) {
     const [wx, wz] = worldOf(x, y);
-    spawnRing(wx, wz, 0x8b93a7, 0.3, true);
-    floatDamage(wx, wz, "0", "#9aa3b5");   // 外れも0として出す(何も起きなかったのか判断できるように)
+    const e = elevationAt(grid, x, y);
+    spawnRing(wx, wz, 0x8b93a7, 0.3, true, e);
+    floatDamage(wx, wz, "0", "#9aa3b5", e);   // 外れも0として出す(何も起きなかったのか判断できるように)
   }
 
   function stepEffects(dt) {

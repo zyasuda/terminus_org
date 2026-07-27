@@ -104,16 +104,19 @@ export default function BattleView() {
   // 結果を先に確定させてから、演出と状態更新をそれぞれ行う。
   // 演出は見た目だけで、確定した結果を変えない
   const attack = (attacker, target) => {
-    const r = resolveMelee({ attacker, target, units, roll: rollD20 });
+    const r = resolveMelee({ attacker, target, units, roll: rollD20, grid });
     if (!r.ok) return;
     const view = sceneRef.current;
     if (r.hit) view?.playHit(target.x, target.y, { crit: r.crit, damage: r.damage, unitId: target.id });
     else view?.playMiss(target.x, target.y);
 
+    // 高低差は「上を取っている/見上げている」と言い添える(数値そのものは出さない)
+    const highNote = r.steps > 0 ? "高い所から打ち下ろす。" : r.steps < 0 ? "見上げる形で分が悪い。" : "";
+
     setState(s => {
       const lines = [];
       if (!r.hit) {
-        lines.push(`${attacker.name}の攻撃は${r.fumble ? "大きく外れ、体勢を崩した" : "外れた"}(d20=${r.d20})。`);
+        lines.push(`${attacker.name}の攻撃は${r.fumble ? "大きく外れ、体勢を崩した" : "外れた"}(d20=${r.d20})。${highNote}`);
         return { ...s, log: [...s.log, ...lines] };
       }
       const cur = s.units.find(u => u.id === target.id);
@@ -121,7 +124,8 @@ export default function BattleView() {
       lines.push(
         `${attacker.name}の攻撃が${r.crit ? "深々と" : ""}命中(d20=${r.d20})。` +
         `${target.name}に${r.damage}ダメージ(残りHP ${hp}/${cur.maxHp})。` +
-        (r.surround >= 2 ? `${r.surround}人で囲んでいる(×${r.multiplier.toFixed(2)})。` : "")
+        (r.surround >= 2 ? `${r.surround}人で囲んでいる(×${r.multiplier.toFixed(2)})。` : "") +
+        highNote
       );
       // 倒れた駒は盤面から退き、その場にコインが残る
       const dropped = hp <= 0 ? [{ id: "coin_" + target.id, x: cur.x, y: cur.y }] : [];
