@@ -72,26 +72,12 @@ export function createBattleScene(container, grid) {
   scene.add(key);
 
   /* --- ランタン(ゆらぐ炎) ---
-     廃坑の灯りのつもりの点光源。明るさを不規則に揺らして炎のちらつきを出す。
+     盤面に固定で置くのはやめ、味方(ガレス・リディア)が持ち歩く形にした。
+     ユニットのGroupに光源を入れてあるので、移動すれば明かりも一緒に動く。
+     倒れると visible=false になり、Three.jsは非表示のライトを集計しないので
+     明かりも自然に消える。敵は光源を持たない。
      見た目だけの演出で、射線や明暗による判定には一切関与しない */
   const lanterns = [];
-  const addLantern = (gx, gy) => {
-    const [wx, wz] = worldOf(gx, gy);
-    const base = 34;
-    const light = new THREE.PointLight(0xffa848, base, 11, 1.6);
-    light.position.set(wx, 1.9, wz);
-    scene.add(light);
-    const bulb = new THREE.Mesh(
-      new THREE.SphereGeometry(0.13, 10, 8),
-      new THREE.MeshBasicMaterial({ color: 0xffd9a0 })
-    );
-    bulb.position.copy(light.position);
-    scene.add(bulb);
-    lanterns.push({ light, bulb, base, phase: lanterns.length * 2.7 });
-  };
-  // 盤面の対角に2つ。中央を空けておくと、どちらへ寄っても明暗の差が出る
-  addLantern(1, 1);
-  addLantern(grid.w - 2, grid.h - 2);
 
   // 周期の違う正弦を重ねて、繰り返しに気づきにくいゆらぎを作る。
   // 速い成分を厚めにすると「ゆっくり明滅」ではなく炎のチラつきに寄る
@@ -144,7 +130,8 @@ export function createBattleScene(container, grid) {
   const BACKDROP_H = 3.6;
   const halfW = grid.w / 2, halfH = grid.h / 2;
 
-  // 下は壁の色、上へ向かうほど透過して闇に溶ける縦グラデーション。
+  // 上ほど見え、下へ向かうほど透過して闇に沈む縦グラデーション。
+  // 背景が暗いので、透過させた床際がいちばん暗くなる。
   // CanvasTextureのflipYが既定で有効なので、canvasの上端がそのまま壁の上端になる
   const backdropTexture = () => {
     const c = document.createElement("canvas");
@@ -152,12 +139,16 @@ export function createBattleScene(container, grid) {
     c.height = 128;
     const g = c.getContext("2d");
     const grad = g.createLinearGradient(0, 0, 0, c.height);
-    grad.addColorStop(0, "rgba(12,14,20,0)");      // 上端: 完全に透過
-    grad.addColorStop(0.55, "rgba(22,26,36,0.72)");
-    grad.addColorStop(1, "rgba(31,36,49,1)");      // 下端: 床際だけしっかり見せる
+    grad.addColorStop(0, "rgba(30,35,49,0.9)");    // 上端: いちばん見える
+    grad.addColorStop(0.45, "rgba(15,18,26,0.5)");
+    grad.addColorStop(1, "rgba(5,6,10,0)");        // 下端: 透過して闇へ沈む
     g.fillStyle = grad;
     g.fillRect(0, 0, c.width, c.height);
-    return new THREE.CanvasTexture(c);
+    const tex = new THREE.CanvasTexture(c);
+    // 色空間を指定しないとcanvasの値が線形として扱われ、出力時のsRGB変換で
+    // 持ち上げられてしまう(指定した色よりかなり明るく出る)
+    tex.colorSpace = THREE.SRGBColorSpace;
+    return tex;
   };
 
   // 陰影を付けない(MeshBasic)。Lambertだと指向性ライトが当たらない向きの壁だけ
@@ -206,6 +197,28 @@ export function createBattleScene(container, grid) {
     m.position.y = h / 2;
     m.userData = { kind: "unit", id: unit.id };   // 子を直接クリックしても拾えるように
     g.add(m);
+
+    if (unit.side === "party") {
+      // 味方はランタンを提げている。光源をGroupに入れてあるので移動に追従する。
+      // decay=0(距離減衰なし)にしてあるのが肝。既定の逆二乗系のままだと、
+      // 光源のすぐ隣にある持ち主の体だけが白飛びして陣営の色まで失われる。
+      // 減衰を切ると範囲内が一様に照らされ、distanceの縁でなめらかに落ちるので、
+      // 「ぼんやり明るい範囲」がそのまま出る
+      const base = 4.6;
+      const light = new THREE.PointLight(0xffa848, base, 6.4, 0);
+      light.position.set(0.36, h * 0.55, 0.36);
+      g.add(light);
+      const bulb = new THREE.Mesh(
+        new THREE.SphereGeometry(0.1, 10, 8),
+        new THREE.MeshBasicMaterial({ color: 0xffd9a0 })
+      );
+      bulb.position.copy(light.position);
+      g.add(bulb);
+      lanterns.push({ light, bulb, base, phase: lanterns.length * 2.7 });
+    } else {
+
+    }
+
     g.userData = { kind: "unit", id: unit.id, mats: [mat] };
     return g;
   };
