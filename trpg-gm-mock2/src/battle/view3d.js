@@ -206,15 +206,9 @@ export function createBattleScene(container, grid) {
       // 「ぼんやり明るい範囲」がそのまま出る
       const base = 4.6;
       const light = new THREE.PointLight(0xffa848, base, 6.4, 0);
-      light.position.set(0.36, h * 0.55, 0.36);
+      light.position.set(0, h * 0.9, 0);   // 頭のあたり。光源だけを置き、球体は出さない
       g.add(light);
-      const bulb = new THREE.Mesh(
-        new THREE.SphereGeometry(0.1, 10, 8),
-        new THREE.MeshBasicMaterial({ color: 0xffd9a0 })
-      );
-      bulb.position.copy(light.position);
-      g.add(bulb);
-      lanterns.push({ light, bulb, base, phase: lanterns.length * 2.7 });
+      lanterns.push({ light, base, phase: lanterns.length * 2.7 });
     } else {
 
     }
@@ -458,9 +452,7 @@ export function createBattleScene(container, grid) {
 
     elapsed += dt;
     for (const l of lanterns) {
-      const f = flicker(elapsed * 6 + l.phase);
-      l.light.intensity = l.base * f;
-      l.bulb.scale.setScalar(0.85 + 0.3 * f);
+      l.light.intensity = l.base * flicker(elapsed * 6 + l.phase);
     }
 
     stepEffects(dt);
