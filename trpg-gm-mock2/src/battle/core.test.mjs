@@ -9,7 +9,7 @@ import {
   isAdjacent, movePointsFor, reachableCells,
   surroundMultiplier, adjacentAllies, turnOrder, resolveMelee,
   chooseEnemyAction, makeRng, scatterObstacles, occupiedBy, pathTo,
-  elevationAt, heightSteps
+  elevationAt, heightSteps, scatterWater, moveCostAt
 } from "./core.js";
 
 const near = (a, b) => Math.abs(a - b) < 1e-9;
@@ -79,6 +79,51 @@ const near = (a, b) => Math.abs(a - b) < 1e-9;
 
   // 起点は結果に含めない
   assert.ok(!one.some(c => c.x === 2 && c.y === 1), "起点は含めない");
+}
+
+/* --- 水溜り(移動コスト2倍) --- */
+{
+  const g = createGrid(Array(5).fill("....."));
+  assert.equal(moveCostAt(g, 0, 0), 1, "既定は1");
+
+  cellAt(g, 2, 1).terrain = { type: "water", moveCost: 2 };
+  assert.equal(moveCostAt(g, 2, 1), 2);
+
+  // 水溜りは進入自体は妨げない
+  assert.ok(isWalkable(g, 2, 1), "水溜りでも通行可能");
+
+  // 移動力2なら、水溜りのマス自体には届くが、コストは2倍かかる
+  const cells = reachableCells(g, { x: 2, y: 0 }, 2);
+  const water = cells.find(c => c.x === 2 && c.y === 1);
+  assert.ok(water, "水溜りのマス自体には届く");
+  assert.equal(water.cost, 2, "水溜りへ入るのに移動力2ぶん消費する");
+
+  // 水溜りだけを通路にした回廊では、それより先に進めるかどうかで
+  // コストが実際に効いていることを確かめる(迂回できないようにする)
+  const corridor = createGrid([
+    "#####",
+    "#...#",
+    "#####"
+  ]);
+  cellAt(corridor, 2, 1).terrain = { type: "water", moveCost: 2 };
+  const short = reachableCells(corridor, { x: 1, y: 1 }, 2);
+  assert.ok(short.some(c => c.x === 2 && c.y === 1), "水溜りのマスまでは移動力2で届く");
+  assert.ok(!short.some(c => c.x === 3 && c.y === 1), "水溜りを踏むとその先へは移動力2では進めない");
+
+  const longer = reachableCells(corridor, { x: 1, y: 1 }, 3);
+  assert.ok(longer.some(c => c.x === 3 && c.y === 1), "移動力3なら水溜りを越えて先へ進める");
+
+  // scatterWaterはkeepClearを避け、障害物の上には置かない
+  const rng = makeRng(5);
+  const clear = [{ x: 0, y: 0 }, { x: 4, y: 4 }];
+  const obstructed = createGrid(Array(5).fill("....."));
+  cellAt(obstructed, 1, 1).obstacle = { height: 1 };
+  cellAt(obstructed, 1, 1).walkable = false;
+  const watered = scatterWater(obstructed, rng, { count: 6, keepClear: clear });
+  const waterCells = watered.cells.filter(c => c.terrain?.type === "water");
+  assert.ok(waterCells.length > 0, "水溜りが配置される");
+  for (const p of clear) assert.equal(cellAt(watered, p.x, p.y).terrain, null, "keepClearには置かない");
+  assert.equal(cellAt(watered, 1, 1).terrain, null, "障害物の上には置かない");
 }
 
 /* --- 経路の復元 --- */

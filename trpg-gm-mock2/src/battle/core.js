@@ -30,7 +30,7 @@ export function createGrid(rows) {
   for (let y = 0; y < h; y++) {
     for (let x = 0; x < w; x++) {
       const ch = rows[y][x] ?? WALL;
-      cells.push({ walkable: ch !== WALL, height: 0, obstacle: null });
+      cells.push({ walkable: ch !== WALL, height: 0, obstacle: null, terrain: null });
     }
   }
   return { w, h, cells };
@@ -129,6 +129,35 @@ export function scatterObstacles(grid, rng, { pillars = 5, rubble = 6, keepClear
   return grid;
 }
 
+/* ---------------- 地形(足元だけに効く。障害物とは別レイヤー) ---------------- */
+
+// 水溜り: 通行は塞がない(walkableのまま)が、そのマスへ入る移動コストが2倍になる。
+// 障害物(柱・瓦礫)の上には置かない。keepClear(開始位置)も避ける
+export function scatterWater(grid, rng, { count = 5, keepClear = [] } = {}) {
+  const clear = new Set(keepClear.map(p => key(p.x, p.y)));
+  const open = [];
+  for (let y = 0; y < grid.h; y++) {
+    for (let x = 0; x < grid.w; x++) {
+      const c = cellAt(grid, x, y);
+      if (c.walkable && !c.obstacle && !clear.has(key(x, y))) open.push({ x, y });
+    }
+  }
+  for (let i = open.length - 1; i > 0; i--) {          // フィッシャー・イェーツ
+    const j = Math.floor(rng() * (i + 1));
+    [open[i], open[j]] = [open[j], open[i]];
+  }
+  for (const p of open.slice(0, count)) {
+    cellAt(grid, p.x, p.y).terrain = { type: "water", moveCost: 2 };
+  }
+  return grid;
+}
+
+// そのマスへ入るときの移動コスト(既定1)。柱は進入不可なのでここには来ない
+export function moveCostAt(grid, x, y) {
+  const c = cellAt(grid, x, y);
+  return c && c.terrain ? c.terrain.moveCost : 1;
+}
+
 /* ---------------- 立ち位置の高さ ---------------- */
 
 // そのマスに立ったときの足元の高さ。乗り越えられる瓦礫(0.25〜0.75)の上に立つ。
@@ -172,27 +201,44 @@ export function occupiedBy(units, moverId) {
   return units.filter(u => u.hp > 0 && u.id !== moverId).map(u => ({ x: u.x, y: u.y }));
 }
 
-// 到達可能マスをBFSで列挙する。8方向・1マスあたりコスト1(チェビシェフ距離)。
-// 近接射程が8方向隣接なので移動も8方向で揃える。斜めを1.5にしたくなったらここを直す。
+// 到達可能マスを列挙する。8方向・そのマスへ入るコストはmoveCostAt()(既定1、
+// 水溜りは2)。コストが均一でなくなったのでBFSではなくダイクストラ法で解く。
+// 盤面は最大64マスなので、優先度付きキューを使わない素朴なO(V^2)で十分。
 // 他ユニットのいるマスは通過も着地も不可として扱う(すり抜けを許すならblockedの作り方を変える)。
 // 各マスに from(直前のマス)を持たせるので、pathTo()で経路を復元できる
 export function reachableCells(grid, start, movePoints, occupied = []) {
   const blocked = new Set(occupied.map(p => key(p.x, p.y)));
-  const seen = new Set([key(start.x, start.y)]);
-  let frontier = [{ x: start.x, y: start.y }];
-  const out = [];
-  for (let step = 1; step <= movePoints; step++) {
-    const next = [];
-    for (const p of frontier) {
-      for (const [dx, dy] of DIRS8) {
-        const x = p.x + dx, y = p.y + dy, k = key(x, y);
-        if (seen.has(k) || !isWalkable(grid, x, y) || blocked.has(k)) continue;
-        seen.add(k);
-        next.push({ x, y });
-        out.push({ x, y, cost: step, from: { x: p.x, y: p.y } });
+  const startKey = key(start.x, start.y);
+  const dist = new Map([[startKey, 0]]);
+  const from = new Map();
+  const settled = new Set();
+
+  while (true) {
+    let curKey = null, curCost = Infinity;
+    for (const [k, d] of dist) {
+      if (!settled.has(k) && d < curCost) { curCost = d; curKey = k; }
+    }
+    if (curKey === null) break;
+    settled.add(curKey);
+    const [cx, cy] = curKey.split(",").map(Number);
+
+    for (const [dx, dy] of DIRS8) {
+      const x = cx + dx, y = cy + dy, k = key(x, y);
+      if (settled.has(k) || !isWalkable(grid, x, y) || blocked.has(k)) continue;
+      const nd = curCost + moveCostAt(grid, x, y);
+      if (nd > movePoints) continue;
+      if (!dist.has(k) || nd < dist.get(k)) {
+        dist.set(k, nd);
+        from.set(k, { x: cx, y: cy });
       }
     }
-    frontier = next;
+  }
+
+  const out = [];
+  for (const [k, d] of dist) {
+    if (k === startKey) continue;
+    const [x, y] = k.split(",").map(Number);
+    out.push({ x, y, cost: d, from: from.get(k) });
   }
   return out;
 }

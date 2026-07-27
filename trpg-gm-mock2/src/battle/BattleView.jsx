@@ -15,7 +15,7 @@ import { createBattleScene } from "./view3d.js";
 import {
   createGrid, isAdjacent, movePointsFor, reachableCells,
   turnOrder, resolveMelee, chooseEnemyAction,
-  makeRng, scatterObstacles, occupiedBy, pathTo
+  makeRng, scatterObstacles, scatterWater, occupiedBy, pathTo, cellAt
 } from "./core.js";
 
 /* --- 盤面 ---
@@ -46,11 +46,13 @@ const makeUnits = () => {
 // ?seed=123 を付けると同じ盤面を再現できる(検証用)。無指定なら毎回変わる
 const makeGrid = seed => {
   const units = makeUnits();
-  return scatterObstacles(createGrid(BASE_MAP), makeRng(seed), {
-    pillars: 5,
-    rubble: 6,
-    keepClear: units.map(u => ({ x: u.x, y: u.y }))
+  const clear = units.map(u => ({ x: u.x, y: u.y }));
+  const grid = scatterObstacles(createGrid(BASE_MAP), makeRng(seed), {
+    pillars: 5, rubble: 6, keepClear: clear
   });
+  // 水溜り(足元を取られる地形)は障害物とは別のrngで散らす。同じrngを使い回すと
+  // 障害物の個数を変えた時に水溜りの配置まで連動して変わってしまうため
+  return scatterWater(grid, makeRng(seed + 9973), { count: 4, keepClear: clear });
 };
 
 const rollD20 = () => 1 + Math.floor(Math.random() * 20);
@@ -151,13 +153,19 @@ export default function BattleView() {
   const moveTo = (unit, x, y, path = [{ x, y }]) => setState(s => {
     const walked = new Set(path.map(p => p.x + "," + p.y));
     const picked = s.coins.filter(c => walked.has(c.x + "," + c.y));
+    // 水溜りを踏んだかどうかは演出上の一言だけ。移動力の消費自体はreachableCellsが
+    // 既に織り込んでいるので、ここで何かを差し引く必要はない
+    const splashed = path.some(p => cellAt(s.grid, p.x, p.y)?.terrain?.type === "water");
+    const lines = [];
+    if (splashed) lines.push(`${unit.name}は水溜りに足を取られながら進んだ。`);
+    if (picked.length) lines.push(`${unit.name}が落ちていた物を${picked.length}つ拾った。`);
     return {
       ...s,
       units: s.units.map(u => (u.id === unit.id ? { ...u, x, y } : u)),
       coins: s.coins.filter(c => !picked.includes(c)),
       purse: s.purse + picked.length,
       hasMoved: true,
-      log: picked.length ? [...s.log, `${unit.name}が落ちていた物を${picked.length}つ拾った。`] : s.log
+      log: lines.length ? [...s.log, ...lines] : s.log
     };
   });
 

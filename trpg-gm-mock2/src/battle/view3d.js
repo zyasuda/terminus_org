@@ -92,6 +92,9 @@ export function createBattleScene(container, grid) {
   const wallMat = new THREE.MeshLambertMaterial({ color: COLOR.wall });
   const pillarMat = new THREE.MeshLambertMaterial({ color: COLOR.pillar });
   const rubbleMat = new THREE.MeshLambertMaterial({ color: COLOR.rubble });
+  const waterMat = new THREE.MeshBasicMaterial({
+    color: 0x2c6f7a, transparent: true, opacity: 0.62, depthWrite: false, side: THREE.DoubleSide
+  });
 
   const tiles = new Map();   // "x,y" → 床メッシュ(ハイライトで色を塗り替える)
   for (let y = 0; y < grid.h; y++) {
@@ -119,6 +122,16 @@ export function createBattleScene(container, grid) {
         const r = new THREE.Mesh(new THREE.BoxGeometry(0.7, h, 0.7), rubbleMat);
         r.position.set(wx, h / 2, wz);
         scene.add(r);
+      }
+
+      // 水溜り: 進入は妨げないが移動コストが2倍。床の色を直接塗ると
+      // ハイライト(到達可能マス等)で上書きされて見分けられなくなるため、
+      // 別の薄い板をわずかに浮かせて重ねる
+      if (cell.terrain?.type === "water") {
+        const w = new THREE.Mesh(new THREE.PlaneGeometry(TILE * 0.86, TILE * 0.86), waterMat);
+        w.rotation.x = -Math.PI / 2;
+        w.position.set(wx, 0.012, wz);
+        scene.add(w);
       }
     }
   }
