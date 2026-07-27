@@ -86,6 +86,7 @@ export default function BattleView() {
   // 演出の見た目調整用。ゲームの状態ではないので「やり直す」「最初から」の対象外
   const [fogOn, setFogOn] = useState(false);
   const [fogLevel, setFogLevel] = useState(1);
+  const [fogColor, setFogColor] = useState("#161a22");
   const [dustOn, setDustOn] = useState(false);
   const [rainOn, setRainOn] = useState(false);
   const [wallsOn, setWallsOn] = useState(false);
@@ -109,6 +110,7 @@ export default function BattleView() {
     // 新しい盤面を作った直後は既定値に戻るので、現在のパネルの設定を反映し直す
     s.setFogEnabled(fogOn);
     s.setFogIntensity(fogLevel);
+    s.setFogColor(fogColor);
     s.setDustEnabled(dustOn);
     s.setRainEnabled(rainOn);
     s.setWallsEnabled(wallsOn);
@@ -124,6 +126,7 @@ export default function BattleView() {
   /* --- 演出パネルの設定を反映(盤面を作り直さず、既存シーンへその場で効かせる) --- */
   useEffect(() => { sceneRef.current?.setFogEnabled(fogOn); }, [fogOn, grid]);
   useEffect(() => { sceneRef.current?.setFogIntensity(fogLevel); }, [fogLevel, grid]);
+  useEffect(() => { sceneRef.current?.setFogColor(fogColor); }, [fogColor, grid]);
   useEffect(() => { sceneRef.current?.setDustEnabled(dustOn); }, [dustOn, grid]);
   useEffect(() => { sceneRef.current?.setRainEnabled(rainOn); }, [rainOn, grid]);
   useEffect(() => { sceneRef.current?.setWallsEnabled(wallsOn); }, [wallsOn, grid]);
@@ -306,6 +309,11 @@ export default function BattleView() {
             type="range" min={0} max={1} step={0.05} value={fogLevel} disabled={!fogOn}
             onChange={e => setFogLevel(Number(e.target.value))}
             style={{ width: 90 }}
+          />
+          <input
+            type="color" value={fogColor} disabled={!fogOn}
+            onChange={e => setFogColor(e.target.value)}
+            style={{ width: 28, height: 20, padding: 0, border: "none", background: "none" }}
           />
           <label style={S.toggle}>
             <input type="checkbox" checked={dustOn} onChange={e => setDustOn(e.target.checked)} />

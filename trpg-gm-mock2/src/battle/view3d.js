@@ -716,12 +716,10 @@ export function createBattleScene(container, grid) {
       key.intensity = p.key;
       key.color.setHex(p.keyColor);
     },
-    // 背景とfogの色は揃える(fogは奥で背景色へ溶け込ませる演出なので、
-    // 背景だけ変えてfogを暗いままにすると奥だけ元の色に沈んで見える)
-    setBackgroundColor(hex) {
-      scene.background.set(hex);
-      fogObj.color.set(hex);
-    },
+    // 背景とfogの色は別々に持つ(白い霧など、背景とは違う色にしたい場合があるため)。
+    // 呼び出す側(BattleView)で、既定値は揃えて渡している
+    setBackgroundColor(hex) { scene.background.set(hex); },
+    setFogColor(hex) { fogObj.color.set(hex); },
     dispose() {
       cancelAnimationFrame(raf);
       ro.disconnect();
