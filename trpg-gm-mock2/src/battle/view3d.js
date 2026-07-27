@@ -63,11 +63,40 @@ export function createBattleScene(container, grid) {
     camera.lookAt(target);
   };
 
-  /* --- ライト --- */
-  scene.add(new THREE.AmbientLight(0xffffff, 0.75));
-  const key = new THREE.DirectionalLight(0xffffff, 0.9);
+  /* --- ライト ---
+     地の明かりは、盤面が読めなくならない程度まで落としてある。
+     暗くするのが目的ではなく、下のランタンの揺らぎが分かるようにするため */
+  scene.add(new THREE.AmbientLight(0xffffff, 0.34));
+  const key = new THREE.DirectionalLight(0xdfe6ff, 0.36);
   key.position.set(6, 12, 4);
   scene.add(key);
+
+  /* --- ランタン(ゆらぐ炎) ---
+     廃坑の灯りのつもりの点光源。明るさを不規則に揺らして炎のちらつきを出す。
+     見た目だけの演出で、射線や明暗による判定には一切関与しない */
+  const lanterns = [];
+  const addLantern = (gx, gy) => {
+    const [wx, wz] = worldOf(gx, gy);
+    const base = 34;
+    const light = new THREE.PointLight(0xffa848, base, 11, 1.6);
+    light.position.set(wx, 1.9, wz);
+    scene.add(light);
+    const bulb = new THREE.Mesh(
+      new THREE.SphereGeometry(0.13, 10, 8),
+      new THREE.MeshBasicMaterial({ color: 0xffd9a0 })
+    );
+    bulb.position.copy(light.position);
+    scene.add(bulb);
+    lanterns.push({ light, bulb, base, phase: lanterns.length * 2.7 });
+  };
+  // 盤面の対角に2つ。中央を空けておくと、どちらへ寄っても明暗の差が出る
+  addLantern(1, 1);
+  addLantern(grid.w - 2, grid.h - 2);
+
+  // 周期の違う正弦を重ねて、繰り返しに気づきにくいゆらぎを作る。
+  // 速い成分を厚めにすると「ゆっくり明滅」ではなく炎のチラつきに寄る
+  const flicker = t =>
+    0.68 + 0.32 * (Math.sin(t) * 0.34 + Math.sin(t * 2.3) * 0.3 + Math.sin(t * 5.7) * 0.22 + Math.sin(t * 9.1) * 0.14);
 
   /* --- 床と壁(戦闘中は変化しないので一度だけ作る) --- */
   const tileGeo = new THREE.BoxGeometry(TILE, TILE_H, TILE);
@@ -112,12 +141,35 @@ export function createBattleScene(container, grid) {
      裏面は描かれないので、カメラ手前側の壁は自動的に消えて盤面が見通せる。
      どの向きから見ても同じように働くので、カメラの4方向すべてで破綻しない。
      グリッドの高さ・障害物・射線の規則には一切関与しない、ただの背景 */
-  const BACKDROP_H = 2.6;
+  const BACKDROP_H = 3.6;
   const halfW = grid.w / 2, halfH = grid.h / 2;
+
+  // 下は壁の色、上へ向かうほど透過して闇に溶ける縦グラデーション。
+  // CanvasTextureのflipYが既定で有効なので、canvasの上端がそのまま壁の上端になる
+  const backdropTexture = () => {
+    const c = document.createElement("canvas");
+    c.width = 2;
+    c.height = 128;
+    const g = c.getContext("2d");
+    const grad = g.createLinearGradient(0, 0, 0, c.height);
+    grad.addColorStop(0, "rgba(12,14,20,0)");      // 上端: 完全に透過
+    grad.addColorStop(0.55, "rgba(22,26,36,0.72)");
+    grad.addColorStop(1, "rgba(31,36,49,1)");      // 下端: 床際だけしっかり見せる
+    g.fillStyle = grad;
+    g.fillRect(0, 0, c.width, c.height);
+    return new THREE.CanvasTexture(c);
+  };
+
   // 陰影を付けない(MeshBasic)。Lambertだと指向性ライトが当たらない向きの壁だけ
   // 環境光のみになって背景に沈み、カメラの向きによって壁が消えて見えた。
-  // 書き割りは平らに塗った紙なので、どの向きでも同じ明るさで出るのが正しい
-  const backdropMat = new THREE.MeshBasicMaterial({ color: 0x2a3040, side: THREE.FrontSide });
+  // 書き割りは平らに塗った紙なので、どの向きでも同じ明るさで出るのが正しい。
+  // depthWriteを切って、背後の透過描画とぶつからないようにする
+  const backdropMat = new THREE.MeshBasicMaterial({
+    map: backdropTexture(),
+    transparent: true,
+    depthWrite: false,
+    side: THREE.FrontSide
+  });
   // [幅, 位置, Y回転] … PlaneGeometryの法線は+Z。Y回転で内側へ向ける
   [
     [grid.w, [0, BACKDROP_H / 2, -halfH], 0],              // 奥(-Z)側 → +Zを向く
@@ -370,6 +422,7 @@ export function createBattleScene(container, grid) {
   placeCamera();
 
   let raf = 0;
+  let elapsed = 0;
   const loop = () => {
     raf = requestAnimationFrame(loop);
     const dt = clock.getDelta();
@@ -388,6 +441,13 @@ export function createBattleScene(container, grid) {
         camera.position.z += (Math.random() - 0.5) * shake;
         if (shake === 0) placeCamera();   // 揺れ終わりに正位置へ戻す
       }
+    }
+
+    elapsed += dt;
+    for (const l of lanterns) {
+      const f = flicker(elapsed * 6 + l.phase);
+      l.light.intensity = l.base * f;
+      l.bulb.scale.setScalar(0.85 + 0.3 * f);
     }
 
     stepEffects(dt);
