@@ -14,35 +14,27 @@ import React, { useEffect, useRef, useState } from "react";
 import { createBattleScene } from "./view3d.js";
 import {
   createGrid, isAdjacent, movePointsFor, reachableCells,
-  turnOrder, resolveMelee, chooseEnemyAction
+  turnOrder, resolveMelee, chooseEnemyAction,
+  makeRng, scatterObstacles
 } from "./core.js";
 
-/* --- 検証用の固定盤面(deterministic fixture) ---
-   8x8では移動力が盤面のほぼ全域に届いて位置取りの意味が薄れたため、12x10へ広げ、
-   遮蔽になる壁を左右対称に置いた。移動力3〜5で一辺のおよそ1/3を進める見当 */
-const GRID = createGrid([
-  "............",
-  "..#......#..",
-  "..#..##..#..",
-  ".....##.....",
-  "............",
-  "............",
-  ".....##.....",
-  "..#..##..#..",
-  "..#......#..",
-  "............"
-]);
+/* --- 盤面 ---
+   8x8を基本として作り込む。素の盤面は全面が床で、遮蔽はランダムに散らす
+   (左右対称に置くと展開が読めてしまうため)。柱(高さ1.0)は進入不可、
+   瓦礫(0.25〜0.75)は乗り越えられる */
+const BASE_MAP = Array(8).fill("........");
 
 // 開始位置。?fixture=melee で「すでに隣接している」状態から始められる
 // (交戦中の挙動を毎回同じ手順で確認するため)
 const START = {
-  default: { gareth: [1, 4], lydia: [1, 5], rust1: [10, 4], rust2: [10, 5] },
-  melee: { gareth: [5, 4], lydia: [4, 4], rust1: [6, 4], rust2: [6, 5] }
+  default: { gareth: [0, 3], lydia: [0, 4], rust1: [7, 3], rust2: [7, 4] },
+  melee: { gareth: [3, 3], lydia: [2, 3], rust1: [4, 3], rust2: [4, 4] }
 };
 
+const params = () => new URLSearchParams(location.search);
+
 const makeUnits = () => {
-  const name = new URLSearchParams(location.search).get("fixture");
-  const p = START[name] || START.default;
+  const p = START[params().get("fixture")] || START.default;
   return [
     { id: "gareth", name: "ガレス", side: "party", x: p.gareth[0], y: p.gareth[1], hp: 16, maxHp: 16, atk: 3, agility: 7, defenseDc: 12, height: 2 },
     { id: "lydia", name: "リディア", side: "party", x: p.lydia[0], y: p.lydia[1], hp: 14, maxHp: 14, atk: 2, agility: 4, defenseDc: 12, height: 1.9 },
@@ -51,11 +43,29 @@ const makeUnits = () => {
   ];
 };
 
+// ?seed=123 を付けると同じ盤面を再現できる(検証用)。無指定なら毎回変わる
+const makeGrid = seed => {
+  const units = makeUnits();
+  return scatterObstacles(createGrid(BASE_MAP), makeRng(seed), {
+    pillars: 5,
+    rubble: 6,
+    keepClear: units.map(u => ({ x: u.x, y: u.y }))
+  });
+};
+
 const rollD20 = () => 1 + Math.floor(Math.random() * 20);
 
-const initialState = () => {
+const initialState = (seed = Number(params().get("seed")) || (Date.now() & 0xffff)) => {
   const units = makeUnits();
-  return { units, order: turnOrder(units).map(u => u.id), turn: 0, hasMoved: false, log: ["戦闘開始。"] };
+  return {
+    seed,
+    grid: makeGrid(seed),
+    units,
+    order: turnOrder(units).map(u => u.id),
+    turn: 0,
+    hasMoved: false,
+    log: ["戦闘開始。"]
+  };
 };
 
 const alive = (units, side) => units.some(u => u.side === side && u.hp > 0);
@@ -65,18 +75,18 @@ export default function BattleView() {
   const sceneRef = useRef(null);
   const [state, setState] = useState(initialState);
 
-  const { units, order, turn, hasMoved } = state;
+  const { grid, units, order, turn, hasMoved } = state;
   const active = units.find(u => u.id === order[turn] && u.hp > 0) || null;
   const partyAlive = alive(units, "party");
   const enemyAlive = alive(units, "enemy");
   const over = !partyAlive || !enemyAlive;
 
-  /* --- シーンの生成と破棄 --- */
+  /* --- シーンの生成と破棄。盤面が変わったら作り直す(「最初から」で新しい配置になる) --- */
   useEffect(() => {
-    const s = createBattleScene(mountRef.current, GRID);
+    const s = createBattleScene(mountRef.current, grid);
     sceneRef.current = s;
     return () => { s.dispose(); sceneRef.current = null; };
-  }, []);
+  }, [grid]);
 
   /* --- 手番の解決 --- */
   const endTurn = () => setState(s => {
@@ -130,7 +140,7 @@ export default function BattleView() {
   useEffect(() => {
     if (over || !active || active.side !== "enemy") return;
     const t = setTimeout(() => {
-      const act = chooseEnemyAction(GRID, active, units);
+      const act = chooseEnemyAction(grid, active, units);
       if (act.type === "attack") {
         const target = units.find(u => u.id === act.targetId);
         if (target) attack(active, target);
@@ -145,7 +155,7 @@ export default function BattleView() {
   /* --- ハイライトと入力 --- */
   const playerTurn = !!active && active.side === "party" && !over;
   const reach = playerTurn && !hasMoved
-    ? reachableCells(GRID, active, movePointsFor(active.agility), units.filter(u => u.hp > 0 && u.id !== active.id))
+    ? reachableCells(grid, active, movePointsFor(active.agility), units.filter(u => u.hp > 0 && u.id !== active.id))
     : [];
   const targets = playerTurn
     ? units.filter(u => u.side === "enemy" && u.hp > 0 && isAdjacent(active, u))

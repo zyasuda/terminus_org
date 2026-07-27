@@ -5,8 +5,9 @@
 
 import { chromium } from "playwright";
 
-// fixture=melee は開始時点で敵と隣接している盤面。ターンを送るだけで必ず交戦する
-const URL = process.env.SMOKE_URL || "https://localhost:5173/battle?fixture=melee";
+// fixture=melee は開始時点で敵と隣接している盤面。ターンを送るだけで必ず交戦する。
+// seedを固定して障害物の配置も毎回同じにする(遊ぶときは無指定で毎回変わる)
+const URL = process.env.SMOKE_URL || "https://localhost:5173/battle?fixture=melee&seed=42";
 
 const browser = await chromium.launch();
 const page = await browser.newPage({ ignoreHTTPSErrors: true, viewport: { width: 1000, height: 800 } });

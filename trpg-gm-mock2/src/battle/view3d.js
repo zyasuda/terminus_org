@@ -18,7 +18,9 @@ const WALL_H = 1.0;
 const COLOR = {
   bg: 0x161a22,
   floor: 0x4a5164,
-  wall: 0x2b303c,
+  wall: 0x2b303c,        // 盤面の外周・地形の壁
+  pillar: 0x3f3527,      // 高さ1.0の障害物(進入不可)
+  rubble: 0x574a35,      // 高さ0.25〜0.75の障害物(乗り越えられる)
   reach: 0x3d7fb5,       // 到達可能マス
   target: 0xb5533d,      // 攻撃可能な相手のマス
   party: 0x6f9ad3,
@@ -72,22 +74,35 @@ export function createBattleScene(container, grid) {
   const wallGeo = new THREE.BoxGeometry(0.98, WALL_H, 0.98);
   const floorMat = new THREE.MeshLambertMaterial({ color: COLOR.floor });
   const wallMat = new THREE.MeshLambertMaterial({ color: COLOR.wall });
+  const pillarMat = new THREE.MeshLambertMaterial({ color: COLOR.pillar });
+  const rubbleMat = new THREE.MeshLambertMaterial({ color: COLOR.rubble });
 
   const tiles = new Map();   // "x,y" → 床メッシュ(ハイライトで色を塗り替える)
   for (let y = 0; y < grid.h; y++) {
     for (let x = 0; x < grid.w; x++) {
       const [wx, wz] = worldOf(x, y);
       const cell = grid.cells[y * grid.w + x];
-      if (cell.walkable) {
-        const m = new THREE.Mesh(tileGeo, floorMat.clone());
-        m.position.set(wx, -TILE_H / 2, wz);
-        m.userData = { kind: "cell", x, y };
-        scene.add(m);
-        tiles.set(x + "," + y, m);
-      } else {
-        const m = new THREE.Mesh(wallGeo, wallMat);
+
+      if (!cell.walkable) {
+        // 地形の壁と、高さ1.0の障害物(柱)。どちらも進入不可だが色で見分ける
+        const m = new THREE.Mesh(wallGeo, cell.obstacle ? pillarMat : wallMat);
         m.position.set(wx, WALL_H / 2, wz);
         scene.add(m);
+        continue;
+      }
+
+      const m = new THREE.Mesh(tileGeo, floorMat.clone());
+      m.position.set(wx, -TILE_H / 2, wz);
+      m.userData = { kind: "cell", x, y };
+      scene.add(m);
+      tiles.set(x + "," + y, m);
+
+      // 乗り越えられる瓦礫。床の上に低い箱を置くだけで、進入は妨げない
+      if (cell.obstacle) {
+        const h = cell.obstacle.height;
+        const r = new THREE.Mesh(new THREE.BoxGeometry(0.7, h, 0.7), rubbleMat);
+        r.position.set(wx, h / 2, wz);
+        scene.add(r);
       }
     }
   }
@@ -103,19 +118,44 @@ export function createBattleScene(container, grid) {
   marker.visible = false;
   scene.add(marker);
 
-  const meshFor = unit => {
-    let m = unitMeshes.get(unit.id);
-    if (!m) {
+  // 味方は円錐の胴体+頂点に頭の球、敵は三角柱。輪郭で陣営が一目で分かる形にする。
+  // 本番のキャラ表現(ビルボードか3Dモデルか)はPhase 3で決めるので、ここは仮の形
+  const makeUnitObject = unit => {
+    const g = new THREE.Group();
+    const mats = [];
+    const add = (geo, y) => {
+      const mat = new THREE.MeshLambertMaterial({ color: 0xffffff });
+      const m = new THREE.Mesh(geo, mat);
+      m.position.y = y;
+      m.userData = { kind: "unit", id: unit.id };   // 子を直接クリックしても拾えるように
+      g.add(m);
+      mats.push(mat);
+    };
+
+    if (unit.side === "party") {
       const h = unit.height ?? 2;
-      m = new THREE.Mesh(
-        new THREE.BoxGeometry(0.5, h, 0.5),
-        new THREE.MeshLambertMaterial({ color: 0xffffff })
-      );
-      m.userData = { kind: "unit", id: unit.id };
-      unitGroup.add(m);
-      unitMeshes.set(unit.id, m);
+      const bodyH = h * 0.72;
+      const headR = h * 0.13;
+      add(new THREE.ConeGeometry(0.34, bodyH, 18), bodyH / 2);
+      add(new THREE.SphereGeometry(headR, 16, 12), bodyH + headR * 0.7);
+    } else {
+      const h = unit.height ?? 0.8;
+      // 3分割のシリンダー = 三角柱
+      add(new THREE.CylinderGeometry(0.44, 0.44, h, 3), h / 2);
     }
-    return m;
+
+    g.userData = { kind: "unit", id: unit.id, mats };
+    return g;
+  };
+
+  const meshFor = unit => {
+    let g = unitMeshes.get(unit.id);
+    if (!g) {
+      g = makeUnitObject(unit);
+      unitGroup.add(g);
+      unitMeshes.set(unit.id, g);
+    }
+    return g;
   };
 
   /* --- 状態を画面へ反映する --- */
@@ -128,14 +168,18 @@ export function createBattleScene(container, grid) {
     }
 
     for (const u of units) {
-      const m = meshFor(u);
+      const g = meshFor(u);
       const [wx, wz] = worldOf(u.x, u.y);
       const h = u.height ?? 2;
-      m.position.set(wx, h / 2, wz);
-      m.material.color.setHex(u.hp <= 0 ? COLOR.down : u.side === "party" ? COLOR.party : COLOR.enemy);
+      g.position.set(wx, 0, wz);   // 各パーツは自分の高さに配置済みなので足元を合わせる
+      const color = u.hp <= 0 ? COLOR.down : u.side === "party" ? COLOR.party : COLOR.enemy;
       // 攻撃できる相手は自身を光らせる。足元のマスを塗っても本体に隠れて見えないため
-      m.material.emissive.setHex(targetIds.includes(u.id) ? COLOR.target : 0x000000);
-      m.visible = true;
+      const glow = targetIds.includes(u.id) ? COLOR.target : 0x000000;
+      for (const mat of g.userData.mats) {
+        mat.color.setHex(color);
+        mat.emissive.setHex(glow);
+      }
+      g.visible = true;
       if (u.id === activeId) {
         marker.visible = true;
         marker.position.set(wx, h + 0.5, wz);
@@ -190,8 +234,8 @@ export function createBattleScene(container, grid) {
     scene.add(num);
     effects.push({ kind: "float", obj: num, t: 0, dur: 0.85, y0: 1.3 });
 
-    const m = unitId && unitMeshes.get(unitId);
-    if (m) effects.push({ kind: "flash", obj: m, t: 0, dur: 0.28, color: crit ? 0xffd76a : 0xffffff });
+    const g = unitId && unitMeshes.get(unitId);
+    if (g) effects.push({ kind: "flash", mats: g.userData.mats, t: 0, dur: 0.28, color: crit ? 0xffd76a : 0xffffff });
 
     shake = crit ? 0.36 : 0.15;
   }
@@ -214,15 +258,19 @@ export function createBattleScene(container, grid) {
         e.obj.position.y = e.y0 + k * 0.9;
         e.obj.material.opacity = k < 0.6 ? 1 : 1 - (k - 0.6) / 0.4;
       } else if (e.kind === "flash") {
-        e.obj.material.emissive.setHex(e.color);
-        e.obj.material.emissiveIntensity = 1 - k;
+        for (const mat of e.mats) {
+          mat.emissive.setHex(e.color);
+          mat.emissiveIntensity = 1 - k;
+        }
       }
       if (k < 1) continue;
 
       if (e.kind === "flash") {
         // 発光を戻す。対象ハイライトが必要なら次のsyncが塗り直す
-        e.obj.material.emissive.setHex(0x000000);
-        e.obj.material.emissiveIntensity = 1;
+        for (const mat of e.mats) {
+          mat.emissive.setHex(0x000000);
+          mat.emissiveIntensity = 1;
+        }
       } else {
         scene.remove(e.obj);
         e.obj.material.map?.dispose();
@@ -243,8 +291,9 @@ export function createBattleScene(container, grid) {
     ndc.x = ((e.clientX - r.left) / r.width) * 2 - 1;
     ndc.y = -((e.clientY - r.top) / r.height) * 2 + 1;
     raycaster.setFromCamera(ndc, camera);
-    // ユニットを床より優先して拾う(敵の足元をクリックしても攻撃対象として扱えるように)
-    const hits = raycaster.intersectObjects([...unitGroup.children, ...tiles.values()], false);
+    // ユニットを床より優先して拾う(敵の足元をクリックしても攻撃対象として扱えるように)。
+    // ユニットはGroup(円錐+球など)なので再帰的に当てる
+    const hits = raycaster.intersectObjects([...unitGroup.children, ...tiles.values()], true);
     const unitHit = hits.find(h => h.object.userData.kind === "unit");
     const hit = unitHit || hits[0];
     if (hit) pickHandler(hit.object.userData);

@@ -49,6 +49,86 @@ export function isWalkable(grid, x, y) {
   return !!c && c.walkable;
 }
 
+/* ---------------- 障害物の配置 ---------------- */
+
+// 決定論の簡易PRNG(mulberry32)。同じseedなら必ず同じ盤面になるので、
+// 遊ぶときは毎回違う盤面、検証するときは ?seed= で固定、という使い分けができる
+export function makeRng(seed) {
+  let a = seed >>> 0;
+  return () => {
+    a = (a + 0x6d2b79f5) >>> 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+const LOW_HEIGHTS = [0.25, 0.5, 0.75];
+
+// 2点が行き来できるか(移動力を無視した到達性の確認)
+function pathExists(grid, from, to) {
+  const seen = new Set([key(from.x, from.y)]);
+  let frontier = [from];
+  while (frontier.length) {
+    const next = [];
+    for (const p of frontier) {
+      if (p.x === to.x && p.y === to.y) return true;
+      for (const [dx, dy] of DIRS8) {
+        const x = p.x + dx, y = p.y + dy, k = key(x, y);
+        if (seen.has(k) || !isWalkable(grid, x, y)) continue;
+        seen.add(k);
+        next.push({ x, y });
+      }
+    }
+    frontier = next;
+  }
+  return false;
+}
+
+// 障害物をランダムに散らす(左右対称に置くと展開が読めてしまうため)。
+//   高さ1.0 = 柱。そのマスへは入れない
+//   高さ0.25〜0.75 = 瓦礫。乗り越えられるので進入でき、視線も遮らないが、
+//                    Phase 2で飛び道具の通過率(1−高さ)に効く
+// keepClear(開始位置)には置かない。置いた結果どちらの陣営からも行き来できなく
+// なる柱は取り消すので、通り抜けられない盤面にはならない
+export function scatterObstacles(grid, rng, { pillars = 5, rubble = 6, keepClear = [] } = {}) {
+  const clear = new Set(keepClear.map(p => key(p.x, p.y)));
+  const open = [];
+  for (let y = 0; y < grid.h; y++) {
+    for (let x = 0; x < grid.w; x++) {
+      if (isWalkable(grid, x, y) && !clear.has(key(x, y))) open.push({ x, y });
+    }
+  }
+  for (let i = open.length - 1; i > 0; i--) {          // フィッシャー・イェーツ
+    const j = Math.floor(rng() * (i + 1));
+    [open[i], open[j]] = [open[j], open[i]];
+  }
+
+  const a = keepClear[0], b = keepClear[keepClear.length - 1];
+  let idx = 0, count = 0;
+  while (idx < open.length && count < pillars) {
+    const p = open[idx++];
+    const c = cellAt(grid, p.x, p.y);
+    c.obstacle = { height: 1 };
+    c.walkable = false;
+    if (a && b && !pathExists(grid, a, b)) {
+      c.obstacle = null;                                // 行き来を断つ柱は置かない
+      c.walkable = true;
+    } else {
+      count++;
+    }
+  }
+  count = 0;
+  while (idx < open.length && count < rubble) {
+    const p = open[idx++];
+    const c = cellAt(grid, p.x, p.y);
+    if (c.obstacle) continue;
+    c.obstacle = { height: LOW_HEIGHTS[Math.floor(rng() * LOW_HEIGHTS.length)] };
+    count++;
+  }
+  return grid;
+}
+
 /* ---------------- 隣接・距離 ---------------- */
 
 // 近接攻撃の射程は8方向隣接のみ(リーチ武器は保留)。自分自身は隣接に含めない
@@ -59,13 +139,13 @@ export function isAdjacent(a, b) {
 
 /* ---------------- 移動 ---------------- */
 
-// 移動力 = 基本2 + agility補正(+1〜+3)。現行データのagilityは概ね4〜7の範囲。
-// 基本値は当初3(合計4〜6)だったが、盤面のほぼ全域へ届いてしまい位置取りの意味が
-// 薄れたため2へ下げた(合計3〜5)。盤面の一辺のおよそ1/3で移動できる程度が目安。
-// ponytail: 3段階の素朴な区切り。細かい曲線が要るならここだけ差し替える
+// 移動力 = 基本1 + agility補正(+1〜+2)。現行データのagilityは概ね4〜7の範囲。
+// 当初は基本3(合計4〜6)だったが8x8盤面のほぼ全域へ届いてしまい、位置取りの意味が
+// 薄れた。8x8を基本として作り込む方針に決まったため、さらに半分へ落として合計2〜3とした。
+// 一手で盤面の1/4ほどしか動けないので、どこへ寄るかの判断が効くようになる。
+// ponytail: 8x8では2段階で十分。盤面が広がったら段を増やす
 export function movePointsFor(agility = 5) {
-  const bonus = agility >= 7 ? 3 : agility >= 5 ? 2 : 1;
-  return 2 + bonus;
+  return 1 + (agility >= 7 ? 2 : 1);
 }
 
 // 到達可能マスをBFSで列挙する。8方向・1マスあたりコスト1(チェビシェフ距離)。

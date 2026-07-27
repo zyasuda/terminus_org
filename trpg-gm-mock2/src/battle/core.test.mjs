@@ -5,10 +5,10 @@
 
 import assert from "node:assert/strict";
 import {
-  createGrid, isWalkable, inBounds,
+  createGrid, isWalkable, inBounds, cellAt,
   isAdjacent, movePointsFor, reachableCells,
   surroundMultiplier, adjacentAllies, turnOrder, resolveMelee,
-  chooseEnemyAction
+  chooseEnemyAction, makeRng, scatterObstacles
 } from "./core.js";
 
 const near = (a, b) => Math.abs(a - b) < 1e-9;
@@ -44,11 +44,11 @@ const near = (a, b) => Math.abs(a - b) < 1e-9;
 
 /* --- 移動力 --- */
 {
-  assert.equal(movePointsFor(4), 3, "agility4 → 2+1");
-  assert.equal(movePointsFor(5), 4, "agility5 → 2+2");
-  assert.equal(movePointsFor(6), 4);
-  assert.equal(movePointsFor(7), 5, "agility7 → 2+3");
-  assert.equal(movePointsFor(), 4, "未指定はagility5扱い");
+  assert.equal(movePointsFor(4), 2, "agility4 → 1+1");
+  assert.equal(movePointsFor(5), 2);
+  assert.equal(movePointsFor(6), 2);
+  assert.equal(movePointsFor(7), 3, "agility7 → 1+2");
+  assert.equal(movePointsFor(), 2, "未指定はagility5扱い");
 }
 
 /* --- 到達範囲 --- */
@@ -78,6 +78,53 @@ const near = (a, b) => Math.abs(a - b) < 1e-9;
 
   // 起点は結果に含めない
   assert.ok(!one.some(c => c.x === 2 && c.y === 1), "起点は含めない");
+}
+
+/* --- 障害物のランダム配置 --- */
+{
+  const base = () => createGrid(Array(8).fill("........"));
+  const corners = [{ x: 0, y: 3 }, { x: 7, y: 4 }];
+  const opts = { pillars: 5, rubble: 6, keepClear: corners };
+
+  const snapshot = g => g.cells.map(c => (c.obstacle ? c.obstacle.height : 0)).join(",");
+
+  // 同じseedなら同じ盤面(検証を再現できる)
+  assert.equal(
+    snapshot(scatterObstacles(base(), makeRng(42), opts)),
+    snapshot(scatterObstacles(base(), makeRng(42), opts)),
+    "同一seedは同一配置"
+  );
+  assert.notEqual(
+    snapshot(scatterObstacles(base(), makeRng(42), opts)),
+    snapshot(scatterObstacles(base(), makeRng(7), opts)),
+    "違うseedなら配置も変わる"
+  );
+
+  // 複数のseedで不変条件を確かめる
+  for (const seed of [1, 2, 3, 42, 999, 12345]) {
+    const g = scatterObstacles(base(), makeRng(seed), opts);
+
+    for (const c of corners) {
+      assert.ok(isWalkable(g, c.x, c.y), `seed${seed}: 開始位置は空けたまま`);
+      assert.equal(cellAt(g, c.x, c.y).obstacle, null);
+    }
+
+    // 開始位置どうしが必ず行き来できる(通り抜けられない盤面を作らない)
+    const far = reachableCells(g, corners[0], 999);
+    assert.ok(
+      far.some(p => p.x === corners[1].x && p.y === corners[1].y),
+      `seed${seed}: 相手側まで到達できる`
+    );
+
+    // 高さ1.0は進入不可、0.25〜0.75は進入できる
+    for (let i = 0; i < g.cells.length; i++) {
+      const c = g.cells[i];
+      if (!c.obstacle) continue;
+      const h = c.obstacle.height;
+      assert.ok([0.25, 0.5, 0.75, 1].includes(h), `seed${seed}: 想定内の高さ (${h})`);
+      assert.equal(c.walkable, h < 1, `seed${seed}: 高さ${h}の通行可否`);
+    }
+  }
 }
 
 /* --- 包囲ボーナス --- */
