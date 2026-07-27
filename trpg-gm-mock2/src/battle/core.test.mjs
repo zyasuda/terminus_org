@@ -294,7 +294,7 @@ const near = (a, b) => Math.abs(a - b) < 1e-9;
   );
 }
 
-/* --- 防御の構え(パリィ/受け流し/カウンター/ドッジ) --- */
+/* --- 防御の構え(パリィ/いなす/カウンター/ドッジ) --- */
 {
   const atk = { id: "gareth", side: "party", hp: 10, x: 1, y: 1, atk: 3, defenseDc: 12 };
   const foe = { id: "rust", side: "enemy", hp: 8, x: 2, y: 1, atk: 2, defenseDc: 12 };
@@ -338,7 +338,7 @@ const near = (a, b) => Math.abs(a - b) < 1e-9;
     assert.equal(r.reaction, "dodge", "逃げ道があれば出目20でも回避");
   }
 
-  /* 受け流し: 何度でも使え、ダメージを1点軽減するだけ */
+  /* いなす: 何度でも使え、ダメージを1点軽減するだけ */
   {
     const guard = { type: "deflect", used: false };
     const r1 = resolveMelee({ attacker: atk, target: foe, units: [atk, foe], roll: () => 12, guard });
@@ -347,7 +347,7 @@ const near = (a, b) => Math.abs(a - b) < 1e-9;
     assert.equal(r1.reaction, "deflect");
     // 2回目も同じguard(used未更新)でそのまま使える
     const r2 = resolveMelee({ attacker: atk, target: foe, units: [atk, foe], roll: () => 12, guard });
-    assert.equal(r2.reaction, "deflect", "受け流しは使い切らない");
+    assert.equal(r2.reaction, "deflect", "いなすは使い切らない");
   }
 
   /* パリィ: guard中1回だけ。成否にかかわらず使い切る */

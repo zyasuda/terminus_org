@@ -18,8 +18,10 @@ import {
   makeRng, scatterObstacles, scatterWater, occupiedBy, pathTo, cellAt
 } from "./core.js";
 
-// 防御の構え。仕様: docs/BATTLE_GRID_STATUS.md「防御・リアクション」節
-const GUARD_LABEL = { parry: "パリィ", deflect: "受け流し", counter: "カウンター", dodge: "ドッジ" };
+// 防御の構え。仕様: docs/BATTLE_GRID_STATUS.md「防御・リアクション」節。
+// deflect(内部の識別子)の表示名は「いなす」。「パリィ」と紛らわしいとの指摘で
+// 「受け流し」から改名したが、type自体は変えていない(表示名だけの変更)
+const GUARD_LABEL = { parry: "パリィ", deflect: "いなす", counter: "カウンター", dodge: "ドッジ" };
 
 /* --- 盤面 ---
    8x8を基本として作り込む。素の盤面は全面が床で、遮蔽はランダムに散らす
@@ -191,6 +193,12 @@ export default function BattleView() {
     // resolveMelee側がreactionを返した時点で使い切ったということなので、ここでusedを立てる
     const guardSpent = r.reaction === "parry" || r.reaction === "counter";
 
+    // 防御が成功した(=攻撃を防いだ/軽減した)場合だけ「◯◯、成功。」と明示する。
+    // 失敗時はダメージが入ること自体で失敗と分かるので、あえて「失敗」とは書かない。
+    // dodge/deflect/counterは発動した時点で必ず成功(resolveMelee側の仕様)、
+    // parryだけ「試みたが外れた(=通常命中のまま)」場合があるので!hitで判定する
+    const tag = label => `${GUARD_LABEL[label]}、成功。`;
+
     setState(s => {
       // 自分が行動した(攻撃した)ので、攻撃側が持っていた古い構えはここで解ける
       let units = s.units.map(u => {
@@ -202,25 +210,32 @@ export default function BattleView() {
       const lines = [];
 
       if (r.reaction === "dodge") {
-        lines.push(`${target.name}は身をかわした。`);
+        lines.push(`${tag("dodge")}${target.name}は身をかわした。`);
+        return { ...s, units, coins, log: [...s.log, ...lines] };
+      }
+
+      if (r.reaction === "parry" && !r.hit) {
+        lines.push(`${tag("parry")}${target.name}が受け止めた!${attacker.name}の攻撃は届かなかった(d20=${r.d20})。`);
+        return { ...s, units, coins, log: [...s.log, ...lines] };
+      }
+
+      if (r.reaction === "counter") {
+        lines.push(`${tag("counter")}${target.name}が防御と同時に反撃に転じた。`);
+        const before = units.find(u => u.id === attacker.id);
+        if (r.counterRoll.hit) {
+          const applied = applyDamage(units, coins, attacker.id, r.counterRoll.damage);
+          units = applied.units; coins = applied.coins;
+          lines.push(`${attacker.name}に${r.counterRoll.damage}ダメージ(残りHP ${applied.hp}/${before.maxHp})。`);
+          if (applied.downed) lines.push(`${attacker.name}は倒れた。落とした物がその場に残っている。`);
+        } else {
+          lines.push("反撃は外れた。");
+        }
         return { ...s, units, coins, log: [...s.log, ...lines] };
       }
 
       if (!r.hit) {
-        if (r.reaction === "parry") lines.push(`${target.name}が受け止めた!${attacker.name}の攻撃は届かなかった(d20=${r.d20})。`);
-        else lines.push(`${attacker.name}の攻撃は${r.fumble ? "大きく外れ、体勢を崩した" : "外れた"}(d20=${r.d20})。${highNote}`);
-
-        if (r.reaction === "counter" && r.counterRoll) {
-          const before = units.find(u => u.id === attacker.id);
-          if (r.counterRoll.hit) {
-            const applied = applyDamage(units, coins, attacker.id, r.counterRoll.damage);
-            units = applied.units; coins = applied.coins;
-            lines.push(`${target.name}が即座に反撃!${attacker.name}に${r.counterRoll.damage}ダメージ(残りHP ${applied.hp}/${before.maxHp})。`);
-            if (applied.downed) lines.push(`${attacker.name}は倒れた。落とした物がその場に残っている。`);
-          } else {
-            lines.push(`${target.name}が反撃を試みたが外れた。`);
-          }
-        }
+        // ここに来るのは通常の外れ、またはパリィを試みたが防御ロールに失敗した場合
+        lines.push(`${attacker.name}の攻撃は${r.fumble ? "大きく外れ、体勢を崩した" : "外れた"}(d20=${r.d20})。${highNote}`);
         return { ...s, units, coins, log: [...s.log, ...lines] };
       }
 
@@ -229,7 +244,7 @@ export default function BattleView() {
       lines.push(
         `${attacker.name}の攻撃が${r.crit ? "深々と" : ""}命中(d20=${r.d20})。` +
         `${target.name}に${r.damage}ダメージ(残りHP ${applied.hp}/${applied.cur.maxHp})。` +
-        (r.reaction === "deflect" ? "受け流して軽減した。" : "") +
+        (r.reaction === "deflect" ? tag("deflect") : "") +
         (r.surround >= 2 ? `${r.surround}人で囲んでいる(×${r.multiplier.toFixed(2)})。` : "") +
         highNote
       );
