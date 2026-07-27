@@ -452,7 +452,8 @@ export function createBattleScene(container, grid) {
 
     elapsed += dt;
     for (const l of lanterns) {
-      l.light.intensity = l.base * flicker(elapsed * 6 + l.phase);
+      // 係数を上げるほど速くなる。6ではせわしなかったので落としてある
+      l.light.intensity = l.base * flicker(elapsed * 3.2 + l.phase);
     }
 
     stepEffects(dt);
