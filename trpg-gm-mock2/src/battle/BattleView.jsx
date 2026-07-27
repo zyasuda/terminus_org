@@ -288,8 +288,8 @@ export default function BattleView() {
           <button style={S.btn} onClick={() => sceneRef.current?.rotate(1)}>視点 ▶</button>
           <button style={S.btn} disabled={!canUndo} onClick={undoTurn}>やり直す</button>
           <button style={S.btn} disabled={!playerTurn} onClick={endTurn}>ターン終了</button>
-          {/* 押し間違えると戦闘がやり直しになるので、他のボタンから離す */}
-          <button style={{ ...S.btn, marginLeft: "auto" }} onClick={() => setState(initialState())}>最初から</button>
+          {/* 押し間違えないよう他のボタンとは少し間隔を空けるが、遠すぎない位置に置く */}
+          <button style={{ ...S.btn, marginLeft: 20 }} onClick={() => setState(initialState())}>最初から</button>
         </div>
 
         <div style={S.hint}>
