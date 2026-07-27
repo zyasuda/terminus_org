@@ -7,7 +7,8 @@ import assert from "node:assert/strict";
 import {
   createGrid, isWalkable, inBounds,
   isAdjacent, movePointsFor, reachableCells,
-  surroundMultiplier, adjacentAllies, turnOrder, resolveMelee
+  surroundMultiplier, adjacentAllies, turnOrder, resolveMelee,
+  chooseEnemyAction
 } from "./core.js";
 
 const near = (a, b) => Math.abs(a - b) < 1e-9;
@@ -149,6 +150,45 @@ const near = (a, b) => Math.abs(a - b) < 1e-9;
 
   const surroundedCrit = resolveMelee({ attacker: atk, target: foe, units: [atk, ally, foe], roll: () => 20 });
   assert.equal(surroundedCrit.damage, 3, "2 × 1.33 → 四捨五入で3");
+}
+
+/* --- 敵の行動選択(仮置きAI) --- */
+{
+  const g = createGrid([
+    "........",
+    "........",
+    "........"
+  ]);
+  const foe = { id: "rust", side: "enemy", hp: 8, agility: 5, x: 0, y: 1 };
+
+  // 隣接していれば攻撃
+  const hero = { id: "gareth", side: "party", hp: 10, agility: 7, x: 1, y: 1 };
+  assert.deepEqual(
+    chooseEnemyAction(g, foe, [foe, hero]),
+    { type: "attack", targetId: "gareth" }
+  );
+
+  // 離れていれば近づく(移動後は必ず今より近くなる)
+  const farHero = { id: "gareth", side: "party", hp: 10, agility: 7, x: 7, y: 1 };
+  const act = chooseEnemyAction(g, foe, [foe, farHero]);
+  assert.equal(act.type, "move");
+  assert.ok(act.to.x > foe.x, "相手の方向へ寄る");
+
+  // 相手が全滅していれば待機
+  assert.deepEqual(
+    chooseEnemyAction(g, foe, [foe, { ...farHero, hp: 0 }]),
+    { type: "wait" }
+  );
+
+  // 壁で完全に囲まれていれば待機
+  const boxed = createGrid([
+    "###",
+    "#.#",
+    "###"
+  ]);
+  const trapped = { id: "t", side: "enemy", hp: 8, agility: 5, x: 1, y: 1 };
+  const outside = { id: "p", side: "party", hp: 10, agility: 5, x: 9, y: 9 };
+  assert.deepEqual(chooseEnemyAction(boxed, trapped, [trapped, outside]), { type: "wait" });
 }
 
 console.log("battle/core: 全チェック通過");

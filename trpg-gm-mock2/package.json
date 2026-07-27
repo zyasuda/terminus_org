@@ -8,13 +8,15 @@
     "dev:api": "node server.cjs",
     "check:assets": "node scripts/check-assets.mjs",
     "test:battle": "node src/battle/core.test.mjs",
+    "smoke:battle": "node src/battle/smoke.mjs",
     "build": "vite build",
     "preview": "vite preview"
   },
   "dependencies": {
     "phaser": "^3.87.0",
     "react": "^18.3.1",
-    "react-dom": "^18.3.1"
+    "react-dom": "^18.3.1",
+    "three": "^0.185.1"
   },
   "devDependencies": {
     "@vitejs/plugin-basic-ssl": "^1.2.0",

@@ -131,3 +131,30 @@ export function resolveMelee({ attacker, target, units = [], roll }) {
 
   return { ok: true, d20, dc, hit, crit, fumble, surround, multiplier, damage };
 }
+
+/* ---------------- 敵の行動選択(Phase 1の仮置き) ---------------- */
+
+// チェビシェフ距離(8方向1コストの移動と一致する)
+const dist = (a, b) => Math.max(Math.abs(a.x - b.x), Math.abs(a.y - b.y));
+
+// ponytail: 最も近い相手へ寄り、隣接していれば殴るだけの素朴なAI。
+// 遮蔽・退避・狙い分け・包囲の意図は持たない。手触り確認用の仮置きで、
+// Phase 4で tune-enemy-ai を使って本設計に置き換える
+export function chooseEnemyAction(grid, unit, units) {
+  const foes = units.filter(u => u.side !== unit.side && u.hp > 0);
+  if (!foes.length) return { type: "wait" };
+
+  const inReach = foes.find(f => isAdjacent(unit, f));
+  if (inReach) return { type: "attack", targetId: inReach.id };
+
+  const nearest = foes.reduce((best, f) => (dist(unit, f) < dist(unit, best) ? f : best));
+  const occupied = units.filter(u => u.hp > 0 && u.id !== unit.id);
+  const cells = reachableCells(grid, unit, movePointsFor(unit.agility), occupied);
+
+  let bestCell = null, bestDist = dist(unit, nearest);
+  for (const c of cells) {
+    const d = dist(c, nearest);
+    if (d < bestDist) { bestDist = d; bestCell = c; }
+  }
+  return bestCell ? { type: "move", to: { x: bestCell.x, y: bestCell.y } } : { type: "wait" };
+}
