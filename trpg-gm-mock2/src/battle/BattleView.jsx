@@ -15,7 +15,7 @@ import { createBattleScene } from "./view3d.js";
 import {
   createGrid, isAdjacent, movePointsFor, reachableCells,
   turnOrder, resolveMelee, chooseEnemyAction,
-  makeRng, scatterObstacles, occupiedBy
+  makeRng, scatterObstacles, occupiedBy, pathTo
 } from "./core.js";
 
 /* --- 盤面 ---
@@ -64,6 +64,8 @@ const initialState = (seed = Number(params().get("seed")) || (Date.now() & 0xfff
     order: turnOrder(units).map(u => u.id),
     turn: 0,
     hasMoved: false,
+    coins: [],        // 倒れた駒の跡。通りかかると拾える
+    purse: 0,         // 拾ったコインの数
     log: ["戦闘開始。"]
   };
 };
@@ -75,7 +77,7 @@ export default function BattleView() {
   const sceneRef = useRef(null);
   const [state, setState] = useState(initialState);
 
-  const { grid, units, order, turn, hasMoved } = state;
+  const { grid, units, order, turn, hasMoved, coins } = state;
   const active = units.find(u => u.id === order[turn] && u.hp > 0) || null;
   const partyAlive = alive(units, "party");
   const enemyAlive = alive(units, "enemy");
@@ -121,20 +123,31 @@ export default function BattleView() {
         `${target.name}に${r.damage}ダメージ(残りHP ${hp}/${cur.maxHp})。` +
         (r.surround >= 2 ? `${r.surround}人で囲んでいる(×${r.multiplier.toFixed(2)})。` : "")
       );
-      if (hp <= 0) lines.push(`${target.name}は倒れた。`);
+      // 倒れた駒は盤面から退き、その場にコインが残る
+      const dropped = hp <= 0 ? [{ id: "coin_" + target.id, x: cur.x, y: cur.y }] : [];
+      if (hp <= 0) lines.push(`${target.name}は倒れた。落とした物がその場に残っている。`);
       return {
         ...s,
         units: s.units.map(u => (u.id === target.id ? { ...u, hp } : u)),
+        coins: [...s.coins, ...dropped],
         log: [...s.log, ...lines]
       };
     });
   };
 
-  const moveTo = (unit, x, y) => setState(s => ({
-    ...s,
-    units: s.units.map(u => (u.id === unit.id ? { ...u, x, y } : u)),
-    hasMoved: true
-  }));
+  // path は起点を除いた通り道。通りかかったコインはすべて拾う
+  const moveTo = (unit, x, y, path = [{ x, y }]) => setState(s => {
+    const walked = new Set(path.map(p => p.x + "," + p.y));
+    const picked = s.coins.filter(c => walked.has(c.x + "," + c.y));
+    return {
+      ...s,
+      units: s.units.map(u => (u.id === unit.id ? { ...u, x, y } : u)),
+      coins: s.coins.filter(c => !picked.includes(c)),
+      purse: s.purse + picked.length,
+      hasMoved: true,
+      log: picked.length ? [...s.log, `${unit.name}が落ちていた物を${picked.length}つ拾った。`] : s.log
+    };
+  });
 
   /* --- 敵の手番は自動で進める --- */
   useEffect(() => {
@@ -145,7 +158,7 @@ export default function BattleView() {
         const target = units.find(u => u.id === act.targetId);
         if (target) attack(active, target);
       } else if (act.type === "move") {
-        moveTo(active, act.to.x, act.to.y);
+        moveTo(active, act.to.x, act.to.y, act.path);
       }
       setTimeout(endTurn, 350);
     }, 500);
@@ -168,7 +181,7 @@ export default function BattleView() {
       ...reach.map(c => ({ x: c.x, y: c.y, kind: "reach" })),
       ...targets.map(t => ({ x: t.x, y: t.y, kind: "target" }))
     ];
-    s.sync(units, highlights, active?.id ?? null, targets.map(t => t.id));
+    s.sync({ units, highlights, activeId: active?.id ?? null, targetIds: targets.map(t => t.id), coins });
     s.setPickHandler(data => {
       if (!playerTurn) return;
       if (data.kind === "unit") {
@@ -177,7 +190,7 @@ export default function BattleView() {
         return;
       }
       if (data.kind === "cell" && !hasMoved && reach.some(c => c.x === data.x && c.y === data.y)) {
-        moveTo(active, data.x, data.y);
+        moveTo(active, data.x, data.y, pathTo(reach, data));
       }
     });
   });
@@ -196,6 +209,9 @@ export default function BattleView() {
           <span style={S.dim}>
             {playerTurn && (hasMoved ? "移動済み" : `移動力 ${movePointsFor(active.agility)}`)}
           </span>
+          {(state.purse > 0 || coins.length > 0) && (
+            <span style={S.dim}>拾った物 {state.purse}{coins.length ? ` / 落ちている ${coins.length}` : ""}</span>
+          )}
         </div>
 
         <div style={S.row}>

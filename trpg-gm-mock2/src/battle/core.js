@@ -148,20 +148,21 @@ export function movePointsFor(agility = 5) {
   return 1 + (agility >= 7 ? 2 : 1);
 }
 
-// 移動する本人以外のユニットが塞いでいるマス。
-// 戦闘不能でも盤面に残っている限りマスを塞ぐ(倒れた駒に重なって立てないように)。
-// これにより「誰も同じマスに立てない」が常に保たれる
+// 移動する本人以外の「立っている」ユニットが塞いでいるマス。
+// 生存ユニットのマスは通過も着地もできない(誰も同じマスに立てない)。
+// 戦闘不能になった駒は盤面から退き、その場にコインが残るだけなので塞がない
 export function occupiedBy(units, moverId) {
-  return units.filter(u => u.id !== moverId).map(u => ({ x: u.x, y: u.y }));
+  return units.filter(u => u.hp > 0 && u.id !== moverId).map(u => ({ x: u.x, y: u.y }));
 }
 
 // 到達可能マスをBFSで列挙する。8方向・1マスあたりコスト1(チェビシェフ距離)。
 // 近接射程が8方向隣接なので移動も8方向で揃える。斜めを1.5にしたくなったらここを直す。
 // 他ユニットのいるマスは通過も着地も不可として扱う(すり抜けを許すならblockedの作り方を変える)。
+// 各マスに from(直前のマス)を持たせるので、pathTo()で経路を復元できる
 export function reachableCells(grid, start, movePoints, occupied = []) {
   const blocked = new Set(occupied.map(p => key(p.x, p.y)));
   const seen = new Set([key(start.x, start.y)]);
-  let frontier = [start];
+  let frontier = [{ x: start.x, y: start.y }];
   const out = [];
   for (let step = 1; step <= movePoints; step++) {
     const next = [];
@@ -171,12 +172,25 @@ export function reachableCells(grid, start, movePoints, occupied = []) {
         if (seen.has(k) || !isWalkable(grid, x, y) || blocked.has(k)) continue;
         seen.add(k);
         next.push({ x, y });
-        out.push({ x, y, cost: step });
+        out.push({ x, y, cost: step, from: { x: p.x, y: p.y } });
       }
     }
     frontier = next;
   }
   return out;
+}
+
+// reachableCells()の結果から目的地までの経路を復元する(起点は含まず、到達順)。
+// 通り道にあるものを拾う判定に使う
+export function pathTo(cells, dest) {
+  const byKey = new Map(cells.map(c => [key(c.x, c.y), c]));
+  const path = [];
+  let cur = byKey.get(key(dest.x, dest.y));
+  while (cur) {
+    path.unshift({ x: cur.x, y: cur.y });
+    cur = cur.from ? byKey.get(key(cur.from.x, cur.from.y)) : null;
+  }
+  return path;
 }
 
 /* ---------------- 包囲ボーナス ---------------- */
@@ -248,5 +262,6 @@ export function chooseEnemyAction(grid, unit, units) {
     const d = dist(c, nearest);
     if (d < bestDist) { bestDist = d; bestCell = c; }
   }
-  return bestCell ? { type: "move", to: { x: bestCell.x, y: bestCell.y } } : { type: "wait" };
+  if (!bestCell) return { type: "wait" };
+  return { type: "move", to: { x: bestCell.x, y: bestCell.y }, path: pathTo(cells, bestCell) };
 }

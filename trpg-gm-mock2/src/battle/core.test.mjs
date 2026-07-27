@@ -8,7 +8,7 @@ import {
   createGrid, isWalkable, inBounds, cellAt,
   isAdjacent, movePointsFor, reachableCells,
   surroundMultiplier, adjacentAllies, turnOrder, resolveMelee,
-  chooseEnemyAction, makeRng, scatterObstacles
+  chooseEnemyAction, makeRng, scatterObstacles, occupiedBy, pathTo
 } from "./core.js";
 
 const near = (a, b) => Math.abs(a - b) < 1e-9;
@@ -78,6 +78,40 @@ const near = (a, b) => Math.abs(a - b) < 1e-9;
 
   // 起点は結果に含めない
   assert.ok(!one.some(c => c.x === 2 && c.y === 1), "起点は含めない");
+}
+
+/* --- 経路の復元 --- */
+{
+  const g = createGrid([
+    ".....",
+    ".....",
+    "....."
+  ]);
+  const start = { x: 0, y: 1 };
+  const cells = reachableCells(g, start, 4);
+  const dest = { x: 3, y: 1 };
+  const path = pathTo(cells, dest);
+
+  assert.ok(path.length >= 1, "経路が取れる");
+  assert.deepEqual(path[path.length - 1], dest, "末尾は目的地");
+  assert.ok(!path.some(p => p.x === start.x && p.y === start.y), "起点は含めない");
+  // 隣り合うマスが連続していること
+  let prev = start;
+  for (const p of path) {
+    assert.ok(isAdjacent(prev, p), `経路が飛んでいる: ${JSON.stringify(prev)} → ${JSON.stringify(p)}`);
+    prev = p;
+  }
+  assert.deepEqual(pathTo(cells, { x: 99, y: 99 }), [], "届かない先は空の経路");
+}
+
+/* --- 立っているユニットだけがマスを塞ぐ --- */
+{
+  const units = [
+    { id: "self", hp: 10, x: 0, y: 0 },
+    { id: "alive", hp: 5, x: 1, y: 0 },
+    { id: "downed", hp: 0, x: 2, y: 0 }   // 倒れた駒はコインになるので塞がない
+  ];
+  assert.deepEqual(occupiedBy(units, "self"), [{ x: 1, y: 0 }]);
 }
 
 /* --- 障害物のランダム配置 --- */
@@ -256,8 +290,8 @@ const near = (a, b) => Math.abs(a - b) < 1e-9;
 /* --- 通し戦闘: 誰も同じマスに重ならない --- */
 {
   // 両陣営をAIで動かして最後まで戦わせ、全ターンを通じて
-  // 「2体が同じマスに立つ」瞬間が一度も無いことを確かめる。
-  // 戦闘不能になった駒もマスを塞ぎ続ける(その上に重なって立てない)
+  // 「立っている2体が同じマスに居る」瞬間が一度も無いことを確かめる。
+  // 倒れた駒は盤面から退く(その場のコインは塞がない)ので、生存者だけを見る
   for (const seed of [1, 77, 2026]) {
     const rng = makeRng(seed);
     const grid = scatterObstacles(
@@ -275,7 +309,7 @@ const near = (a, b) => Math.abs(a - b) < 1e-9;
 
     const assertNoOverlap = where => {
       const seen = new Set();
-      for (const u of units) {
+      for (const u of units.filter(x => x.hp > 0)) {
         const k = u.x + "," + u.y;
         assert.ok(!seen.has(k), `seed${seed} ${where}: ${k} に複数のユニットが重なった`);
         seen.add(k);

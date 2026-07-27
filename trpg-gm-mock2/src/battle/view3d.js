@@ -144,9 +144,36 @@ export function createBattleScene(container, grid) {
     return g;
   };
 
+  /* --- コイン(倒れた駒の跡に残る。通りかかると拾える) --- */
+  const coinGeo = new THREE.CylinderGeometry(0.3, 0.3, 0.06, 20);   // 薄い円柱=地面に寝たコイン
+  const coinMat = new THREE.MeshLambertMaterial({ color: 0xe8c34a, emissive: 0x4a3708 });
+  const coinMeshes = new Map();
+
+  function syncCoins(coins) {
+    const seen = new Set();
+    for (const c of coins) {
+      seen.add(c.id);
+      let m = coinMeshes.get(c.id);
+      if (!m) {
+        m = new THREE.Mesh(coinGeo, coinMat);
+        scene.add(m);
+        coinMeshes.set(c.id, m);
+      }
+      const [wx, wz] = worldOf(c.x, c.y);
+      m.position.set(wx, 0.06, wz);
+    }
+    for (const [id, m] of coinMeshes) {          // 拾われたコインは消す
+      if (!seen.has(id)) {
+        scene.remove(m);
+        coinMeshes.delete(id);
+      }
+    }
+  }
+
   /* --- 状態を画面へ反映する --- */
   // highlights: [{x, y, kind:"reach"|"target"}] / targetIds: 攻撃できる相手のid
-  function sync(units, highlights = [], activeId = null, targetIds = []) {
+  // coins: [{id, x, y}] 倒れた駒の跡
+  function sync({ units, highlights = [], activeId = null, targetIds = [], coins = [] }) {
     for (const [, m] of tiles) m.material.color.setHex(COLOR.floor);
     for (const h of highlights) {
       const t = tiles.get(h.x + "," + h.y);
@@ -155,14 +182,16 @@ export function createBattleScene(container, grid) {
 
     for (const u of units) {
       const g = meshFor(u);
+      // 戦闘不能の駒は盤面から退く(その場にはコインが残る)
+      if (u.hp <= 0) { g.visible = false; continue; }
+
       const [wx, wz] = worldOf(u.x, u.y);
       const h = u.height ?? 2;
       g.position.set(wx, 0, wz);   // 各パーツは自分の高さに配置済みなので足元を合わせる
-      const color = u.hp <= 0 ? COLOR.down : u.side === "party" ? COLOR.party : COLOR.enemy;
       // 攻撃できる相手は自身を光らせる。足元のマスを塗っても本体に隠れて見えないため
       const glow = targetIds.includes(u.id) ? COLOR.target : 0x000000;
       for (const mat of g.userData.mats) {
-        mat.color.setHex(color);
+        mat.color.setHex(u.side === "party" ? COLOR.party : COLOR.enemy);
         mat.emissive.setHex(glow);
       }
       g.visible = true;
@@ -172,6 +201,8 @@ export function createBattleScene(container, grid) {
       }
     }
     if (!activeId) marker.visible = false;
+
+    syncCoins(coins);
   }
 
   /* --- ヒット演出 --- */
@@ -327,6 +358,7 @@ export function createBattleScene(container, grid) {
 
     stepEffects(dt);
     marker.rotation.y += 0.02;
+    for (const [, m] of coinMeshes) m.rotation.y += 0.9 * dt;   // 拾えるものだと分かるよう回す
     renderer.render(scene, camera);
   };
   loop();
