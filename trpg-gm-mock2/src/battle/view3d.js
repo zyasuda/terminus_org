@@ -144,6 +144,94 @@ export function createBattleScene(container, grid) {
     if (!activeId) marker.visible = false;
   }
 
+  /* --- ヒット演出 --- */
+  // 衝撃の輪・ダメージ数値・被弾者の発光・画面の揺れ。すべて一時的な見た目だけで、
+  // 盤面の状態は一切変えない。演出中でもcore.jsが確定した結果は動かない
+  const clock = new THREE.Clock();
+  const effects = [];
+  const ringGeo = new THREE.RingGeometry(0.18, 0.42, 24);
+  let shake = 0;
+
+  function damageSprite(text, crit) {
+    const c = document.createElement("canvas");
+    c.width = 128; c.height = 64;
+    const g = c.getContext("2d");
+    g.font = "bold 44px system-ui, sans-serif";
+    g.textAlign = "center";
+    g.textBaseline = "middle";
+    g.lineWidth = 7;
+    g.strokeStyle = "rgba(0,0,0,.85)";
+    g.strokeText(text, 64, 32);
+    g.fillStyle = crit ? "#ffd76a" : "#ffffff";
+    g.fillText(text, 64, 32);
+    const s = new THREE.Sprite(new THREE.SpriteMaterial({
+      map: new THREE.CanvasTexture(c), transparent: true, depthTest: false
+    }));
+    s.scale.set(1.7, 0.85, 1);
+    return s;
+  }
+
+  function spawnRing(wx, wz, color, dur, weak) {
+    const ring = new THREE.Mesh(ringGeo, new THREE.MeshBasicMaterial({
+      color, transparent: true, side: THREE.DoubleSide, depthTest: false
+    }));
+    ring.rotation.x = -Math.PI / 2;
+    ring.position.set(wx, 0.15, wz);
+    scene.add(ring);
+    effects.push({ kind: "ring", obj: ring, t: 0, dur, weak });
+  }
+
+  function playHit(x, y, { crit = false, damage = 0, unitId = null } = {}) {
+    const [wx, wz] = worldOf(x, y);
+    spawnRing(wx, wz, crit ? 0xffd76a : 0xff8f6a, crit ? 0.5 : 0.36, false);
+
+    const num = damageSprite(String(damage), crit);
+    num.position.set(wx, 1.3, wz);
+    scene.add(num);
+    effects.push({ kind: "float", obj: num, t: 0, dur: 0.85, y0: 1.3 });
+
+    const m = unitId && unitMeshes.get(unitId);
+    if (m) effects.push({ kind: "flash", obj: m, t: 0, dur: 0.28, color: crit ? 0xffd76a : 0xffffff });
+
+    shake = crit ? 0.36 : 0.15;
+  }
+
+  function playMiss(x, y) {
+    const [wx, wz] = worldOf(x, y);
+    spawnRing(wx, wz, 0x8b93a7, 0.3, true);
+  }
+
+  function stepEffects(dt) {
+    for (let i = effects.length - 1; i >= 0; i--) {
+      const e = effects[i];
+      e.t += dt;
+      const k = Math.min(1, e.t / e.dur);
+      if (e.kind === "ring") {
+        const s = 1 + k * (e.weak ? 1.4 : 2.6);
+        e.obj.scale.set(s, s, s);
+        e.obj.material.opacity = (1 - k) * (e.weak ? 0.5 : 0.9);
+      } else if (e.kind === "float") {
+        e.obj.position.y = e.y0 + k * 0.9;
+        e.obj.material.opacity = k < 0.6 ? 1 : 1 - (k - 0.6) / 0.4;
+      } else if (e.kind === "flash") {
+        e.obj.material.emissive.setHex(e.color);
+        e.obj.material.emissiveIntensity = 1 - k;
+      }
+      if (k < 1) continue;
+
+      if (e.kind === "flash") {
+        // 発光を戻す。対象ハイライトが必要なら次のsyncが塗り直す
+        e.obj.material.emissive.setHex(0x000000);
+        e.obj.material.emissiveIntensity = 1;
+      } else {
+        scene.remove(e.obj);
+        e.obj.material.map?.dispose();
+        e.obj.material.dispose();   // ジオメトリは使い回すので破棄しない
+      }
+      effects.splice(i, 1);
+    }
+  }
+
   /* --- 入力(クリックでマス/ユニットを拾う) --- */
   const raycaster = new THREE.Raycaster();
   const ndc = new THREE.Vector2();
@@ -184,12 +272,25 @@ export function createBattleScene(container, grid) {
   let raf = 0;
   const loop = () => {
     raf = requestAnimationFrame(loop);
-    // 回転はなめらかに寄せる(カメラを状態へ直結させない: build-game-camera-controls)
+    const dt = clock.getDelta();
+
+    // 回転はなめらかに寄せる(カメラを状態へ直結させない: build-game-camera-controls)。
+    // 揺れは基本カメラの上に一時的に重ねるだけで、目標位置そのものは動かさない
     const want = Math.PI / 4 + dirIndex * (Math.PI / 2);
-    if (Math.abs(want - camAngle) > 0.001) {
-      camAngle += (want - camAngle) * 0.15;
+    const rotating = Math.abs(want - camAngle) > 0.001;
+    if (rotating) camAngle += (want - camAngle) * 0.15;
+    if (rotating || shake > 0) {
       placeCamera();
+      if (shake > 0) {
+        shake = Math.max(0, shake - dt * 1.8);
+        camera.position.x += (Math.random() - 0.5) * shake;
+        camera.position.y += (Math.random() - 0.5) * shake;
+        camera.position.z += (Math.random() - 0.5) * shake;
+        if (shake === 0) placeCamera();   // 揺れ終わりに正位置へ戻す
+      }
     }
+
+    stepEffects(dt);
     marker.rotation.y += 0.02;
     renderer.render(scene, camera);
   };
@@ -197,6 +298,8 @@ export function createBattleScene(container, grid) {
 
   return {
     sync,
+    playHit,
+    playMiss,
     rotate(delta) { dirIndex += delta; },
     setPickHandler(fn) { pickHandler = fn; },
     dispose() {

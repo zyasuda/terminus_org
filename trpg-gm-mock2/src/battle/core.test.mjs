@@ -44,11 +44,11 @@ const near = (a, b) => Math.abs(a - b) < 1e-9;
 
 /* --- 移動力 --- */
 {
-  assert.equal(movePointsFor(4), 4, "agility4 → 3+1");
-  assert.equal(movePointsFor(5), 5, "agility5 → 3+2");
-  assert.equal(movePointsFor(6), 5);
-  assert.equal(movePointsFor(7), 6, "agility7 → 3+3");
-  assert.equal(movePointsFor(), 5, "未指定は5扱い");
+  assert.equal(movePointsFor(4), 3, "agility4 → 2+1");
+  assert.equal(movePointsFor(5), 4, "agility5 → 2+2");
+  assert.equal(movePointsFor(6), 4);
+  assert.equal(movePointsFor(7), 5, "agility7 → 2+3");
+  assert.equal(movePointsFor(), 4, "未指定はagility5扱い");
 }
 
 /* --- 到達範囲 --- */
@@ -112,7 +112,7 @@ const near = (a, b) => Math.abs(a - b) < 1e-9;
 
 /* --- 近接攻撃の解決 --- */
 {
-  const atk = { id: "gareth", side: "party", hp: 10, x: 1, y: 1 };
+  const atk = { id: "gareth", side: "party", hp: 10, x: 1, y: 1, atk: 3 };
   const foe = { id: "rust", side: "enemy", hp: 8, x: 2, y: 1, defenseDc: 12 };
 
   // 隣接していなければ成立しない
@@ -131,25 +131,40 @@ const near = (a, b) => Math.abs(a - b) < 1e-9;
 
   const hit = resolveMelee({ attacker: atk, target: foe, units: [atk, foe], roll: () => 12 });
   assert.equal(hit.hit, true);
-  assert.equal(hit.damage, 1, "単独ならダメージ1");
+  assert.equal(hit.damage, 3, "単独ならatkそのまま");
+
+  // atk未指定は既定3
+  assert.equal(
+    resolveMelee({ attacker: { ...atk, atk: undefined }, target: foe, units: [], roll: () => 12 }).damage,
+    3
+  );
 
   // 出目20はクリティカル(自動成功)、出目1はファンブル(自動失敗)
   const crit = resolveMelee({ attacker: atk, target: { ...foe, defenseDc: 30 }, units: [atk, foe], roll: () => 20 });
   assert.ok(crit.hit && crit.crit, "20はDCを超えていても命中");
-  assert.equal(crit.damage, 2);
+  assert.equal(crit.damage, 6, "クリティカルはatkの2倍");
 
   const fumble = resolveMelee({ attacker: atk, target: { ...foe, defenseDc: 2 }, units: [atk, foe], roll: () => 1 });
   assert.ok(!fumble.hit && fumble.fumble, "1はDCを満たしていても失敗");
 
-  // 包囲: 味方2人で隣接するとダメージが上がる
-  const ally = { id: "lydia", side: "party", hp: 10, x: 2, y: 2 };
-  const surrounded = resolveMelee({ attacker: atk, target: foe, units: [atk, ally, foe], roll: () => 12 });
-  assert.equal(surrounded.surround, 2);
-  assert.ok(near(surrounded.multiplier, 1 + 1 / 3));
-  assert.equal(surrounded.damage, 1, "1 × 1.33 → 四捨五入で1");
+  // 包囲: 隣接する味方が増えるごとに1ずつ増える(3 / 4 / 5 / 6)
+  const ally2 = { id: "lydia", side: "party", hp: 10, x: 2, y: 2 };
+  const ally3 = { id: "c", side: "party", hp: 10, x: 3, y: 1 };
+  const ally4 = { id: "d", side: "party", hp: 10, x: 3, y: 2 };
 
-  const surroundedCrit = resolveMelee({ attacker: atk, target: foe, units: [atk, ally, foe], roll: () => 20 });
-  assert.equal(surroundedCrit.damage, 3, "2 × 1.33 → 四捨五入で3");
+  const two = resolveMelee({ attacker: atk, target: foe, units: [atk, ally2, foe], roll: () => 12 });
+  assert.equal(two.surround, 2);
+  assert.ok(near(two.multiplier, 1 + 1 / 3));
+  assert.equal(two.damage, 4, "3 × 1.33 → 4");
+
+  assert.equal(
+    resolveMelee({ attacker: atk, target: foe, units: [atk, ally2, ally3, foe], roll: () => 12 }).damage,
+    5, "3人で囲むと5"
+  );
+  assert.equal(
+    resolveMelee({ attacker: atk, target: foe, units: [atk, ally2, ally3, ally4, foe], roll: () => 12 }).damage,
+    6, "4人で囲むと6"
+  );
 }
 
 /* --- 敵の行動選択(仮置きAI) --- */

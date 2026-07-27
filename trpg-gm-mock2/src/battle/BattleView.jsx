@@ -17,33 +17,37 @@ import {
   turnOrder, resolveMelee, chooseEnemyAction
 } from "./core.js";
 
-/* --- 検証用の固定盤面(deterministic fixture) --- */
+/* --- 検証用の固定盤面(deterministic fixture) ---
+   8x8では移動力が盤面のほぼ全域に届いて位置取りの意味が薄れたため、12x10へ広げ、
+   遮蔽になる壁を左右対称に置いた。移動力3〜5で一辺のおよそ1/3を進める見当 */
 const GRID = createGrid([
-  "........",
-  "..#.....",
-  "..#..##.",
-  "........",
-  ".##..#..",
-  "........",
-  "...##...",
-  "........"
+  "............",
+  "..#......#..",
+  "..#..##..#..",
+  ".....##.....",
+  "............",
+  "............",
+  ".....##.....",
+  "..#..##..#..",
+  "..#......#..",
+  "............"
 ]);
 
 // 開始位置。?fixture=melee で「すでに隣接している」状態から始められる
 // (交戦中の挙動を毎回同じ手順で確認するため)
 const START = {
-  default: { gareth: [0, 7], lydia: [1, 7], rust1: [7, 0], rust2: [6, 1] },
-  melee: { gareth: [3, 5], lydia: [2, 5], rust1: [4, 5], rust2: [4, 6] }
+  default: { gareth: [1, 4], lydia: [1, 5], rust1: [10, 4], rust2: [10, 5] },
+  melee: { gareth: [5, 4], lydia: [4, 4], rust1: [6, 4], rust2: [6, 5] }
 };
 
 const makeUnits = () => {
   const name = new URLSearchParams(location.search).get("fixture");
   const p = START[name] || START.default;
   return [
-    { id: "gareth", name: "ガレス", side: "party", x: p.gareth[0], y: p.gareth[1], hp: 10, maxHp: 10, agility: 7, defenseDc: 12, height: 2 },
-    { id: "lydia", name: "リディア", side: "party", x: p.lydia[0], y: p.lydia[1], hp: 10, maxHp: 10, agility: 4, defenseDc: 12, height: 1.9 },
-    { id: "rust1", name: "錆喰い", side: "enemy", x: p.rust1[0], y: p.rust1[1], hp: 8, maxHp: 8, agility: 5, defenseDc: 12, height: 0.8 },
-    { id: "rust2", name: "錆喰い(2)", side: "enemy", x: p.rust2[0], y: p.rust2[1], hp: 8, maxHp: 8, agility: 5, defenseDc: 12, height: 0.8 }
+    { id: "gareth", name: "ガレス", side: "party", x: p.gareth[0], y: p.gareth[1], hp: 16, maxHp: 16, atk: 3, agility: 7, defenseDc: 12, height: 2 },
+    { id: "lydia", name: "リディア", side: "party", x: p.lydia[0], y: p.lydia[1], hp: 14, maxHp: 14, atk: 2, agility: 4, defenseDc: 12, height: 1.9 },
+    { id: "rust1", name: "錆喰い", side: "enemy", x: p.rust1[0], y: p.rust1[1], hp: 10, maxHp: 10, atk: 2, agility: 5, defenseDc: 12, height: 0.8 },
+    { id: "rust2", name: "錆喰い(2)", side: "enemy", x: p.rust2[0], y: p.rust2[1], hp: 10, maxHp: 10, atk: 2, agility: 5, defenseDc: 12, height: 0.8 }
   ];
 };
 
@@ -85,25 +89,36 @@ export default function BattleView() {
     return s;
   });
 
-  const attack = (attacker, target) => setState(s => {
-    const r = resolveMelee({ attacker, target, units: s.units, roll: rollD20 });
-    if (!r.ok) return s;
+  // 結果を先に確定させてから、演出と状態更新をそれぞれ行う。
+  // 演出は見た目だけで、確定した結果を変えない
+  const attack = (attacker, target) => {
+    const r = resolveMelee({ attacker, target, units, roll: rollD20 });
+    if (!r.ok) return;
+    const view = sceneRef.current;
+    if (r.hit) view?.playHit(target.x, target.y, { crit: r.crit, damage: r.damage, unitId: target.id });
+    else view?.playMiss(target.x, target.y);
 
-    const lines = [];
-    if (r.hit) {
-      const hp = Math.max(0, target.hp - r.damage);
+    setState(s => {
+      const lines = [];
+      if (!r.hit) {
+        lines.push(`${attacker.name}の攻撃は${r.fumble ? "大きく外れ、体勢を崩した" : "外れた"}(d20=${r.d20})。`);
+        return { ...s, log: [...s.log, ...lines] };
+      }
+      const cur = s.units.find(u => u.id === target.id);
+      const hp = Math.max(0, cur.hp - r.damage);
       lines.push(
         `${attacker.name}の攻撃が${r.crit ? "深々と" : ""}命中(d20=${r.d20})。` +
-        `${target.name}に${r.damage}ダメージ(残りHP ${hp}/${target.maxHp})。` +
+        `${target.name}に${r.damage}ダメージ(残りHP ${hp}/${cur.maxHp})。` +
         (r.surround >= 2 ? `${r.surround}人で囲んでいる(×${r.multiplier.toFixed(2)})。` : "")
       );
       if (hp <= 0) lines.push(`${target.name}は倒れた。`);
-      const nextUnits = s.units.map(u => (u.id === target.id ? { ...u, hp } : u));
-      return { ...s, units: nextUnits, log: [...s.log, ...lines] };
-    }
-    lines.push(`${attacker.name}の攻撃は${r.fumble ? "大きく外れ、体勢を崩した" : "外れた"}(d20=${r.d20})。`);
-    return { ...s, log: [...s.log, ...lines] };
-  });
+      return {
+        ...s,
+        units: s.units.map(u => (u.id === target.id ? { ...u, hp } : u)),
+        log: [...s.log, ...lines]
+      };
+    });
+  };
 
   const moveTo = (unit, x, y) => setState(s => ({
     ...s,

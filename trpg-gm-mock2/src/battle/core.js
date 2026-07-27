@@ -59,11 +59,13 @@ export function isAdjacent(a, b) {
 
 /* ---------------- 移動 ---------------- */
 
-// 移動力 = 基本3 + agility補正(+1〜+3)。現行データのagilityは概ね4〜7の範囲。
+// 移動力 = 基本2 + agility補正(+1〜+3)。現行データのagilityは概ね4〜7の範囲。
+// 基本値は当初3(合計4〜6)だったが、盤面のほぼ全域へ届いてしまい位置取りの意味が
+// 薄れたため2へ下げた(合計3〜5)。盤面の一辺のおよそ1/3で移動できる程度が目安。
 // ponytail: 3段階の素朴な区切り。細かい曲線が要るならここだけ差し替える
 export function movePointsFor(agility = 5) {
   const bonus = agility >= 7 ? 3 : agility >= 5 ? 2 : 1;
-  return 3 + bonus;
+  return 2 + bonus;
 }
 
 // 到達可能マスをBFSで列挙する。8方向・1マスあたりコスト1(チェビシェフ距離)。
@@ -127,7 +129,11 @@ export function resolveMelee({ attacker, target, units = [], roll }) {
 
   const surround = adjacentAllies(units, target, attacker.side).length;
   const multiplier = surroundMultiplier(surround);
-  const damage = hit ? Math.round((crit ? 2 : 1) * multiplier) : 0;
+  // 基礎ダメージはユニットのatk(既定3)。当初は1固定だったが、包囲倍率1.33を掛けても
+  // 四捨五入で1のまま消えてしまい、囲んでいる実感が出なかった。3を基準にすると
+  // 1人3 / 2人4 / 3人5 / 4人6 と一段ずつ増えて手応えが分かる
+  const base = attacker.atk ?? 3;
+  const damage = hit ? Math.round((crit ? base * 2 : base) * multiplier) : 0;
 
   return { ok: true, d20, dc, hit, crit, fumble, surround, multiplier, damage };
 }
