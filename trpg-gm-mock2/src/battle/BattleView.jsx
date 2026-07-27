@@ -87,6 +87,9 @@ export default function BattleView() {
   const [fogOn, setFogOn] = useState(true);
   const [fogLevel, setFogLevel] = useState(1);
   const [dustOn, setDustOn] = useState(true);
+  const [rainOn, setRainOn] = useState(false);
+  const [wallsOn, setWallsOn] = useState(true);
+  const [bgColor, setBgColor] = useState("#161a22");
 
   const { grid, units, order, turn, hasMoved, coins } = state;
   const active = units.find(u => u.id === order[turn] && u.hp > 0) || null;
@@ -102,6 +105,9 @@ export default function BattleView() {
     s.setFogEnabled(fogOn);
     s.setFogIntensity(fogLevel);
     s.setDustEnabled(dustOn);
+    s.setRainEnabled(rainOn);
+    s.setWallsEnabled(wallsOn);
+    s.setBackgroundColor(bgColor);
     return () => { s.dispose(); sceneRef.current = null; };
   }, [grid]);
 
@@ -109,6 +115,9 @@ export default function BattleView() {
   useEffect(() => { sceneRef.current?.setFogEnabled(fogOn); }, [fogOn, grid]);
   useEffect(() => { sceneRef.current?.setFogIntensity(fogLevel); }, [fogLevel, grid]);
   useEffect(() => { sceneRef.current?.setDustEnabled(dustOn); }, [dustOn, grid]);
+  useEffect(() => { sceneRef.current?.setRainEnabled(rainOn); }, [rainOn, grid]);
+  useEffect(() => { sceneRef.current?.setWallsEnabled(wallsOn); }, [wallsOn, grid]);
+  useEffect(() => { sceneRef.current?.setBackgroundColor(bgColor); }, [bgColor, grid]);
 
   /* --- 手番の解決 --- */
   const endTurn = () => setState(s => {
@@ -286,6 +295,18 @@ export default function BattleView() {
           <label style={S.toggle}>
             <input type="checkbox" checked={dustOn} onChange={e => setDustOn(e.target.checked)} />
             塵
+          </label>
+          <label style={S.toggle}>
+            <input type="checkbox" checked={rainOn} onChange={e => setRainOn(e.target.checked)} />
+            雨
+          </label>
+          <label style={S.toggle}>
+            <input type="checkbox" checked={wallsOn} onChange={e => setWallsOn(e.target.checked)} />
+            壁
+          </label>
+          <label style={S.toggle}>
+            背景
+            <input type="color" value={bgColor} onChange={e => setBgColor(e.target.value)} style={{ width: 28, height: 20, padding: 0, border: "none", background: "none" }} />
           </label>
         </div>
 

@@ -232,6 +232,9 @@ export function createBattleScene(container, grid) {
     depthWrite: false,
     side: THREE.FrontSide
   });
+  // on/offをまとめて切り替えられるようGroupに入れる(検証パネルからのトグル用)
+  const backdropGroup = new THREE.Group();
+  scene.add(backdropGroup);
   // [幅, 位置, Y回転] … PlaneGeometryの法線は+Z。Y回転で内側へ向ける
   [
     [grid.w, [0, BACKDROP_H / 2, -halfH], 0],              // 奥(-Z)側 → +Zを向く
@@ -242,7 +245,7 @@ export function createBattleScene(container, grid) {
     const m = new THREE.Mesh(new THREE.PlaneGeometry(width, BACKDROP_H), backdropMat);
     m.position.set(...pos);
     m.rotation.y = rotY;
-    scene.add(m);
+    backdropGroup.add(m);
   });
 
   /* --- 空気感の粒子(ゆらゆら立ち上る塵・埃) ---
@@ -301,6 +304,58 @@ export function createBattleScene(container, grid) {
       const swayX = Math.sin(elapsed * d.swayFreqX + d.swayPhase) * d.swayAmpX;
       const swayZ = Math.cos(elapsed * d.swayFreqZ + d.swayPhase) * d.swayAmpZ;
       d.sprite.position.set(d.x + swayX, d.y, d.z + swayZ);
+    }
+  }
+
+  /* --- 雨(屋外マップ向けの演出) ---
+     塵と同じ「個別Spriteをまとめて表示/非表示」の作りを流用し、上から下へ
+     速く落として地面で頂点(実際は底)に着いたら上へ戻す。既定は非表示
+     (暗い地下的な盤面には合わないため、屋外マップで使う時だけonにする想定)。
+     見た目だけの演出で、盤面のルールには一切関与しない */
+  const rainTexture = () => {
+    const c = document.createElement("canvas");
+    c.width = 8; c.height = 48;
+    const g = c.getContext("2d");
+    const grad = g.createLinearGradient(0, 0, 0, 48);
+    grad.addColorStop(0, "rgba(210,230,255,0)");
+    grad.addColorStop(0.5, "rgba(210,230,255,0.55)");
+    grad.addColorStop(1, "rgba(210,230,255,0)");
+    g.fillStyle = grad;
+    g.fillRect(0, 0, 8, 48);
+    return new THREE.CanvasTexture(c);
+  };
+  const rainMat = new THREE.SpriteMaterial({
+    map: rainTexture(), transparent: true, opacity: 0.55, depthWrite: false
+  });
+  const rainGroup = new THREE.Group();
+  rainGroup.visible = false;   // 既定オフ。屋外マップでトグルする想定
+  scene.add(rainGroup);
+
+  const RAIN_COUNT = 90;
+  const RAIN_TOP = 5.2;
+  const rainSpan = Math.max(grid.w, grid.h) + 3;   // 盤面の外側からも降らせて途切れ感を無くす
+  const rainState = Array.from({ length: RAIN_COUNT }, () => {
+    const sprite = new THREE.Sprite(rainMat);
+    sprite.scale.set(0.035 + Math.random() * 0.015, 0.3 + Math.random() * 0.14, 1);
+    rainGroup.add(sprite);
+    return {
+      sprite,
+      x: (Math.random() - 0.5) * rainSpan,
+      z: (Math.random() - 0.5) * rainSpan,
+      y: Math.random() * RAIN_TOP,
+      speed: 3.2 + Math.random() * 2.2
+    };
+  });
+
+  function stepRain(dt) {
+    for (const d of rainState) {
+      d.y -= d.speed * dt;
+      if (d.y < 0) {
+        d.y += RAIN_TOP;
+        d.x = (Math.random() - 0.5) * rainSpan;
+        d.z = (Math.random() - 0.5) * rainSpan;
+      }
+      d.sprite.position.set(d.x, d.y, d.z);
     }
   }
 
@@ -595,6 +650,7 @@ export function createBattleScene(container, grid) {
 
     stepEffects(dt);
     stepDust(dt);
+    if (rainGroup.visible) stepRain(dt);
     marker.rotation.y += 0.02;
     for (const [, m] of coinMeshes) m.rotation.y += 1.1 * dt;   // 拾えるものだと分かるよう回す
     // 水面のテクスチャをゆっくり流す(全水溜りが同じテクスチャを共有しているので、
@@ -616,6 +672,14 @@ export function createBattleScene(container, grid) {
     setFogEnabled(on) { scene.fog = on ? fogObj : null; },
     setFogIntensity(t) { fogObj.far = CAMERA_DIST + 10 + (1 - t) * 50; },
     setDustEnabled(on) { dustGroup.visible = on; },
+    setRainEnabled(on) { rainGroup.visible = on; },
+    setWallsEnabled(on) { backdropGroup.visible = on; },
+    // 背景とfogの色は揃える(fogは奥で背景色へ溶け込ませる演出なので、
+    // 背景だけ変えてfogを暗いままにすると奥だけ元の色に沈んで見える)
+    setBackgroundColor(hex) {
+      scene.background.set(hex);
+      fogObj.color.set(hex);
+    },
     dispose() {
       cancelAnimationFrame(raf);
       ro.disconnect();
