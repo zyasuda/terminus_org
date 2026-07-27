@@ -30,9 +30,20 @@ const COLOR = {
   active: 0xf2df7e       // 手番のユニットを示すマーカー
 };
 
+const CAMERA_DIST = 20;   // placeCamera()の r と同じ値。fogのnear/farはここからの相対距離で決める
+
 export function createBattleScene(container, grid) {
   const scene = new THREE.Scene();
   scene.background = new THREE.Color(COLOR.bg);
+  // 奥行き方向の霞み。書き割りの上下グラデーションとは軸が違う(fogは奥行き、
+  // 書き割りは高さ)ので、役割が重ならず共存できる。標準マテリアルは既定でfogの
+  // 影響を受けるので、追加でmaterial側の設定は要らない。
+  // THREE.Fogは「カメラ位置からの実距離」で効く。正射影でも見た目の大きさは
+  // 変わらないが距離自体はCAMERA_DIST(≒20)離れているので、盤面の大きさだけで
+  // near/farを決めると実距離よりずっと小さくなり、全部霞んでしまう(実際に起きた)。
+  // 8x8盤面・この俯角では実測で手前角が約20.6、奥角が約28.7だったので、
+  // その範囲を挟むようにnear/farを置く(手前はほぼ霞まず、奥だけはっきり沈む)
+  scene.fog = new THREE.Fog(COLOR.bg, CAMERA_DIST - 1, CAMERA_DIST + 10);
 
   // グリッド中心を原点に置く。セル(x,y)はワールドの(x,·,y)へ写す
   const offX = (grid.w - 1) / 2;
@@ -59,7 +70,7 @@ export function createBattleScene(container, grid) {
 
   const placeCamera = () => {
     // 真のアイソメトリックに近い見下ろし角(atan(1/√2) ≒ 35.26度)
-    const r = 20, y = r * Math.tan(Math.atan(1 / Math.SQRT2));
+    const r = CAMERA_DIST, y = r * Math.tan(Math.atan(1 / Math.SQRT2));
     camera.position.set(Math.cos(camAngle) * r, y, Math.sin(camAngle) * r);
     camera.lookAt(target);
   };
