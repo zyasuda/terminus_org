@@ -10,7 +10,7 @@
    ========================================================= */
 
 import * as THREE from "three";
-import { elevationAt } from "./core.js";
+import { elevationAt, makeRng } from "./core.js";
 
 const TILE = 0.92;       // 床タイルの一辺(セル間にわずかな目地を残す)
 const TILE_H = 0.25;     // 床の厚み(1キューブ=4層の1層ぶん)
@@ -92,9 +92,51 @@ export function createBattleScene(container, grid) {
   const wallMat = new THREE.MeshLambertMaterial({ color: COLOR.wall });
   const pillarMat = new THREE.MeshLambertMaterial({ color: COLOR.pillar });
   const rubbleMat = new THREE.MeshLambertMaterial({ color: COLOR.rubble });
+  // 水面: canvasで焼いたノイズをタイル状に貼り、時間で少しずつスクロールして
+  // さざ波っぽく見せる(本物の水面シェーダーではなく、あくまで簡易な近似)。
+  // 画像ファイルは使わず、ダメージ数値や書き割りと同じくcanvasで手描きする
+  const waterTexture = () => {
+    const c = document.createElement("canvas");
+    c.width = c.height = 64;
+    const g = c.getContext("2d");
+    g.fillStyle = "#1c4d57";
+    g.fillRect(0, 0, 64, 64);
+    const rng = makeRng(777);
+    for (let i = 0; i < 90; i++) {
+      const x = rng() * 64, y = rng() * 64, r = 2 + rng() * 5;
+      g.fillStyle = rng() > 0.5 ? "rgba(150,210,215,0.22)" : "rgba(10,30,35,0.22)";
+      g.beginPath();
+      g.arc(x, y, r, 0, Math.PI * 2);
+      g.fill();
+    }
+    const tex = new THREE.CanvasTexture(c);
+    tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+    tex.repeat.set(1.6, 1.6);
+    tex.colorSpace = THREE.SRGBColorSpace;
+    return tex;
+  };
+  const waterTex = waterTexture();
   const waterMat = new THREE.MeshBasicMaterial({
-    color: 0x2c6f7a, transparent: true, opacity: 0.62, depthWrite: false, side: THREE.DoubleSide
+    map: waterTex, color: 0x6fb0b8, transparent: true, opacity: 0.68,
+    depthWrite: false, side: THREE.DoubleSide
   });
+
+  // 水溜りの輪郭を、正円ではなく水たまりらしい不定形にする。角度ごとに半径を
+  // 揺らした多角形を作るだけの素朴な方法。マス位置から作る決定論rngなので、
+  // 同じ盤面なら毎回同じ形になる(演出用の形だけの話で、core.js側の当たり判定は
+  // 常にマス単位のまま変わらない)
+  const puddleShape = seed => {
+    const rng = makeRng(seed);
+    const points = 10;
+    const shape = new THREE.Shape();
+    for (let i = 0; i <= points; i++) {
+      const a = (i / points) * Math.PI * 2;
+      const r = (TILE * 0.3) * (0.72 + rng() * 0.4);
+      const x = Math.cos(a) * r, y = Math.sin(a) * r;
+      if (i === 0) shape.moveTo(x, y); else shape.lineTo(x, y);
+    }
+    return shape;
+  };
 
   const tiles = new Map();   // "x,y" → 床メッシュ(ハイライトで色を塗り替える)
   for (let y = 0; y < grid.h; y++) {
@@ -126,9 +168,9 @@ export function createBattleScene(container, grid) {
 
       // 水溜り: 進入は妨げないが移動コストが2倍。床の色を直接塗ると
       // ハイライト(到達可能マス等)で上書きされて見分けられなくなるため、
-      // 別の薄い板をわずかに浮かせて重ねる
+      // 別の薄い板をわずかに浮かせて重ねる。形はマスごとに不定形(丸みのある水たまり風)
       if (cell.terrain?.type === "water") {
-        const w = new THREE.Mesh(new THREE.PlaneGeometry(TILE * 0.86, TILE * 0.86), waterMat);
+        const w = new THREE.Mesh(new THREE.ShapeGeometry(puddleShape(x * 7919 + y * 104729)), waterMat);
         w.rotation.x = -Math.PI / 2;
         w.position.set(wx, 0.012, wz);
         scene.add(w);
@@ -480,6 +522,10 @@ export function createBattleScene(container, grid) {
     stepEffects(dt);
     marker.rotation.y += 0.02;
     for (const [, m] of coinMeshes) m.rotation.y += 1.1 * dt;   // 拾えるものだと分かるよう回す
+    // 水面のテクスチャをゆっくり流す(全水溜りが同じテクスチャを共有しているので、
+    // 1箇所ずらすだけで全部にさざ波が付く)。ごく低速: 速いと安っぽいスクロールに見える
+    waterTex.offset.x = (waterTex.offset.x + dt * 0.05) % 1;
+    waterTex.offset.y = (waterTex.offset.y + dt * 0.032) % 1;
     renderer.render(scene, camera);
   };
   loop();
