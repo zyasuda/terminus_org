@@ -253,4 +253,58 @@ const near = (a, b) => Math.abs(a - b) < 1e-9;
   assert.deepEqual(chooseEnemyAction(boxed, trapped, [trapped, outside]), { type: "wait" });
 }
 
+/* --- 通し戦闘: 誰も同じマスに重ならない --- */
+{
+  // 両陣営をAIで動かして最後まで戦わせ、全ターンを通じて
+  // 「2体が同じマスに立つ」瞬間が一度も無いことを確かめる。
+  // 戦闘不能になった駒もマスを塞ぎ続ける(その上に重なって立てない)
+  for (const seed of [1, 77, 2026]) {
+    const rng = makeRng(seed);
+    const grid = scatterObstacles(
+      createGrid(Array(8).fill("........")),
+      makeRng(seed + 1),
+      { pillars: 5, rubble: 6, keepClear: [{ x: 0, y: 3 }, { x: 7, y: 4 }] }
+    );
+    const units = [
+      { id: "g", name: "g", side: "party", x: 0, y: 3, hp: 16, maxHp: 16, atk: 3, agility: 7, defenseDc: 12 },
+      { id: "l", name: "l", side: "party", x: 0, y: 4, hp: 14, maxHp: 14, atk: 2, agility: 4, defenseDc: 12 },
+      { id: "r1", name: "r1", side: "enemy", x: 7, y: 3, hp: 10, maxHp: 10, atk: 2, agility: 5, defenseDc: 12 },
+      { id: "r2", name: "r2", side: "enemy", x: 7, y: 4, hp: 10, maxHp: 10, atk: 2, agility: 5, defenseDc: 12 }
+    ];
+    const roll = () => 1 + Math.floor(rng() * 20);
+
+    const assertNoOverlap = where => {
+      const seen = new Set();
+      for (const u of units) {
+        const k = u.x + "," + u.y;
+        assert.ok(!seen.has(k), `seed${seed} ${where}: ${k} に複数のユニットが重なった`);
+        seen.add(k);
+        assert.ok(isWalkable(grid, u.x, u.y), `seed${seed} ${where}: 進入不可のマスに乗った`);
+      }
+    };
+
+    assertNoOverlap("開始時");
+
+    const order = turnOrder(units).map(u => u.id);
+    for (let t = 0; t < 400; t++) {
+      const alive = s => units.some(u => u.side === s && u.hp > 0);
+      if (!alive("party") || !alive("enemy")) break;
+
+      const self = units.find(u => u.id === order[t % order.length]);
+      if (!self || self.hp <= 0) continue;
+
+      const act = chooseEnemyAction(grid, self, units);   // 両陣営とも同じAIで動かす
+      if (act.type === "move") {
+        self.x = act.to.x;
+        self.y = act.to.y;
+      } else if (act.type === "attack") {
+        const target = units.find(u => u.id === act.targetId);
+        const r = resolveMelee({ attacker: self, target, units, roll });
+        if (r.ok && r.hit) target.hp = Math.max(0, target.hp - r.damage);
+      }
+      assertNoOverlap(`ターン${t}`);
+    }
+  }
+}
+
 console.log("battle/core: 全チェック通過");

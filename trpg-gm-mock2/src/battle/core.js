@@ -148,6 +148,13 @@ export function movePointsFor(agility = 5) {
   return 1 + (agility >= 7 ? 2 : 1);
 }
 
+// 移動する本人以外のユニットが塞いでいるマス。
+// 戦闘不能でも盤面に残っている限りマスを塞ぐ(倒れた駒に重なって立てないように)。
+// これにより「誰も同じマスに立てない」が常に保たれる
+export function occupiedBy(units, moverId) {
+  return units.filter(u => u.id !== moverId).map(u => ({ x: u.x, y: u.y }));
+}
+
 // 到達可能マスをBFSで列挙する。8方向・1マスあたりコスト1(チェビシェフ距離)。
 // 近接射程が8方向隣接なので移動も8方向で揃える。斜めを1.5にしたくなったらここを直す。
 // 他ユニットのいるマスは通過も着地も不可として扱う(すり抜けを許すならblockedの作り方を変える)。
@@ -234,8 +241,7 @@ export function chooseEnemyAction(grid, unit, units) {
   if (inReach) return { type: "attack", targetId: inReach.id };
 
   const nearest = foes.reduce((best, f) => (dist(unit, f) < dist(unit, best) ? f : best));
-  const occupied = units.filter(u => u.hp > 0 && u.id !== unit.id);
-  const cells = reachableCells(grid, unit, movePointsFor(unit.agility), occupied);
+  const cells = reachableCells(grid, unit, movePointsFor(unit.agility), occupiedBy(units, unit.id));
 
   let bestCell = null, bestDist = dist(unit, nearest);
   for (const c of cells) {

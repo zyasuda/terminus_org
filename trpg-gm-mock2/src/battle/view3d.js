@@ -118,33 +118,19 @@ export function createBattleScene(container, grid) {
   marker.visible = false;
   scene.add(marker);
 
-  // 味方は円錐の胴体+頂点に頭の球、敵は三角柱。輪郭で陣営が一目で分かる形にする。
-  // 本番のキャラ表現(ビルボードか3Dモデルか)はPhase 3で決めるので、ここは仮の形
+  // ユニットは陣営を問わず箱で表す。
+  // 一度は味方を円錐+球、敵を三角柱にしてみたが、Phase 3の判断材料としては箱が正しい。
+  // 2D表現なら箱の各面(前後左右・上)にテクスチャを貼ることになり、3Dモデルなら
+  // その箱が占める体積にモデルを置くことになるため、どちらの見当もつけやすい
   const makeUnitObject = unit => {
     const g = new THREE.Group();
-    const mats = [];
-    const add = (geo, y) => {
-      const mat = new THREE.MeshLambertMaterial({ color: 0xffffff });
-      const m = new THREE.Mesh(geo, mat);
-      m.position.y = y;
-      m.userData = { kind: "unit", id: unit.id };   // 子を直接クリックしても拾えるように
-      g.add(m);
-      mats.push(mat);
-    };
-
-    if (unit.side === "party") {
-      const h = unit.height ?? 2;
-      const bodyH = h * 0.72;
-      const headR = h * 0.13;
-      add(new THREE.ConeGeometry(0.34, bodyH, 18), bodyH / 2);
-      add(new THREE.SphereGeometry(headR, 16, 12), bodyH + headR * 0.7);
-    } else {
-      const h = unit.height ?? 0.8;
-      // 3分割のシリンダー = 三角柱
-      add(new THREE.CylinderGeometry(0.44, 0.44, h, 3), h / 2);
-    }
-
-    g.userData = { kind: "unit", id: unit.id, mats };
+    const h = unit.height ?? 2;
+    const mat = new THREE.MeshLambertMaterial({ color: 0xffffff });
+    const m = new THREE.Mesh(new THREE.BoxGeometry(0.5, h, 0.5), mat);
+    m.position.y = h / 2;
+    m.userData = { kind: "unit", id: unit.id };   // 子を直接クリックしても拾えるように
+    g.add(m);
+    g.userData = { kind: "unit", id: unit.id, mats: [mat] };
     return g;
   };
 

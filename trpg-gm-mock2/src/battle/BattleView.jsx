@@ -15,7 +15,7 @@ import { createBattleScene } from "./view3d.js";
 import {
   createGrid, isAdjacent, movePointsFor, reachableCells,
   turnOrder, resolveMelee, chooseEnemyAction,
-  makeRng, scatterObstacles
+  makeRng, scatterObstacles, occupiedBy
 } from "./core.js";
 
 /* --- 盤面 ---
@@ -155,7 +155,7 @@ export default function BattleView() {
   /* --- ハイライトと入力 --- */
   const playerTurn = !!active && active.side === "party" && !over;
   const reach = playerTurn && !hasMoved
-    ? reachableCells(grid, active, movePointsFor(active.agility), units.filter(u => u.hp > 0 && u.id !== active.id))
+    ? reachableCells(grid, active, movePointsFor(active.agility), occupiedBy(units, active.id))
     : [];
   const targets = playerTurn
     ? units.filter(u => u.side === "enemy" && u.hp > 0 && isAdjacent(active, u))
