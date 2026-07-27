@@ -7,6 +7,7 @@
     "dev": "vite",
     "dev:api": "node server.cjs",
     "check:assets": "node scripts/check-assets.mjs",
+    "test:battle": "node src/battle/core.test.mjs",
     "build": "vite build",
     "preview": "vite preview"
   },
