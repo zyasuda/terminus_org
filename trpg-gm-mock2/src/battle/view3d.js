@@ -80,10 +80,17 @@ export function createBattleScene(container, grid) {
   };
 
   /* --- ライト ---
-     地の明かりは、盤面が読めなくならない程度まで落としてある。
-     暗くするのが目的ではなく、下のランタンの揺らぎが分かるようにするため */
-  scene.add(new THREE.AmbientLight(0xffffff, 0.34));
-  const key = new THREE.DirectionalLight(0xdfe6ff, 0.36);
+     地の明かりは、盤面が読めなくならない程度まで落としてある(夜プリセット、既定)。
+     暗くするのが目的ではなく、下のランタンの揺らぎが分かるようにするため。
+     屋外・昼の場面では背景色を変えるだけだと地面が暗いままで浮くので、
+     「昼」プリセットでは太陽光相当まで両方の強さを上げる */
+  const LIGHT_PRESET = {
+    night: { ambient: 0.34, key: 0.36, keyColor: 0xdfe6ff },
+    day: { ambient: 0.85, key: 1.05, keyColor: 0xfff3da }
+  };
+  const ambientLight = new THREE.AmbientLight(0xffffff, LIGHT_PRESET.night.ambient);
+  scene.add(ambientLight);
+  const key = new THREE.DirectionalLight(LIGHT_PRESET.night.keyColor, LIGHT_PRESET.night.key);
   key.position.set(6, 12, 4);
   scene.add(key);
 
@@ -343,7 +350,7 @@ export function createBattleScene(container, grid) {
       x: (Math.random() - 0.5) * rainSpan,
       z: (Math.random() - 0.5) * rainSpan,
       y: Math.random() * RAIN_TOP,
-      speed: 3.2 + Math.random() * 2.2
+      speed: 1.6 + Math.random() * 1.2   // 屋外での見え方を確認しつつ落下速度を半分程度に落とした
     };
   });
 
@@ -674,6 +681,12 @@ export function createBattleScene(container, grid) {
     setDustEnabled(on) { dustGroup.visible = on; },
     setRainEnabled(on) { rainGroup.visible = on; },
     setWallsEnabled(on) { backdropGroup.visible = on; },
+    setLightPreset(name) {
+      const p = LIGHT_PRESET[name] || LIGHT_PRESET.night;
+      ambientLight.intensity = p.ambient;
+      key.intensity = p.key;
+      key.color.setHex(p.keyColor);
+    },
     // 背景とfogの色は揃える(fogは奥で背景色へ溶け込ませる演出なので、
     // 背景だけ変えてfogを暗いままにすると奥だけ元の色に沈んで見える)
     setBackgroundColor(hex) {

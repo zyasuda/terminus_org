@@ -90,6 +90,7 @@ export default function BattleView() {
   const [rainOn, setRainOn] = useState(false);
   const [wallsOn, setWallsOn] = useState(true);
   const [bgColor, setBgColor] = useState("#161a22");
+  const [lightPreset, setLightPreset] = useState("night");
 
   const { grid, units, order, turn, hasMoved, coins } = state;
   const active = units.find(u => u.id === order[turn] && u.hp > 0) || null;
@@ -108,6 +109,7 @@ export default function BattleView() {
     s.setRainEnabled(rainOn);
     s.setWallsEnabled(wallsOn);
     s.setBackgroundColor(bgColor);
+    s.setLightPreset(lightPreset);
     return () => { s.dispose(); sceneRef.current = null; };
   }, [grid]);
 
@@ -118,6 +120,7 @@ export default function BattleView() {
   useEffect(() => { sceneRef.current?.setRainEnabled(rainOn); }, [rainOn, grid]);
   useEffect(() => { sceneRef.current?.setWallsEnabled(wallsOn); }, [wallsOn, grid]);
   useEffect(() => { sceneRef.current?.setBackgroundColor(bgColor); }, [bgColor, grid]);
+  useEffect(() => { sceneRef.current?.setLightPreset(lightPreset); }, [lightPreset, grid]);
 
   /* --- 手番の解決 --- */
   const endTurn = () => setState(s => {
@@ -308,6 +311,13 @@ export default function BattleView() {
             背景
             <input type="color" value={bgColor} onChange={e => setBgColor(e.target.value)} style={{ width: 28, height: 20, padding: 0, border: "none", background: "none" }} />
           </label>
+          <label style={S.toggle}>
+            光
+            <select value={lightPreset} onChange={e => setLightPreset(e.target.value)} style={S.select}>
+              <option value="night">夜</option>
+              <option value="day">昼</option>
+            </select>
+          </label>
         </div>
 
         {/* GMの語りはログに残す(Phase 1は定型文。Phase 4でGMの語りへ差し替える) */}
@@ -332,6 +342,7 @@ const S = {
     borderRadius: 6, padding: "5px 11px", cursor: "pointer", font: "inherit" },
   hint: { color: "#8b93a7", fontSize: 12, marginBottom: 6 },
   toggle: { display: "flex", alignItems: "center", gap: 4, color: "#8b93a7", fontSize: 12, cursor: "pointer" },
+  select: { background: "#2b303c", color: "#e6e8ee", border: "1px solid #3c4354", borderRadius: 4, font: "inherit" },
   log: { maxHeight: 116, overflowY: "auto", background: "#11141b",
     border: "1px solid #2b303c", borderRadius: 6, padding: "6px 9px" }
 };
