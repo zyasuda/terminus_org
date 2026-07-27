@@ -107,6 +107,30 @@ export function createBattleScene(container, grid) {
     }
   }
 
+  /* --- 外壁(紙工作・ジオラマ的な書き割り) ---
+     盤面の四辺に固定向きの平面を立て、法線を内側へ向ける。
+     裏面は描かれないので、カメラ手前側の壁は自動的に消えて盤面が見通せる。
+     どの向きから見ても同じように働くので、カメラの4方向すべてで破綻しない。
+     グリッドの高さ・障害物・射線の規則には一切関与しない、ただの背景 */
+  const BACKDROP_H = 2.6;
+  const halfW = grid.w / 2, halfH = grid.h / 2;
+  // 陰影を付けない(MeshBasic)。Lambertだと指向性ライトが当たらない向きの壁だけ
+  // 環境光のみになって背景に沈み、カメラの向きによって壁が消えて見えた。
+  // 書き割りは平らに塗った紙なので、どの向きでも同じ明るさで出るのが正しい
+  const backdropMat = new THREE.MeshBasicMaterial({ color: 0x2a3040, side: THREE.FrontSide });
+  // [幅, 位置, Y回転] … PlaneGeometryの法線は+Z。Y回転で内側へ向ける
+  [
+    [grid.w, [0, BACKDROP_H / 2, -halfH], 0],              // 奥(-Z)側 → +Zを向く
+    [grid.w, [0, BACKDROP_H / 2, halfH], Math.PI],         // 手前(+Z)側 → -Zを向く
+    [grid.h, [-halfW, BACKDROP_H / 2, 0], Math.PI / 2],    // 左(-X)側 → +Xを向く
+    [grid.h, [halfW, BACKDROP_H / 2, 0], -Math.PI / 2]     // 右(+X)側 → -Xを向く
+  ].forEach(([width, pos, rotY]) => {
+    const m = new THREE.Mesh(new THREE.PlaneGeometry(width, BACKDROP_H), backdropMat);
+    m.position.set(...pos);
+    m.rotation.y = rotY;
+    scene.add(m);
+  });
+
   /* --- ユニット(箱)と手番マーカー --- */
   const unitMeshes = new Map();  // id → メッシュ
   const unitGroup = new THREE.Group();
@@ -145,7 +169,8 @@ export function createBattleScene(container, grid) {
   };
 
   /* --- コイン(倒れた駒の跡に残る。通りかかると拾える) --- */
-  const coinGeo = new THREE.CylinderGeometry(0.3, 0.3, 0.06, 20);   // 薄い円柱=地面に寝たコイン
+  const COIN_R = 0.3;
+  const coinGeo = new THREE.CylinderGeometry(COIN_R, COIN_R, 0.06, 20);
   const coinMat = new THREE.MeshLambertMaterial({ color: 0xe8c34a, emissive: 0x4a3708 });
   const coinMeshes = new Map();
 
@@ -156,11 +181,15 @@ export function createBattleScene(container, grid) {
       let m = coinMeshes.get(c.id);
       if (!m) {
         m = new THREE.Mesh(coinGeo, coinMat);
+        // 立てたコインをY軸で回す。回転の適用順を YXZ にしておかないと、
+        // Xで倒す前にYが効いてしまい「自分の軸で回るだけ=見た目が変わらない」になる
+        m.rotation.order = "YXZ";
+        m.rotation.x = Math.PI / 2;
         scene.add(m);
         coinMeshes.set(c.id, m);
       }
       const [wx, wz] = worldOf(c.x, c.y);
-      m.position.set(wx, 0.06, wz);
+      m.position.set(wx, COIN_R, wz);     // 立てた状態で地面に接する高さ
     }
     for (const [id, m] of coinMeshes) {          // 拾われたコインは消す
       if (!seen.has(id)) {
@@ -213,7 +242,7 @@ export function createBattleScene(container, grid) {
   const ringGeo = new THREE.RingGeometry(0.18, 0.42, 24);
   let shake = 0;
 
-  function damageSprite(text, crit) {
+  function damageSprite(text, color) {
     const c = document.createElement("canvas");
     c.width = 128; c.height = 64;
     const g = c.getContext("2d");
@@ -223,13 +252,21 @@ export function createBattleScene(container, grid) {
     g.lineWidth = 7;
     g.strokeStyle = "rgba(0,0,0,.85)";
     g.strokeText(text, 64, 32);
-    g.fillStyle = crit ? "#ffd76a" : "#ffffff";
+    g.fillStyle = color;
     g.fillText(text, 64, 32);
     const s = new THREE.Sprite(new THREE.SpriteMaterial({
       map: new THREE.CanvasTexture(c), transparent: true, depthTest: false
     }));
     s.scale.set(1.7, 0.85, 1);
     return s;
+  }
+
+  // ダメージ値を浮かび上がらせる(外れは0)
+  function floatDamage(wx, wz, text, color) {
+    const num = damageSprite(text, color);
+    num.position.set(wx, 1.3, wz);
+    scene.add(num);
+    effects.push({ kind: "float", obj: num, t: 0, dur: 0.85, y0: 1.3 });
   }
 
   function spawnRing(wx, wz, color, dur, weak) {
@@ -245,11 +282,7 @@ export function createBattleScene(container, grid) {
   function playHit(x, y, { crit = false, damage = 0, unitId = null } = {}) {
     const [wx, wz] = worldOf(x, y);
     spawnRing(wx, wz, crit ? 0xffd76a : 0xff8f6a, crit ? 0.5 : 0.36, false);
-
-    const num = damageSprite(String(damage), crit);
-    num.position.set(wx, 1.3, wz);
-    scene.add(num);
-    effects.push({ kind: "float", obj: num, t: 0, dur: 0.85, y0: 1.3 });
+    floatDamage(wx, wz, String(damage), crit ? "#ffd76a" : "#ffffff");
 
     const g = unitId && unitMeshes.get(unitId);
     if (g) effects.push({ kind: "flash", mats: g.userData.mats, t: 0, dur: 0.28, color: crit ? 0xffd76a : 0xffffff });
@@ -260,6 +293,7 @@ export function createBattleScene(container, grid) {
   function playMiss(x, y) {
     const [wx, wz] = worldOf(x, y);
     spawnRing(wx, wz, 0x8b93a7, 0.3, true);
+    floatDamage(wx, wz, "0", "#9aa3b5");   // 外れも0として出す(何も起きなかったのか判断できるように)
   }
 
   function stepEffects(dt) {
@@ -358,7 +392,7 @@ export function createBattleScene(container, grid) {
 
     stepEffects(dt);
     marker.rotation.y += 0.02;
-    for (const [, m] of coinMeshes) m.rotation.y += 0.9 * dt;   // 拾えるものだと分かるよう回す
+    for (const [, m] of coinMeshes) m.rotation.y += 1.1 * dt;   // 拾えるものだと分かるよう回す
     renderer.render(scene, camera);
   };
   loop();
