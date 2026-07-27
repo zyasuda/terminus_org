@@ -239,7 +239,7 @@ export function createBattleScene(container, grid) {
     c.width = c.height = 32;
     const g = c.getContext("2d");
     const grad = g.createRadialGradient(16, 16, 0, 16, 16, 16);
-    grad.addColorStop(0, "rgba(255,244,220,0.9)");
+    grad.addColorStop(0, "rgba(255,244,220,0.55)");
     grad.addColorStop(1, "rgba(255,244,220,0)");
     g.fillStyle = grad;
     g.fillRect(0, 0, 32, 32);
@@ -249,14 +249,14 @@ export function createBattleScene(container, grid) {
   // カスタムシェーダーが要る)ため、粒ごとにサイズが違って見えるように
   // 個別のSpriteにした。数が少ない(22個)ので描画コストは気にしなくてよい
   const dustMat = new THREE.SpriteMaterial({
-    map: dustTexture(), transparent: true, opacity: 0.85,
+    map: dustTexture(), transparent: true, opacity: 0.45,
     depthWrite: false, blending: THREE.AdditiveBlending
   });
   const DUST_COUNT = 22;
   const DUST_TOP = 2.6;
   const dustState = Array.from({ length: DUST_COUNT }, () => {
     const sprite = new THREE.Sprite(dustMat);
-    const size = 0.16 + Math.random() * 0.32;   // 0.16〜0.48。大小のばらつきを付ける
+    const size = 0.16 + Math.random() * 0.02;   // 0.16〜0.18。控えめな大小差
     sprite.scale.setScalar(size);
     scene.add(sprite);
     return {
@@ -264,9 +264,13 @@ export function createBattleScene(container, grid) {
       x: (Math.random() - 0.5) * (grid.w - 1),
       z: (Math.random() - 0.5) * (grid.h - 1),
       y: Math.random() * DUST_TOP,
-      speed: 0.14 + Math.random() * 0.22,        // 頂点まで7〜19秒程度(以前より速め)
-      swayAmp: 0.05 + Math.random() * 0.08,
-      swayFreq: 0.3 + Math.random() * 0.4,
+      speed: 0.14 + Math.random() * 0.22,
+      // ゆらゆら感はX方向だけだと単調に見えたため、Z方向にも周期違いの
+      // 揺れを重ねて円を描くように動かす。振幅・周期も以前よりはっきり効かせる
+      swayAmpX: 0.14 + Math.random() * 0.16,
+      swayFreqX: 0.5 + Math.random() * 0.5,
+      swayAmpZ: 0.1 + Math.random() * 0.14,
+      swayFreqZ: 0.35 + Math.random() * 0.4,
       swayPhase: Math.random() * Math.PI * 2
     };
   });
@@ -275,8 +279,9 @@ export function createBattleScene(container, grid) {
     for (const d of dustState) {
       d.y += d.speed * dt;
       if (d.y > DUST_TOP) d.y -= DUST_TOP;   // 頂点まで来たら地面へ戻し、また立ち上らせる
-      const sway = Math.sin(elapsed * d.swayFreq + d.swayPhase) * d.swayAmp;
-      d.sprite.position.set(d.x + sway, d.y, d.z);
+      const swayX = Math.sin(elapsed * d.swayFreqX + d.swayPhase) * d.swayAmpX;
+      const swayZ = Math.cos(elapsed * d.swayFreqZ + d.swayPhase) * d.swayAmpZ;
+      d.sprite.position.set(d.x + swayX, d.y, d.z + swayZ);
     }
   }
 
