@@ -83,6 +83,10 @@ export default function BattleView() {
   const mountRef = useRef(null);
   const sceneRef = useRef(null);
   const [state, setState] = useState(initialState);
+  // 演出の見た目調整用。ゲームの状態ではないので「やり直す」「最初から」の対象外
+  const [fogOn, setFogOn] = useState(true);
+  const [fogLevel, setFogLevel] = useState(1);
+  const [dustOn, setDustOn] = useState(true);
 
   const { grid, units, order, turn, hasMoved, coins } = state;
   const active = units.find(u => u.id === order[turn] && u.hp > 0) || null;
@@ -94,8 +98,17 @@ export default function BattleView() {
   useEffect(() => {
     const s = createBattleScene(mountRef.current, grid);
     sceneRef.current = s;
+    // 新しい盤面を作った直後は既定値に戻るので、現在のパネルの設定を反映し直す
+    s.setFogEnabled(fogOn);
+    s.setFogIntensity(fogLevel);
+    s.setDustEnabled(dustOn);
     return () => { s.dispose(); sceneRef.current = null; };
   }, [grid]);
+
+  /* --- 演出パネルの設定を反映(盤面を作り直さず、既存シーンへその場で効かせる) --- */
+  useEffect(() => { sceneRef.current?.setFogEnabled(fogOn); }, [fogOn, grid]);
+  useEffect(() => { sceneRef.current?.setFogIntensity(fogLevel); }, [fogLevel, grid]);
+  useEffect(() => { sceneRef.current?.setDustEnabled(dustOn); }, [dustOn, grid]);
 
   /* --- 手番の解決 --- */
   const endTurn = () => setState(s => {
@@ -259,6 +272,23 @@ export default function BattleView() {
           青いマス=移動先 / 赤いマス=攻撃できる相手。攻撃するとターンが終わる。
         </div>
 
+        {/* 演出の見た目調整(検証用)。盤面のルールには影響しない */}
+        <div style={S.row}>
+          <label style={S.toggle}>
+            <input type="checkbox" checked={fogOn} onChange={e => setFogOn(e.target.checked)} />
+            霧
+          </label>
+          <input
+            type="range" min={0} max={1} step={0.05} value={fogLevel} disabled={!fogOn}
+            onChange={e => setFogLevel(Number(e.target.value))}
+            style={{ width: 90 }}
+          />
+          <label style={S.toggle}>
+            <input type="checkbox" checked={dustOn} onChange={e => setDustOn(e.target.checked)} />
+            塵
+          </label>
+        </div>
+
         {/* GMの語りはログに残す(Phase 1は定型文。Phase 4でGMの語りへ差し替える) */}
         <div style={S.log}>
           {state.log.slice(-8).map((l, i) => <div key={i}>{l}</div>)}
@@ -280,6 +310,7 @@ const S = {
   btn: { background: "#2b303c", color: "#e6e8ee", border: "1px solid #3c4354",
     borderRadius: 6, padding: "5px 11px", cursor: "pointer", font: "inherit" },
   hint: { color: "#8b93a7", fontSize: 12, marginBottom: 6 },
+  toggle: { display: "flex", alignItems: "center", gap: 4, color: "#8b93a7", fontSize: 12, cursor: "pointer" },
   log: { maxHeight: 116, overflowY: "auto", background: "#11141b",
     border: "1px solid #2b303c", borderRadius: 6, padding: "6px 9px" }
 };

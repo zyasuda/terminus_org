@@ -42,8 +42,12 @@ export function createBattleScene(container, grid) {
   // 変わらないが距離自体はCAMERA_DIST(≒20)離れているので、盤面の大きさだけで
   // near/farを決めると実距離よりずっと小さくなり、全部霞んでしまう(実際に起きた)。
   // 8x8盤面・この俯角では実測で手前角が約20.6、奥角が約28.7だったので、
-  // その範囲を挟むようにnear/farを置く(手前はほぼ霞まず、奥だけはっきり沈む)
-  scene.fog = new THREE.Fog(COLOR.bg, CAMERA_DIST - 1, CAMERA_DIST + 10);
+  // その範囲を挟むようにnear/farを置く(手前はほぼ霞まず、奥だけはっきり沈む)。
+  // オブジェクト自体は常に保持し、on/offはscene.fogへの参照の付け外しで行う
+  // (毎回作り直すと強さスライダーの度に無駄が出る)
+  const FOG_NEAR = CAMERA_DIST - 1;
+  const fogObj = new THREE.Fog(COLOR.bg, FOG_NEAR, CAMERA_DIST + 10);
+  scene.fog = fogObj;
 
   // グリッド中心を原点に置く。セル(x,y)はワールドの(x,·,y)へ写す
   const offX = (grid.w - 1) / 2;
@@ -263,13 +267,17 @@ export function createBattleScene(container, grid) {
     map: dustTexture(), transparent: true, opacity: 0.28,
     depthWrite: false, blending: THREE.AdditiveBlending
   });
+  // on/offをまとめて切り替えられるようGroupに入れる(検証パネルからのトグル用)
+  const dustGroup = new THREE.Group();
+  scene.add(dustGroup);
+
   const DUST_COUNT = 22;
   const DUST_TOP = 2.6;
   const dustState = Array.from({ length: DUST_COUNT }, () => {
     const sprite = new THREE.Sprite(dustMat);
     const size = 0.08 + Math.random() * 0.02;   // 0.08〜0.10。前回(0.16〜0.18)からさらに縮小
     sprite.scale.setScalar(size);
-    scene.add(sprite);
+    dustGroup.add(sprite);
     return {
       sprite,
       x: (Math.random() - 0.5) * (grid.w - 1),
@@ -603,6 +611,11 @@ export function createBattleScene(container, grid) {
     playMiss,
     rotate(delta) { dirIndex += delta; },
     setPickHandler(fn) { pickHandler = fn; },
+    // 検証パネル用のトグル・フェーダー。強さ0〜1: 0=ほぼ無効(farを遠くへ逃がす)、
+    // 1=現状のチューニング値(near=CAMERA_DIST-1 / far=CAMERA_DIST+10)
+    setFogEnabled(on) { scene.fog = on ? fogObj : null; },
+    setFogIntensity(t) { fogObj.far = CAMERA_DIST + 10 + (1 - t) * 50; },
+    setDustEnabled(on) { dustGroup.visible = on; },
     dispose() {
       cancelAnimationFrame(raf);
       ro.disconnect();
