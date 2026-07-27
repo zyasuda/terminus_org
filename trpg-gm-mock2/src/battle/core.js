@@ -283,17 +283,24 @@ export function turnOrder(units) {
 
 export const GUARD_TYPES = ["parry", "deflect", "counter", "dodge"];
 
-// ドッジの成立条件: 隣接8マスに「歩行可能・誰も立っていない・障害物の高さが0.5未満」の
-// マスが1つでもあるか。使用回数の制限はなく、地形さえ許せば毎回成立する
-export function hasEscapeRoute(grid, unit, units) {
-  const blocked = new Set(occupiedBy(units, unit.id).map(p => key(p.x, p.y)));
+// ドッジの成立条件: targetの隣接8マスのうち「歩行可能・誰も立っていない・
+// 障害物の高さが0.5未満・かつattackerとも隣接しなくなる」マスを探す。
+// 単に空きマスへ避けるだけでは同じ攻撃者にまた狙われ続けてしまうため、
+// 「間合いの外まで跳び退く」ことをドッジの成立条件にしている。
+// 見つかればその座標を返す(呼び出し側がtargetをそこへ移す)。使用回数の制限は
+// なく、地形と位置関係さえ許せば毎回成立する
+export function findDodgeCell(grid, attacker, target, units) {
+  const blocked = new Set(occupiedBy(units, target.id).map(p => key(p.x, p.y)));
+  blocked.add(key(attacker.x, attacker.y));   // attacker自身のマスへは逃げられない
   for (const [dx, dy] of DIRS8) {
-    const x = unit.x + dx, y = unit.y + dy;
+    const x = target.x + dx, y = target.y + dy;
     if (!isWalkable(grid, x, y) || blocked.has(key(x, y))) continue;
     const c = cellAt(grid, x, y);
-    if ((c.obstacle ? c.obstacle.height : 0) < 0.5) return true;
+    if ((c.obstacle ? c.obstacle.height : 0) >= 0.5) continue;
+    if (isAdjacent({ x, y }, attacker)) continue;
+    return { x, y };
   }
-  return false;
+  return null;
 }
 
 /* ---------------- 近接攻撃の解決 ---------------- */
@@ -309,13 +316,17 @@ export function resolveMelee({ attacker, target, units = [], roll, grid = null, 
 
   const dc = target.defenseDc ?? 12;
 
-  // ドッジ: 逃げ道さえあれば毎回成立し、この攻撃自体を無かったことにする
-  if (guard?.type === "dodge" && grid && hasEscapeRoute(grid, target, units)) {
-    return {
-      ok: true, d20: null, dc, hit: false, crit: false, fumble: false,
-      surround: 0, multiplier: 1, damage: 0, steps: 0, heightDamage: 0,
-      reaction: "dodge", counterRoll: null
-    };
+  // ドッジ: attackerの間合いの外まで跳び退ける先があれば、この攻撃自体を
+  // 無かったことにし、targetをその座標へ移す(dodgeTo)
+  if (guard?.type === "dodge" && grid) {
+    const dodgeTo = findDodgeCell(grid, attacker, target, units);
+    if (dodgeTo) {
+      return {
+        ok: true, d20: null, dc, hit: false, crit: false, fumble: false,
+        surround: 0, multiplier: 1, damage: 0, steps: 0, heightDamage: 0,
+        reaction: "dodge", counterRoll: null, dodgeTo
+      };
+    }
   }
 
   // 高低差。上を取れば当てやすく、下から攻めれば当てにくい。

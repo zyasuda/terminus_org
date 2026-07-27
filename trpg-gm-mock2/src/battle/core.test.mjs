@@ -9,7 +9,7 @@ import {
   isAdjacent, movePointsFor, reachableCells,
   surroundMultiplier, adjacentAllies, turnOrder, resolveMelee,
   chooseEnemyAction, makeRng, scatterObstacles, occupiedBy, pathTo,
-  elevationAt, heightSteps, scatterWater, moveCostAt, hasEscapeRoute
+  elevationAt, heightSteps, scatterWater, moveCostAt, findDodgeCell
 } from "./core.js";
 
 const near = (a, b) => Math.abs(a - b) < 1e-9;
@@ -299,43 +299,62 @@ const near = (a, b) => Math.abs(a - b) < 1e-9;
   const atk = { id: "gareth", side: "party", hp: 10, x: 1, y: 1, atk: 3, defenseDc: 12 };
   const foe = { id: "rust", side: "enemy", hp: 8, x: 2, y: 1, atk: 2, defenseDc: 12 };
 
-  /* ドッジ: 逃げ道の有無 */
+  /* ドッジ: 攻撃者の間合いの外まで跳び退ける先を探す(単なる空きマスでは足りない) */
   {
+    // target(1,1)・attacker(2,1)の3x3盤面では、attackerから見て奥側(x=0の列)の
+    // 3マスだけが「隣接しなくなる」有効な逃げ先になる
     const g = createGrid(Array(3).fill("..."));
-    assert.ok(hasEscapeRoute(g, { id: "u", x: 1, y: 1 }, []), "開けた場所なら逃げ道がある");
+    const target = { id: "u", x: 1, y: 1 };
+    const attacker = { id: "a", x: 2, y: 1 };
+    const cell = findDodgeCell(g, attacker, target, []);
+    assert.ok(cell, "開けた場所なら逃げ先がある");
+    assert.ok(!isAdjacent(cell, attacker), "逃げ先はattackerと隣接しない");
 
-    // 周囲すべてに高さ0.5以上の障害物か他ユニットを置くと逃げ道が無くなる
+    // 周囲すべてに高さ0.5以上の障害物を置くと、attackerから離れていても逃げ場が無い
     const boxed = createGrid(Array(3).fill("..."));
     for (const [dx, dy] of [[-1,-1],[0,-1],[1,-1],[-1,0],[1,0],[-1,1],[0,1],[1,1]]) {
       cellAt(boxed, 1 + dx, 1 + dy).obstacle = { height: 0.75 };
     }
-    assert.ok(!hasEscapeRoute(boxed, { id: "u", x: 1, y: 1 }, []), "高さ0.5以上に囲まれると逃げ道が無い");
+    assert.equal(findDodgeCell(boxed, attacker, target, []), null, "高さ0.5以上に囲まれると不成立");
 
-    // 高さ0.25(0.5未満)のマスは逃げ道として使える
+    // 高さ0.25(0.5未満)は逃げ先として使える
     const low = createGrid(Array(3).fill("..."));
     for (const [dx, dy] of [[-1,-1],[0,-1],[1,-1],[-1,0],[1,0],[-1,1],[0,1],[1,1]]) {
       cellAt(low, 1 + dx, 1 + dy).obstacle = { height: 0.25 };
     }
-    assert.ok(hasEscapeRoute(low, { id: "u", x: 1, y: 1 }, []), "高さ0.25未満(0.5未満)は逃げ道になる");
+    assert.ok(findDodgeCell(low, attacker, target, []), "高さ0.25未満(0.5未満)は逃げ先になる");
 
-    // 逃げ道が他ユニットで塞がれていれば数えない(残り7方向は地形で塞ぎ、
-    // 唯一空いている(2,1)を他ユニットが占めている状況)
+    // 西側の列(attackerと隣接しなくなる唯一の逃げ先)を塞ぐと、残る開いたマスは
+    // どれもattackerと隣接したままなので、空きマスはあっても不成立になる
+    const stillNear = createGrid(Array(3).fill("..."));
+    for (const y of [0, 1, 2]) cellAt(stillNear, 0, y).obstacle = { height: 0.75 };
+    assert.equal(
+      findDodgeCell(stillNear, attacker, target, []), null,
+      "空きマスはあっても、どれもattackerと隣接したままなら不成立"
+    );
+
+    // 唯一の逃げ先が他ユニットに塞がれていれば不成立
     const onlyOneOpen = createGrid(Array(3).fill("..."));
-    for (const [dx, dy] of [[-1,-1],[0,-1],[1,-1],[-1,0],[-1,1],[0,1],[1,1]]) {
-      cellAt(onlyOneOpen, 1 + dx, 1 + dy).obstacle = { height: 0.75 };
-    }
-    assert.ok(hasEscapeRoute(onlyOneOpen, { id: "u", x: 1, y: 1 }, []), "空きマスが1つあれば成立");
-    const around = { id: "block", x: 2, y: 1, hp: 5 };
-    assert.ok(!hasEscapeRoute(onlyOneOpen, { id: "u", x: 1, y: 1 }, [around]), "唯一の空きマスも他ユニットが占めていれば不成立");
+    for (const [x, y] of [[0, 0], [0, 2]]) cellAt(onlyOneOpen, x, y).obstacle = { height: 0.75 };
+    assert.ok(findDodgeCell(onlyOneOpen, attacker, target, []), "空きマスが1つあれば成立");
+    const around = { id: "block", x: 0, y: 1, hp: 5 };
+    assert.equal(
+      findDodgeCell(onlyOneOpen, attacker, target, [around]), null,
+      "唯一の逃げ先も他ユニットが占めていれば不成立"
+    );
   }
 
-  /* ドッジ: 攻撃そのものを無かったことにする */
+  /* ドッジ: 攻撃そのものを無かったことにし、targetを間合いの外へ移す */
   {
-    const g = createGrid(Array(3).fill("..."));
+    // 3x3だとfoe(2,1)は盤の端で逃げ場がない(attacker側と反対の列が無い)ので、
+    // 逃げ先を確保できる広さの盤面で確認する
+    const g = createGrid(Array(5).fill("....."));
     const r = resolveMelee({ attacker: atk, target: foe, units: [atk, foe], roll: () => 20, grid: g, guard: { type: "dodge" } });
     assert.equal(r.hit, false);
     assert.equal(r.damage, 0);
-    assert.equal(r.reaction, "dodge", "逃げ道があれば出目20でも回避");
+    assert.equal(r.reaction, "dodge", "逃げ先があれば出目20でも回避");
+    assert.ok(r.dodgeTo, "移動先の座標が返る");
+    assert.ok(!isAdjacent(r.dodgeTo, atk), "移動先はattackerと隣接しない");
   }
 
   /* いなす: 何度でも使え、ダメージを1点軽減するだけ */

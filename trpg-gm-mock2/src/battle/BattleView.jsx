@@ -210,7 +210,10 @@ export default function BattleView() {
       const lines = [];
 
       if (r.reaction === "dodge") {
-        lines.push(`${tag("dodge")}${target.name}は身をかわした。`);
+        // 避けるだけでなく、攻撃側の間合いの外まで実際に移動する(resolveMelee側で
+        // 「隣接しなくなる先」を探した上で成立させているので、必ず有効な座標が入っている)
+        units = units.map(u => (u.id === target.id ? { ...u, x: r.dodgeTo.x, y: r.dodgeTo.y } : u));
+        lines.push(`${tag("dodge")}${target.name}は${attacker.name}の間合いの外へ跳び退いた。`);
         return { ...s, units, coins, log: [...s.log, ...lines] };
       }
 
