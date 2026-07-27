@@ -14,7 +14,7 @@ import React, { useEffect, useRef, useState } from "react";
 import { createBattleScene } from "./view3d.js";
 import {
   createGrid, isAdjacent, movePointsFor, reachableCells,
-  turnOrder, resolveMelee, chooseEnemyAction,
+  turnOrder, resolveMelee, resolveSweep, chooseEnemyAction,
   makeRng, scatterObstacles, scatterWater, occupiedBy, pathTo, cellAt
 } from "./core.js";
 
@@ -97,6 +97,74 @@ const applyDamage = (units, coins, id, damage) => {
   };
 };
 
+// 防御が成功した(=攻撃を防いだ/軽減した)場合だけ「◯◯、成功。」と明示する。
+// 失敗はダメージが入ること自体で分かるので、あえて「失敗」とは書かない
+const tag = label => `${GUARD_LABEL[label]}、成功。`;
+
+// resolveMelee/resolveSweepの1体ぶんの結果を状態へ適用する共通処理。
+// 通常攻撃(1対1)でも薙ぎ払い(1対多)でも、相手ごとにこの処理をそのまま使い回す
+const applyMeleeResult = (units, coins, attacker, target, r) => {
+  // dodge/deflect/counterは発動した時点で必ず成功、parryだけ「試みたが外れた
+  // (=通常命中のまま)」場合があるので!hitで判定する
+  const highNote = r.steps > 0 ? "高い所から打ち下ろす。" : r.steps < 0 ? "見上げる形で分が悪い。" : "";
+  // パリィ・カウンターはguard中1回だけ。成否にかかわらず(パリィ)/成功時のみ(カウンター)
+  // resolveMelee側がreactionを返した時点で使い切ったということなので、ここでusedを立てる
+  const guardSpent = r.reaction === "parry" || r.reaction === "counter";
+
+  // 自分が行動した(攻撃した)ので、攻撃側が持っていた古い構えはここで解ける
+  units = units.map(u => {
+    if (u.id === attacker.id && u.guard) return { ...u, guard: null };
+    if (guardSpent && u.id === target.id) return { ...u, guard: { ...u.guard, used: true } };
+    return u;
+  });
+  const lines = [];
+
+  if (r.reaction === "dodge") {
+    // 避けるだけでなく、攻撃側の間合いの外まで実際に移動する(resolveMelee側で
+    // 「隣接しなくなる先」を探した上で成立させているので、必ず有効な座標が入っている)
+    units = units.map(u => (u.id === target.id ? { ...u, x: r.dodgeTo.x, y: r.dodgeTo.y } : u));
+    lines.push(`${tag("dodge")}${target.name}は${attacker.name}の間合いの外へ跳び退いた。`);
+    return { units, coins, lines };
+  }
+
+  if (r.reaction === "parry" && !r.hit) {
+    lines.push(`${tag("parry")}${target.name}が受け止めた!${attacker.name}の攻撃は届かなかった(d20=${r.d20})。`);
+    return { units, coins, lines };
+  }
+
+  if (r.reaction === "counter") {
+    lines.push(`${tag("counter")}${target.name}が防御と同時に反撃に転じた。`);
+    const before = units.find(u => u.id === attacker.id);
+    if (r.counterRoll.hit) {
+      const applied = applyDamage(units, coins, attacker.id, r.counterRoll.damage);
+      units = applied.units; coins = applied.coins;
+      lines.push(`${attacker.name}に${r.counterRoll.damage}ダメージ(残りHP ${applied.hp}/${before.maxHp})。`);
+      if (applied.downed) lines.push(`${attacker.name}は倒れた。落とした物がその場に残っている。`);
+    } else {
+      lines.push("反撃は外れた。");
+    }
+    return { units, coins, lines };
+  }
+
+  if (!r.hit) {
+    // ここに来るのは通常の外れ、またはパリィを試みたが防御ロールに失敗した場合
+    lines.push(`${attacker.name}の攻撃は${r.fumble ? "大きく外れ、体勢を崩した" : "外れた"}(d20=${r.d20})。${highNote}`);
+    return { units, coins, lines };
+  }
+
+  const applied = applyDamage(units, coins, target.id, r.damage);
+  units = applied.units; coins = applied.coins;
+  lines.push(
+    `${attacker.name}の攻撃が${r.crit ? "深々と" : ""}命中(d20=${r.d20})。` +
+    `${target.name}に${r.damage}ダメージ(残りHP ${applied.hp}/${applied.cur.maxHp})。` +
+    (r.reaction === "deflect" ? tag("deflect") : "") +
+    (r.surround >= 2 ? `${r.surround}人で囲んでいる(×${r.multiplier.toFixed(2)})。` : "") +
+    highNote
+  );
+  if (applied.downed) lines.push(`${target.name}は倒れた。落とした物がその場に残っている。`);
+  return { units, coins, lines };
+};
+
 export default function BattleView() {
   const mountRef = useRef(null);
   const sceneRef = useRef(null);
@@ -169,14 +237,9 @@ export default function BattleView() {
   // 手番の開始時点へ戻す。移動した位置も、途中で拾ったコインも元通りになる
   const undoTurn = () => setState(s => ({ ...s, ...s.snapshot }));
 
-  // 結果を先に確定させてから、演出と状態更新をそれぞれ行う。
-  // 演出は見た目だけで、確定した結果を変えない。
-  // targetが防御の構え(guard)を持っていれば、resolveMelee側で自動的に反映される
-  const attack = (attacker, target) => {
-    const r = resolveMelee({ attacker, target, units, roll: rollD20, grid, guard: target.guard || null });
-    if (!r.ok) return;
+  // 演出(命中/外れの視覚効果)は見た目だけで、確定した結果は変えない
+  const playHitEffects = (attacker, target, r) => {
     const view = sceneRef.current;
-
     if (r.reaction === "dodge") view?.playMiss(target.x, target.y);
     else if (r.hit) view?.playHit(target.x, target.y, { crit: r.crit, damage: r.damage, unitId: target.id });
     else view?.playMiss(target.x, target.y);
@@ -186,73 +249,35 @@ export default function BattleView() {
       if (r.counterRoll.hit) view?.playHit(attacker.x, attacker.y, { crit: r.counterRoll.crit, damage: r.counterRoll.damage, unitId: attacker.id });
       else view?.playMiss(attacker.x, attacker.y);
     }
+  };
 
-    // 高低差は「上を取っている/見上げている」と言い添える(数値そのものは出さない)
-    const highNote = r.steps > 0 ? "高い所から打ち下ろす。" : r.steps < 0 ? "見上げる形で分が悪い。" : "";
-    // パリィ・カウンターはguard中1回だけ。成否にかかわらず(パリィ)/成功時のみ(カウンター)
-    // resolveMelee側がreactionを返した時点で使い切ったということなので、ここでusedを立てる
-    const guardSpent = r.reaction === "parry" || r.reaction === "counter";
-
-    // 防御が成功した(=攻撃を防いだ/軽減した)場合だけ「◯◯、成功。」と明示する。
-    // 失敗時はダメージが入ること自体で失敗と分かるので、あえて「失敗」とは書かない。
-    // dodge/deflect/counterは発動した時点で必ず成功(resolveMelee側の仕様)、
-    // parryだけ「試みたが外れた(=通常命中のまま)」場合があるので!hitで判定する
-    const tag = label => `${GUARD_LABEL[label]}、成功。`;
-
+  // 結果を先に確定させてから、演出と状態更新をそれぞれ行う。
+  // targetが防御の構え(guard)を持っていれば、resolveMelee側で自動的に反映される
+  const attack = (attacker, target) => {
+    const r = resolveMelee({ attacker, target, units, roll: rollD20, grid, guard: target.guard || null });
+    if (!r.ok) return;
+    playHitEffects(attacker, target, r);
     setState(s => {
-      // 自分が行動した(攻撃した)ので、攻撃側が持っていた古い構えはここで解ける
-      let units = s.units.map(u => {
-        if (u.id === attacker.id && u.guard) return { ...u, guard: null };
-        if (guardSpent && u.id === target.id) return { ...u, guard: { ...u.guard, used: true } };
-        return u;
-      });
-      let coins = s.coins;
-      const lines = [];
+      const applied = applyMeleeResult(s.units, s.coins, attacker, target, r);
+      return { ...s, units: applied.units, coins: applied.coins, log: [...s.log, ...applied.lines] };
+    });
+  };
 
-      if (r.reaction === "dodge") {
-        // 避けるだけでなく、攻撃側の間合いの外まで実際に移動する(resolveMelee側で
-        // 「隣接しなくなる先」を探した上で成立させているので、必ず有効な座標が入っている)
-        units = units.map(u => (u.id === target.id ? { ...u, x: r.dodgeTo.x, y: r.dodgeTo.y } : u));
-        lines.push(`${tag("dodge")}${target.name}は${attacker.name}の間合いの外へ跳び退いた。`);
-        return { ...s, units, coins, log: [...s.log, ...lines] };
+  // 薙ぎ払い: 隣接する敵全員に、同じ1回分の出目で攻撃する(攻撃の代わりに選ぶ行動)。
+  // 対象ごとの処理はapplyMeleeResultをそのまま使い回す(通常攻撃と同じ防御反応が個別に効く)
+  const sweep = (attacker, targets) => {
+    const sr = resolveSweep({ attacker, targets, units, roll: rollD20, grid });
+    if (!sr.ok) return;
+    for (const res of sr.results) playHitEffects(attacker, res.target, res);
+    setState(s => {
+      let curUnits = s.units, curCoins = s.coins;
+      const lines = [`${attacker.name}が薙ぎ払った(d20=${sr.d20})。`];
+      for (const res of sr.results) {
+        const applied = applyMeleeResult(curUnits, curCoins, attacker, res.target, res);
+        curUnits = applied.units; curCoins = applied.coins;
+        lines.push(...applied.lines);
       }
-
-      if (r.reaction === "parry" && !r.hit) {
-        lines.push(`${tag("parry")}${target.name}が受け止めた!${attacker.name}の攻撃は届かなかった(d20=${r.d20})。`);
-        return { ...s, units, coins, log: [...s.log, ...lines] };
-      }
-
-      if (r.reaction === "counter") {
-        lines.push(`${tag("counter")}${target.name}が防御と同時に反撃に転じた。`);
-        const before = units.find(u => u.id === attacker.id);
-        if (r.counterRoll.hit) {
-          const applied = applyDamage(units, coins, attacker.id, r.counterRoll.damage);
-          units = applied.units; coins = applied.coins;
-          lines.push(`${attacker.name}に${r.counterRoll.damage}ダメージ(残りHP ${applied.hp}/${before.maxHp})。`);
-          if (applied.downed) lines.push(`${attacker.name}は倒れた。落とした物がその場に残っている。`);
-        } else {
-          lines.push("反撃は外れた。");
-        }
-        return { ...s, units, coins, log: [...s.log, ...lines] };
-      }
-
-      if (!r.hit) {
-        // ここに来るのは通常の外れ、またはパリィを試みたが防御ロールに失敗した場合
-        lines.push(`${attacker.name}の攻撃は${r.fumble ? "大きく外れ、体勢を崩した" : "外れた"}(d20=${r.d20})。${highNote}`);
-        return { ...s, units, coins, log: [...s.log, ...lines] };
-      }
-
-      const applied = applyDamage(units, coins, target.id, r.damage);
-      units = applied.units; coins = applied.coins;
-      lines.push(
-        `${attacker.name}の攻撃が${r.crit ? "深々と" : ""}命中(d20=${r.d20})。` +
-        `${target.name}に${r.damage}ダメージ(残りHP ${applied.hp}/${applied.cur.maxHp})。` +
-        (r.reaction === "deflect" ? tag("deflect") : "") +
-        (r.surround >= 2 ? `${r.surround}人で囲んでいる(×${r.multiplier.toFixed(2)})。` : "") +
-        highNote
-      );
-      if (applied.downed) lines.push(`${target.name}は倒れた。落とした物がその場に残っている。`);
-      return { ...s, units, coins, log: [...s.log, ...lines] };
+      return { ...s, units: curUnits, coins: curCoins, log: [...s.log, ...lines] };
     });
   };
 
@@ -371,6 +396,11 @@ export default function BattleView() {
           <button style={S.btn} onClick={() => sceneRef.current?.rotate(1)}>視点 ▶</button>
           <button style={S.btn} disabled={!canUndo} onClick={undoTurn}>やり直す</button>
           <button style={S.btn} disabled={!playerTurn} onClick={endTurn}>ターン終了</button>
+          {/* 隣接する敵が2体以上いる時だけ意味がある(1体なら通常攻撃の方が強い) */}
+          <button style={S.btn} disabled={!playerTurn || targets.length < 2}
+            onClick={() => { sweep(active, targets); endTurn(); }}>
+            薙ぎ払い({targets.length})
+          </button>
           {/* 押し間違えないよう他のボタンとは少し間隔を空けるが、遠すぎない位置に置く */}
           <button style={{ ...S.btn, marginLeft: 20 }} onClick={() => setState(initialState())}>最初から</button>
         </div>

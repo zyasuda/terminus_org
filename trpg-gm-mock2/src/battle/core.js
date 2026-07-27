@@ -375,6 +375,31 @@ export function resolveMelee({ attacker, target, units = [], roll, grid = null, 
   return { ok: true, d20, dc, hit, crit, fumble, surround, multiplier, damage, steps, heightDamage, reaction, counterRoll };
 }
 
+// 薙ぎ払い: 隣接する敵全員に、同じ1回分の出目で攻撃する。
+// resolveMeleeを1体ずつ呼び出すだけの薄い層(命中判定・高低差・防御の構えは
+// resolveMelee側の仕様がそのまま個別に効く)。集中攻撃より弱くするため、
+// 命中した相手のダメージを一律0.6倍にする(数値は仮置き、遊びながら調整する)。
+// 各相手ごとの防御ロール(パリィ・カウンターの追加ロール)は共有せず、
+// 出目の共有は「最初の命中判定」1回分だけにとどめる
+const SWEEP_DAMAGE_MULTIPLIER = 0.6;
+
+export function resolveSweep({ attacker, targets, units = [], roll, grid = null }) {
+  if (attacker.hp <= 0) return { ok: false, reason: "attacker_down" };
+  const hits = targets.filter(t => t.hp > 0 && isAdjacent(attacker, t));
+  if (!hits.length) return { ok: false, reason: "no_targets" };
+
+  const sharedD20 = roll();
+  const results = hits.map(target => {
+    let sharedUsed = false;
+    const rollForThis = () => (sharedUsed ? roll() : ((sharedUsed = true), sharedD20));
+    const r = resolveMelee({ attacker, target, units, roll: rollForThis, grid, guard: target.guard || null });
+    if (r.hit) r.damage = Math.round(r.damage * SWEEP_DAMAGE_MULTIPLIER);
+    return { target, ...r };
+  });
+
+  return { ok: true, d20: sharedD20, results };
+}
+
 /* ---------------- 敵の行動選択(Phase 1の仮置き) ---------------- */
 
 // チェビシェフ距離(8方向1コストの移動と一致する)

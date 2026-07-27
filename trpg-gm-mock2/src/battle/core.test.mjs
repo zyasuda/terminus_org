@@ -9,7 +9,7 @@ import {
   isAdjacent, movePointsFor, reachableCells,
   surroundMultiplier, adjacentAllies, turnOrder, resolveMelee,
   chooseEnemyAction, makeRng, scatterObstacles, occupiedBy, pathTo,
-  elevationAt, heightSteps, scatterWater, moveCostAt, findDodgeCell
+  elevationAt, heightSteps, scatterWater, moveCostAt, findDodgeCell, resolveSweep
 } from "./core.js";
 
 const near = (a, b) => Math.abs(a - b) < 1e-9;
@@ -409,6 +409,38 @@ const near = (a, b) => Math.abs(a - b) < 1e-9;
     assert.equal(ok.counterRoll.hit, true, "出目15はdefenseDc12以上なので反撃命中");
     assert.equal(ok.counterRoll.damage, 2, "targetのatk(foe.atk=2)がそのまま反撃威力");
   }
+}
+
+/* --- 薙ぎ払い: 隣接する敵全員に、同じ1回分の出目で攻撃する --- */
+{
+  const attacker = { id: "gareth", side: "party", hp: 10, x: 1, y: 1, atk: 5, defenseDc: 12 };
+  const near1 = { id: "e1", side: "enemy", hp: 8, x: 2, y: 1, defenseDc: 12 };
+  const near2 = { id: "e2", side: "enemy", hp: 8, x: 0, y: 1, defenseDc: 12 };
+  const far = { id: "e3", side: "enemy", hp: 8, x: 5, y: 5, defenseDc: 12 };
+
+  assert.equal(resolveSweep({ attacker: { ...attacker, hp: 0 }, targets: [near1], roll: () => 20 }).reason, "attacker_down");
+  assert.equal(resolveSweep({ attacker, targets: [far], roll: () => 20 }).reason, "no_targets", "隣接する敵がいなければ不成立");
+
+  // 隣接する2体だけが対象になり、離れた相手は含まれない。全員が同じ出目で判定される
+  const r = resolveSweep({ attacker, targets: [near1, near2, far], units: [attacker, near1, near2, far], roll: () => 15 });
+  assert.equal(r.ok, true);
+  assert.equal(r.results.length, 2, "隣接する2体だけが対象");
+  assert.ok(r.results.every(x => x.d20 === r.d20), "全員が同じ出目で判定される");
+  assert.ok(r.results.every(x => x.hit), "出目15は全員に命中(DC12)");
+  assert.ok(r.results.every(x => x.damage === 3), "atk5の通常ダメージ5を0.6倍→3(集中攻撃より弱くする)");
+
+  // 防御の構えは相手ごとに個別に効く。パリィの追加ロールは対象ごとに独立して消費される
+  const guardedNear1 = { ...near1, guard: { type: "parry", used: false } };
+  const rolls = [12, 20];   // 0: 共有の命中判定(出目12) / 1: near1のパリィ防御ロール(出目20で成功)
+  let i = 0;
+  const roll2 = () => rolls[i++];
+  const guarded = resolveSweep({ attacker, targets: [guardedNear1, near2], units: [attacker, guardedNear1, near2], roll: roll2 });
+  const r1 = guarded.results.find(x => x.target.id === "e1");
+  const r2 = guarded.results.find(x => x.target.id === "e2");
+  assert.equal(r1.reaction, "parry");
+  assert.equal(r1.hit, false, "パリィが成功した相手は無効化される");
+  assert.equal(r2.hit, true, "パリィを持たない相手は通常どおり被弾");
+  assert.equal(r2.damage, 3, "他人のパリィとは無関係に、通常どおり0.6倍のダメージが入る");
 }
 
 /* --- 高低差 --- */
