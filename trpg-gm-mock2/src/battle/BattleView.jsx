@@ -18,6 +18,9 @@ import {
   makeRng, scatterObstacles, scatterWater, occupiedBy, pathTo, cellAt
 } from "./core.js";
 
+// 防御の構え。仕様: docs/BATTLE_GRID_STATUS.md「防御・リアクション」節
+const GUARD_LABEL = { parry: "パリィ", deflect: "受け流し", counter: "カウンター", dodge: "ドッジ" };
+
 /* --- 盤面 ---
    8x8を基本として作り込む。素の盤面は全面が床で、遮蔽はランダムに散らす
    (左右対称に置くと展開が読めてしまうため)。柱(高さ1.0)は進入不可、
@@ -78,6 +81,19 @@ const initialState = (seed = Number(params().get("seed")) || (Date.now() & 0xfff
 };
 
 const alive = (units, side) => units.some(u => u.side === side && u.hp > 0);
+
+// ダメージ適用の共通処理(通常の攻撃とカウンターの反撃で使い回す)。
+// 倒れた場合はその場にコインを残す(既存の「戦闘不能はコインになる」仕様と同じ)
+const applyDamage = (units, coins, id, damage) => {
+  const cur = units.find(u => u.id === id);
+  const hp = Math.max(0, cur.hp - damage);
+  const downed = hp <= 0;
+  return {
+    units: units.map(u => (u.id === id ? { ...u, hp } : u)),
+    coins: downed ? [...coins, { id: "coin_" + id, x: cur.x, y: cur.y }] : coins,
+    hp, cur, downed
+  };
+};
 
 export default function BattleView() {
   const mountRef = useRef(null);
@@ -152,41 +168,85 @@ export default function BattleView() {
   const undoTurn = () => setState(s => ({ ...s, ...s.snapshot }));
 
   // 結果を先に確定させてから、演出と状態更新をそれぞれ行う。
-  // 演出は見た目だけで、確定した結果を変えない
+  // 演出は見た目だけで、確定した結果を変えない。
+  // targetが防御の構え(guard)を持っていれば、resolveMelee側で自動的に反映される
   const attack = (attacker, target) => {
-    const r = resolveMelee({ attacker, target, units, roll: rollD20, grid });
+    const r = resolveMelee({ attacker, target, units, roll: rollD20, grid, guard: target.guard || null });
     if (!r.ok) return;
     const view = sceneRef.current;
-    if (r.hit) view?.playHit(target.x, target.y, { crit: r.crit, damage: r.damage, unitId: target.id });
+
+    if (r.reaction === "dodge") view?.playMiss(target.x, target.y);
+    else if (r.hit) view?.playHit(target.x, target.y, { crit: r.crit, damage: r.damage, unitId: target.id });
     else view?.playMiss(target.x, target.y);
+
+    // カウンター成功時は、元の攻撃側へ反撃が飛ぶ演出も出す
+    if (r.reaction === "counter" && r.counterRoll) {
+      if (r.counterRoll.hit) view?.playHit(attacker.x, attacker.y, { crit: r.counterRoll.crit, damage: r.counterRoll.damage, unitId: attacker.id });
+      else view?.playMiss(attacker.x, attacker.y);
+    }
 
     // 高低差は「上を取っている/見上げている」と言い添える(数値そのものは出さない)
     const highNote = r.steps > 0 ? "高い所から打ち下ろす。" : r.steps < 0 ? "見上げる形で分が悪い。" : "";
+    // パリィ・カウンターはguard中1回だけ。成否にかかわらず(パリィ)/成功時のみ(カウンター)
+    // resolveMelee側がreactionを返した時点で使い切ったということなので、ここでusedを立てる
+    const guardSpent = r.reaction === "parry" || r.reaction === "counter";
 
     setState(s => {
+      // 自分が行動した(攻撃した)ので、攻撃側が持っていた古い構えはここで解ける
+      let units = s.units.map(u => {
+        if (u.id === attacker.id && u.guard) return { ...u, guard: null };
+        if (guardSpent && u.id === target.id) return { ...u, guard: { ...u.guard, used: true } };
+        return u;
+      });
+      let coins = s.coins;
       const lines = [];
-      if (!r.hit) {
-        lines.push(`${attacker.name}の攻撃は${r.fumble ? "大きく外れ、体勢を崩した" : "外れた"}(d20=${r.d20})。${highNote}`);
-        return { ...s, log: [...s.log, ...lines] };
+
+      if (r.reaction === "dodge") {
+        lines.push(`${target.name}は身をかわした。`);
+        return { ...s, units, coins, log: [...s.log, ...lines] };
       }
-      const cur = s.units.find(u => u.id === target.id);
-      const hp = Math.max(0, cur.hp - r.damage);
+
+      if (!r.hit) {
+        if (r.reaction === "parry") lines.push(`${target.name}が受け止めた!${attacker.name}の攻撃は届かなかった(d20=${r.d20})。`);
+        else lines.push(`${attacker.name}の攻撃は${r.fumble ? "大きく外れ、体勢を崩した" : "外れた"}(d20=${r.d20})。${highNote}`);
+
+        if (r.reaction === "counter" && r.counterRoll) {
+          const before = units.find(u => u.id === attacker.id);
+          if (r.counterRoll.hit) {
+            const applied = applyDamage(units, coins, attacker.id, r.counterRoll.damage);
+            units = applied.units; coins = applied.coins;
+            lines.push(`${target.name}が即座に反撃!${attacker.name}に${r.counterRoll.damage}ダメージ(残りHP ${applied.hp}/${before.maxHp})。`);
+            if (applied.downed) lines.push(`${attacker.name}は倒れた。落とした物がその場に残っている。`);
+          } else {
+            lines.push(`${target.name}が反撃を試みたが外れた。`);
+          }
+        }
+        return { ...s, units, coins, log: [...s.log, ...lines] };
+      }
+
+      const applied = applyDamage(units, coins, target.id, r.damage);
+      units = applied.units; coins = applied.coins;
       lines.push(
         `${attacker.name}の攻撃が${r.crit ? "深々と" : ""}命中(d20=${r.d20})。` +
-        `${target.name}に${r.damage}ダメージ(残りHP ${hp}/${cur.maxHp})。` +
+        `${target.name}に${r.damage}ダメージ(残りHP ${applied.hp}/${applied.cur.maxHp})。` +
+        (r.reaction === "deflect" ? "受け流して軽減した。" : "") +
         (r.surround >= 2 ? `${r.surround}人で囲んでいる(×${r.multiplier.toFixed(2)})。` : "") +
         highNote
       );
-      // 倒れた駒は盤面から退き、その場にコインが残る
-      const dropped = hp <= 0 ? [{ id: "coin_" + target.id, x: cur.x, y: cur.y }] : [];
-      if (hp <= 0) lines.push(`${target.name}は倒れた。落とした物がその場に残っている。`);
-      return {
-        ...s,
-        units: s.units.map(u => (u.id === target.id ? { ...u, hp } : u)),
-        coins: [...s.coins, ...dropped],
-        log: [...s.log, ...lines]
-      };
+      if (applied.downed) lines.push(`${target.name}は倒れた。落とした物がその場に残っている。`);
+      return { ...s, units, coins, log: [...s.log, ...lines] };
     });
+  };
+
+  // 防御の構えを選ぶ(移動・攻撃と同じく、選ぶとターンが終わる)。
+  // 選んだ内容は本人が次に自分の手番で行動する(移動/攻撃する)まで有効
+  const chooseGuard = type => {
+    setState(s => ({
+      ...s,
+      units: s.units.map(u => (u.id === active.id ? { ...u, guard: { type, used: false } } : u)),
+      log: [...s.log, `${active.name}は${GUARD_LABEL[type]}の構えを取った。`]
+    }));
+    endTurn();
   };
 
   // path は起点を除いた通り道。通りかかったコインはすべて拾う
@@ -201,7 +261,8 @@ export default function BattleView() {
     if (picked.length) lines.push(`${unit.name}が落ちていた物を${picked.length}つ拾った。`);
     return {
       ...s,
-      units: s.units.map(u => (u.id === unit.id ? { ...u, x, y } : u)),
+      // 移動したので、持っていた古い構えはここで解ける(guardは選び直さない限り引き継がない)
+      units: s.units.map(u => (u.id === unit.id ? { ...u, x, y, guard: null } : u)),
       coins: s.coins.filter(c => !picked.includes(c)),
       purse: s.purse + picked.length,
       hasMoved: true,
@@ -282,6 +343,7 @@ export default function BattleView() {
             <span key={u.id} style={{ ...S.chip, opacity: u.hp > 0 ? 1 : 0.35,
               borderColor: u.side === "party" ? "#6f9ad3" : "#c4634a" }}>
               {u.name} {u.hp}/{u.maxHp}
+              {u.guard ? ` [${GUARD_LABEL[u.guard.type]}${u.guard.used ? "済" : ""}]` : ""}
             </span>
           ))}
         </div>
@@ -293,6 +355,15 @@ export default function BattleView() {
           <button style={S.btn} disabled={!playerTurn} onClick={endTurn}>ターン終了</button>
           {/* 押し間違えないよう他のボタンとは少し間隔を空けるが、遠すぎない位置に置く */}
           <button style={{ ...S.btn, marginLeft: 20 }} onClick={() => setState(initialState())}>最初から</button>
+        </div>
+
+        <div style={S.row}>
+          <span style={S.dim}>防御:</span>
+          {["parry", "deflect", "counter", "dodge"].map(type => (
+            <button key={type} style={S.btn} disabled={!playerTurn} onClick={() => chooseGuard(type)}>
+              {GUARD_LABEL[type]}
+            </button>
+          ))}
         </div>
 
         <div style={S.hint}>

@@ -276,15 +276,47 @@ export function turnOrder(units) {
   return units.filter(u => u.hp > 0).slice().sort((a, b) => (b.agility ?? 5) - (a.agility ?? 5));
 }
 
+/* ---------------- 防御の構え(パリィ/受け流し/カウンター/ドッジ) ---------------- */
+// 仕様: docs/BATTLE_GRID_STATUS.md「防御・リアクション」節。
+// 自分の手番で構えを決め、以降の被弾時に自動で適用する「事前コミット」方式。
+// 敵の自動ターンを止める必要がないので、決定論的なターン進行を変えずに済む。
+
+export const GUARD_TYPES = ["parry", "deflect", "counter", "dodge"];
+
+// ドッジの成立条件: 隣接8マスに「歩行可能・誰も立っていない・障害物の高さが0.5未満」の
+// マスが1つでもあるか。使用回数の制限はなく、地形さえ許せば毎回成立する
+export function hasEscapeRoute(grid, unit, units) {
+  const blocked = new Set(occupiedBy(units, unit.id).map(p => key(p.x, p.y)));
+  for (const [dx, dy] of DIRS8) {
+    const x = unit.x + dx, y = unit.y + dy;
+    if (!isWalkable(grid, x, y) || blocked.has(key(x, y))) continue;
+    const c = cellAt(grid, x, y);
+    if ((c.obstacle ? c.obstacle.height : 0) < 0.5) return true;
+  }
+  return false;
+}
+
 /* ---------------- 近接攻撃の解決 ---------------- */
 
 // 命中・ダメージ・包囲倍率をここで確定し、「何が起きたか」だけを返す。
 // roll は d20 を返す関数(テストでは固定値を注入する)。
+// guard は target が事前に選んだ構え({ type, used })。未使用時はnullでよい。
 // 返り値はそのままGMの語り・画面演出・ログの入力になる(この層は文言を持たない)。
-export function resolveMelee({ attacker, target, units = [], roll, grid = null }) {
+export function resolveMelee({ attacker, target, units = [], roll, grid = null, guard = null }) {
   if (attacker.hp <= 0) return { ok: false, reason: "attacker_down" };
   if (target.hp <= 0) return { ok: false, reason: "target_down" };
   if (!isAdjacent(attacker, target)) return { ok: false, reason: "not_adjacent" };
+
+  const dc = target.defenseDc ?? 12;
+
+  // ドッジ: 逃げ道さえあれば毎回成立し、この攻撃自体を無かったことにする
+  if (guard?.type === "dodge" && grid && hasEscapeRoute(grid, target, units)) {
+    return {
+      ok: true, d20: null, dc, hit: false, crit: false, fumble: false,
+      surround: 0, multiplier: 1, damage: 0, steps: 0, heightDamage: 0,
+      reaction: "dodge", counterRoll: null
+    };
+  }
 
   // 高低差。上を取れば当てやすく、下から攻めれば当てにくい。
   // 補正はDCではなく出目に足す。こうしないと「出目20はクリティカル、1はファンブル」
@@ -293,8 +325,7 @@ export function resolveMelee({ attacker, target, units = [], roll, grid = null }
 
   const d20 = roll();
   const crit = d20 === 20, fumble = d20 === 1;
-  const dc = target.defenseDc ?? 12;
-  const hit = crit || (!fumble && d20 + steps >= dc);
+  let hit = crit || (!fumble && d20 + steps >= dc);
 
   const surround = adjacentAllies(units, target, attacker.side).length;
   const multiplier = surroundMultiplier(surround);
@@ -304,11 +335,33 @@ export function resolveMelee({ attacker, target, units = [], roll, grid = null }
   const base = attacker.atk ?? 3;
   // 2段(0.5)以上の高低差は威力にも効く。1段程度の段差は当てやすさだけに留める
   const heightDamage = steps >= 2 ? 1 : steps <= -2 ? -1 : 0;
-  const damage = hit
+  let damage = hit
     ? Math.max(1, Math.round((crit ? base * 2 : base) * multiplier) + heightDamage)
     : 0;
 
-  return { ok: true, d20, dc, hit, crit, fumble, surround, multiplier, damage, steps, heightDamage };
+  let reaction = null;      // 実際に発動したリアクション("deflect"|"parry"|"counter")。何も無ければnull
+  let counterRoll = null;   // カウンター成功時の反撃結果
+
+  if (hit && guard?.type === "deflect") {
+    damage = Math.max(0, damage - 1);
+    reaction = "deflect";
+  } else if (hit && guard?.type === "parry" && !guard.used) {
+    // 成否にかかわらずその場で使い切る(呼び出し側でguard.used=trueにする)
+    reaction = "parry";
+    if (roll() >= dc) { hit = false; damage = 0; }
+  } else if (hit && guard?.type === "counter" && !guard.used) {
+    // 防御ロールに成功した時だけ発動し、成功時のみ使い切る
+    if (roll() >= dc) {
+      hit = false; damage = 0; reaction = "counter";
+      const cd20 = roll();
+      const cCrit = cd20 === 20, cFumble = cd20 === 1;
+      const cHit = cCrit || (!cFumble && cd20 >= (attacker.defenseDc ?? 12));
+      const cBase = target.atk ?? 3;
+      counterRoll = { d20: cd20, hit: cHit, crit: cCrit, damage: cHit ? Math.max(1, Math.round(cCrit ? cBase * 2 : cBase)) : 0 };
+    }
+  }
+
+  return { ok: true, d20, dc, hit, crit, fumble, surround, multiplier, damage, steps, heightDamage, reaction, counterRoll };
 }
 
 /* ---------------- 敵の行動選択(Phase 1の仮置き) ---------------- */

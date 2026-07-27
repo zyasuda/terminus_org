@@ -9,7 +9,7 @@ import {
   isAdjacent, movePointsFor, reachableCells,
   surroundMultiplier, adjacentAllies, turnOrder, resolveMelee,
   chooseEnemyAction, makeRng, scatterObstacles, occupiedBy, pathTo,
-  elevationAt, heightSteps, scatterWater, moveCostAt
+  elevationAt, heightSteps, scatterWater, moveCostAt, hasEscapeRoute
 } from "./core.js";
 
 const near = (a, b) => Math.abs(a - b) < 1e-9;
@@ -292,6 +292,104 @@ const near = (a, b) => Math.abs(a - b) < 1e-9;
     resolveMelee({ attacker: atk, target: foe, units: [atk, ally2, ally3, ally4, foe], roll: () => 12 }).damage,
     6, "4人で囲むと6"
   );
+}
+
+/* --- 防御の構え(パリィ/受け流し/カウンター/ドッジ) --- */
+{
+  const atk = { id: "gareth", side: "party", hp: 10, x: 1, y: 1, atk: 3, defenseDc: 12 };
+  const foe = { id: "rust", side: "enemy", hp: 8, x: 2, y: 1, atk: 2, defenseDc: 12 };
+
+  /* ドッジ: 逃げ道の有無 */
+  {
+    const g = createGrid(Array(3).fill("..."));
+    assert.ok(hasEscapeRoute(g, { id: "u", x: 1, y: 1 }, []), "開けた場所なら逃げ道がある");
+
+    // 周囲すべてに高さ0.5以上の障害物か他ユニットを置くと逃げ道が無くなる
+    const boxed = createGrid(Array(3).fill("..."));
+    for (const [dx, dy] of [[-1,-1],[0,-1],[1,-1],[-1,0],[1,0],[-1,1],[0,1],[1,1]]) {
+      cellAt(boxed, 1 + dx, 1 + dy).obstacle = { height: 0.75 };
+    }
+    assert.ok(!hasEscapeRoute(boxed, { id: "u", x: 1, y: 1 }, []), "高さ0.5以上に囲まれると逃げ道が無い");
+
+    // 高さ0.25(0.5未満)のマスは逃げ道として使える
+    const low = createGrid(Array(3).fill("..."));
+    for (const [dx, dy] of [[-1,-1],[0,-1],[1,-1],[-1,0],[1,0],[-1,1],[0,1],[1,1]]) {
+      cellAt(low, 1 + dx, 1 + dy).obstacle = { height: 0.25 };
+    }
+    assert.ok(hasEscapeRoute(low, { id: "u", x: 1, y: 1 }, []), "高さ0.25未満(0.5未満)は逃げ道になる");
+
+    // 逃げ道が他ユニットで塞がれていれば数えない(残り7方向は地形で塞ぎ、
+    // 唯一空いている(2,1)を他ユニットが占めている状況)
+    const onlyOneOpen = createGrid(Array(3).fill("..."));
+    for (const [dx, dy] of [[-1,-1],[0,-1],[1,-1],[-1,0],[-1,1],[0,1],[1,1]]) {
+      cellAt(onlyOneOpen, 1 + dx, 1 + dy).obstacle = { height: 0.75 };
+    }
+    assert.ok(hasEscapeRoute(onlyOneOpen, { id: "u", x: 1, y: 1 }, []), "空きマスが1つあれば成立");
+    const around = { id: "block", x: 2, y: 1, hp: 5 };
+    assert.ok(!hasEscapeRoute(onlyOneOpen, { id: "u", x: 1, y: 1 }, [around]), "唯一の空きマスも他ユニットが占めていれば不成立");
+  }
+
+  /* ドッジ: 攻撃そのものを無かったことにする */
+  {
+    const g = createGrid(Array(3).fill("..."));
+    const r = resolveMelee({ attacker: atk, target: foe, units: [atk, foe], roll: () => 20, grid: g, guard: { type: "dodge" } });
+    assert.equal(r.hit, false);
+    assert.equal(r.damage, 0);
+    assert.equal(r.reaction, "dodge", "逃げ道があれば出目20でも回避");
+  }
+
+  /* 受け流し: 何度でも使え、ダメージを1点軽減するだけ */
+  {
+    const guard = { type: "deflect", used: false };
+    const r1 = resolveMelee({ attacker: atk, target: foe, units: [atk, foe], roll: () => 12, guard });
+    assert.equal(r1.hit, true);
+    assert.equal(r1.damage, 2, "3-1に軽減されるだけで無効化はしない");
+    assert.equal(r1.reaction, "deflect");
+    // 2回目も同じguard(used未更新)でそのまま使える
+    const r2 = resolveMelee({ attacker: atk, target: foe, units: [atk, foe], roll: () => 12, guard });
+    assert.equal(r2.reaction, "deflect", "受け流しは使い切らない");
+  }
+
+  /* パリィ: guard中1回だけ。成否にかかわらず使い切る */
+  {
+    const guard = { type: "parry", used: false };
+    // 防御ロールも同じroll関数から取るので、命中判定(12)→防御判定(12)の順で2回呼ばれる
+    const rolls = [12, 20];
+    let i = 0;
+    const roll = () => rolls[i++];
+    const r = resolveMelee({ attacker: atk, target: foe, units: [atk, foe], roll, guard });
+    assert.equal(r.reaction, "parry");
+    assert.equal(r.hit, false, "防御ロールが成功すれば無効化");
+    assert.equal(r.damage, 0);
+
+    // 一度使ったら(呼び出し側でused=trueにした後は)発動しない
+    guard.used = true;
+    const after = resolveMelee({ attacker: atk, target: foe, units: [atk, foe], roll: () => 12, guard });
+    assert.equal(after.reaction, null, "使い切った後は通常どおり命中する");
+    assert.equal(after.hit, true);
+  }
+
+  /* カウンター: 防御ロール成功時だけ発動し、その時だけ使い切る */
+  {
+    const guard = { type: "counter", used: false };
+    // 命中判定(12)→防御判定(11、失敗=defenseDc12未満)
+    const failRolls = [12, 11];
+    let fi = 0;
+    const failed = resolveMelee({ attacker: atk, target: foe, units: [atk, foe], roll: () => failRolls[fi++], guard });
+    assert.equal(failed.reaction, null, "防御ロール失敗時は発動しない");
+    assert.equal(failed.hit, true, "発動しなければ通常どおり命中");
+    assert.equal(guard.used, false, "失敗時は消費されない(呼び出し側もfalseのまま)");
+
+    // 防御ロール成功(12)→反撃の出目(15)
+    const okRolls = [12, 12, 15];
+    let oi = 0;
+    const ok = resolveMelee({ attacker: atk, target: foe, units: [atk, foe], roll: () => okRolls[oi++], guard });
+    assert.equal(ok.reaction, "counter");
+    assert.equal(ok.hit, false, "反撃成功時は元の攻撃を無効化");
+    assert.ok(ok.counterRoll, "反撃の結果が返る");
+    assert.equal(ok.counterRoll.hit, true, "出目15はdefenseDc12以上なので反撃命中");
+    assert.equal(ok.counterRoll.damage, 2, "targetのatk(foe.atk=2)がそのまま反撃威力");
+  }
 }
 
 /* --- 高低差 --- */
