@@ -46,6 +46,11 @@ export function createBattleScene(container, grid) {
   // オブジェクト自体は常に保持し、on/offはscene.fogへの参照の付け外しで行う
   // (毎回作り直すと強さスライダーの度に無駄が出る)
   const FOG_NEAR = CAMERA_DIST - 1;
+  // 盤面奥角の実測距離(約28.7)。フェーダーの強さをここでの霞み具合に対して
+  // 線形にするための基準点(setFogIntensity参照)
+  const FOG_REF_DIST = CAMERA_DIST + 8.7;
+  const FOG_MIN_DENSITY = 0.05;   // 強さ0: ほぼ無効
+  const FOG_MAX_DENSITY = 0.88;   // 強さ1: 従来のfar=CAMERA_DIST+10相当
   const fogObj = new THREE.Fog(COLOR.bg, FOG_NEAR, CAMERA_DIST + 10);
   scene.fog = fogObj;
 
@@ -699,7 +704,17 @@ export function createBattleScene(container, grid) {
     // 検証パネル用のトグル・フェーダー。強さ0〜1: 0=ほぼ無効(farを遠くへ逃がす)、
     // 1=現状のチューニング値(near=CAMERA_DIST-1 / far=CAMERA_DIST+10)
     setFogEnabled(on) { scene.fog = on ? fogObj : null; },
-    setFogIntensity(t) { fogObj.far = CAMERA_DIST + 10 + (1 - t) * 50; },
+    // fogの見え方は「far」に対して線形ではない。Three.jsのfogは
+    // (far-距離)/(far-near) で不透明度が決まるため、farをただ等間隔にずらすと
+    // 盤面奥(距離D)での実際の霞み具合(density = (D-near)/(far-near))は
+    // 強さが高い側(farがnearに近い側)でのみ急に動き、低い側ではほとんど動かない
+    // (実際に「50%以下はほぼ反映されない/50%以上は粗い」という指摘どおりの現象)。
+    // そこで「盤面奥での霞み具合(density)」そのものをスライダーに対して線形にし、
+    // そこから逆算してfarを求める(far = near + (D-near)/density)
+    setFogIntensity(t) {
+      const density = FOG_MIN_DENSITY + t * (FOG_MAX_DENSITY - FOG_MIN_DENSITY);
+      fogObj.far = FOG_NEAR + (FOG_REF_DIST - FOG_NEAR) / density;
+    },
     setDustEnabled(on) { dustGroup.visible = on; },
     setRainEnabled(on) { rainGroup.visible = on; },
     setWallsEnabled(on) { backdropGroup.visible = on; },
