@@ -245,35 +245,39 @@ export function createBattleScene(container, grid) {
     g.fillRect(0, 0, 32, 32);
     return new THREE.CanvasTexture(c);
   };
+  // THREE.PointsMaterialは全粒子で同じsizeしか持てない(粒ごとに変えるには
+  // カスタムシェーダーが要る)ため、粒ごとにサイズが違って見えるように
+  // 個別のSpriteにした。数が少ない(22個)ので描画コストは気にしなくてよい
+  const dustMat = new THREE.SpriteMaterial({
+    map: dustTexture(), transparent: true, opacity: 0.85,
+    depthWrite: false, blending: THREE.AdditiveBlending
+  });
   const DUST_COUNT = 22;
   const DUST_TOP = 2.6;
-  const dustState = Array.from({ length: DUST_COUNT }, () => ({
-    x: (Math.random() - 0.5) * (grid.w - 1),
-    z: (Math.random() - 0.5) * (grid.h - 1),
-    y: Math.random() * DUST_TOP,
-    speed: 0.06 + Math.random() * 0.07,          // ゆっくり: 頂点まで20〜35秒程度
-    swayAmp: 0.05 + Math.random() * 0.08,
-    swayFreq: 0.3 + Math.random() * 0.4,
-    swayPhase: Math.random() * Math.PI * 2
-  }));
-  const dustGeo = new THREE.BufferGeometry();
-  dustGeo.setAttribute("position", new THREE.Float32BufferAttribute(new Float32Array(DUST_COUNT * 3), 3));
-  const dustPoints = new THREE.Points(dustGeo, new THREE.PointsMaterial({
-    map: dustTexture(), size: 0.22, transparent: true, opacity: 0.85,
-    depthWrite: false, blending: THREE.AdditiveBlending, sizeAttenuation: true
-  }));
-  scene.add(dustPoints);
+  const dustState = Array.from({ length: DUST_COUNT }, () => {
+    const sprite = new THREE.Sprite(dustMat);
+    const size = 0.16 + Math.random() * 0.32;   // 0.16〜0.48。大小のばらつきを付ける
+    sprite.scale.setScalar(size);
+    scene.add(sprite);
+    return {
+      sprite,
+      x: (Math.random() - 0.5) * (grid.w - 1),
+      z: (Math.random() - 0.5) * (grid.h - 1),
+      y: Math.random() * DUST_TOP,
+      speed: 0.14 + Math.random() * 0.22,        // 頂点まで7〜19秒程度(以前より速め)
+      swayAmp: 0.05 + Math.random() * 0.08,
+      swayFreq: 0.3 + Math.random() * 0.4,
+      swayPhase: Math.random() * Math.PI * 2
+    };
+  });
 
   function stepDust(dt) {
-    const pos = dustGeo.attributes.position;
-    for (let i = 0; i < DUST_COUNT; i++) {
-      const d = dustState[i];
+    for (const d of dustState) {
       d.y += d.speed * dt;
       if (d.y > DUST_TOP) d.y -= DUST_TOP;   // 頂点まで来たら地面へ戻し、また立ち上らせる
       const sway = Math.sin(elapsed * d.swayFreq + d.swayPhase) * d.swayAmp;
-      pos.setXYZ(i, d.x + sway, d.y, d.z);
+      d.sprite.position.set(d.x + sway, d.y, d.z);
     }
-    pos.needsUpdate = true;
   }
 
   /* --- ユニット(箱)と手番マーカー --- */
