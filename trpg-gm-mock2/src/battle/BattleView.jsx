@@ -91,6 +91,9 @@ export default function BattleView() {
   const [wallsOn, setWallsOn] = useState(true);
   const [bgColor, setBgColor] = useState("#161a22");
   const [lightPreset, setLightPreset] = useState("night");
+  const [lanternsOn, setLanternsOn] = useState(true);
+  const [obstaclesOn, setObstaclesOn] = useState(true);
+  const [waterOn, setWaterOn] = useState(true);
 
   const { grid, units, order, turn, hasMoved, coins } = state;
   const active = units.find(u => u.id === order[turn] && u.hp > 0) || null;
@@ -110,6 +113,9 @@ export default function BattleView() {
     s.setWallsEnabled(wallsOn);
     s.setBackgroundColor(bgColor);
     s.setLightPreset(lightPreset);
+    s.setLanternsEnabled(lanternsOn);
+    s.setObstaclesEnabled(obstaclesOn);
+    s.setWaterEnabled(waterOn);
     return () => { s.dispose(); sceneRef.current = null; };
   }, [grid]);
 
@@ -121,6 +127,9 @@ export default function BattleView() {
   useEffect(() => { sceneRef.current?.setWallsEnabled(wallsOn); }, [wallsOn, grid]);
   useEffect(() => { sceneRef.current?.setBackgroundColor(bgColor); }, [bgColor, grid]);
   useEffect(() => { sceneRef.current?.setLightPreset(lightPreset); }, [lightPreset, grid]);
+  useEffect(() => { sceneRef.current?.setLanternsEnabled(lanternsOn); }, [lanternsOn, grid]);
+  useEffect(() => { sceneRef.current?.setObstaclesEnabled(obstaclesOn); }, [obstaclesOn, grid]);
+  useEffect(() => { sceneRef.current?.setWaterEnabled(waterOn); }, [waterOn, grid]);
 
   /* --- 手番の解決 --- */
   const endTurn = () => setState(s => {
@@ -317,6 +326,18 @@ export default function BattleView() {
               <option value="night">夜</option>
               <option value="day">昼</option>
             </select>
+          </label>
+          <label style={S.toggle}>
+            <input type="checkbox" checked={lanternsOn} onChange={e => setLanternsOn(e.target.checked)} />
+            ランタン
+          </label>
+          <label style={S.toggle}>
+            <input type="checkbox" checked={obstaclesOn} onChange={e => setObstaclesOn(e.target.checked)} />
+            障害物
+          </label>
+          <label style={S.toggle}>
+            <input type="checkbox" checked={waterOn} onChange={e => setWaterOn(e.target.checked)} />
+            水溜り
           </label>
         </div>
 

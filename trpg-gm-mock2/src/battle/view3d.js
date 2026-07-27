@@ -101,6 +101,9 @@ export function createBattleScene(container, grid) {
      明かりも自然に消える。敵は光源を持たない。
      見た目だけの演出で、射線や明暗による判定には一切関与しない */
   const lanterns = [];
+  // ユニットは各手番の描画(meshFor)で遅延生成されるため、生成タイミングによらず
+  // 既存の設定を新しいランタンにも適用できるよう、状態をここに持っておく
+  let lanternsOn = true;
 
   // 周期の違う正弦を重ねて、繰り返しに気づきにくいゆらぎを作る。
   // 速い成分を厚めにすると「ゆっくり明滅」ではなく炎のチラつきに寄る
@@ -160,6 +163,14 @@ export function createBattleScene(container, grid) {
     return shape;
   };
 
+  // 障害物(柱・瓦礫)と水溜りは、それぞれの見え方だけをまとめてon/offできるよう
+  // 専用のGroupへ入れる。非表示にしても当たり判定・移動コストはgrid側にそのまま
+  // 残るので、盤面のルールには一切影響しない(あくまで見た目の検証用)
+  const obstacleGroup = new THREE.Group();
+  scene.add(obstacleGroup);
+  const waterGroup = new THREE.Group();
+  scene.add(waterGroup);
+
   const tiles = new Map();   // "x,y" → 床メッシュ(ハイライトで色を塗り替える)
   for (let y = 0; y < grid.h; y++) {
     for (let x = 0; x < grid.w; x++) {
@@ -170,7 +181,7 @@ export function createBattleScene(container, grid) {
         // 地形の壁と、高さ1.0の障害物(柱)。どちらも進入不可だが色で見分ける
         const m = new THREE.Mesh(wallGeo, cell.obstacle ? pillarMat : wallMat);
         m.position.set(wx, WALL_H / 2, wz);
-        scene.add(m);
+        (cell.obstacle ? obstacleGroup : scene).add(m);
         continue;
       }
 
@@ -185,7 +196,7 @@ export function createBattleScene(container, grid) {
         const h = cell.obstacle.height;
         const r = new THREE.Mesh(new THREE.BoxGeometry(0.7, h, 0.7), rubbleMat);
         r.position.set(wx, h / 2, wz);
-        scene.add(r);
+        obstacleGroup.add(r);
       }
 
       // 水溜り: 進入は妨げないが移動コストが2倍。床の色を直接塗ると
@@ -195,7 +206,7 @@ export function createBattleScene(container, grid) {
         const w = new THREE.Mesh(new THREE.ShapeGeometry(puddleShape(x * 7919 + y * 104729)), waterMat);
         w.rotation.x = -Math.PI / 2;
         w.position.set(wx, 0.012, wz);
-        scene.add(w);
+        waterGroup.add(w);
       }
     }
   }
@@ -399,6 +410,7 @@ export function createBattleScene(container, grid) {
       const base = 4.6;
       const light = new THREE.PointLight(0xffa848, base, 6.4, 0);
       light.position.set(0, h * 0.9, 0);   // 頭のあたり。光源だけを置き、球体は出さない
+      light.visible = lanternsOn;
       g.add(light);
       lanterns.push({ light, base, phase: lanterns.length * 2.7 });
     } else {
@@ -681,6 +693,11 @@ export function createBattleScene(container, grid) {
     setDustEnabled(on) { dustGroup.visible = on; },
     setRainEnabled(on) { rainGroup.visible = on; },
     setWallsEnabled(on) { backdropGroup.visible = on; },
+    setObstaclesEnabled(on) { obstacleGroup.visible = on; },
+    setWaterEnabled(on) { waterGroup.visible = on; },
+    // 光源は各ユニットのGroupの子なのでGroup化できない。lanterns配列のlightに
+    // 直接visibleを立てる(Three.jsはvisible=falseの光を照明計算から除外する)
+    setLanternsEnabled(on) { lanternsOn = on; for (const l of lanterns) l.light.visible = on; },
     setLightPreset(name) {
       const p = LIGHT_PRESET[name] || LIGHT_PRESET.night;
       ambientLight.intensity = p.ambient;
