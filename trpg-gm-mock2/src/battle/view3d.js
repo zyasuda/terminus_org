@@ -239,7 +239,7 @@ export function createBattleScene(container, grid) {
     c.width = c.height = 32;
     const g = c.getContext("2d");
     const grad = g.createRadialGradient(16, 16, 0, 16, 16, 16);
-    grad.addColorStop(0, "rgba(255,244,220,0.55)");
+    grad.addColorStop(0, "rgba(255,244,220,0.32)");
     grad.addColorStop(1, "rgba(255,244,220,0)");
     g.fillStyle = grad;
     g.fillRect(0, 0, 32, 32);
@@ -249,7 +249,7 @@ export function createBattleScene(container, grid) {
   // カスタムシェーダーが要る)ため、粒ごとにサイズが違って見えるように
   // 個別のSpriteにした。数が少ない(22個)ので描画コストは気にしなくてよい
   const dustMat = new THREE.SpriteMaterial({
-    map: dustTexture(), transparent: true, opacity: 0.45,
+    map: dustTexture(), transparent: true, opacity: 0.28,
     depthWrite: false, blending: THREE.AdditiveBlending
   });
   const DUST_COUNT = 22;
