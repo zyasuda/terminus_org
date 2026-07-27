@@ -131,7 +131,7 @@ export function createBattleScene(container, grid) {
     const shape = new THREE.Shape();
     for (let i = 0; i <= points; i++) {
       const a = (i / points) * Math.PI * 2;
-      const r = (TILE * 0.3) * (0.72 + rng() * 0.4);
+      const r = (TILE * 0.36) * (0.75 + rng() * 0.4);   // 0.36: 前回の0.3よりひと回り大きく、タイルの縁は越えない範囲
       const x = Math.cos(a) * r, y = Math.sin(a) * r;
       if (i === 0) shape.moveTo(x, y); else shape.lineTo(x, y);
     }
@@ -229,6 +229,52 @@ export function createBattleScene(container, grid) {
     m.rotation.y = rotY;
     scene.add(m);
   });
+
+  /* --- 空気感の粒子(ゆらゆら立ち上る塵・埃) ---
+     地面から上へ、少量だけゆっくり上がっていく演出。数を少なめにして
+     (会話が「戦闘グリッドの雰囲気作り」であって主役ではないため)、
+     頂点まで達したら下へ戻して延々ループさせる。盤面のルールには一切関与しない */
+  const dustTexture = () => {
+    const c = document.createElement("canvas");
+    c.width = c.height = 32;
+    const g = c.getContext("2d");
+    const grad = g.createRadialGradient(16, 16, 0, 16, 16, 16);
+    grad.addColorStop(0, "rgba(255,244,220,0.9)");
+    grad.addColorStop(1, "rgba(255,244,220,0)");
+    g.fillStyle = grad;
+    g.fillRect(0, 0, 32, 32);
+    return new THREE.CanvasTexture(c);
+  };
+  const DUST_COUNT = 22;
+  const DUST_TOP = 2.6;
+  const dustState = Array.from({ length: DUST_COUNT }, () => ({
+    x: (Math.random() - 0.5) * (grid.w - 1),
+    z: (Math.random() - 0.5) * (grid.h - 1),
+    y: Math.random() * DUST_TOP,
+    speed: 0.06 + Math.random() * 0.07,          // ゆっくり: 頂点まで20〜35秒程度
+    swayAmp: 0.05 + Math.random() * 0.08,
+    swayFreq: 0.3 + Math.random() * 0.4,
+    swayPhase: Math.random() * Math.PI * 2
+  }));
+  const dustGeo = new THREE.BufferGeometry();
+  dustGeo.setAttribute("position", new THREE.Float32BufferAttribute(new Float32Array(DUST_COUNT * 3), 3));
+  const dustPoints = new THREE.Points(dustGeo, new THREE.PointsMaterial({
+    map: dustTexture(), size: 0.22, transparent: true, opacity: 0.85,
+    depthWrite: false, blending: THREE.AdditiveBlending, sizeAttenuation: true
+  }));
+  scene.add(dustPoints);
+
+  function stepDust(dt) {
+    const pos = dustGeo.attributes.position;
+    for (let i = 0; i < DUST_COUNT; i++) {
+      const d = dustState[i];
+      d.y += d.speed * dt;
+      if (d.y > DUST_TOP) d.y -= DUST_TOP;   // 頂点まで来たら地面へ戻し、また立ち上らせる
+      const sway = Math.sin(elapsed * d.swayFreq + d.swayPhase) * d.swayAmp;
+      pos.setXYZ(i, d.x + sway, d.y, d.z);
+    }
+    pos.needsUpdate = true;
+  }
 
   /* --- ユニット(箱)と手番マーカー --- */
   const unitMeshes = new Map();  // id → メッシュ
@@ -520,6 +566,7 @@ export function createBattleScene(container, grid) {
     }
 
     stepEffects(dt);
+    stepDust(dt);
     marker.rotation.y += 0.02;
     for (const [, m] of coinMeshes) m.rotation.y += 1.1 * dt;   // 拾えるものだと分かるよう回す
     // 水面のテクスチャをゆっくり流す(全水溜りが同じテクスチャを共有しているので、
