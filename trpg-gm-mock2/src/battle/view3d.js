@@ -256,7 +256,7 @@ export function createBattleScene(container, grid) {
   const DUST_TOP = 2.6;
   const dustState = Array.from({ length: DUST_COUNT }, () => {
     const sprite = new THREE.Sprite(dustMat);
-    const size = 0.16 + Math.random() * 0.02;   // 0.16〜0.18。控えめな大小差
+    const size = 0.08 + Math.random() * 0.02;   // 0.08〜0.10。前回(0.16〜0.18)からさらに縮小
     sprite.scale.setScalar(size);
     scene.add(sprite);
     return {
@@ -264,7 +264,7 @@ export function createBattleScene(container, grid) {
       x: (Math.random() - 0.5) * (grid.w - 1),
       z: (Math.random() - 0.5) * (grid.h - 1),
       y: Math.random() * DUST_TOP,
-      speed: 0.14 + Math.random() * 0.22,
+      speed: 0.05 + Math.random() * 0.07,   // 頂点まで約20〜52秒。前回(0.14〜0.36)より遅く
       // ゆらゆら感はX方向だけだと単調に見えたため、Z方向にも周期違いの
       // 揺れを重ねて円を描くように動かす。振幅・周期も以前よりはっきり効かせる
       swayAmpX: 0.14 + Math.random() * 0.16,
