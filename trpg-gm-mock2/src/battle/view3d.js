@@ -170,6 +170,12 @@ export function createBattleScene(container, grid) {
   scene.add(obstacleGroup);
   const waterGroup = new THREE.Group();
   scene.add(waterGroup);
+  // 柱の下にも床を敷く。柱のマスは(旧実装で)床を作らずcontinueしていたため、
+  // 柱の底と床タイルの間に背景が透けて見える隙間ができていた(実際に指摘を受けた不具合)。
+  // 「床がない=穴」という見た目自体は面白いとのことなので、削除はせず穴として
+  // 独立にon/offできるようGroupへ分ける(既定は穴off=床が敷かれた通常状態)
+  const groundPatchGroup = new THREE.Group();
+  scene.add(groundPatchGroup);
 
   const tiles = new Map();   // "x,y" → 床メッシュ(ハイライトで色を塗り替える)
   for (let y = 0; y < grid.h; y++) {
@@ -182,6 +188,10 @@ export function createBattleScene(container, grid) {
         const m = new THREE.Mesh(wallGeo, cell.obstacle ? pillarMat : wallMat);
         m.position.set(wx, WALL_H / 2, wz);
         (cell.obstacle ? obstacleGroup : scene).add(m);
+
+        const floor = new THREE.Mesh(tileGeo, floorMat.clone());
+        floor.position.set(wx, -TILE_H / 2, wz);
+        groundPatchGroup.add(floor);
         continue;
       }
 
@@ -695,6 +705,8 @@ export function createBattleScene(container, grid) {
     setWallsEnabled(on) { backdropGroup.visible = on; },
     setObstaclesEnabled(on) { obstacleGroup.visible = on; },
     setWaterEnabled(on) { waterGroup.visible = on; },
+    // 「穴」on = 柱の下の床を隠す(背景が透けて見える見た目)。既定はoff(床あり=隙間なし)
+    setHolesEnabled(on) { groundPatchGroup.visible = !on; },
     // 光源は各ユニットのGroupの子なのでGroup化できない。lanterns配列のlightに
     // 直接visibleを立てる(Three.jsはvisible=falseの光を照明計算から除外する)
     setLanternsEnabled(on) { lanternsOn = on; for (const l of lanterns) l.light.visible = on; },

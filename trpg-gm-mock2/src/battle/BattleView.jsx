@@ -94,6 +94,7 @@ export default function BattleView() {
   const [lanternsOn, setLanternsOn] = useState(false);
   const [obstaclesOn, setObstaclesOn] = useState(false);
   const [waterOn, setWaterOn] = useState(false);
+  const [holesOn, setHolesOn] = useState(false);
 
   const { grid, units, order, turn, hasMoved, coins } = state;
   const active = units.find(u => u.id === order[turn] && u.hp > 0) || null;
@@ -116,6 +117,7 @@ export default function BattleView() {
     s.setLanternsEnabled(lanternsOn);
     s.setObstaclesEnabled(obstaclesOn);
     s.setWaterEnabled(waterOn);
+    s.setHolesEnabled(holesOn);
     return () => { s.dispose(); sceneRef.current = null; };
   }, [grid]);
 
@@ -130,6 +132,7 @@ export default function BattleView() {
   useEffect(() => { sceneRef.current?.setLanternsEnabled(lanternsOn); }, [lanternsOn, grid]);
   useEffect(() => { sceneRef.current?.setObstaclesEnabled(obstaclesOn); }, [obstaclesOn, grid]);
   useEffect(() => { sceneRef.current?.setWaterEnabled(waterOn); }, [waterOn, grid]);
+  useEffect(() => { sceneRef.current?.setHolesEnabled(holesOn); }, [holesOn, grid]);
 
   /* --- 手番の解決 --- */
   const endTurn = () => setState(s => {
@@ -338,6 +341,10 @@ export default function BattleView() {
           <label style={S.toggle}>
             <input type="checkbox" checked={waterOn} onChange={e => setWaterOn(e.target.checked)} />
             水溜り
+          </label>
+          <label style={S.toggle}>
+            <input type="checkbox" checked={holesOn} onChange={e => setHolesOn(e.target.checked)} />
+            穴
           </label>
         </div>
 
