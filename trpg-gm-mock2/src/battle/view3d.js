@@ -568,11 +568,53 @@ export function createBattleScene(container, grid) {
     effects.push({ kind: "ring", obj: ring, t: 0, dur, weak });
   }
 
-  function playHit(x, y, { crit = false, damage = 0, unitId = null } = {}) {
+  // ふわっと広がって消える丸い煙/光のパフ(パリィの閃光・ドッジの土煙で使う)。
+  // dustと同じ「canvasに焼いた放射グラデーション」のスプライトだが、
+  // 色は呼び出し側で変えられるようmaterial.colorで着色する
+  const puffTexture = (() => {
+    const c = document.createElement("canvas");
+    c.width = c.height = 64;
+    const g = c.getContext("2d");
+    const grad = g.createRadialGradient(32, 32, 0, 32, 32, 32);
+    grad.addColorStop(0, "rgba(255,255,255,0.95)");
+    grad.addColorStop(1, "rgba(255,255,255,0)");
+    g.fillStyle = grad;
+    g.fillRect(0, 0, 64, 64);
+    return new THREE.CanvasTexture(c);
+  })();
+
+  function spawnPuff(wx, wz, color, dur, size, elev = 0) {
+    const mat = new THREE.SpriteMaterial({
+      map: puffTexture, color, transparent: true, depthWrite: false, depthTest: false
+    });
+    const s = new THREE.Sprite(mat);
+    s.scale.setScalar(size * 0.4);
+    s.position.set(wx, elev + 0.5, wz);
+    scene.add(s);
+    effects.push({ kind: "puff", obj: s, t: 0, dur, size });
+  }
+
+  // 2点を結ぶ一瞬の閃光の線(カウンターの反撃・体当たりの押し出し方向を示す)。
+  // 短命でジオメトリを使い回さないので、消える時にちゃんとdisposeする
+  function spawnStreak(x1, z1, x2, z2, color, dur, elev = 0) {
+    const geo = new THREE.BufferGeometry().setFromPoints([
+      new THREE.Vector3(x1, elev + 0.7, z1),
+      new THREE.Vector3(x2, elev + 0.7, z2)
+    ]);
+    const mat = new THREE.LineBasicMaterial({ color, transparent: true, depthTest: false });
+    const line = new THREE.Line(geo, mat);
+    scene.add(line);
+    effects.push({ kind: "streak", obj: line, t: 0, dur });
+  }
+
+  // tint: いなす(deflect)の時だけ、通常の赤橙ではなく涼しい水色にして
+  // 「軽減された/受け流された」印象を出す(クリティカルの金色が最優先なのは変わらない)
+  function playHit(x, y, { crit = false, damage = 0, unitId = null, tint = null } = {}) {
     const [wx, wz] = worldOf(x, y);
     const e = elevationAt(grid, x, y);   // 瓦礫の上なら演出もその高さで出す
-    spawnRing(wx, wz, crit ? 0xffd76a : 0xff8f6a, crit ? 0.5 : 0.36, false, e);
-    floatDamage(wx, wz, String(damage), crit ? "#ffd76a" : "#ffffff", e);
+    const ringColor = crit ? 0xffd76a : (tint ?? 0xff8f6a);
+    spawnRing(wx, wz, ringColor, crit ? 0.5 : 0.36, false, e);
+    floatDamage(wx, wz, String(damage), crit ? "#ffd76a" : tint ? "#bdeef5" : "#ffffff", e);
 
     const g = unitId && unitMeshes.get(unitId);
     if (g) effects.push({ kind: "flash", mats: g.userData.mats, t: 0, dur: 0.28, color: crit ? 0xffd76a : 0xffffff });
@@ -585,6 +627,52 @@ export function createBattleScene(container, grid) {
     const e = elevationAt(grid, x, y);
     spawnRing(wx, wz, 0x8b93a7, 0.3, true, e);
     floatDamage(wx, wz, "0", "#9aa3b5", e);   // 外れも0として出す(何も起きなかったのか判断できるように)
+  }
+
+  // パリィ成功: 素早く強い白光の輪+パフ+被弾者(受けた側)の一瞬の閃光。
+  // 「金属がぶつかる」感を、既存のヒット演出より速く・鋭く出す
+  function playParry(x, y, unitId) {
+    const [wx, wz] = worldOf(x, y);
+    const e = elevationAt(grid, x, y);
+    spawnRing(wx, wz, 0xf2f4ff, 0.2, false, e);
+    spawnPuff(wx, wz, 0xffffff, 0.24, 0.9, e);
+    const g = unitId && unitMeshes.get(unitId);
+    if (g) effects.push({ kind: "flash", mats: g.userData.mats, t: 0, dur: 0.18, color: 0xffffff });
+    shake = Math.max(shake, 0.1);
+  }
+
+  // ドッジ成功: 足元に土煙のパフだけを残す(移動先は次のsyncで反映されるので、
+  // ここでは「元いた場所から素早く離れた」ことだけを示す)
+  function playDodge(x, y) {
+    const [wx, wz] = worldOf(x, y);
+    const e = elevationAt(grid, x, y);
+    spawnPuff(wx, wz, 0xd6d9de, 0.32, 1.1, e);
+  }
+
+  // カウンター成功: 防御側→攻撃側へ向かう一瞬の閃光(反撃の軌跡)。
+  // この直後に呼び出し側がplayHit/playMissで実際の反撃結果を重ねる
+  function playCounter(fromX, fromY, toX, toY) {
+    const [fx, fz] = worldOf(fromX, fromY);
+    const [tx, tz] = worldOf(toX, toY);
+    const e = elevationAt(grid, fromX, fromY);
+    spawnStreak(fx, fz, tx, tz, 0xffd76a, 0.2, e);
+  }
+
+  // 体当たり成功(押し出し): 土色の大きめの衝撃波+押し出す方向への閃光
+  function playShove(x, y, toX, toY) {
+    const [wx, wz] = worldOf(x, y);
+    const e = elevationAt(grid, x, y);
+    spawnRing(wx, wz, 0xc9a06a, 0.4, false, e);
+    const [tx, tz] = worldOf(toX, toY);
+    spawnStreak(wx, wz, tx, tz, 0xc9a06a, 0.25, e);
+  }
+
+  // 薙ぎ払い: 攻撃側自身の位置から広がる、通常より大きく涼しい色の輪(振り回した
+  // 範囲を示す)。この後、各対象ごとの命中/外れの演出が個別に重なる
+  function playSweep(x, y) {
+    const [wx, wz] = worldOf(x, y);
+    const e = elevationAt(grid, x, y);
+    spawnRing(wx, wz, 0xbfe0ea, 0.45, false, e);
   }
 
   function stepEffects(dt) {
@@ -604,6 +692,13 @@ export function createBattleScene(container, grid) {
           mat.emissive.setHex(e.color);
           mat.emissiveIntensity = 1 - k;
         }
+      } else if (e.kind === "puff") {
+        // ふわっと広がりながら消える(ringより緩やかに大きくする)
+        const s = e.size * (0.4 + k * 0.5);
+        e.obj.scale.set(s, s, 1);
+        e.obj.material.opacity = 1 - k;
+      } else if (e.kind === "streak") {
+        e.obj.material.opacity = 1 - k;   // 拡大はせず、ただ薄れて消える
       }
       if (k < 1) continue;
 
@@ -616,7 +711,8 @@ export function createBattleScene(container, grid) {
       } else {
         scene.remove(e.obj);
         e.obj.material.map?.dispose();
-        e.obj.material.dispose();   // ジオメトリは使い回すので破棄しない
+        e.obj.material.dispose();
+        if (e.kind === "streak") e.obj.geometry.dispose();   // streakだけジオメトリを使い回さない
       }
       effects.splice(i, 1);
     }
@@ -705,6 +801,11 @@ export function createBattleScene(container, grid) {
     sync,
     playHit,
     playMiss,
+    playParry,
+    playDodge,
+    playCounter,
+    playShove,
+    playSweep,
     rotate(delta) { dirIndex += delta; },
     setPickHandler(fn) { pickHandler = fn; },
     // 検証パネル用のトグル・フェーダー。強さ0〜1: 0=ほぼ無効(farを遠くへ逃がす)、

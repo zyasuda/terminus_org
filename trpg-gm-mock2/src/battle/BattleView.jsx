@@ -313,17 +313,38 @@ export default function BattleView() {
     setHolesOn(withObstacles && Math.random() < 0.5);
   };
 
-  // 演出(命中/外れの視覚効果)は見た目だけで、確定した結果は変えない
+  // 演出(命中/外れの視覚効果)は見た目だけで、確定した結果は変えない。
+  // 防御の構えごと・体当たりの成否ごとに、それぞれ違う演出を鳴らし分ける
   const playHitEffects = (attacker, target, r) => {
     const view = sceneRef.current;
-    if (r.reaction === "dodge") view?.playMiss(target.x, target.y);
-    else if (r.hit) view?.playHit(target.x, target.y, { crit: r.crit, damage: r.damage, unitId: target.id });
-    else view?.playMiss(target.x, target.y);
 
-    // カウンター成功時は、元の攻撃側へ反撃が飛ぶ演出も出す
-    if (r.reaction === "counter" && r.counterRoll) {
-      if (r.counterRoll.hit) view?.playHit(attacker.x, attacker.y, { crit: r.counterRoll.crit, damage: r.counterRoll.damage, unitId: attacker.id });
+    if (r.reaction === "dodge") {
+      view?.playDodge(target.x, target.y);
+      return;
+    }
+    if (r.reaction === "parry" && !r.hit) {
+      view?.playParry(target.x, target.y, target.id);
+      return;
+    }
+    if (r.reaction === "counter") {
+      view?.playCounter(target.x, target.y, attacker.x, attacker.y);
+      if (r.counterRoll?.hit) view?.playHit(attacker.x, attacker.y, { crit: r.counterRoll.crit, damage: r.counterRoll.damage, unitId: attacker.id });
       else view?.playMiss(attacker.x, attacker.y);
+      return;
+    }
+    if ("pushedTo" in r) {   // 体当たり(resolveShove)の結果
+      if (r.pushedTo) view?.playShove(target.x, target.y, r.pushedTo.x, r.pushedTo.y);
+      else if (r.hit) view?.playHit(target.x, target.y, { crit: r.crit, damage: r.damage, unitId: target.id });
+      else view?.playMiss(target.x, target.y);
+      return;
+    }
+    if (r.hit) {
+      view?.playHit(target.x, target.y, {
+        crit: r.crit, damage: r.damage, unitId: target.id,
+        tint: r.reaction === "deflect" ? 0x7fd9e0 : null   // いなす: 水色で「軽減された」印象に
+      });
+    } else {
+      view?.playMiss(target.x, target.y);
     }
   };
 
@@ -357,6 +378,7 @@ export default function BattleView() {
   const sweep = (attacker, targets) => {
     const sr = resolveSweep({ attacker, targets, units, roll: rollD20, grid });
     if (!sr.ok) return;
+    sceneRef.current?.playSweep(attacker.x, attacker.y);   // 振り回した範囲を示す演出を1回だけ
     for (const res of sr.results) playHitEffects(attacker, res.target, res);
     setState(s => {
       let curUnits = s.units, curCoins = s.coins;
