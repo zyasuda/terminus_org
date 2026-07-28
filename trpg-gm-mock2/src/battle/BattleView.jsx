@@ -30,22 +30,29 @@ const BG_COLOR_CHOICES = ["#161a22", "#20242e", "#2a2035", "#3a4a3a", "#2a4a5e",
 const randomPick = arr => arr[Math.floor(Math.random() * arr.length)];
 
 /* --- 盤面 ---
-   8x8を基本として作り込む。素の盤面は全面が床で、遮蔽はランダムに散らす
-   (左右対称に置くと展開が読めてしまうため)。柱(高さ1.0)は進入不可、
-   瓦礫(0.25〜0.75)は乗り越えられる */
-const BASE_MAP = Array(8).fill("........");
+   8x8を基本としていたが、8〜12の正方形をランダムに選ぶようにした。素の盤面は
+   全面が床で、遮蔽はランダムに散らす(左右対称に置くと展開が読めてしまうため)。
+   柱(高さ1.0)は進入不可、瓦礫(0.25〜0.75)は乗り越えられる */
+const BOARD_SIZE_MIN = 8, BOARD_SIZE_MAX = 12;
+const baseMapFor = size => Array(size).fill(".".repeat(size));
 
-// 開始位置。?fixture=melee で「すでに隣接している」状態から始められる
-// (交戦中の挙動を毎回同じ手順で確認するため)
+// 開始位置。盤面サイズが変わっても使えるよう、絶対座標ではなくサイズからの相対位置で持つ。
+// ?fixture=melee で「すでに隣接している」状態から始められる(交戦中の挙動を毎回同じ手順で確認するため)
 const START = {
-  default: { gareth: [0, 3], lydia: [0, 4], rust1: [7, 3], rust2: [7, 4] },
-  melee: { gareth: [3, 3], lydia: [2, 3], rust1: [4, 3], rust2: [4, 4] }
+  default: size => ({
+    gareth: [0, Math.floor(size / 2) - 1], lydia: [0, Math.floor(size / 2)],
+    rust1: [size - 1, Math.floor(size / 2) - 1], rust2: [size - 1, Math.floor(size / 2)]
+  }),
+  melee: size => {
+    const c = Math.floor(size / 2);
+    return { gareth: [c, c], lydia: [c - 1, c], rust1: [c + 1, c], rust2: [c + 1, c + 1] };
+  }
 };
 
 const params = () => new URLSearchParams(location.search);
 
-const makeUnits = () => {
-  const p = START[params().get("fixture")] || START.default;
+const makeUnits = size => {
+  const p = (START[params().get("fixture")] || START.default)(size);
   return [
     { id: "gareth", name: "ガレス", side: "party", x: p.gareth[0], y: p.gareth[1], hp: 16, maxHp: 16, atk: 3, agility: 7, defenseDc: 12, height: 1.5 },
     { id: "lydia", name: "リディア", side: "party", x: p.lydia[0], y: p.lydia[1], hp: 14, maxHp: 14, atk: 2, agility: 4, defenseDc: 12, height: 1.425 },
@@ -54,16 +61,27 @@ const makeUnits = () => {
   ];
 };
 
-// ?seed=123 を付けると同じ盤面を再現できる(検証用)。無指定なら毎回変わる
-const makeGrid = seed => {
-  const units = makeUnits();
+// 盤面サイズ(8〜12の正方形)をseedから決める。obstacle用のrngとは別ストリームにして
+// (seedを直接ではなくオフセットした値で乱数器を作って)、他の抽選と独立させる
+const boardSizeFor = seed =>
+  BOARD_SIZE_MIN + Math.floor(makeRng(seed + 4242)() * (BOARD_SIZE_MAX - BOARD_SIZE_MIN + 1));
+
+// ?seed=123 を付けると同じ盤面(サイズ込み)を再現できる(検証用)。無指定なら毎回変わる
+const makeGrid = (size, seed) => {
+  const units = makeUnits(size);
   const clear = units.map(u => ({ x: u.x, y: u.y }));
-  const grid = scatterObstacles(createGrid(BASE_MAP), makeRng(seed), {
-    pillars: 5, rubble: 6, keepClear: clear
+  // 障害物・水溜りの密度は、元の8x8(64マス)での比率(柱5・瓦礫6・水4)に揃える。
+  // 絶対数のままだと盤面が広がるほどスカスカになってしまう
+  const area = size * size;
+  const pillars = Math.round((area * 5) / 64);
+  const rubble = Math.round((area * 6) / 64);
+  const waterCount = Math.round((area * 4) / 64);
+  const grid = scatterObstacles(createGrid(baseMapFor(size)), makeRng(seed), {
+    pillars, rubble, keepClear: clear
   });
   // 水溜り(足元を取られる地形)は障害物とは別のrngで散らす。同じrngを使い回すと
   // 障害物の個数を変えた時に水溜りの配置まで連動して変わってしまうため
-  return scatterWater(grid, makeRng(seed + 9973), { count: 4, keepClear: clear });
+  return scatterWater(grid, makeRng(seed + 9973), { count: waterCount, keepClear: clear });
 };
 
 const rollD20 = () => 1 + Math.floor(Math.random() * 20);
@@ -73,10 +91,12 @@ const rollD20 = () => 1 + Math.floor(Math.random() * 20);
 const snapshotOf = s => ({ units: s.units, coins: s.coins, purse: s.purse, hasMoved: false, log: s.log });
 
 const initialState = (seed = Number(params().get("seed")) || (Date.now() & 0xffff)) => {
-  const units = makeUnits();
+  // ?size= で盤面サイズを固定できる(検証用)。無指定ならseedから決める
+  const size = Number(params().get("size")) || boardSizeFor(seed);
+  const units = makeUnits(size);
   const base = {
     seed,
-    grid: makeGrid(seed),
+    grid: makeGrid(size, seed),
     units,
     order: turnOrder(units).map(u => u.id),
     turn: 0,
