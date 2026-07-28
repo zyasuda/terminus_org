@@ -231,7 +231,9 @@ export default function BattleView() {
   const [wallsOn, setWallsOn] = useState(false);
   const [bgColor, setBgColor] = useState("#161a22");
   const [lightPreset, setLightPreset] = useState("night");
-  const [lanternsOn, setLanternsOn] = useState(false);
+  // ランタンはガレス・リディアそれぞれ個別に点灯/消灯したいとのことなので、
+  // ユニットIDごとの状態にしてある(以前は全員一括のbooleanだった)
+  const [lanternOn, setLanternOn] = useState({ gareth: false, lydia: false });
   const [obstaclesOn, setObstaclesOn] = useState(false);
   const [waterOn, setWaterOn] = useState(false);
   const [holesOn, setHolesOn] = useState(false);
@@ -257,7 +259,7 @@ export default function BattleView() {
     s.setWallsEnabled(wallsOn);
     s.setBackgroundColor(bgColor);
     s.setLightPreset(lightPreset);
-    s.setLanternsEnabled(lanternsOn);
+    for (const [id, on] of Object.entries(lanternOn)) s.setLanternEnabled(id, on);
     s.setObstaclesEnabled(obstaclesOn);
     s.setWaterEnabled(waterOn);
     s.setHolesEnabled(holesOn);
@@ -273,7 +275,11 @@ export default function BattleView() {
   useEffect(() => { sceneRef.current?.setWallsEnabled(wallsOn); }, [wallsOn, grid]);
   useEffect(() => { sceneRef.current?.setBackgroundColor(bgColor); }, [bgColor, grid]);
   useEffect(() => { sceneRef.current?.setLightPreset(lightPreset); }, [lightPreset, grid]);
-  useEffect(() => { sceneRef.current?.setLanternsEnabled(lanternsOn); }, [lanternsOn, grid]);
+  useEffect(() => {
+    const s = sceneRef.current;
+    if (!s) return;
+    for (const [id, on] of Object.entries(lanternOn)) s.setLanternEnabled(id, on);
+  }, [lanternOn, grid]);
   useEffect(() => { sceneRef.current?.setObstaclesEnabled(obstaclesOn); }, [obstaclesOn, grid]);
   useEffect(() => { sceneRef.current?.setWaterEnabled(waterOn); }, [waterOn, grid]);
   useEffect(() => { sceneRef.current?.setHolesEnabled(holesOn); }, [holesOn, grid]);
@@ -517,12 +523,19 @@ export default function BattleView() {
               {GUARD_LABEL[type]}
             </button>
           ))}
-          {/* ランタンだけ独立して点灯/消灯したいとのことなので、防御の操作から
-              間隔を空けてここに置く(他の見た目調整とはまとめない) */}
-          <label style={{ ...S.toggle, marginLeft: 20 }}>
-            <input type="checkbox" checked={lanternsOn} onChange={e => setLanternsOn(e.target.checked)} />
-            ランタン
-          </label>
+          {/* ランタンはガレス・リディアそれぞれ個別に点灯/消灯したいとのことなので、
+              ユニットごとのチェックボックスにしてある。防御の操作から間隔を空けて置く */}
+          <span style={{ ...S.dim, marginLeft: 20 }}>ランタン:</span>
+          {units.filter(u => u.side === "party").map(u => (
+            <label key={u.id} style={S.toggle}>
+              <input
+                type="checkbox"
+                checked={lanternOn[u.id] ?? false}
+                onChange={e => setLanternOn(prev => ({ ...prev, [u.id]: e.target.checked }))}
+              />
+              {u.name}
+            </label>
+          ))}
         </div>
 
         <div style={S.hint}>

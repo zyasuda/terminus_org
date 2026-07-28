@@ -107,8 +107,10 @@ export function createBattleScene(container, grid) {
      見た目だけの演出で、射線や明暗による判定には一切関与しない */
   const lanterns = [];
   // ユニットは各手番の描画(meshFor)で遅延生成されるため、生成タイミングによらず
-  // 既存の設定を新しいランタンにも適用できるよう、状態をここに持っておく
-  let lanternsOn = true;
+  // 既存の設定を新しいランタンにも適用できるよう、ユニットIDごとの状態をここに持つ。
+  // ガレスだけ消す、リディアの手番でリディアだけ消す、といった個別操作のため
+  // (以前は全員一括on/offだったが、個別に制御したいとの要望で変更した)
+  const lanternOverrides = new Map();   // id → boolean(未設定なら既定でtrue)
 
   // 周期の違う正弦を重ねて、繰り返しに気づきにくいゆらぎを作る。
   // 速い成分を厚めにすると「ゆっくり明滅」ではなく炎のチラつきに寄る
@@ -429,9 +431,9 @@ export function createBattleScene(container, grid) {
       const base = 4.6;
       const light = new THREE.PointLight(0xffa848, base, 6.4, 0);
       light.position.set(0, h * 0.9, 0);   // 頭のあたり。光源だけを置き、球体は出さない
-      light.visible = lanternsOn;
+      light.visible = lanternOverrides.has(unit.id) ? lanternOverrides.get(unit.id) : true;
       g.add(light);
-      lanterns.push({ light, base, phase: lanterns.length * 2.7 });
+      lanterns.push({ id: unit.id, light, base, phase: lanterns.length * 2.7 });
     } else {
 
     }
@@ -728,7 +730,14 @@ export function createBattleScene(container, grid) {
     setHolesEnabled(on) { groundPatchGroup.visible = !on; },
     // 光源は各ユニットのGroupの子なのでGroup化できない。lanterns配列のlightに
     // 直接visibleを立てる(Three.jsはvisible=falseの光を照明計算から除外する)
-    setLanternsEnabled(on) { lanternsOn = on; for (const l of lanterns) l.light.visible = on; },
+    // ユニットごとに個別で点灯/消灯する(ガレスだけ消す、リディアの手番でリディアの
+    // ランタンだけ消す、といった使い方のため)。まだそのユニットの光源が生成されて
+    // いない(手番が回ってきていない)場合でも、Mapに覚えておいて生成時に反映する
+    setLanternEnabled(id, on) {
+      lanternOverrides.set(id, on);
+      const entry = lanterns.find(l => l.id === id);
+      if (entry) entry.light.visible = on;
+    },
     setLightPreset(name) {
       const p = LIGHT_PRESET[name] || LIGHT_PRESET.night;
       ambientLight.intensity = p.ambient;
