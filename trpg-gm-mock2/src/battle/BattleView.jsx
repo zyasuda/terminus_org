@@ -14,7 +14,7 @@ import React, { useEffect, useRef, useState } from "react";
 import { createBattleScene } from "./view3d.js";
 import {
   createGrid, isAdjacent, movePointsFor, reachableCells,
-  turnOrder, resolveMelee, resolveSweep, chooseEnemyAction,
+  turnOrder, resolveMelee, resolveSweep, resolveShove, chooseEnemyAction,
   makeRng, scatterObstacles, scatterWater, occupiedBy, pathTo, cellAt
 } from "./core.js";
 
@@ -152,6 +152,21 @@ const applyMeleeResult = (units, coins, attacker, target, r) => {
     return { units, coins, lines };
   }
 
+  // 体当たり(resolveShove)の結果。pushedToキーの有無で判別する(通常のresolveMeleeは
+  // このキーを持たない)。命中した場合のみここへ来る(外れ・防御成功は上のreturnで抜けている)
+  if ("pushedTo" in r) {
+    if (r.pushedTo) {
+      units = units.map(u => (u.id === target.id ? { ...u, x: r.pushedTo.x, y: r.pushedTo.y } : u));
+      lines.push(`${attacker.name}の体当たりが決まり、${target.name}を弾き飛ばした(d20=${r.d20})。`);
+      return { units, coins, lines };
+    }
+    const applied = applyDamage(units, coins, target.id, r.damage);
+    units = applied.units; coins = applied.coins;
+    lines.push(`${attacker.name}の体当たりは押し出せず、${target.name}に${r.damage}ダメージ(残りHP ${applied.hp}/${applied.cur.maxHp})。`);
+    if (applied.downed) lines.push(`${target.name}は倒れた。落とした物がその場に残っている。`);
+    return { units, coins, lines };
+  }
+
   const applied = applyDamage(units, coins, target.id, r.damage);
   units = applied.units; coins = applied.coins;
   lines.push(
@@ -182,6 +197,8 @@ export default function BattleView() {
   const [obstaclesOn, setObstaclesOn] = useState(false);
   const [waterOn, setWaterOn] = useState(false);
   const [holesOn, setHolesOn] = useState(false);
+  // 攻撃の種類。"通常"以外は1回選んだら使ったら"通常"へ戻す(構えのように持ち越さない)
+  const [attackMode, setAttackMode] = useState("normal");
 
   const { grid, units, order, turn, hasMoved, coins } = state;
   const active = units.find(u => u.id === order[turn] && u.hp > 0) || null;
@@ -252,9 +269,22 @@ export default function BattleView() {
   };
 
   // 結果を先に確定させてから、演出と状態更新をそれぞれ行う。
-  // targetが防御の構え(guard)を持っていれば、resolveMelee側で自動的に反映される
-  const attack = (attacker, target) => {
-    const r = resolveMelee({ attacker, target, units, roll: rollD20, grid, guard: target.guard || null });
+  // targetが防御の構え(guard)を持っていれば、resolveMelee側で自動的に反映される。
+  // meleeOptsはクリティカル狙い(critMin/fumbleMax)などresolveMeleeへの追加オプション
+  const attack = (attacker, target, meleeOpts = {}) => {
+    const r = resolveMelee({ attacker, target, units, roll: rollD20, grid, guard: target.guard || null, ...meleeOpts });
+    if (!r.ok) return;
+    playHitEffects(attacker, target, r);
+    setState(s => {
+      const applied = applyMeleeResult(s.units, s.coins, attacker, target, r);
+      return { ...s, units: applied.units, coins: applied.coins, log: [...s.log, ...applied.lines] };
+    });
+  };
+
+  // 体当たり: 攻撃の代わりに選ぶ行動。命中すればtargetを押し出し、押し出せなければ
+  // ダメージ1点だけ入る(resolveShove側の仕様)。防御の構えへの反応は通常攻撃と同じ
+  const shove = (attacker, target) => {
+    const r = resolveShove({ attacker, target, units, roll: rollD20, grid, guard: target.guard || null });
     if (!r.ok) return;
     playHitEffects(attacker, target, r);
     setState(s => {
@@ -350,7 +380,13 @@ export default function BattleView() {
       if (!playerTurn) return;
       if (data.kind === "unit") {
         const t = units.find(u => u.id === data.id);
-        if (t && targets.some(x => x.id === t.id)) { attack(active, t); endTurn(); }
+        if (t && targets.some(x => x.id === t.id)) {
+          if (attackMode === "shove") shove(active, t);
+          else if (attackMode === "aimCrit") attack(active, t, { critMin: 18, fumbleMax: 3 });
+          else attack(active, t);
+          setAttackMode("normal");   // 構えと違い、1回使ったら通常へ戻す
+          endTurn();
+        }
         return;
       }
       if (data.kind === "cell" && !hasMoved && reach.some(c => c.x === data.x && c.y === data.y)) {
@@ -410,6 +446,21 @@ export default function BattleView() {
           {["parry", "deflect", "counter", "dodge"].map(type => (
             <button key={type} style={S.btn} disabled={!playerTurn} onClick={() => chooseGuard(type)}>
               {GUARD_LABEL[type]}
+            </button>
+          ))}
+        </div>
+
+        {/* 攻撃モード: 選んでから相手をクリックすると発動する。1回使うと通常へ戻る */}
+        <div style={S.row}>
+          <span style={S.dim}>攻撃:</span>
+          {[["normal", "通常"], ["shove", "体当たり"], ["aimCrit", "クリティカル狙い"]].map(([key, label]) => (
+            <button
+              key={key}
+              style={{ ...S.btn, ...(attackMode === key ? S.btnActive : {}) }}
+              disabled={!playerTurn}
+              onClick={() => setAttackMode(key)}
+            >
+              {label}
             </button>
           ))}
         </div>
@@ -495,6 +546,7 @@ const S = {
   chip: { border: "1px solid", borderRadius: 999, padding: "1px 9px", fontSize: 12 },
   btn: { background: "#2b303c", color: "#e6e8ee", border: "1px solid #3c4354",
     borderRadius: 6, padding: "5px 11px", cursor: "pointer", font: "inherit" },
+  btnActive: { background: "#3d7fb5", borderColor: "#3d7fb5" },
   hint: { color: "#8b93a7", fontSize: 12, marginBottom: 6 },
   toggle: { display: "flex", alignItems: "center", gap: 4, color: "#8b93a7", fontSize: 12, cursor: "pointer" },
   select: { background: "#2b303c", color: "#e6e8ee", border: "1px solid #3c4354", borderRadius: 4, font: "inherit" },

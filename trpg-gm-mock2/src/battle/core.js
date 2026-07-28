@@ -308,8 +308,13 @@ export function findDodgeCell(grid, attacker, target, units) {
 // 命中・ダメージ・包囲倍率をここで確定し、「何が起きたか」だけを返す。
 // roll は d20 を返す関数(テストでは固定値を注入する)。
 // guard は target が事前に選んだ構え({ type, used })。未使用時はnullでよい。
+// critMin/fumbleMaxは既定20/1(=出目20だけクリティカル、1だけファンブル)。
+// 「クリティカル狙い」のような、範囲を広げて命中/ファンブルの賭けを大きくする
+// 行動から呼び出す時だけ変える(通常攻撃は既定のままなので挙動は変わらない)
 // 返り値はそのままGMの語り・画面演出・ログの入力になる(この層は文言を持たない)。
-export function resolveMelee({ attacker, target, units = [], roll, grid = null, guard = null }) {
+export function resolveMelee({
+  attacker, target, units = [], roll, grid = null, guard = null, critMin = 20, fumbleMax = 1
+}) {
   if (attacker.hp <= 0) return { ok: false, reason: "attacker_down" };
   if (target.hp <= 0) return { ok: false, reason: "target_down" };
   if (!isAdjacent(attacker, target)) return { ok: false, reason: "not_adjacent" };
@@ -335,7 +340,7 @@ export function resolveMelee({ attacker, target, units = [], roll, grid = null, 
   const steps = grid ? heightSteps(grid, attacker, target) : 0;
 
   const d20 = roll();
-  const crit = d20 === 20, fumble = d20 === 1;
+  const crit = d20 >= critMin, fumble = !crit && d20 <= fumbleMax;
   let hit = crit || (!fumble && d20 + steps >= dc);
 
   const surround = adjacentAllies(units, target, attacker.side).length;
@@ -398,6 +403,29 @@ export function resolveSweep({ attacker, targets, units = [], roll, grid = null 
   });
 
   return { ok: true, d20: sharedD20, results };
+}
+
+// 体当たり: 攻撃の代わりに選ぶ行動。命中判定・防御の構えの扱いはresolveMeleeと同じ
+// (ドッジ・パリィ・カウンターが成立すればresolveMelee側でhit=falseになり、そのまま
+// 素通りする)。ダメージの代わりに、命中すればattacker→targetの延長線上の隣接マスへ
+// targetを押し出す。押し出し先が壁・障害物・他ユニットで塞がっていれば押し出せず、
+// その場合はダメージ1点だけ入る(数値は仮置き)。
+// 返り値には常にpushedTo(成功時は座標、失敗/不成立時はnull)を含める。これを
+// 呼び出し側が「これは体当たりの結果だ」と判別する目印にも使う
+export function resolveShove({ attacker, target, units = [], roll, grid = null, guard = null }) {
+  const r = resolveMelee({ attacker, target, units, roll, grid, guard });
+  if (!r.ok) return r;
+  if (!r.hit) return { ...r, pushedTo: null };
+
+  const dx = Math.sign(target.x - attacker.x), dy = Math.sign(target.y - attacker.y);
+  const px = target.x + dx, py = target.y + dy;
+  const occupied = occupiedBy(units, target.id).some(p => p.x === px && p.y === py);
+  const blockedByTerrain = grid ? (!isWalkable(grid, px, py) || (cellAt(grid, px, py).obstacle?.height ?? 0) >= 1) : false;
+
+  if (!occupied && !blockedByTerrain) {
+    return { ...r, damage: 0, pushedTo: { x: px, y: py } };
+  }
+  return { ...r, damage: 1, pushedTo: null };
 }
 
 /* ---------------- 敵の行動選択(Phase 1の仮置き) ---------------- */

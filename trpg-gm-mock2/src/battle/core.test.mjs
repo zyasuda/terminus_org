@@ -9,7 +9,7 @@ import {
   isAdjacent, movePointsFor, reachableCells,
   surroundMultiplier, adjacentAllies, turnOrder, resolveMelee,
   chooseEnemyAction, makeRng, scatterObstacles, occupiedBy, pathTo,
-  elevationAt, heightSteps, scatterWater, moveCostAt, findDodgeCell, resolveSweep
+  elevationAt, heightSteps, scatterWater, moveCostAt, findDodgeCell, resolveSweep, resolveShove
 } from "./core.js";
 
 const near = (a, b) => Math.abs(a - b) < 1e-9;
@@ -441,6 +441,79 @@ const near = (a, b) => Math.abs(a - b) < 1e-9;
   assert.equal(r1.hit, false, "パリィが成功した相手は無効化される");
   assert.equal(r2.hit, true, "パリィを持たない相手は通常どおり被弾");
   assert.equal(r2.damage, 3, "他人のパリィとは無関係に、通常どおり0.6倍のダメージが入る");
+}
+
+/* --- 体当たり: 命中すれば押し出す。押し出せなければダメージ1点だけ --- */
+{
+  const atk = { id: "gareth", side: "party", hp: 10, x: 1, y: 1, atk: 3, defenseDc: 12 };
+  const foe = { id: "rust", side: "enemy", hp: 8, x: 2, y: 1, defenseDc: 12 };
+
+  // 外れれば何も起きない(通常の攻撃と同じ)
+  const miss = resolveShove({ attacker: atk, target: foe, units: [atk, foe], roll: () => 11 });
+  assert.equal(miss.hit, false);
+  assert.equal(miss.pushedTo, null);
+
+  // 命中・押し出し先が空いていれば、attacker→targetの延長線上へ押し出す
+  const open = createGrid(Array(4).fill("...."));
+  const pushed = resolveShove({ attacker: atk, target: foe, units: [atk, foe], roll: () => 15, grid: open });
+  assert.equal(pushed.hit, true);
+  assert.deepEqual(pushed.pushedTo, { x: 3, y: 1 });
+  assert.equal(pushed.damage, 0, "押し出し成功時はダメージ無し");
+
+  // 押し出し先が障害物(柱)で塞がっていれば、押し出せずダメージ1点だけ入る
+  const walled = createGrid(Array(4).fill("...."));
+  cellAt(walled, 3, 1).obstacle = { height: 1 };
+  cellAt(walled, 3, 1).walkable = false;
+  const blockedByWall = resolveShove({ attacker: atk, target: foe, units: [atk, foe], roll: () => 15, grid: walled });
+  assert.equal(blockedByWall.pushedTo, null);
+  assert.equal(blockedByWall.damage, 1, "押し出せない時はダメージ1点");
+
+  // 押し出し先が他ユニットで塞がっていても同様
+  const blocker = { id: "b", side: "enemy", hp: 5, x: 3, y: 1 };
+  const blockedByUnit = resolveShove({ attacker: atk, target: foe, units: [atk, foe, blocker], roll: () => 15, grid: open });
+  assert.equal(blockedByUnit.pushedTo, null);
+  assert.equal(blockedByUnit.damage, 1);
+
+  // 盤の端(押し出し先が盤外)でも同様に押し出せない
+  const edgeFoe = { ...foe, x: 3, y: 1 };
+  const atEdge = resolveShove({ attacker: { ...atk, x: 2, y: 1 }, target: edgeFoe, units: [atk, edgeFoe], roll: () => 15, grid: open });
+  assert.equal(atEdge.pushedTo, null, "盤外へは押し出せない");
+
+  // ドッジが成立していれば、体当たりも他の近接攻撃と同じくresolveMelee側で無効化される。
+  // 3x3だとfoeが盤の端で逃げ場がないため、逃げ先を確保できる広さの盤面で確認する
+  const dodgeGrid = createGrid(Array(5).fill("....."));
+  const dodging = resolveShove({
+    attacker: atk, target: foe, units: [atk, foe], roll: () => 20, grid: dodgeGrid, guard: { type: "dodge" }
+  });
+  assert.equal(dodging.hit, false);
+  assert.equal(dodging.reaction, "dodge");
+  assert.ok(dodging.dodgeTo, "ドッジ自体の移動先はそのまま返る");
+  assert.equal(dodging.pushedTo, null, "ドッジで無効化された体当たりに押し出しは発生しない");
+}
+
+/* --- クリティカル狙い: crit/fumbleの範囲を広げて命中判定できる --- */
+{
+  const atk = { id: "gareth", side: "party", hp: 10, x: 1, y: 1, atk: 3, defenseDc: 12 };
+  const foe = { id: "rust", side: "enemy", hp: 8, x: 2, y: 1, defenseDc: 12 };
+
+  // 既定(critMin=20, fumbleMax=1)では出目18はただの命中判定(DC12は超えるので命中、クリティカルではない)
+  const normal18 = resolveMelee({ attacker: atk, target: foe, units: [atk, foe], roll: () => 18 });
+  assert.ok(normal18.hit && !normal18.crit, "既定では出目18はクリティカルにならない");
+
+  // クリティカル狙い(critMin:18, fumbleMax:3)では出目18からクリティカル
+  const aimed18 = resolveMelee({ attacker: atk, target: foe, units: [atk, foe], roll: () => 18, critMin: 18, fumbleMax: 3 });
+  assert.ok(aimed18.hit && aimed18.crit, "クリティカル狙いなら出目18でクリティカル");
+  assert.equal(aimed18.damage, 6, "クリティカルなのでatkの2倍");
+
+  // 出目3は既定ならDC12を満たさない普通の外れだが、クリティカル狙いではファンブル扱いになる
+  const normal3 = resolveMelee({ attacker: atk, target: foe, units: [atk, foe], roll: () => 3 });
+  assert.ok(!normal3.hit && !normal3.fumble, "既定では出目3はただの外れ");
+  const aimed3 = resolveMelee({ attacker: atk, target: foe, units: [atk, foe], roll: () => 3, critMin: 18, fumbleMax: 3 });
+  assert.ok(!aimed3.hit && aimed3.fumble, "クリティカル狙いでは出目3もファンブル扱い");
+
+  // 中間の出目(4〜17)は従来どおりDC判定のまま
+  const mid = resolveMelee({ attacker: atk, target: foe, units: [atk, foe], roll: () => 12, critMin: 18, fumbleMax: 3 });
+  assert.ok(mid.hit && !mid.crit && !mid.fumble, "範囲外の出目は通常どおりのDC判定");
 }
 
 /* --- 高低差 --- */
