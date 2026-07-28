@@ -87,6 +87,16 @@ function pathExists(grid, from, to) {
   return false;
 }
 
+// points全員が互いに行き来できるか(先頭から他の全員へpathExistsが通るかで判定)。
+// 「両端(最初と最後)さえ繋がっていればよい」だと、間の1体だけが孤立していても
+// 見逃してしまう(実際に指摘を受けた不具合)。開始位置(keepClear)全員の保護には
+// これが要る
+function allConnected(grid, points) {
+  if (points.length < 2) return true;
+  const [first, ...rest] = points;
+  return rest.every(p => pathExists(grid, first, p));
+}
+
 /* ---------------- 盤面の外形(長方形の角・辺を削る) ---------------- */
 
 // 中心点(cx,cy)から見た角度ごとに半径をゆらした不定形の範囲を作る
@@ -124,7 +134,8 @@ function blobCells(grid, cx, cy, rx, ry, rng) {
 // 削ったマスはwalkable=false・void=trueにする(obstacleとは違い「そもそも盤面の外」
 // という扱いなので、描画側は何も出さず完全な空白にする)。
 // keepClear(開始位置)は削らない。既存のscatterObstaclesと同じ考え方で、
-// 削った結果keepClearの両端が行き来できなくなる場合は変形を取り消す
+// 削った結果keepClear全員が互いに行き来できなくなる(誰か1人だけ孤立する
+// 場合も含む)なら変形を取り消す
 export function carveShape(grid, rng, { keepClear = [] } = {}) {
   const clear = new Set(keepClear.map(p => key(p.x, p.y)));
   const kind = ["corner", "notch", "none"][Math.floor(rng() * 3)];
@@ -158,8 +169,7 @@ export function carveShape(grid, rng, { keepClear = [] } = {}) {
     c.void = true;
   }
 
-  const a = keepClear[0], b = keepClear[keepClear.length - 1];
-  if (a && b && !pathExists(grid, a, b)) {
+  if (!allConnected(grid, keepClear)) {
     for (const { x, y } of cells) {
       const c = cellAt(grid, x, y);
       c.walkable = true;
@@ -173,8 +183,9 @@ export function carveShape(grid, rng, { keepClear = [] } = {}) {
 //   高さ1.0 = 柱。そのマスへは入れない
 //   高さ0.25〜0.75 = 瓦礫。乗り越えられるので進入でき、視線も遮らないが、
 //                    Phase 2で飛び道具の通過率(1−高さ)に効く
-// keepClear(開始位置)には置かない。置いた結果どちらの陣営からも行き来できなく
-// なる柱は取り消すので、通り抜けられない盤面にはならない
+// keepClear(開始位置)には置かない。置いた結果keepClear全員が互いに行き来
+// できなくなる(誰か1人だけ孤立する場合も含む)柱は取り消すので、
+// 通り抜けられない盤面や、出られない孤島にはならない
 export function scatterObstacles(grid, rng, { pillars = 5, rubble = 6, keepClear = [] } = {}) {
   const clear = new Set(keepClear.map(p => key(p.x, p.y)));
   const open = [];
@@ -188,14 +199,13 @@ export function scatterObstacles(grid, rng, { pillars = 5, rubble = 6, keepClear
     [open[i], open[j]] = [open[j], open[i]];
   }
 
-  const a = keepClear[0], b = keepClear[keepClear.length - 1];
   let idx = 0, count = 0;
   while (idx < open.length && count < pillars) {
     const p = open[idx++];
     const c = cellAt(grid, p.x, p.y);
     c.obstacle = { height: 1 };
     c.walkable = false;
-    if (a && b && !pathExists(grid, a, b)) {
+    if (!allConnected(grid, keepClear)) {
       c.obstacle = null;                                // 行き来を断つ柱は置かない
       c.walkable = true;
     } else {

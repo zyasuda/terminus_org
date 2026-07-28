@@ -206,6 +206,33 @@ const near = (a, b) => Math.abs(a - b) < 1e-9;
       assert.equal(c.walkable, h < 1, `seed${seed}: 高さ${h}の通行可否`);
     }
   }
+
+  // 回帰テスト: keepClearが3体以上の時、「先頭と末尾さえ繋がっていればよい」という
+  // 判定だと、間の1体だけが孤立していても見逃してしまう不具合があった。
+  // a・b(先頭・末尾)は共に1行目(row0)にいて直結しており、そこを塞いでも
+  // (斜め移動があるので)互いに繋がったまま。midだけが枝分かれの合流点(2,1)を
+  // 経由しないと到達できない盤面を作る
+  {
+    const g = createGrid(Array(3).fill("....."));
+    for (const cell of g.cells) cell.walkable = false;   // 一旦すべて壁にする
+    // 開けるマス: a・bのいる1行目(row0)全体、枝分かれの合流点(2,1)、midのいる(2,2)
+    for (let x = 0; x < 5; x++) cellAt(g, x, 0).walkable = true;
+    cellAt(g, 2, 1).walkable = true;
+    cellAt(g, 2, 2).walkable = true;
+
+    const a = { x: 0, y: 0 }, mid = { x: 2, y: 2 }, b = { x: 4, y: 0 };
+    // pillarsをopenの数以上にして、候補セルすべてに柱を試させる
+    // (row0の途中のマスは斜め移動で迂回できるので置いても無害、(2,1)だけがmidの唯一の道)
+    scatterObstacles(g, makeRng(1), { pillars: 10, rubble: 0, keepClear: [a, mid, b] });
+    assert.equal(cellAt(g, 2, 1).obstacle, null, "midへの唯一の道には柱を置かない");
+    assert.ok(pathReaches(g, a, mid), "先頭・末尾は繋がっていても、間のmidへも到達できる");
+    assert.ok(pathReaches(g, a, b), "a-bどうしも引き続き到達できる");
+  }
+}
+
+// 2点が行き来できるか(テスト内だけで使う簡易BFS。core.js内部のpathExistsとは別実装)
+function pathReaches(grid, from, to) {
+  return reachableCells(grid, from, 999).some(c => c.x === to.x && c.y === to.y);
 }
 
 /* --- 包囲ボーナス --- */
