@@ -1,0 +1,646 @@
+/* =========================================================
+   戦闘グリッド 検証画面(Phase 1)  /battle で開く
+
+   物語シーンとは完全に別画面。ここでは手触りの確認だけを行う。
+   盤面の確定は core.js、描画は view3d.js、この層は「入力」と「表示」を繋ぐだけ。
+
+   語りについて:
+     決定どおり、結果はGMが語ってログに残す形にする。ただしPhase 1では
+     LLMを繋がず、確定結果から組み立てた定型文をログへ流す。
+     Phase 4でmock2本体に接続する際、この文言生成をGMの語りへ差し替える。
+   ========================================================= */
+
+import React, { useEffect, useRef, useState } from "react";
+import { createBattleScene } from "./view3d.js";
+import {
+  createGrid, isAdjacent, movePointsFor, reachableCells,
+  turnOrder, resolveMelee, resolveSweep, resolveShove, chooseEnemyAction,
+  makeRng, scatterObstacles, scatterWater, carveShape, occupiedBy, pathTo, cellAt
+} from "./core.js";
+
+// 防御の構え。仕様: docs/BATTLE_GRID_STATUS.md「防御・リアクション」節。
+// deflect(内部の識別子)の表示名は「いなす」。「パリィ」と紛らわしいとの指摘で
+// 「受け流し」から改名したが、type自体は変えていない(表示名だけの変更)
+const GUARD_LABEL = { parry: "パリィ", deflect: "いなす", counter: "カウンター", dodge: "ドッジ" };
+
+// 「最初から」でステージ設定をランダムに引き直す時の背景色候補。
+// 任意のRGBだと読みにくい配色になり得るので、あらかじめ用意した候補から選ぶ。
+// 明るすぎると見づらいとの指摘を受け、すべて明度(HSLのL)50%以下の暗めの色にしてある
+const BG_COLOR_CHOICES = ["#161a22", "#20242e", "#2a2035", "#3a4a3a", "#2a4a5e", "#5a3f20"];
+const randomPick = arr => arr[Math.floor(Math.random() * arr.length)];
+
+/* --- 盤面 ---
+   8x8を基本としていたが、8〜12の長方形をランダムに選び、角を大きく削ったり
+   辺に切れ込みを入れたりする外形の変形も加えるようにした。素の盤面は全面が床で、
+   遮蔽はランダムに散らす(左右対称に置くと展開が読めてしまうため)。
+   柱(高さ1.0)は進入不可、瓦礫(0.25〜0.75)は乗り越えられる */
+const BOARD_SIZE_MIN = 8, BOARD_SIZE_MAX = 12;
+const baseMapFor = (w, h) => Array(h).fill(".".repeat(w));
+
+// 開始位置。盤面の幅・高さが変わっても使えるよう、絶対座標ではなく幅・高さからの
+// 相対位置で持つ。?fixture=melee で「すでに隣接している」状態から始められる
+// (交戦中の挙動を毎回同じ手順で確認するため)
+const START = {
+  default: (w, h) => ({
+    gareth: [0, Math.floor(h / 2) - 1], lydia: [0, Math.floor(h / 2)],
+    rust1: [w - 1, Math.floor(h / 2) - 1], rust2: [w - 1, Math.floor(h / 2)]
+  }),
+  melee: (w, h) => {
+    const cx = Math.floor(w / 2), cy = Math.floor(h / 2);
+    return { gareth: [cx, cy], lydia: [cx - 1, cy], rust1: [cx + 1, cy], rust2: [cx + 1, cy + 1] };
+  }
+};
+
+const params = () => new URLSearchParams(location.search);
+
+const makeUnits = (w, h) => {
+  const p = (START[params().get("fixture")] || START.default)(w, h);
+  return [
+    { id: "gareth", name: "ガレス", side: "party", x: p.gareth[0], y: p.gareth[1], hp: 16, maxHp: 16, atk: 3, agility: 7, defenseDc: 12, height: 1.5 },
+    { id: "lydia", name: "リディア", side: "party", x: p.lydia[0], y: p.lydia[1], hp: 14, maxHp: 14, atk: 2, agility: 4, defenseDc: 12, height: 1.425 },
+    { id: "rust1", name: "錆喰い", side: "enemy", x: p.rust1[0], y: p.rust1[1], hp: 10, maxHp: 10, atk: 2, agility: 5, defenseDc: 12, height: 0.8 },
+    { id: "rust2", name: "錆喰い(2)", side: "enemy", x: p.rust2[0], y: p.rust2[1], hp: 10, maxHp: 10, atk: 2, agility: 5, defenseDc: 12, height: 0.8 }
+  ];
+};
+
+// 盤面の幅・高さ(それぞれ独立に8〜12)をseedから決める。obstacle用のrngとは
+// 別ストリームにして(seedを直接ではなくオフセットした値で乱数器を作って)、
+// 他の抽選と独立させる
+const boardDimsFor = seed => {
+  const rng = makeRng(seed + 4242);
+  const span = BOARD_SIZE_MAX - BOARD_SIZE_MIN + 1;
+  return { w: BOARD_SIZE_MIN + Math.floor(rng() * span), h: BOARD_SIZE_MIN + Math.floor(rng() * span) };
+};
+
+// ?seed=123 を付けると同じ盤面(サイズ・外形込み)を再現できる(検証用)。無指定なら毎回変わる
+const makeGrid = ({ w, h }, seed) => {
+  const units = makeUnits(w, h);
+  const clear = units.map(u => ({ x: u.x, y: u.y }));
+  let grid = createGrid(baseMapFor(w, h));
+  // 外形の変形(角を削る/辺に切れ込み/変形なし)。障害物・水溜りより先に行うことで、
+  // 削られたマスにはそもそも障害物や水溜りが置かれないようにする
+  grid = carveShape(grid, makeRng(seed + 1313), { keepClear: clear });
+  // 障害物・水溜りの密度は、元の8x8(64マス)での比率(柱5・瓦礫6・水4)に揃える。
+  // 絶対数のままだと盤面が広がるほどスカスカになってしまう
+  const area = w * h;
+  const pillars = Math.round((area * 5) / 64);
+  const rubble = Math.round((area * 6) / 64);
+  const waterCount = Math.round((area * 4) / 64);
+  grid = scatterObstacles(grid, makeRng(seed), { pillars, rubble, keepClear: clear });
+  // 水溜り(足元を取られる地形)は障害物とは別のrngで散らす。同じrngを使い回すと
+  // 障害物の個数を変えた時に水溜りの配置まで連動して変わってしまうため
+  return scatterWater(grid, makeRng(seed + 9973), { count: waterCount, keepClear: clear });
+};
+
+const rollD20 = () => 1 + Math.floor(Math.random() * 20);
+
+// 手番の開始時点を控えておき、「やり直す」で丸ごと戻せるようにする。
+// 状態はすべて作り直して差し替えているので、参照を持っておくだけで十分
+const snapshotOf = s => ({ units: s.units, coins: s.coins, purse: s.purse, hasMoved: false, log: s.log });
+
+const initialState = (seed = Number(params().get("seed")) || (Date.now() & 0xffff)) => {
+  // ?w= / ?h= で盤面の幅・高さを固定できる(検証用)。無指定ならseedから決める
+  const seedDims = boardDimsFor(seed);
+  const dims = {
+    w: Number(params().get("w")) || seedDims.w,
+    h: Number(params().get("h")) || seedDims.h
+  };
+  const units = makeUnits(dims.w, dims.h);
+  const base = {
+    seed,
+    grid: makeGrid(dims, seed),
+    units,
+    order: turnOrder(units).map(u => u.id),
+    turn: 0,
+    hasMoved: false,
+    coins: [],        // 倒れた駒の跡。通りかかると拾える
+    purse: 0,         // 拾ったコインの数
+    log: ["戦闘開始。"]
+  };
+  return { ...base, snapshot: snapshotOf(base) };
+};
+
+const alive = (units, side) => units.some(u => u.side === side && u.hp > 0);
+
+// ダメージ適用の共通処理(通常の攻撃とカウンターの反撃で使い回す)。
+// 倒れた場合はその場にコインを残す(既存の「戦闘不能はコインになる」仕様と同じ)
+const applyDamage = (units, coins, id, damage) => {
+  const cur = units.find(u => u.id === id);
+  const hp = Math.max(0, cur.hp - damage);
+  const downed = hp <= 0;
+  return {
+    units: units.map(u => (u.id === id ? { ...u, hp } : u)),
+    coins: downed ? [...coins, { id: "coin_" + id, x: cur.x, y: cur.y }] : coins,
+    hp, cur, downed
+  };
+};
+
+// 防御が成功した(=攻撃を防いだ/軽減した)場合だけ「◯◯、成功。」と明示する。
+// 失敗はダメージが入ること自体で分かるので、あえて「失敗」とは書かない
+const tag = label => `${GUARD_LABEL[label]}、成功。`;
+
+// resolveMelee/resolveSweepの1体ぶんの結果を状態へ適用する共通処理。
+// 通常攻撃(1対1)でも薙ぎ払い(1対多)でも、相手ごとにこの処理をそのまま使い回す
+const applyMeleeResult = (units, coins, attacker, target, r) => {
+  // dodge/deflect/counterは発動した時点で必ず成功、parryだけ「試みたが外れた
+  // (=通常命中のまま)」場合があるので!hitで判定する
+  const highNote = r.steps > 0 ? "高い所から打ち下ろす。" : r.steps < 0 ? "見上げる形で分が悪い。" : "";
+  // パリィ・カウンターはguard中1回だけ。成否にかかわらず(パリィ)/成功時のみ(カウンター)
+  // resolveMelee側がreactionを返した時点で使い切ったということなので、ここでusedを立てる
+  const guardSpent = r.reaction === "parry" || r.reaction === "counter";
+
+  // 自分が行動した(攻撃した)ので、攻撃側が持っていた古い構えはここで解ける
+  units = units.map(u => {
+    if (u.id === attacker.id && u.guard) return { ...u, guard: null };
+    if (guardSpent && u.id === target.id) return { ...u, guard: { ...u.guard, used: true } };
+    return u;
+  });
+  const lines = [];
+
+  if (r.reaction === "dodge") {
+    // 避けるだけでなく、攻撃側の間合いの外まで実際に移動する(resolveMelee側で
+    // 「隣接しなくなる先」を探した上で成立させているので、必ず有効な座標が入っている)
+    units = units.map(u => (u.id === target.id ? { ...u, x: r.dodgeTo.x, y: r.dodgeTo.y } : u));
+    lines.push(`${tag("dodge")}${target.name}は${attacker.name}の間合いの外へ跳び退いた。`);
+    return { units, coins, lines };
+  }
+
+  if (r.reaction === "parry" && !r.hit) {
+    lines.push(`${tag("parry")}${target.name}が受け止めた!${attacker.name}の攻撃は届かなかった(d20=${r.d20})。`);
+    return { units, coins, lines };
+  }
+
+  if (r.reaction === "counter") {
+    lines.push(`${tag("counter")}${target.name}が防御と同時に反撃に転じた。`);
+    const before = units.find(u => u.id === attacker.id);
+    if (r.counterRoll.hit) {
+      const applied = applyDamage(units, coins, attacker.id, r.counterRoll.damage);
+      units = applied.units; coins = applied.coins;
+      lines.push(`${attacker.name}に${r.counterRoll.damage}ダメージ(残りHP ${applied.hp}/${before.maxHp})。`);
+      if (applied.downed) lines.push(`${attacker.name}は倒れた。落とした物がその場に残っている。`);
+    } else {
+      lines.push("反撃は外れた。");
+    }
+    return { units, coins, lines };
+  }
+
+  if (!r.hit) {
+    // ここに来るのは通常の外れ、またはパリィを試みたが防御ロールに失敗した場合
+    lines.push(`${attacker.name}の攻撃は${r.fumble ? "大きく外れ、体勢を崩した" : "外れた"}(d20=${r.d20})。${highNote}`);
+    return { units, coins, lines };
+  }
+
+  // 体当たり(resolveShove)の結果。pushedToキーの有無で判別する(通常のresolveMeleeは
+  // このキーを持たない)。命中した場合のみここへ来る(外れ・防御成功は上のreturnで抜けている)
+  if ("pushedTo" in r) {
+    if (r.pushedTo) {
+      units = units.map(u => (u.id === target.id ? { ...u, x: r.pushedTo.x, y: r.pushedTo.y } : u));
+      lines.push(`${attacker.name}の体当たりが決まり、${target.name}を弾き飛ばした(d20=${r.d20})。`);
+      return { units, coins, lines };
+    }
+    const applied = applyDamage(units, coins, target.id, r.damage);
+    units = applied.units; coins = applied.coins;
+    lines.push(`${attacker.name}の体当たりは押し出せず、${target.name}に${r.damage}ダメージ(残りHP ${applied.hp}/${applied.cur.maxHp})。`);
+    if (applied.downed) lines.push(`${target.name}は倒れた。落とした物がその場に残っている。`);
+    return { units, coins, lines };
+  }
+
+  const applied = applyDamage(units, coins, target.id, r.damage);
+  units = applied.units; coins = applied.coins;
+  lines.push(
+    `${attacker.name}の攻撃が${r.crit ? "深々と" : ""}命中(d20=${r.d20})。` +
+    `${target.name}に${r.damage}ダメージ(残りHP ${applied.hp}/${applied.cur.maxHp})。` +
+    (r.reaction === "deflect" ? tag("deflect") : "") +
+    (r.surround >= 2 ? `${r.surround}人で囲んでいる(×${r.multiplier.toFixed(2)})。` : "") +
+    highNote
+  );
+  if (applied.downed) lines.push(`${target.name}は倒れた。落とした物がその場に残っている。`);
+  return { units, coins, lines };
+};
+
+export default function BattleView() {
+  const mountRef = useRef(null);
+  const sceneRef = useRef(null);
+  const [state, setState] = useState(initialState);
+  // 演出の見た目調整用。ゲームの状態ではないので「やり直す」「最初から」の対象外
+  const [fogOn, setFogOn] = useState(false);
+  const [fogLevel, setFogLevel] = useState(1);
+  const [fogColor, setFogColor] = useState("#161a22");
+  const [dustOn, setDustOn] = useState(false);
+  const [rainOn, setRainOn] = useState(false);
+  const [wallsOn, setWallsOn] = useState(false);
+  const [bgColor, setBgColor] = useState("#161a22");
+  const [lightPreset, setLightPreset] = useState("night");
+  // ランタンはガレス・リディアそれぞれ個別に点灯/消灯したいとのことなので、
+  // ユニットIDごとの状態にしてある(以前は全員一括のbooleanだった)
+  const [lanternOn, setLanternOn] = useState({ gareth: false, lydia: false });
+  const [obstaclesOn, setObstaclesOn] = useState(false);
+  const [waterOn, setWaterOn] = useState(false);
+  const [holesOn, setHolesOn] = useState(false);
+  // 攻撃の種類。"通常"以外は1回選んだら使ったら"通常"へ戻す(構えのように持ち越さない)
+  const [attackMode, setAttackMode] = useState("normal");
+
+  const { grid, units, order, turn, hasMoved, coins } = state;
+  const active = units.find(u => u.id === order[turn] && u.hp > 0) || null;
+  const partyAlive = alive(units, "party");
+  const enemyAlive = alive(units, "enemy");
+  const over = !partyAlive || !enemyAlive;
+
+  /* --- シーンの生成と破棄。盤面が変わったら作り直す(「最初から」で新しい配置になる) --- */
+  useEffect(() => {
+    const s = createBattleScene(mountRef.current, grid);
+    sceneRef.current = s;
+    // 新しい盤面を作った直後は既定値に戻るので、現在のパネルの設定を反映し直す
+    s.setFogEnabled(fogOn);
+    s.setFogIntensity(fogLevel);
+    s.setFogColor(fogColor);
+    s.setDustEnabled(dustOn);
+    s.setRainEnabled(rainOn);
+    s.setWallsEnabled(wallsOn);
+    s.setBackgroundColor(bgColor);
+    s.setLightPreset(lightPreset);
+    for (const [id, on] of Object.entries(lanternOn)) s.setLanternEnabled(id, on);
+    s.setObstaclesEnabled(obstaclesOn);
+    s.setWaterEnabled(waterOn);
+    s.setHolesEnabled(holesOn);
+    return () => { s.dispose(); sceneRef.current = null; };
+  }, [grid]);
+
+  /* --- 演出パネルの設定を反映(盤面を作り直さず、既存シーンへその場で効かせる) --- */
+  useEffect(() => { sceneRef.current?.setFogEnabled(fogOn); }, [fogOn, grid]);
+  useEffect(() => { sceneRef.current?.setFogIntensity(fogLevel); }, [fogLevel, grid]);
+  useEffect(() => { sceneRef.current?.setFogColor(fogColor); }, [fogColor, grid]);
+  useEffect(() => { sceneRef.current?.setDustEnabled(dustOn); }, [dustOn, grid]);
+  useEffect(() => { sceneRef.current?.setRainEnabled(rainOn); }, [rainOn, grid]);
+  useEffect(() => { sceneRef.current?.setWallsEnabled(wallsOn); }, [wallsOn, grid]);
+  useEffect(() => { sceneRef.current?.setBackgroundColor(bgColor); }, [bgColor, grid]);
+  useEffect(() => { sceneRef.current?.setLightPreset(lightPreset); }, [lightPreset, grid]);
+  useEffect(() => {
+    const s = sceneRef.current;
+    if (!s) return;
+    for (const [id, on] of Object.entries(lanternOn)) s.setLanternEnabled(id, on);
+  }, [lanternOn, grid]);
+  useEffect(() => { sceneRef.current?.setObstaclesEnabled(obstaclesOn); }, [obstaclesOn, grid]);
+  useEffect(() => { sceneRef.current?.setWaterEnabled(waterOn); }, [waterOn, grid]);
+  useEffect(() => { sceneRef.current?.setHolesEnabled(holesOn); }, [holesOn, grid]);
+
+  /* --- 手番の解決 --- */
+  const endTurn = () => setState(s => {
+    // 生存している次のユニットへ送る。1周しても居なければそのまま
+    for (let i = 1; i <= s.order.length; i++) {
+      const next = (s.turn + i) % s.order.length;
+      const u = s.units.find(x => x.id === s.order[next]);
+      if (u && u.hp > 0) return { ...s, turn: next, hasMoved: false, snapshot: snapshotOf(s) };
+    }
+    return s;
+  });
+
+  // 手番の開始時点へ戻す。移動した位置も、途中で拾ったコインも元通りになる
+  const undoTurn = () => setState(s => ({ ...s, ...s.snapshot }));
+
+  // 「最初から」は盤面を作り直すだけでなく、ステージ設定(背景色・昼夜・壁/障害物/
+  // 水溜り/穴の有無)もランダムに引き直す。霧・塵・雨はここでは変えない
+  // (地形・障害物の見え方を確認する用途なので、それを隠しかねない演出は手動操作のまま残す)
+  const restartWithRandomStage = () => {
+    setState(initialState());
+    setBgColor(randomPick(BG_COLOR_CHOICES));
+    setLightPreset(Math.random() < 0.5 ? "night" : "day");
+    setWallsOn(Math.random() < 0.5);
+    setWaterOn(Math.random() < 0.5);
+    const withObstacles = Math.random() < 0.5;
+    setObstaclesOn(withObstacles);
+    // 穴は障害物(柱)の下に生まれる隙間の演出なので、柱が無ければ意味を持たない
+    setHolesOn(withObstacles && Math.random() < 0.5);
+  };
+
+  // 演出(命中/外れの視覚効果)は見た目だけで、確定した結果は変えない。
+  // 防御の構えごと・体当たりの成否ごとに、それぞれ違う演出を鳴らし分ける
+  const playHitEffects = (attacker, target, r) => {
+    const view = sceneRef.current;
+
+    if (r.reaction === "dodge") {
+      view?.playDodge(target.x, target.y);
+      return;
+    }
+    if (r.reaction === "parry" && !r.hit) {
+      view?.playParry(target.x, target.y, target.id);
+      return;
+    }
+    if (r.reaction === "counter") {
+      view?.playCounter(target.x, target.y, attacker.x, attacker.y);
+      if (r.counterRoll?.hit) view?.playHit(attacker.x, attacker.y, { crit: r.counterRoll.crit, damage: r.counterRoll.damage, unitId: attacker.id });
+      else view?.playMiss(attacker.x, attacker.y);
+      return;
+    }
+    if ("pushedTo" in r) {   // 体当たり(resolveShove)の結果
+      if (r.pushedTo) view?.playShove(target.x, target.y, r.pushedTo.x, r.pushedTo.y);
+      else if (r.hit) view?.playHit(target.x, target.y, { crit: r.crit, damage: r.damage, unitId: target.id });
+      else view?.playMiss(target.x, target.y);
+      return;
+    }
+    if (r.hit) {
+      view?.playHit(target.x, target.y, {
+        crit: r.crit, damage: r.damage, unitId: target.id,
+        tint: r.reaction === "deflect" ? 0x7fd9e0 : null   // いなす: 水色で「軽減された」印象に
+      });
+    } else {
+      view?.playMiss(target.x, target.y);
+    }
+  };
+
+  // 結果を先に確定させてから、演出と状態更新をそれぞれ行う。
+  // targetが防御の構え(guard)を持っていれば、resolveMelee側で自動的に反映される。
+  // meleeOptsはクリティカル狙い(critMin/fumbleMax)などresolveMeleeへの追加オプション
+  const attack = (attacker, target, meleeOpts = {}) => {
+    const r = resolveMelee({ attacker, target, units, roll: rollD20, grid, guard: target.guard || null, ...meleeOpts });
+    if (!r.ok) return;
+    playHitEffects(attacker, target, r);
+    setState(s => {
+      const applied = applyMeleeResult(s.units, s.coins, attacker, target, r);
+      return { ...s, units: applied.units, coins: applied.coins, log: [...s.log, ...applied.lines] };
+    });
+  };
+
+  // 体当たり: 攻撃の代わりに選ぶ行動。命中すればtargetを押し出し、押し出せなければ
+  // ダメージ1点だけ入る(resolveShove側の仕様)。防御の構えへの反応は通常攻撃と同じ
+  const shove = (attacker, target) => {
+    const r = resolveShove({ attacker, target, units, roll: rollD20, grid, guard: target.guard || null });
+    if (!r.ok) return;
+    playHitEffects(attacker, target, r);
+    setState(s => {
+      const applied = applyMeleeResult(s.units, s.coins, attacker, target, r);
+      return { ...s, units: applied.units, coins: applied.coins, log: [...s.log, ...applied.lines] };
+    });
+  };
+
+  // 薙ぎ払い: 隣接する敵全員に、同じ1回分の出目で攻撃する(攻撃の代わりに選ぶ行動)。
+  // 対象ごとの処理はapplyMeleeResultをそのまま使い回す(通常攻撃と同じ防御反応が個別に効く)
+  const sweep = (attacker, targets) => {
+    const sr = resolveSweep({ attacker, targets, units, roll: rollD20, grid });
+    if (!sr.ok) return;
+    sceneRef.current?.playSweep(attacker.x, attacker.y);   // 振り回した範囲を示す演出を1回だけ
+    for (const res of sr.results) playHitEffects(attacker, res.target, res);
+    setState(s => {
+      let curUnits = s.units, curCoins = s.coins;
+      const lines = [`${attacker.name}が薙ぎ払った(d20=${sr.d20})。`];
+      for (const res of sr.results) {
+        const applied = applyMeleeResult(curUnits, curCoins, attacker, res.target, res);
+        curUnits = applied.units; curCoins = applied.coins;
+        lines.push(...applied.lines);
+      }
+      return { ...s, units: curUnits, coins: curCoins, log: [...s.log, ...lines] };
+    });
+  };
+
+  // 防御の構えを選ぶ(移動・攻撃と同じく、選ぶとターンが終わる)。
+  // 選んだ内容は本人が次に自分の手番で行動する(移動/攻撃する)まで有効
+  const chooseGuard = type => {
+    setState(s => ({
+      ...s,
+      units: s.units.map(u => (u.id === active.id ? { ...u, guard: { type, used: false } } : u)),
+      log: [...s.log, `${active.name}は${GUARD_LABEL[type]}の構えを取った。`]
+    }));
+    endTurn();
+  };
+
+  // path は起点を除いた通り道。通りかかったコインはすべて拾う
+  const moveTo = (unit, x, y, path = [{ x, y }]) => setState(s => {
+    const walked = new Set(path.map(p => p.x + "," + p.y));
+    const picked = s.coins.filter(c => walked.has(c.x + "," + c.y));
+    // 水溜りを踏んだかどうかは演出上の一言だけ。移動力の消費自体はreachableCellsが
+    // 既に織り込んでいるので、ここで何かを差し引く必要はない
+    const splashed = path.some(p => cellAt(s.grid, p.x, p.y)?.terrain?.type === "water");
+    const lines = [];
+    if (splashed) lines.push(`${unit.name}は水溜りに足を取られながら進んだ。`);
+    if (picked.length) lines.push(`${unit.name}が落ちていた物を${picked.length}つ拾った。`);
+    return {
+      ...s,
+      // 移動したので、持っていた古い構えはここで解ける(guardは選び直さない限り引き継がない)
+      units: s.units.map(u => (u.id === unit.id ? { ...u, x, y, guard: null } : u)),
+      coins: s.coins.filter(c => !picked.includes(c)),
+      purse: s.purse + picked.length,
+      hasMoved: true,
+      log: lines.length ? [...s.log, ...lines] : s.log
+    };
+  });
+
+  /* --- 敵の手番は自動で進める --- */
+  useEffect(() => {
+    if (over || !active || active.side !== "enemy") return;
+    const t = setTimeout(() => {
+      const act = chooseEnemyAction(grid, active, units);
+      if (act.type === "attack") {
+        const target = units.find(u => u.id === act.targetId);
+        if (target) attack(active, target);
+      } else if (act.type === "move") {
+        moveTo(active, act.to.x, act.to.y, act.path);
+      }
+      setTimeout(endTurn, 350);
+    }, 500);
+    return () => clearTimeout(t);
+  }, [active?.id, turn, over]);
+
+  /* --- ハイライトと入力 --- */
+  const playerTurn = !!active && active.side === "party" && !over;
+  const reach = playerTurn && !hasMoved
+    ? reachableCells(grid, active, movePointsFor(active.agility), occupiedBy(units, active.id))
+    : [];
+  const targets = playerTurn
+    ? units.filter(u => u.side === "enemy" && u.hp > 0 && isAdjacent(active, u))
+    : [];
+
+  useEffect(() => {
+    const s = sceneRef.current;
+    if (!s) return;
+    const highlights = [
+      ...reach.map(c => ({ x: c.x, y: c.y, kind: "reach" })),
+      ...targets.map(t => ({ x: t.x, y: t.y, kind: "target" }))
+    ];
+    s.sync({ units, highlights, activeId: active?.id ?? null, targetIds: targets.map(t => t.id), coins });
+    s.setPickHandler(data => {
+      if (!playerTurn) return;
+      if (data.kind === "unit") {
+        const t = units.find(u => u.id === data.id);
+        if (t && targets.some(x => x.id === t.id)) {
+          if (attackMode === "shove") shove(active, t);
+          else if (attackMode === "aimCrit") attack(active, t, { critMin: 18, fumbleMax: 3 });
+          else attack(active, t);
+          setAttackMode("normal");   // 構えと違い、1回使ったら通常へ戻す
+          endTurn();
+        }
+        return;
+      }
+      if (data.kind === "cell" && !hasMoved && reach.some(c => c.x === data.x && c.y === data.y)) {
+        moveTo(active, data.x, data.y, pathTo(reach, data));
+      }
+    });
+  });
+
+  const status = !partyAlive ? "敗北" : !enemyAlive ? "勝利" : null;
+  // 手番開始時から何も変わっていなければ、やり直すものが無い(参照が同じかで判る)
+  const canUndo = playerTurn &&
+    (state.units !== state.snapshot.units || state.coins !== state.snapshot.coins);
+
+  return (
+    <div style={S.page}>
+      <div ref={mountRef} style={S.canvas} />
+
+      <div style={S.hud}>
+        <div style={S.row}>
+          <strong style={{ color: "#f2df7e" }}>
+            {status ? `—— ${status} ——` : active ? `${active.name} の手番` : "—"}
+          </strong>
+          <span style={S.dim}>
+            {playerTurn && (hasMoved ? "移動済み" : `移動力 ${movePointsFor(active.agility)}`)}
+          </span>
+          {(state.purse > 0 || coins.length > 0) && (
+            <span style={S.dim}>拾った物 {state.purse}{coins.length ? ` / 落ちている ${coins.length}` : ""}</span>
+          )}
+        </div>
+
+        <div style={S.row}>
+          {units.map(u => (
+            <span key={u.id} style={{ ...S.chip, opacity: u.hp > 0 ? 1 : 0.35,
+              borderColor: u.side === "party" ? "#6f9ad3" : "#c4634a" }}>
+              {u.name} {u.hp}/{u.maxHp}
+              {u.guard ? ` [${GUARD_LABEL[u.guard.type]}${u.guard.used ? "済" : ""}]` : ""}
+            </span>
+          ))}
+        </div>
+
+        <div style={S.row}>
+          <button style={S.btn} onClick={() => sceneRef.current?.rotate(-1)}>◀ 視点</button>
+          <button style={S.btn} onClick={() => sceneRef.current?.rotate(1)}>視点 ▶</button>
+          <button style={S.btn} disabled={!canUndo} onClick={undoTurn}>やり直す</button>
+          <button style={S.btn} disabled={!playerTurn} onClick={endTurn}>ターン終了</button>
+          {/* 押し間違えないよう他のボタンとは少し間隔を空けるが、遠すぎない位置に置く */}
+          <button style={{ ...S.btn, marginLeft: 20 }} onClick={restartWithRandomStage}>最初から</button>
+        </div>
+
+        {/* 攻撃モード: 選んでから相手をクリックすると発動する。1回使うと通常へ戻る。
+            薙ぎ払いだけは相手を選ばず即発動するボタン(単一対象への「モード」ではないため) */}
+        <div style={S.row}>
+          <span style={S.dim}>攻撃:</span>
+          {[["normal", "通常"], ["shove", "体当たり"], ["aimCrit", "クリティカル狙い"]].map(([key, label]) => (
+            <button
+              key={key}
+              style={{ ...S.btn, ...(attackMode === key ? S.btnActive : {}) }}
+              disabled={!playerTurn}
+              onClick={() => setAttackMode(key)}
+            >
+              {label}
+            </button>
+          ))}
+          {/* 隣接する敵が2体以上いる時だけ意味がある(1体なら通常攻撃の方が強い) */}
+          <button style={S.btn} disabled={!playerTurn || targets.length < 2}
+            onClick={() => { sweep(active, targets); endTurn(); }}>
+            薙ぎ払い({targets.length})
+          </button>
+        </div>
+
+        <div style={S.row}>
+          <span style={S.dim}>防御:</span>
+          {["parry", "deflect", "counter", "dodge"].map(type => (
+            <button key={type} style={S.btn} disabled={!playerTurn} onClick={() => chooseGuard(type)}>
+              {GUARD_LABEL[type]}
+            </button>
+          ))}
+          {/* ランタンはガレス・リディアそれぞれ個別に点灯/消灯したいとのことなので、
+              ユニットごとのチェックボックスにしてある。防御の操作から間隔を空けて置く */}
+          <span style={{ ...S.dim, marginLeft: 20 }}>ランタン:</span>
+          {units.filter(u => u.side === "party").map(u => (
+            <label key={u.id} style={S.toggle}>
+              <input
+                type="checkbox"
+                checked={lanternOn[u.id] ?? false}
+                onChange={e => setLanternOn(prev => ({ ...prev, [u.id]: e.target.checked }))}
+              />
+              {u.name}
+            </label>
+          ))}
+        </div>
+
+        <div style={S.hint}>
+          青いマス=移動先 / 赤いマス=攻撃できる相手。攻撃するとターンが終わる。
+        </div>
+
+        {/* 演出の見た目調整(検証用)。盤面のルールには影響しない */}
+        <div style={S.row}>
+          <label style={S.toggle}>
+            <input type="checkbox" checked={fogOn} onChange={e => setFogOn(e.target.checked)} />
+            霧
+          </label>
+          <input
+            type="range" min={0} max={1} step={0.05} value={fogLevel} disabled={!fogOn}
+            onChange={e => setFogLevel(Number(e.target.value))}
+            style={{ width: 90 }}
+          />
+          <input
+            type="color" value={fogColor} disabled={!fogOn}
+            onChange={e => setFogColor(e.target.value)}
+            style={{ width: 28, height: 20, padding: 0, border: "none", background: "none" }}
+          />
+          <label style={S.toggle}>
+            <input type="checkbox" checked={dustOn} onChange={e => setDustOn(e.target.checked)} />
+            塵
+          </label>
+          <label style={S.toggle}>
+            <input type="checkbox" checked={rainOn} onChange={e => setRainOn(e.target.checked)} />
+            雨
+          </label>
+          <label style={S.toggle}>
+            <input type="checkbox" checked={wallsOn} onChange={e => setWallsOn(e.target.checked)} />
+            壁
+          </label>
+          <label style={S.toggle}>
+            背景
+            <input type="color" value={bgColor} onChange={e => setBgColor(e.target.value)} style={{ width: 28, height: 20, padding: 0, border: "none", background: "none" }} />
+          </label>
+          <label style={S.toggle}>
+            光
+            <select value={lightPreset} onChange={e => setLightPreset(e.target.value)} style={S.select}>
+              <option value="night">夜</option>
+              <option value="day">昼</option>
+            </select>
+          </label>
+          <label style={S.toggle}>
+            <input type="checkbox" checked={obstaclesOn} onChange={e => setObstaclesOn(e.target.checked)} />
+            障害物
+          </label>
+          <label style={S.toggle}>
+            <input type="checkbox" checked={waterOn} onChange={e => setWaterOn(e.target.checked)} />
+            水溜り
+          </label>
+          <label style={S.toggle}>
+            <input type="checkbox" checked={holesOn} onChange={e => setHolesOn(e.target.checked)} />
+            穴
+          </label>
+        </div>
+
+        {/* GMの語りはログに残す(Phase 1は定型文。Phase 4でGMの語りへ差し替える) */}
+        <div style={S.log}>
+          {state.log.slice(-8).map((l, i) => <div key={i}>{l}</div>)}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+const S = {
+  page: { position: "fixed", inset: 0, background: "#161a22", color: "#e6e8ee",
+    font: "13px/1.6 system-ui, sans-serif", display: "flex", flexDirection: "column" },
+  canvas: { flex: 1, minHeight: 0 },
+  hud: { padding: "10px 14px calc(10px + env(safe-area-inset-bottom))",
+    background: "rgba(20,24,32,.92)", borderTop: "1px solid #2b303c" },
+  row: { display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", marginBottom: 6 },
+  dim: { color: "#8b93a7" },
+  chip: { border: "1px solid", borderRadius: 999, padding: "1px 9px", fontSize: 12 },
+  btn: { background: "#2b303c", color: "#e6e8ee", border: "1px solid #3c4354",
+    borderRadius: 6, padding: "5px 11px", cursor: "pointer", font: "inherit" },
+  btnActive: { background: "#3d7fb5", borderColor: "#3d7fb5" },
+  hint: { color: "#8b93a7", fontSize: 12, marginBottom: 6 },
+  toggle: { display: "flex", alignItems: "center", gap: 4, color: "#8b93a7", fontSize: 12, cursor: "pointer" },
+  select: { background: "#2b303c", color: "#e6e8ee", border: "1px solid #3c4354", borderRadius: 4, font: "inherit" },
+  log: { maxHeight: 116, overflowY: "auto", background: "#11141b",
+    border: "1px solid #2b303c", borderRadius: 6, padding: "6px 9px" }
+};
