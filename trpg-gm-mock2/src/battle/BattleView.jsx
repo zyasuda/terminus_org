@@ -485,16 +485,12 @@ export default function BattleView() {
           <button style={S.btn} onClick={() => sceneRef.current?.rotate(1)}>視点 ▶</button>
           <button style={S.btn} disabled={!canUndo} onClick={undoTurn}>やり直す</button>
           <button style={S.btn} disabled={!playerTurn} onClick={endTurn}>ターン終了</button>
-          {/* 隣接する敵が2体以上いる時だけ意味がある(1体なら通常攻撃の方が強い) */}
-          <button style={S.btn} disabled={!playerTurn || targets.length < 2}
-            onClick={() => { sweep(active, targets); endTurn(); }}>
-            薙ぎ払い({targets.length})
-          </button>
           {/* 押し間違えないよう他のボタンとは少し間隔を空けるが、遠すぎない位置に置く */}
           <button style={{ ...S.btn, marginLeft: 20 }} onClick={restartWithRandomStage}>最初から</button>
         </div>
 
-        {/* 攻撃モード: 選んでから相手をクリックすると発動する。1回使うと通常へ戻る */}
+        {/* 攻撃モード: 選んでから相手をクリックすると発動する。1回使うと通常へ戻る。
+            薙ぎ払いだけは相手を選ばず即発動するボタン(単一対象への「モード」ではないため) */}
         <div style={S.row}>
           <span style={S.dim}>攻撃:</span>
           {[["normal", "通常"], ["shove", "体当たり"], ["aimCrit", "クリティカル狙い"]].map(([key, label]) => (
@@ -507,6 +503,11 @@ export default function BattleView() {
               {label}
             </button>
           ))}
+          {/* 隣接する敵が2体以上いる時だけ意味がある(1体なら通常攻撃の方が強い) */}
+          <button style={S.btn} disabled={!playerTurn || targets.length < 2}
+            onClick={() => { sweep(active, targets); endTurn(); }}>
+            薙ぎ払い({targets.length})
+          </button>
         </div>
 
         <div style={S.row}>
