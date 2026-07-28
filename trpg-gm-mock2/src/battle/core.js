@@ -89,40 +89,40 @@ function pathExists(grid, from, to) {
 
 /* ---------------- 盤面の外形(長方形の角・辺を削る) ---------------- */
 
-// 削るマスの座標一覧を作るだけの純粋関数(実際にgridへ適用するのはcarveShape側)
-function cornerCells(grid, corner, wFrac, hFrac) {
-  const cw = Math.max(1, Math.round(grid.w * wFrac));
-  const ch = Math.max(1, Math.round(grid.h * hFrac));
-  const x0 = corner.includes("r") ? grid.w - cw : 0;
-  const y0 = corner.includes("b") ? grid.h - ch : 0;
-  const cells = [];
-  for (let y = y0; y < y0 + ch; y++) {
-    for (let x = x0; x < x0 + cw; x++) cells.push({ x, y });
-  }
-  return cells;
-}
+// 中心点(cx,cy)から見た角度ごとに半径をゆらした不定形の範囲を作る
+// (view3d.jsの水たまりの輪郭と同じ「角度ごとに半径を揺らす」考え方をグリッド座標でやる)。
+// rx/ryで楕円のように縦横比を変え、波の数・振幅をランダムにすることで
+// 丸っこい形から尖った/ギザギザした形まで色々な見た目になる。
+// 中心点自体は盤面の角・辺の上に置くので、盤外にはみ出す分は自然に切り捨てられる
+function blobCells(grid, cx, cy, rx, ry, rng) {
+  const waves = 2 + Math.floor(rng() * 3);       // 2〜4波の合成。多いほどギザギザ・尖った印象になる
+  const amp = 0.25 + rng() * 0.4;                // 振幅(基準半径に対する割合)
+  const phases = Array.from({ length: waves }, () => rng() * Math.PI * 2);
+  const freqs = Array.from({ length: waves }, () => 1 + Math.floor(rng() * 4));
+  const wobble = angle => {
+    let w = 1;
+    for (let i = 0; i < waves; i++) w += (amp * Math.sin(angle * freqs[i] + phases[i])) / waves;
+    return w;
+  };
 
-function edgeNotchCells(grid, edge, spanFrac, depthFrac) {
-  const horizontal = edge === "top" || edge === "bottom";
-  const full = horizontal ? grid.w : grid.h;
-  const span = Math.max(1, Math.round(full * spanFrac));
-  const start = Math.floor((full - span) / 2);   // 辺の中央あたりを切り込む
-  const depth = Math.max(1, Math.round((horizontal ? grid.h : grid.w) * depthFrac));
+  const maxR = Math.max(rx, ry) * (1 + amp);
+  const x0 = Math.max(0, Math.floor(cx - maxR)), x1 = Math.min(grid.w - 1, Math.ceil(cx + maxR));
+  const y0 = Math.max(0, Math.floor(cy - maxR)), y1 = Math.min(grid.h - 1, Math.ceil(cy + maxR));
   const cells = [];
-  for (let i = start; i < start + span; i++) {
-    for (let d = 0; d < depth; d++) {
-      if (edge === "top") cells.push({ x: i, y: d });
-      else if (edge === "bottom") cells.push({ x: i, y: grid.h - 1 - d });
-      else if (edge === "left") cells.push({ x: d, y: i });
-      else cells.push({ x: grid.w - 1 - d, y: i });   // right
+  for (let y = y0; y <= y1; y++) {
+    for (let x = x0; x <= x1; x++) {
+      const dx = (x - cx) / rx, dy = (y - cy) / ry;   // 楕円換算
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      if (dist <= wobble(Math.atan2(dy, dx))) cells.push({ x, y });
     }
   }
   return cells;
 }
 
 // 盤面の外形を変形する: 角を大きく削る/辺の中央に切れ込みを入れる/何もしない、を
-// ランダムに1つ選ぶ。削ったマスはwalkable=false・void=trueにする(obstacleとは違い
-// 「そもそも盤面の外」という扱いなので、描画側は何も出さず完全な空白にする)。
+// ランダムに1つ選ぶ。どちらもblobCellsで不定形に削るので、正確な長方形にはならない。
+// 削ったマスはwalkable=false・void=trueにする(obstacleとは違い「そもそも盤面の外」
+// という扱いなので、描画側は何も出さず完全な空白にする)。
 // keepClear(開始位置)は削らない。既存のscatterObstaclesと同じ考え方で、
 // 削った結果keepClearの両端が行き来できなくなる場合は変形を取り消す
 export function carveShape(grid, rng, { keepClear = [] } = {}) {
@@ -130,10 +130,26 @@ export function carveShape(grid, rng, { keepClear = [] } = {}) {
   const kind = ["corner", "notch", "none"][Math.floor(rng() * 3)];
   if (kind === "none") return grid;
 
-  const cells = (kind === "corner"
-    ? cornerCells(grid, ["tl", "tr", "bl", "br"][Math.floor(rng() * 4)], 0.25 + rng() * 0.2, 0.25 + rng() * 0.2)
-    : edgeNotchCells(grid, ["top", "bottom", "left", "right"][Math.floor(rng() * 4)], 0.3 + rng() * 0.2, 0.2 + rng() * 0.15)
-  ).filter(p => inBounds(grid, p.x, p.y) && !clear.has(key(p.x, p.y)));
+  let cx, cy, rx, ry;
+  if (kind === "corner") {
+    const corner = ["tl", "tr", "bl", "br"][Math.floor(rng() * 4)];
+    cx = corner.includes("r") ? grid.w - 1 : 0;
+    cy = corner.includes("b") ? grid.h - 1 : 0;
+    rx = grid.w * (0.3 + rng() * 0.2);
+    ry = grid.h * (0.3 + rng() * 0.2);
+  } else {
+    const edge = ["top", "bottom", "left", "right"][Math.floor(rng() * 4)];
+    const horizontal = edge === "top" || edge === "bottom";
+    const spanFrac = 0.2 + rng() * 0.15;    // 辺方向(切れ込みの横幅)
+    const depthFrac = 0.25 + rng() * 0.2;   // 奥行き方向(盤面へどれだけ食い込むか)
+    cx = horizontal ? grid.w * (0.3 + rng() * 0.4) : (edge === "left" ? 0 : grid.w - 1);
+    cy = horizontal ? (edge === "top" ? 0 : grid.h - 1) : grid.h * (0.3 + rng() * 0.4);
+    rx = horizontal ? grid.w * spanFrac : grid.w * depthFrac;
+    ry = horizontal ? grid.h * depthFrac : grid.h * spanFrac;
+  }
+
+  const cells = blobCells(grid, cx, cy, rx, ry, rng)
+    .filter(p => inBounds(grid, p.x, p.y) && !clear.has(key(p.x, p.y)));
   if (!cells.length) return grid;
 
   for (const { x, y } of cells) {

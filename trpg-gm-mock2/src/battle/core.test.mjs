@@ -444,28 +444,28 @@ const near = (a, b) => Math.abs(a - b) < 1e-9;
   assert.equal(r2.damage, 3, "他人のパリィとは無関係に、通常どおり0.6倍のダメージが入る");
 }
 
-/* --- 盤面の外形変形(角を削る/辺に切れ込み) --- */
+/* --- 盤面の外形変形(角を削る/辺に切れ込み。丸かったり尖ったりする不定形) --- */
 {
-  // rngの出目を手で並べて、狙った分岐(角/切れ込み/変形なし)を強制する
-  const seq = vals => { let i = 0; return () => vals[i++]; };
+  // rngの出目を手で並べて、狙った分岐(角/切れ込み/変形なし)を強制する。
+  // 境界の具体的な形は波の合成(waves/amp/phase/freq)で決まるため、
+  // 1マス単位の厳密な位置までは断定せず、頑健に成り立つ性質だけを確認する
+  const seq = vals => { let i = 0; return () => (i < vals.length ? vals[i++] : 0.5); };
 
-  // 角(左上)を3x3ぶん削る: kind→corner(0.1), corner→tl(0.1), wFrac/hFrac→0.5/0.5
+  // 角(左上)を削る: kind→corner(0.1), corner→tl(0.1)。距離0の起点は
+  // wobble(振幅は必ず1未満)より必ず小さいので、角そのものは必ず削られる
   {
-    const g = createGrid(Array(8).fill("........"));
-    carveShape(g, seq([0.1, 0.1, 0.5, 0.5]));
-    assert.equal(cellAt(g, 0, 0).void, true, "左上が削られる");
-    assert.equal(cellAt(g, 2, 2).void, true, "削った範囲の端も削られる");
-    assert.equal(isWalkable(g, 0, 0), false, "削られたマスは通行不可");
-    assert.equal(cellAt(g, 3, 3).void, false, "削った範囲の外は変わらない");
+    const g = createGrid(Array(10).fill(".".repeat(10)));
+    carveShape(g, seq([0.1, 0.1]));
+    assert.equal(cellAt(g, 0, 0).void, true, "角の起点は必ず削られる");
+    assert.ok(g.cells.some(c => !c.void), "盤面全部が削られることはない");
   }
 
-  // 上辺の中央に切れ込み: kind→notch(0.4), edge→top(0.1), spanFrac/depthFrac→0.5/0.5
+  // 上辺に切れ込み: kind→notch(0.4), edge→top(0.1)。切れ込みの中心は上辺の上に
+  // 置かれるので、上辺(y=0)のどこかは必ず削られる
   {
-    const g = createGrid(Array(8).fill("........"));
-    carveShape(g, seq([0.4, 0.1, 0.5, 0.5]));
-    assert.equal(cellAt(g, 3, 0).void, true, "上辺中央あたりが削られる");
-    assert.equal(cellAt(g, 0, 0).void, false, "切れ込みの外(左端)は変わらない");
-    assert.equal(cellAt(g, 3, 3).void, false, "切れ込みの深さの外は変わらない");
+    const g = createGrid(Array(10).fill(".".repeat(10)));
+    carveShape(g, seq([0.4, 0.1]));
+    assert.ok(g.cells.some((c, i) => c.void && Math.floor(i / g.w) === 0), "上辺のどこかが削られる");
   }
 
   // 変形なし: kind→none(0.9)
@@ -477,11 +477,28 @@ const near = (a, b) => Math.abs(a - b) < 1e-9;
 
   // keepClear(開始位置)は削らない
   {
-    const g = createGrid(Array(8).fill("........"));
-    carveShape(g, seq([0.1, 0.1, 0.5, 0.5]), { keepClear: [{ x: 0, y: 0 }] });
+    const g = createGrid(Array(10).fill(".".repeat(10)));
+    carveShape(g, seq([0.1, 0.1]), { keepClear: [{ x: 0, y: 0 }] });
     assert.equal(cellAt(g, 0, 0).void, false, "keepClearのマスは削らない");
-    assert.equal(cellAt(g, 1, 1).void, true, "keepClear以外の範囲は通常どおり削られる");
   }
+
+  // 不定形であること(正確な長方形にはならない)を確認する。もし単純な矩形なら
+  // 「削れたマスの外接矩形」＝「削れたマス自身」になるはずだが、波でゆらした境界は
+  // 外接矩形の一部(角など)を必ず埋め残すので、外接矩形の面積より削れた数が少なくなる
+  let shapedSeeds = 0;
+  for (let seed = 1; seed <= 40 && shapedSeeds < 5; seed++) {
+    const g = createGrid(Array(12).fill(".".repeat(12)));
+    carveShape(g, makeRng(seed + 5050));
+    const voids = [];
+    for (let y = 0; y < g.h; y++) for (let x = 0; x < g.w; x++) if (cellAt(g, x, y).void) voids.push({ x, y });
+    if (voids.length < 4) continue;   // 変形なし、または小さすぎるものは形状判定をスキップ
+    shapedSeeds++;
+    const minX = Math.min(...voids.map(p => p.x)), maxX = Math.max(...voids.map(p => p.x));
+    const minY = Math.min(...voids.map(p => p.y)), maxY = Math.max(...voids.map(p => p.y));
+    const bboxArea = (maxX - minX + 1) * (maxY - minY + 1);
+    assert.ok(voids.length < bboxArea, `seed${seed}: 不定形なので外接矩形を隙間なく埋めない`);
+  }
+  assert.ok(shapedSeeds >= 3, "十分な数のseedで実際に変形が発生している(形状判定できている)");
 
   // 多数のseedで不変条件を確認: keepClearは常に無傷で、両端は必ず行き来できる
   for (const seed of [1, 2, 3, 7, 42, 999, 12345]) {
