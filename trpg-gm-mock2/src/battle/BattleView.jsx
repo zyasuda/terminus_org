@@ -462,15 +462,6 @@ export default function BattleView() {
           <button style={{ ...S.btn, marginLeft: 20 }} onClick={restartWithRandomStage}>最初から</button>
         </div>
 
-        <div style={S.row}>
-          <span style={S.dim}>防御:</span>
-          {["parry", "deflect", "counter", "dodge"].map(type => (
-            <button key={type} style={S.btn} disabled={!playerTurn} onClick={() => chooseGuard(type)}>
-              {GUARD_LABEL[type]}
-            </button>
-          ))}
-        </div>
-
         {/* 攻撃モード: 選んでから相手をクリックすると発動する。1回使うと通常へ戻る */}
         <div style={S.row}>
           <span style={S.dim}>攻撃:</span>
@@ -482,6 +473,15 @@ export default function BattleView() {
               onClick={() => setAttackMode(key)}
             >
               {label}
+            </button>
+          ))}
+        </div>
+
+        <div style={S.row}>
+          <span style={S.dim}>防御:</span>
+          {["parry", "deflect", "counter", "dodge"].map(type => (
+            <button key={type} style={S.btn} disabled={!playerTurn} onClick={() => chooseGuard(type)}>
+              {GUARD_LABEL[type]}
             </button>
           ))}
         </div>
