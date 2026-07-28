@@ -23,6 +23,11 @@ import {
 // 「受け流し」から改名したが、type自体は変えていない(表示名だけの変更)
 const GUARD_LABEL = { parry: "パリィ", deflect: "いなす", counter: "カウンター", dodge: "ドッジ" };
 
+// 「最初から」でステージ設定をランダムに引き直す時の背景色候補。
+// 任意のRGBだと読みにくい配色になり得るので、あらかじめ用意した候補から選ぶ
+const BG_COLOR_CHOICES = ["#161a22", "#20242e", "#2a2035", "#7fc4e8", "#e8b06a", "#3a4a3a"];
+const randomPick = arr => arr[Math.floor(Math.random() * arr.length)];
+
 /* --- 盤面 ---
    8x8を基本として作り込む。素の盤面は全面が床で、遮蔽はランダムに散らす
    (左右対称に置くと展開が読めてしまうため)。柱(高さ1.0)は進入不可、
@@ -254,6 +259,21 @@ export default function BattleView() {
   // 手番の開始時点へ戻す。移動した位置も、途中で拾ったコインも元通りになる
   const undoTurn = () => setState(s => ({ ...s, ...s.snapshot }));
 
+  // 「最初から」は盤面を作り直すだけでなく、ステージ設定(背景色・昼夜・壁/障害物/
+  // 水溜り/穴の有無)もランダムに引き直す。霧・塵・雨はここでは変えない
+  // (地形・障害物の見え方を確認する用途なので、それを隠しかねない演出は手動操作のまま残す)
+  const restartWithRandomStage = () => {
+    setState(initialState());
+    setBgColor(randomPick(BG_COLOR_CHOICES));
+    setLightPreset(Math.random() < 0.5 ? "night" : "day");
+    setWallsOn(Math.random() < 0.5);
+    setWaterOn(Math.random() < 0.5);
+    const withObstacles = Math.random() < 0.5;
+    setObstaclesOn(withObstacles);
+    // 穴は障害物(柱)の下に生まれる隙間の演出なので、柱が無ければ意味を持たない
+    setHolesOn(withObstacles && Math.random() < 0.5);
+  };
+
   // 演出(命中/外れの視覚効果)は見た目だけで、確定した結果は変えない
   const playHitEffects = (attacker, target, r) => {
     const view = sceneRef.current;
@@ -438,7 +458,7 @@ export default function BattleView() {
             薙ぎ払い({targets.length})
           </button>
           {/* 押し間違えないよう他のボタンとは少し間隔を空けるが、遠すぎない位置に置く */}
-          <button style={{ ...S.btn, marginLeft: 20 }} onClick={() => setState(initialState())}>最初から</button>
+          <button style={{ ...S.btn, marginLeft: 20 }} onClick={restartWithRandomStage}>最初から</button>
         </div>
 
         <div style={S.row}>
