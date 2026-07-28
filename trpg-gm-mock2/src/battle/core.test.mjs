@@ -9,7 +9,8 @@ import {
   isAdjacent, movePointsFor, reachableCells,
   surroundMultiplier, adjacentAllies, turnOrder, resolveMelee,
   chooseEnemyAction, makeRng, scatterObstacles, occupiedBy, pathTo,
-  elevationAt, heightSteps, scatterWater, moveCostAt, findDodgeCell, resolveSweep, resolveShove
+  elevationAt, heightSteps, scatterWater, moveCostAt, findDodgeCell, resolveSweep, resolveShove,
+  carveShape
 } from "./core.js";
 
 const near = (a, b) => Math.abs(a - b) < 1e-9;
@@ -441,6 +442,59 @@ const near = (a, b) => Math.abs(a - b) < 1e-9;
   assert.equal(r1.hit, false, "パリィが成功した相手は無効化される");
   assert.equal(r2.hit, true, "パリィを持たない相手は通常どおり被弾");
   assert.equal(r2.damage, 3, "他人のパリィとは無関係に、通常どおり0.6倍のダメージが入る");
+}
+
+/* --- 盤面の外形変形(角を削る/辺に切れ込み) --- */
+{
+  // rngの出目を手で並べて、狙った分岐(角/切れ込み/変形なし)を強制する
+  const seq = vals => { let i = 0; return () => vals[i++]; };
+
+  // 角(左上)を3x3ぶん削る: kind→corner(0.1), corner→tl(0.1), wFrac/hFrac→0.5/0.5
+  {
+    const g = createGrid(Array(8).fill("........"));
+    carveShape(g, seq([0.1, 0.1, 0.5, 0.5]));
+    assert.equal(cellAt(g, 0, 0).void, true, "左上が削られる");
+    assert.equal(cellAt(g, 2, 2).void, true, "削った範囲の端も削られる");
+    assert.equal(isWalkable(g, 0, 0), false, "削られたマスは通行不可");
+    assert.equal(cellAt(g, 3, 3).void, false, "削った範囲の外は変わらない");
+  }
+
+  // 上辺の中央に切れ込み: kind→notch(0.4), edge→top(0.1), spanFrac/depthFrac→0.5/0.5
+  {
+    const g = createGrid(Array(8).fill("........"));
+    carveShape(g, seq([0.4, 0.1, 0.5, 0.5]));
+    assert.equal(cellAt(g, 3, 0).void, true, "上辺中央あたりが削られる");
+    assert.equal(cellAt(g, 0, 0).void, false, "切れ込みの外(左端)は変わらない");
+    assert.equal(cellAt(g, 3, 3).void, false, "切れ込みの深さの外は変わらない");
+  }
+
+  // 変形なし: kind→none(0.9)
+  {
+    const g = createGrid(Array(8).fill("........"));
+    carveShape(g, seq([0.9]));
+    assert.ok(g.cells.every(c => !c.void), "変形なしを選べば何も削られない");
+  }
+
+  // keepClear(開始位置)は削らない
+  {
+    const g = createGrid(Array(8).fill("........"));
+    carveShape(g, seq([0.1, 0.1, 0.5, 0.5]), { keepClear: [{ x: 0, y: 0 }] });
+    assert.equal(cellAt(g, 0, 0).void, false, "keepClearのマスは削らない");
+    assert.equal(cellAt(g, 1, 1).void, true, "keepClear以外の範囲は通常どおり削られる");
+  }
+
+  // 多数のseedで不変条件を確認: keepClearは常に無傷で、両端は必ず行き来できる
+  for (const seed of [1, 2, 3, 7, 42, 999, 12345]) {
+    const g = createGrid(Array(8).fill("........"));
+    const corners = [{ x: 0, y: 0 }, { x: 7, y: 7 }];
+    carveShape(g, makeRng(seed), { keepClear: corners });
+    for (const p of corners) assert.ok(isWalkable(g, p.x, p.y), `seed${seed}: keepClearは無傷`);
+    const reach = reachableCells(g, corners[0], 999);
+    assert.ok(
+      reach.some(c => c.x === corners[1].x && c.y === corners[1].y),
+      `seed${seed}: 変形後も両端が行き来できる`
+    );
+  }
 }
 
 /* --- 体当たり: 命中すれば押し出す。押し出せなければダメージ1点だけ --- */

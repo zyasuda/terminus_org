@@ -189,6 +189,10 @@ export function createBattleScene(container, grid) {
       const cell = grid.cells[y * grid.w + x];
 
       if (!cell.walkable) {
+        // void: 盤面の外形を削った結果できた「そもそも盤面の外」のマス。
+        // 柱・地形の壁とは違い、何も置かない(完全な空白のまま)
+        if (cell.void) continue;
+
         // 地形の壁と、高さ1.0の障害物(柱)。どちらも進入不可だが色で見分ける
         const m = new THREE.Mesh(wallGeo, cell.obstacle ? pillarMat : wallMat);
         m.position.set(wx, WALL_H / 2, wz);

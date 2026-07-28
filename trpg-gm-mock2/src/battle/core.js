@@ -30,7 +30,9 @@ export function createGrid(rows) {
   for (let y = 0; y < h; y++) {
     for (let x = 0; x < w; x++) {
       const ch = rows[y][x] ?? WALL;
-      cells.push({ walkable: ch !== WALL, height: 0, obstacle: null, terrain: null });
+      // void: 「盤面の外」扱いのマス(外形を変形した時に生まれる)。obstacle(柱・瓦礫)
+      // とは違い、そもそもマップの一部ではないので描画側は何も出さない(完全な空白)
+      cells.push({ walkable: ch !== WALL, height: 0, obstacle: null, terrain: null, void: false });
     }
   }
   return { w, h, cells };
@@ -83,6 +85,72 @@ function pathExists(grid, from, to) {
     frontier = next;
   }
   return false;
+}
+
+/* ---------------- 盤面の外形(長方形の角・辺を削る) ---------------- */
+
+// 削るマスの座標一覧を作るだけの純粋関数(実際にgridへ適用するのはcarveShape側)
+function cornerCells(grid, corner, wFrac, hFrac) {
+  const cw = Math.max(1, Math.round(grid.w * wFrac));
+  const ch = Math.max(1, Math.round(grid.h * hFrac));
+  const x0 = corner.includes("r") ? grid.w - cw : 0;
+  const y0 = corner.includes("b") ? grid.h - ch : 0;
+  const cells = [];
+  for (let y = y0; y < y0 + ch; y++) {
+    for (let x = x0; x < x0 + cw; x++) cells.push({ x, y });
+  }
+  return cells;
+}
+
+function edgeNotchCells(grid, edge, spanFrac, depthFrac) {
+  const horizontal = edge === "top" || edge === "bottom";
+  const full = horizontal ? grid.w : grid.h;
+  const span = Math.max(1, Math.round(full * spanFrac));
+  const start = Math.floor((full - span) / 2);   // 辺の中央あたりを切り込む
+  const depth = Math.max(1, Math.round((horizontal ? grid.h : grid.w) * depthFrac));
+  const cells = [];
+  for (let i = start; i < start + span; i++) {
+    for (let d = 0; d < depth; d++) {
+      if (edge === "top") cells.push({ x: i, y: d });
+      else if (edge === "bottom") cells.push({ x: i, y: grid.h - 1 - d });
+      else if (edge === "left") cells.push({ x: d, y: i });
+      else cells.push({ x: grid.w - 1 - d, y: i });   // right
+    }
+  }
+  return cells;
+}
+
+// 盤面の外形を変形する: 角を大きく削る/辺の中央に切れ込みを入れる/何もしない、を
+// ランダムに1つ選ぶ。削ったマスはwalkable=false・void=trueにする(obstacleとは違い
+// 「そもそも盤面の外」という扱いなので、描画側は何も出さず完全な空白にする)。
+// keepClear(開始位置)は削らない。既存のscatterObstaclesと同じ考え方で、
+// 削った結果keepClearの両端が行き来できなくなる場合は変形を取り消す
+export function carveShape(grid, rng, { keepClear = [] } = {}) {
+  const clear = new Set(keepClear.map(p => key(p.x, p.y)));
+  const kind = ["corner", "notch", "none"][Math.floor(rng() * 3)];
+  if (kind === "none") return grid;
+
+  const cells = (kind === "corner"
+    ? cornerCells(grid, ["tl", "tr", "bl", "br"][Math.floor(rng() * 4)], 0.25 + rng() * 0.2, 0.25 + rng() * 0.2)
+    : edgeNotchCells(grid, ["top", "bottom", "left", "right"][Math.floor(rng() * 4)], 0.3 + rng() * 0.2, 0.2 + rng() * 0.15)
+  ).filter(p => inBounds(grid, p.x, p.y) && !clear.has(key(p.x, p.y)));
+  if (!cells.length) return grid;
+
+  for (const { x, y } of cells) {
+    const c = cellAt(grid, x, y);
+    c.walkable = false;
+    c.void = true;
+  }
+
+  const a = keepClear[0], b = keepClear[keepClear.length - 1];
+  if (a && b && !pathExists(grid, a, b)) {
+    for (const { x, y } of cells) {
+      const c = cellAt(grid, x, y);
+      c.walkable = true;
+      c.void = false;
+    }
+  }
+  return grid;
 }
 
 // 障害物をランダムに散らす(左右対称に置くと展開が読めてしまうため)。
