@@ -517,6 +517,12 @@ export default function BattleView() {
               {GUARD_LABEL[type]}
             </button>
           ))}
+          {/* ランタンだけ独立して点灯/消灯したいとのことなので、防御の操作から
+              間隔を空けてここに置く(他の見た目調整とはまとめない) */}
+          <label style={{ ...S.toggle, marginLeft: 20 }}>
+            <input type="checkbox" checked={lanternsOn} onChange={e => setLanternsOn(e.target.checked)} />
+            ランタン
+          </label>
         </div>
 
         <div style={S.hint}>
@@ -561,10 +567,6 @@ export default function BattleView() {
               <option value="night">夜</option>
               <option value="day">昼</option>
             </select>
-          </label>
-          <label style={S.toggle}>
-            <input type="checkbox" checked={lanternsOn} onChange={e => setLanternsOn(e.target.checked)} />
-            ランタン
           </label>
           <label style={S.toggle}>
             <input type="checkbox" checked={obstaclesOn} onChange={e => setObstaclesOn(e.target.checked)} />
