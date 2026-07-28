@@ -385,6 +385,20 @@ Playwrightでガレスだけ点灯した状態のスクリーンショットを�
 
 演出は一瞬(0.2〜0.45秒)で終わるため、通常のスクリーンショットでは捉えにくい。検証は一時的な診断フック(`window.__debugScene`、検証後に完全に削除・grep 0件を確認済み)でシーンの演出関数を直接呼び出し、発火直後のフレームをスクリーンショットして、パリィの白い閃光・体当たりの土色の衝撃波・薙ぎ払いの広い輪・カウンターの反撃の軌跡が、それぞれ意図通り出ていることを確認した。
 
+## リファクタリング: 戦闘結果の状態反映ロジックをbattleResult.jsへ切り出し(2026-07-28)
+
+Codex(`codex-rescue`)によるプロジェクト全体調査で、「判定結果を実状態へ反映する`applyDamage()`と`applyMeleeResult()`が`BattleView.jsx`に残っており、Reactの画面なしでは単体テストできない」という指摘を受けた。リスクの高い箇所(`engine/index.js`分割、`view3d.js`分割)より先に、リスクの低いここから着手した。
+
+- **`src/battle/battleResult.js`(新規)**: `GUARD_LABEL`・`applyDamage`・`applyMeleeResult`・`snapshotOf`・`advanceTurn`(手番を次の生存ユニットへ進める)・`applyMoveResult`(移動のコイン回収・水溜り検知・guard解除・hasMoved)・`applySweepResult`(薙ぎ払いの複数対象への適用)を、Reactに依存しない純粋関数として切り出した。ロジック自体は変更していない(挙動を変えずに置き場所を変えただけ)
+- **`core.js`へは統合しなかった**。`core.js`には「この層は文言を持たない(GMの語り・演出は結果を表現するだけ)」という明記された設計原則があり、`applyMeleeResult`は日本語のログ文言を生成するため、統合するとその原則と矛盾する。「判定はcore.js、判定結果の反映と語りはbattleResult.js」という役割分担のまま独立させた
+- **`src/battle/battleResult.test.mjs`(新規)**: 通常命中/クリティカル/外れ/ファンブル、高低差・包囲の言い添え、いなす/パリィ(成功・失敗)/カウンター(成功・失敗・反撃で撃破)/ドッジ/体当たり(押し出し成功・失敗)、撃破時のコイン生成、攻撃側の古い構えの解除、`advanceTurn`(戦闘不能を飛ばす・全滅時は現状維持)、`applyMoveResult`(コイン回収・水溜り・guard解除)、`applySweepResult`(複数対象の一括適用)を検証する特性テストを追加
+- `BattleView.jsx`は646行→512行に減り、`endTurn`/`moveTo`/`sweep`は対応する純粋関数を呼ぶだけになった
+- `package.json`の`test:battle`は`core.test.mjs`と`battleResult.test.mjs`の両方を実行するようにした
+
+作業の途中で、`BattleView.jsx`が`.jsx`拡張子のため素の`node`では直接importできないことが分かった(`core.test.mjs`が動くのは`core.js`が純粋な`.js`だから)。そのため、対象の関数を先に`.js`ファイルへ機械的に移してからテストを書く、という順番で進めた。
+
+`npm run test:battle` / `npm run build`(バンドルサイズほぼ変化なしを確認) / `npm run smoke:battle` いずれも通過。
+
 ## 次にやること
 
 1. 水溜りの事故判定(足を取られて移動打ち切り等)を追加する
