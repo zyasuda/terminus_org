@@ -24,8 +24,9 @@ import {
 const GUARD_LABEL = { parry: "パリィ", deflect: "いなす", counter: "カウンター", dodge: "ドッジ" };
 
 // 「最初から」でステージ設定をランダムに引き直す時の背景色候補。
-// 任意のRGBだと読みにくい配色になり得るので、あらかじめ用意した候補から選ぶ
-const BG_COLOR_CHOICES = ["#161a22", "#20242e", "#2a2035", "#7fc4e8", "#e8b06a", "#3a4a3a"];
+// 任意のRGBだと読みにくい配色になり得るので、あらかじめ用意した候補から選ぶ。
+// 明るすぎると見づらいとの指摘を受け、すべて明度(HSLのL)50%以下の暗めの色にしてある
+const BG_COLOR_CHOICES = ["#161a22", "#20242e", "#2a2035", "#3a4a3a", "#2a4a5e", "#5a3f20"];
 const randomPick = arr => arr[Math.floor(Math.random() * arr.length)];
 
 /* --- 盤面 ---
@@ -46,8 +47,8 @@ const params = () => new URLSearchParams(location.search);
 const makeUnits = () => {
   const p = START[params().get("fixture")] || START.default;
   return [
-    { id: "gareth", name: "ガレス", side: "party", x: p.gareth[0], y: p.gareth[1], hp: 16, maxHp: 16, atk: 3, agility: 7, defenseDc: 12, height: 2 },
-    { id: "lydia", name: "リディア", side: "party", x: p.lydia[0], y: p.lydia[1], hp: 14, maxHp: 14, atk: 2, agility: 4, defenseDc: 12, height: 1.9 },
+    { id: "gareth", name: "ガレス", side: "party", x: p.gareth[0], y: p.gareth[1], hp: 16, maxHp: 16, atk: 3, agility: 7, defenseDc: 12, height: 1.5 },
+    { id: "lydia", name: "リディア", side: "party", x: p.lydia[0], y: p.lydia[1], hp: 14, maxHp: 14, atk: 2, agility: 4, defenseDc: 12, height: 1.425 },
     { id: "rust1", name: "錆喰い", side: "enemy", x: p.rust1[0], y: p.rust1[1], hp: 10, maxHp: 10, atk: 2, agility: 5, defenseDc: 12, height: 0.8 },
     { id: "rust2", name: "錆喰い(2)", side: "enemy", x: p.rust2[0], y: p.rust2[1], hp: 10, maxHp: 10, atk: 2, agility: 5, defenseDc: 12, height: 0.8 }
   ];
