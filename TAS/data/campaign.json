@@ -1,6 +1,6 @@
 {
   "meta": {
-    "id": "lanternhill",
+    "id": "campaign",
     "title": "ランタンヒル年代記",
     "version": "0.2"
   },
@@ -22,7 +22,8 @@
       "電池",
       "メートル"
     ],
-    "world": "舞台は電気も内燃機関もない前近代の世界。現代の機器や語彙を語りに出してはならない。"
+    "world": "ミステリー / ロー・ファンタジー。静かで神秘的、少し切ない。",
+    "terms": "現代語彙を避ける。正名はエンティティ台帳に合わせる。"
   },
   "flags": {
     "guardian_fate": [
@@ -55,178 +56,390 @@
   ],
   "companions": [
     {
-      "id": "gareth",
-      "name": "ガレス",
-      "persona": "寡黙で仲間思いの戦士。気が早く先走りがち。学のある話は苦手。礼を言うのが下手。",
-      "retortDrive": 2,
-      "quirks": [
-        {
-          "tag": "気が早い",
-          "mutter": "……もう待てん。"
-        },
-        {
-          "tag": "武骨",
-          "mutter": "こういう小難しいのは、俺の役目じゃないな。"
-        },
-        {
-          "tag": "不器用",
-          "mutter": "……礼は、あとでまとめて言う。"
-        }
-      ],
-      "banter": [
-        {
-          "to": "lydia",
-          "retortEvery": 6,
-          "tsukkomi": [
-            "……長い。",
-            "リディア。敵が待ってる。"
-          ],
-          "ignore": [
-            "(黙って先へ進む)"
-          ]
-        }
-      ],
-      "sprite": "portrait_gareth_alt.png",
-      "agility": 7,
-      "battleEnd": {
-        "win": [
-          "ふん、手応えのない相手だったな。",
-          "終わったな。先へ進むぞ。",
-          "……怪我はないか。なら、いい。"
-        ],
-        "fled": [
-          "深追いは無用だ。",
-          "逃げるが勝ち、という時もある。"
-        ],
-        "repelled": [
-          "ほう、剣より効いたな。",
-          "……なるほど、ああいう手もあるのか。"
-        ]
-      }
+      "id": "member_1",
+      "name": "リディア",
+      "persona": "遺工に詳しい斥候である。物事を慎重に考える。皮肉をよく言う。ガレスの尻ぬぐいをいつもしている。",
+      "flags": {
+        "chat": true,
+        "propose": true,
+        "act": false,
+        "mutate": false
+      },
+      "image": "assets/casts/member_1.png",
+      "sprite": "portrait_lydia_alt.png",
+      "gender": "female",
+      "firstPerson": "あたし",
+      "addressTerm": "あなた"
     },
     {
-      "id": "lydia",
-      "name": "リディア",
-      "persona": "遺工に明るい斥候。慎重で理屈っぽい皮肉屋。ガレスの後始末をよくしている。話が長い。",
-      "retortDrive": 5,
-      "quirks": [
-        {
-          "tag": "理屈っぽい",
-          "mutter": "この軌条の摩耗、ざっと見て三十年ぶんね。つまり——"
-        },
-        {
-          "tag": "慎重すぎ",
-          "mutter": "先に罠を見せて。話はそれから。"
-        }
-      ],
-      "banter": [
-        {
-          "to": "gareth",
-          "retortEvery": 4,
-          "tsukkomi": [
-            "だから先走るなと言ったでしょう。",
-            "あなたの『勘』で何度死にかけたか、数えてあげようか。",
-            "……で、その傷は誰が診るの。私だけど。"
-          ],
-          "ignore": [
-            "ふん。",
-            "(肩をすくめて何も言わない)"
-          ]
-        }
-      ],
-      "sprite": "portrait_lydia_alt.png",
-      "agility": 4,
-      "battleEnd": {
-        "win": [
-          "決着ね。怪我はない?",
-          "理屈より腕が勝つ日もあるのね。"
-        ],
-        "fled": [
-          "撤退も立派な戦術よ。",
-          "命あっての物種でしょ。"
-        ],
-        "repelled": [
-          "弱点を突くなんて、いい判断ね。",
-          "ほら、観察は裏切らないのよ。"
-        ]
-      }
+      "id": "member_2",
+      "name": "ガレス",
+      "persona": "無口な戦士である。言葉を少なく話す。実用的な動きだけをする。",
+      "flags": {
+        "chat": true,
+        "propose": true,
+        "act": false,
+        "mutate": false
+      },
+      "image": "assets/casts/member_2.png",
+      "sprite": "portrait_gareth_alt.png",
+      "gender": "male",
+      "firstPerson": "俺",
+      "addressTerm": "お前"
     }
   ],
   "companionsHint": "場面に合う方を選べ(戦闘寄り=ガレス、調査・遺工・慎重論=リディア)",
   "entities": [
     {
+      "id": "member_1",
+      "ja": "リディア",
+      "aliases": [],
+      "kind": "character",
+      "importance": "support",
+      "visual": "",
+      "affordances": [
+        "talk",
+        "inspect"
+      ]
+    },
+    {
+      "id": "member_2",
+      "ja": "ガレス",
+      "aliases": [],
+      "kind": "character",
+      "importance": "support",
+      "visual": "",
+      "affordances": [
+        "talk",
+        "inspect"
+      ]
+    },
+    {
+      "id": "npc_1",
+      "ja": "マイラ",
+      "aliases": [],
+      "kind": "npc",
+      "importance": "support",
+      "visual": "",
+      "affordances": [
+        "talk",
+        "inspect"
+      ]
+    },
+    {
+      "id": "item_lantern",
       "ja": "ランタン",
-      "en": "Lantern",
-      "kind": "エンジン管理(所持品)",
-      "surface": null,
-      "visual": "真鍮枠の携行ランタン、飴色の光"
+      "aliases": [
+        "ランプ",
+        "灯り",
+        "ていとう",
+        "らんたん",
+        "手元灯",
+        "照明"
+      ],
+      "kind": "item",
+      "parentConceptId": null,
+      "scope": "campaign",
+      "acquisition": "starting_inventory",
+      "persistent": true,
+      "capabilities": [
+        "inspect",
+        "use"
+      ],
+      "requires": "",
+      "surface": "金属製の小さな灯りである。ガラスのなかで火が揺れている。暗い場所を照らす。",
+      "visual": ""
     },
     {
+      "id": "item_rope",
       "ja": "ロープ",
-      "en": "Rope",
-      "kind": "エンジン管理(所持品)",
-      "surface": null,
-      "visual": "麻の三つ打ちロープ、肩掛け"
+      "aliases": [
+        "綱",
+        "紐",
+        "麻縄",
+        "つな",
+        "ひも",
+        "あさなわ",
+        "コード"
+      ],
+      "kind": "item",
+      "parentConceptId": null,
+      "scope": "campaign",
+      "acquisition": "starting_inventory",
+      "persistent": true,
+      "capabilities": [
+        "inspect",
+        "use"
+      ],
+      "requires": "",
+      "surface": "麻で編んだ丈夫な綱である。物を縛るのに使う。",
+      "visual": ""
     },
     {
+      "id": "item_knife",
       "ja": "ナイフ",
-      "en": "Knife",
-      "kind": "エンジン管理(所持品)",
-      "surface": null,
-      "visual": "鹿角柄の実用ナイフ"
+      "aliases": [
+        "刃物",
+        "刀",
+        "小刀",
+        "ないふ",
+        "はもの",
+        "かたな",
+        "ブレード"
+      ],
+      "kind": "item",
+      "parentConceptId": null,
+      "scope": "campaign",
+      "acquisition": "starting_inventory",
+      "persistent": true,
+      "capabilities": [
+        "inspect",
+        "use"
+      ],
+      "requires": "",
+      "surface": "柄の短い小さな刃物である。銀色の刃は冷たく光る。ものを切るために使う。",
+      "visual": ""
     },
     {
-      "ja": "作業札",
-      "en": "The Work Board",
-      "kind": "秘密の器",
-      "surface": "朽ちた木札、霞んだ墨字",
-      "visual": "反り返った木札、掠れた文字列"
+      "id": "item_heartstone_fragment",
+      "ja": "心石の欠片",
+      "aliases": [
+        "心石",
+        "こころいし",
+        "青い石",
+        "光る石",
+        "かけら",
+        "破片",
+        "石"
+      ],
+      "kind": "item",
+      "parentConceptId": "concept_heartstone",
+      "scope": "scene",
+      "acquisition": "dialogue",
+      "persistent": true,
+      "capabilities": [
+        "inspect",
+        "take",
+        "give"
+      ],
+      "requires": "ch1_s3_item_2",
+      "surface": "青く光る小さな石の破片である。手に取るとかすかに温かい。強い力を秘めている。",
+      "visual": ""
     },
     {
-      "ja": "トロッコ軌道",
-      "en": "The Cart Rails",
-      "kind": "秘密の器",
-      "surface": "錆びた軌条が闇へ続く",
-      "visual": "赤錆の細い軌条、枕木は苔"
-    },
-    {
-      "ja": "封鎖柵",
-      "en": "The Barrier",
-      "kind": "秘密の器",
-      "surface": "古いが崩れていない木柵",
-      "visual": "木柵に無数の補修痕"
-    },
-    {
+      "id": "monster_1",
       "ja": "錆喰い",
-      "en": "Rustmaw",
-      "kind": "敵",
-      "surface": "犬ほどの甲殻獣、光を嫌う",
-      "visual": "赤錆色の甲殻、低い姿勢"
+      "aliases": [],
+      "kind": "enemy",
+      "importance": "support",
+      "visual": "/images/s2_rust_eater.png",
+      "affordances": [
+        "inspect",
+        "fight"
+      ]
     },
     {
-      "ja": "灯の番人",
-      "en": "The Wardenlight",
-      "kind": "秘密の器/敵(非敵対)",
-      "surface": "ランタンを掲げた大柄な人影",
-      "visual": "継ぎ接ぎの機巧人形、胸に淡青の光"
+      "id": "monster_2",
+      "ja": "灯りの番人",
+      "kind": "enemy",
+      "importance": "support",
+      "visual": "/images/s3_guardian.png",
+      "affordances": [
+        "inspect",
+        "fight"
+      ]
     },
     {
+      "id": "concept_heartstone",
       "ja": "心石",
-      "en": "The Heartstone",
-      "kind": "秘密の器(章2以降)",
-      "surface": "(章1では番人の胸の光としてのみ)",
-      "visual": "青く脈打つ拳大の結晶"
-    },
-    {
-      "ja": "マイラ・ヴェイン",
-      "en": "Myra Vane",
-      "kind": "キャスト",
-      "surface": "快活な元行商人の顔役",
-      "visual": "40代、商人外套、値踏みする目"
+      "aliases": [
+        "青い石",
+        "光る石",
+        "石",
+        "あおいし",
+        "ひかるいし",
+        "いし",
+        "心臓の石"
+      ],
+      "kind": "concept",
+      "role": "main",
+      "usage": "dialogue_condition",
+      "scope": "campaign",
+      "storyKey": true,
+      "surface": "ゆっくりと脈動している青く光る石",
+      "truth": "何かの動力源になるような不思議な力を宿す"
     }
   ],
   "gmSprite": "gm_mascot.png",
   "player": {
     "agility": 6
+  },
+  "image": "locked_iron_gate.jpg",
+  "concepts": [
+    {
+      "id": "concept_heartstone",
+      "ja": "心石",
+      "aliases": [
+        "青い石",
+        "光る石",
+        "石",
+        "あおいし",
+        "ひかるいし",
+        "いし",
+        "心臓の石"
+      ],
+      "kind": "concept",
+      "role": "main",
+      "usage": "dialogue_condition",
+      "scope": "campaign",
+      "storyKey": true,
+      "surface": "ゆっくりと脈動している青く光る石",
+      "truth": "何かの動力源になるような不思議な力を宿す"
+    }
+  ],
+  "items": [
+    {
+      "id": "item_lantern",
+      "ja": "ランタン",
+      "aliases": [
+        "ランプ",
+        "灯り",
+        "ていとう",
+        "らんたん",
+        "手元灯",
+        "照明"
+      ],
+      "kind": "item",
+      "parentConceptId": null,
+      "scope": "campaign",
+      "acquisition": "starting_inventory",
+      "persistent": true,
+      "capabilities": [
+        "inspect",
+        "use"
+      ],
+      "requires": "",
+      "surface": "金属製の小さな灯りである。ガラスのなかで火が揺れている。暗い場所を照らす。",
+      "visual": ""
+    },
+    {
+      "id": "item_rope",
+      "ja": "ロープ",
+      "aliases": [
+        "綱",
+        "紐",
+        "麻縄",
+        "つな",
+        "ひも",
+        "あさなわ",
+        "コード"
+      ],
+      "kind": "item",
+      "parentConceptId": null,
+      "scope": "campaign",
+      "acquisition": "starting_inventory",
+      "persistent": true,
+      "capabilities": [
+        "inspect",
+        "use"
+      ],
+      "requires": "",
+      "surface": "麻で編んだ丈夫な綱である。物を縛るのに使う。",
+      "visual": ""
+    },
+    {
+      "id": "item_knife",
+      "ja": "ナイフ",
+      "aliases": [
+        "刃物",
+        "刀",
+        "小刀",
+        "ないふ",
+        "はもの",
+        "かたな",
+        "ブレード"
+      ],
+      "kind": "item",
+      "parentConceptId": null,
+      "scope": "campaign",
+      "acquisition": "starting_inventory",
+      "persistent": true,
+      "capabilities": [
+        "inspect",
+        "use"
+      ],
+      "requires": "",
+      "surface": "柄の短い小さな刃物である。銀色の刃は冷たく光る。ものを切るために使う。",
+      "visual": ""
+    },
+    {
+      "id": "item_heartstone_fragment",
+      "ja": "心石の欠片",
+      "aliases": [
+        "心石",
+        "こころいし",
+        "青い石",
+        "光る石",
+        "かけら",
+        "破片",
+        "石"
+      ],
+      "kind": "item",
+      "parentConceptId": "concept_heartstone",
+      "scope": "scene",
+      "acquisition": "dialogue",
+      "persistent": true,
+      "capabilities": [
+        "inspect",
+        "take",
+        "give"
+      ],
+      "requires": "ch1_s3_item_2",
+      "surface": "青く光る小さな石の破片である。手に取るとかすかに温かい。強い力を秘めている。",
+      "visual": ""
+    }
+  ],
+  "initialInventory": [
+    "ランタン",
+    "ロープ",
+    "ナイフ"
+  ],
+  "initialInventoryIds": [
+    "item_lantern",
+    "item_rope",
+    "item_knife"
+  ],
+  "castAttributes": {
+    "gm": {
+      "gender": "male",
+      "firstPerson": "私",
+      "addressTerm": "君"
+    },
+    "member_1": {
+      "gender": "female",
+      "firstPerson": "あたし",
+      "addressTerm": "あなた",
+      "name": "リディア",
+      "persona": "遺工に詳しい斥候である。物事を慎重に考える。皮肉をよく言う。ガレスの尻ぬぐいをいつもしている。",
+      "sprite": "portrait_lydia_alt.png"
+    },
+    "member_2": {
+      "gender": "male",
+      "firstPerson": "俺",
+      "addressTerm": "お前",
+      "name": "ガレス",
+      "persona": "無口な戦士である。言葉を少なく話す。実用的な動きだけをする。",
+      "sprite": "portrait_gareth_alt.png"
+    },
+    "npc_1": {
+      "gender": "female",
+      "firstPerson": "私たち",
+      "addressTerm": "お前たち"
+    },
+    "npc_2": {
+      "gender": "other",
+      "firstPerson": "",
+      "addressTerm": ""
+    }
   }
 }

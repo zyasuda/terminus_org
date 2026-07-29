@@ -25,7 +25,26 @@
     "world": "ミステリー / ロー・ファンタジー。静かで神秘的、少し切ない。",
     "terms": "現代語彙を避ける。正名はエンティティ台帳に合わせる。"
   },
-  "flags": {},
+  "flags": {
+    "guardian_fate": [
+      "対話",
+      "撃破",
+      "回避"
+    ],
+    "learned_heartstone": [
+      true,
+      false
+    ],
+    "heartstone_choice": [
+      "渡した",
+      "隠した",
+      "砕いた"
+    ],
+    "guardian_alive": [
+      true,
+      false
+    ]
+  },
   "cast": [
     {
       "id": "myra",
@@ -191,7 +210,11 @@
         "光る石",
         "かけら",
         "破片",
-        "石"
+        "石",
+        "あおいし",
+        "ひかるいし",
+        "いし",
+        "心臓の石"
       ],
       "kind": "item",
       "parentConceptId": "concept_heartstone",
@@ -222,6 +245,7 @@
     {
       "id": "monster_2",
       "ja": "灯りの番人",
+      "aliases": [],
       "kind": "enemy",
       "importance": "support",
       "visual": "/images/s3_guardian.png",
@@ -363,7 +387,11 @@
         "光る石",
         "かけら",
         "破片",
-        "石"
+        "石",
+        "あおいし",
+        "ひかるいし",
+        "いし",
+        "心臓の石"
       ],
       "kind": "item",
       "parentConceptId": "concept_heartstone",
@@ -399,18 +427,12 @@
     "member_1": {
       "gender": "female",
       "firstPerson": "あたし",
-      "addressTerm": "あなた",
-      "name": "リディア",
-      "persona": "遺工に詳しい斥候である。物事を慎重に考える。皮肉をよく言う。ガレスの尻ぬぐいをいつもしている。",
-      "sprite": "portrait_lydia_alt.png"
+      "addressTerm": "あなた"
     },
     "member_2": {
       "gender": "male",
       "firstPerson": "俺",
-      "addressTerm": "お前",
-      "name": "ガレス",
-      "persona": "無口な戦士である。言葉を少なく話す。実用的な動きだけをする。",
-      "sprite": "portrait_gareth_alt.png"
+      "addressTerm": "お前"
     },
     "npc_1": {
       "gender": "female",

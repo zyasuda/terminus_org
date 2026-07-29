@@ -281,8 +281,10 @@ pub struct LootEntry {
 pub struct Exit {
     #[serde(default)]
     pub id: String,
+    /// 行き先。TASの編集中は "scene:2" のような文字列、mock2へ出力した後は 2 のような数値、
+    /// 行き止まりは null になる。どの形でも読めるようにValueで受ける。
     #[serde(default)]
-    pub to: String,
+    pub to: Option<Value>,
     #[serde(default, rename = "match")]
     pub match_terms: Vec<String>,
     #[serde(default)]
@@ -442,8 +444,10 @@ mod tests {
             include_str!("../../../data/chapter_01.json"),
         )
         .expect("TASのJSONを読み込めること");
-        assert_eq!(bundle.campaign.meta.id, "lanternhill");
-        assert_eq!(bundle.chapter.scenes.len(), 5);
+        // mock2側の正は "campaign"(campaigns.jsonのdefaultCampaignと配置ディレクトリ名に一致)。
+        // 旧スラッグ "lanternhill" はTASのフィクスチャにだけ残っていた
+        assert_eq!(bundle.campaign.meta.id, "campaign");
+        assert_eq!(bundle.chapter.scenes.len(), 4);
         assert!(
             bundle.validate().is_empty(),
             "検証エラー: {:?}",

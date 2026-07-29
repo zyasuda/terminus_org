@@ -45,8 +45,7 @@
           "category": "object",
           "importance": "support",
           "appearances": [],
-          "tags": [],
-          "usage": "inspect"
+          "tags": []
         },
         {
           "id": "s1b",
@@ -64,8 +63,7 @@
           "category": "object",
           "importance": "support",
           "appearances": [],
-          "tags": [],
-          "usage": "inspect"
+          "tags": []
         }
       ],
       "exits": [
@@ -117,7 +115,13 @@
         "dialogueRules": [],
         "gmSceneNotes": ""
       },
-      "entityRefs": []
+      "entityRefs": [],
+      "parallax": {
+        "sky": "s1_sky.jpg",
+        "fg": "mine_entrance.png"
+      },
+      "parallaxFg": "/images/mine_entrance.png",
+      "useParallax": false
     },
     {
       "id": 2,
@@ -138,7 +142,7 @@
         "hp": 8,
         "maxHp": 8,
         "surface": "レールの錆を食べる、犬くらいの大きさの虫のような魔物だ。縄張りに入ると、おどして襲ってくる。",
-        "trait": "レールの錆を食べる、犬くらいの大きさの虫のような魔物だ。縄張りに入ると、おどして襲ってくる。光が苦手だ。",
+        "trait": "動きが早い、単独で行動する。光を極度に嫌う。",
         "sprite": "s2_rust_eater.png",
         "ambush": true,
         "ambushDc": 12,
@@ -148,7 +152,11 @@
         "defenseDc": 12,
         "fleeDc": 10,
         "weakness": {
-          "triggers": ["ランタン", "光", "照ら"],
+          "triggers": [
+            "ランタン",
+            "光",
+            "照ら"
+          ],
           "effect": "flee",
           "text": "光を浴びた錆喰いは身を縮め、坑道の奥へ退いていった",
           "hint": "こいつ、光を嫌がってる——ランタンで照らせ!"
@@ -172,8 +180,7 @@
           "category": "object",
           "importance": "support",
           "appearances": [],
-          "tags": [],
-          "usage": "inspect"
+          "tags": []
         },
         {
           "id": "s2b",
@@ -192,8 +199,7 @@
           "category": "object",
           "importance": "support",
           "appearances": [],
-          "tags": [],
-          "usage": "inspect"
+          "tags": []
         }
       ],
       "blockedText": "先へ続いているのは右の坑道だけだが、封鎖の木柵が行く手をふさいでいる。古い木のはずなのに、崩れる気配がない。左の坑道は崩れて行き止まりだ。",
@@ -278,7 +284,7 @@
         "name": "灯りの番人",
         "hp": 12,
         "maxHp": 12,
-        "trait": "ランタンを持った、大きな人影だ。こちらが敵として扱わない限り、自分からは攻撃してこない。",
+        "trait": "機械人形の使命は坑道を維持することた。戦う意志はない。",
         "sprite": "s3_guardian.png",
         "revealOnDefeat": "s3a",
         "presence": true,
@@ -291,7 +297,7 @@
       "loot": [
         {
           "name": "心石の欠片",
-          "requires": "ch1_s3_item_2"
+          "requires": "s3b"
         }
       ],
       "secrets": [
@@ -312,8 +318,7 @@
           "category": "main",
           "importance": "major",
           "appearances": [],
-          "tags": [],
-          "usage": "event"
+          "tags": []
         },
         {
           "id": "s3b",
@@ -335,8 +340,7 @@
           "category": "main",
           "importance": "major",
           "appearances": [],
-          "tags": [],
-          "usage": "event"
+          "tags": []
         }
       ],
       "completeRequires": {
