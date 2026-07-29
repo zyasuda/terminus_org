@@ -2,12 +2,7 @@
   "id": 1,
   "title": "廃坑の灯",
   "quest": "灯りの正体を確かめ、坑道が使えるか村に報告する(依頼人:村の顔役マイラ・ヴェイン)",
-  "flagsOut": [
-    "guardian_fate",
-    "learned_heartstone",
-    "guardian_alive",
-    "heartstone_choice"
-  ],
+  "flagsOut": [],
   "intro": "夕暮れの村。マイラ・ヴェインは机に坑道の古い見取り図を広げ、消えた作業員と坑道の奥から聞こえる金属音について語り始める。",
   "flagRules": {},
   "reference": {
@@ -31,78 +26,98 @@
       "brief": "古いレールと薄汚れた木の札がある。奥の方から何かしらの金属音が聞こえる。",
       "goal": "札とレールを確認し、奥へ進む",
       "direction": "ここが日常から切り離された場所だと感じさせよ。30年前に人の営みが突然止まったことを直接は語らず、物の古び方と「最近も何かが動いている」気配の対比で匂わせよ。",
-      "img": "mine_entrance.jpg",
-      "parallax": {
-        "sky": "s1_sky.jpg",
-        "fg": "s1_foreground.png"
-      },
+      "img": "mine_entrance.png",
       "loot": [],
       "secrets": [
         {
           "id": "s1a",
-          "entity": "作業札",
-          "aliases": [],
-          "surface": "",
-          "text": "作業札",
-          "trigger": "",
+          "entity": "木の札",
+          "aliases": [
+            "札",
+            "板",
+            "パネル",
+            "標識"
+          ],
+          "dc": 8,
+          "surface": "薄汚れた、古すぎる標識。書いてある文字が判別できない。危険、立ち入り禁止と書いてあるようだ。",
+          "text": "この札はただの木片である。表面には古びた文字が刻まれているだけで、意味を読み取るのは難しい。",
+          "trigger": "調べる,見る,よく調べる,手に取る",
           "category": "object",
           "importance": "support",
           "appearances": [],
-          "tags": []
+          "tags": [],
+          "usage": "inspect"
         },
         {
           "id": "s1b",
-          "entity": "トロッコ軌道",
-          "aliases": [],
-          "surface": "",
-          "text": "トロッコ軌道",
-          "trigger": "",
+          "entity": "レール",
+          "aliases": [
+            "軌道",
+            "線路",
+            "きどう",
+            "せんろ"
+          ],
+          "dc": 8,
+          "surface": "錆びついて赤く変色したレール。なぜかところどころ錆が落ちて、真新しく削れている。",
+          "text": "この線路はかつて使われていたものだ。錆が落ちた部分からは、深い溝が見える。誰かがここを通り過ぎた痕跡がある。",
+          "trigger": "レールを調べる",
           "category": "object",
           "importance": "support",
           "appearances": [],
-          "tags": []
+          "tags": [],
+          "usage": "inspect"
         }
       ],
       "exits": [
         {
           "id": "to_scean02",
           "match": [
-            "奥へ進む",
-            "入る"
+            "奥",
+            "進む",
+            "入る",
+            "穴",
+            "入り口",
+            "奥へ",
+            "先",
+            "出口"
           ],
           "to": 2,
           "requires": {
-            "text": ""
+            "secretsAll": [
+              "s1a"
+            ]
           },
-          "blockedText": "条件を満たしていないため、先へ進めません。"
+          "blockedText": "ここは何という場所だろうか"
         }
       ],
       "authoring": {
-        "transitions": [
-          {
-            "trigger": "奥へ進む",
-            "requires": "",
-            "conditionValue": "",
-            "target": "scene:2"
-          }
-        ],
+        "transitions": [],
         "exits": [
           {
             "id": "to_scean02",
             "match": [
-              "奥へ進む",
-              "入る"
+              "奥",
+              "進む",
+              "入る",
+              "穴",
+              "入り口",
+              "奥へ",
+              "先",
+              "出口"
             ],
             "to": "scene:2",
             "requires": {
-              "text": ""
+              "secretsAll": [
+                "ch1_s1_item_1"
+              ]
             },
-            "blockedText": "条件を満たしていないため、先へ進めません。"
+            "blockedText": "ここは何という場所だろうか"
           }
         ],
         "dialogueRules": [],
         "gmSceneNotes": ""
-      }
+      },
+      "entityRefs": []
     },
     {
       "id": 2,
@@ -120,11 +135,10 @@
       "enemy": {
         "name": "錆喰い",
         "unknownName": "不気味な影",
-        "hp": 5,
-        "maxHp": 5,
+        "hp": 8,
+        "maxHp": 8,
         "surface": "レールの錆を食べる、犬くらいの大きさの虫のような魔物だ。縄張りに入ると、おどして襲ってくる。",
         "trait": "レールの錆を食べる、犬くらいの大きさの虫のような魔物だ。縄張りに入ると、おどして襲ってくる。光が苦手だ。",
-        "img": "rust_eater.jpg",
         "sprite": "s2_rust_eater.png",
         "ambush": true,
         "ambushDc": 12,
@@ -134,11 +148,7 @@
         "defenseDc": 12,
         "fleeDc": 10,
         "weakness": {
-          "triggers": [
-            "ランタン",
-            "光",
-            "照ら"
-          ],
+          "triggers": ["ランタン", "光", "照ら"],
           "effect": "flee",
           "text": "光を浴びた錆喰いは身を縮め、坑道の奥へ退いていった",
           "hint": "こいつ、光を嫌がってる——ランタンで照らせ!"
@@ -149,92 +159,112 @@
         {
           "id": "s2a",
           "entity": "封鎖の木柵",
-          "aliases": [],
-          "surface": "",
-          "text": "封鎖の木柵",
-          "trigger": "",
+          "aliases": [
+            "柵",
+            "板",
+            "ふさぎ",
+            "きのさく"
+          ],
+          "dc": 8,
+          "surface": "朽ちた木の板が、道を塞いでいる。柵は古びており、隙間から光が漏れている。",
+          "text": "この木柵は、外部からの侵入を防ぐための目印である。内部の通路への関わりを示すものだ。",
+          "trigger": "木柵に触れてみる",
           "category": "object",
           "importance": "support",
           "appearances": [],
-          "tags": []
+          "tags": [],
+          "usage": "inspect"
         },
         {
           "id": "s2b",
           "entity": "油の匂い",
-          "aliases": [],
-          "surface": "",
-          "text": "油の匂い",
-          "trigger": "",
+          "aliases": [
+            "臭い",
+            "油っぽい",
+            "におい",
+            "オイル",
+            "あぶらくさい"
+          ],
+          "dc": 8,
+          "surface": "鼻腔を刺激する、油のような匂いが漂っている。",
+          "text": "この匂いは、近くで何らかの油脂を用いた作業が行われた痕跡である。",
+          "trigger": "その場に立ち止まり、空気を深く吸い込む。",
           "category": "object",
           "importance": "support",
           "appearances": [],
-          "tags": []
+          "tags": [],
+          "usage": "inspect"
         }
       ],
       "blockedText": "先へ続いているのは右の坑道だけだが、封鎖の木柵が行く手をふさいでいる。古い木のはずなのに、崩れる気配がない。左の坑道は崩れて行き止まりだ。",
       "exits": [
         {
-          "id": "to_scene3_right",
+          "id": "to_scean03",
           "match": [
             "右",
-            "柵",
-            "木柵",
-            "第三坑道"
+            "さく",
+            "奥",
+            "灯り",
+            "灯りのほう"
           ],
           "to": 3,
           "requires": {
-            "secretsAny": [
+            "secretsAll": [
               "s2a",
               "s2b"
             ]
           },
-          "blockedText": "先へ続いているのは右の坑道だけだが、封鎖の木柵が行く手をふさいでいる。古い木のはずなのに、崩れる気配がない。"
-        },
-        {
-          "id": "left_deadend",
-          "match": [
-            "左"
-          ],
-          "to": null,
-          "requires": {
-            "text": ""
-          }
+          "blockedText": "何かの匂いが立ち込めている",
+          "text": "左の坑道は既に崩れた岩が道を塞いでいる。"
         }
       ],
       "authoring": {
         "transitions": [],
         "exits": [
           {
-            "id": "to_scene3_right",
+            "id": "to_scean03",
             "match": [
               "右",
-              "柵",
-              "木柵",
-              "第三坑道"
+              "さく",
+              "奥",
+              "灯り",
+              "灯りのほう"
             ],
             "to": "scene:3",
             "requires": {
-              "secretsAny": [
-                "s2a",
-                "s2b"
+              "secretsAll": [
+                "ch1_s2_item_1",
+                "ch1_s2_item_2"
               ]
             },
-            "blockedText": "先へ続いているのは右の坑道だけだが、封鎖の木柵が行く手をふさいでいる。古い木のはずなのに、崩れる気配がない。"
-          },
-          {
-            "id": "left_deadend",
-            "match": [
-              "左"
-            ],
-            "to": null,
-            "requires": {
-              "text": ""
-            }
+            "blockedText": "何かの匂いが立ち込めている",
+            "text": "左の坑道は既に崩れた岩が道を塞いでいる。"
           }
         ],
         "dialogueRules": [],
         "gmSceneNotes": ""
-      }
+      },
+      "encounters": [
+        {
+          "id": "encounter_1",
+          "type": "conditional",
+          "monsterId": "monster_1",
+          "monsterName": "錆喰い",
+          "triggerTerms": [
+            "柵を調べる"
+          ],
+          "requiredElements": [
+            "封鎖の木柵"
+          ],
+          "requiredOperator": "all",
+          "probability": null,
+          "timing": "player_action",
+          "maxOccurrences": null,
+          "blockedBy": [],
+          "onsetText": "得体の知れない影が近づく",
+          "notes": ""
+        }
+      ]
     },
     {
       "id": 3,
@@ -243,11 +273,11 @@
       "brief": "ランタンを持つ人影がこちらを向く。",
       "img": "s3_chamber.jpg",
       "goal": "灯りの主と決着する",
-      "direction": "番人に敵意がないことを、正体を明かさずに佇まいと所作で示唆せよ。プレイヤーが刃を向けない限り、脅威ではなく孤独と献身を感じさせる存在として描け。",
+      "direction": "番人に敵意がないことを、正体を明かさずに佇まいと所作で示唆せよ。プレイヤーが刃を向けない限り、脅威ではなく孤独と献身を感じさせる存在として描け。\n【TAS発話ルール】「胸の光るもの」の開示後にNPCが「胸の周りに付着している青い欠片を手に取った。」と伝える（一度だけ）",
       "enemy": {
-        "name": "灯の番人",
-        "hp": 8,
-        "maxHp": 8,
+        "name": "灯りの番人",
+        "hp": 12,
+        "maxHp": 12,
         "trait": "ランタンを持った、大きな人影だ。こちらが敵として扱わない限り、自分からは攻撃してこない。",
         "sprite": "s3_guardian.png",
         "revealOnDefeat": "s3a",
@@ -261,33 +291,52 @@
       "loot": [
         {
           "name": "心石の欠片",
-          "requires": "s3b"
+          "requires": "ch1_s3_item_2"
         }
       ],
       "secrets": [
         {
           "id": "s3a",
           "entity": "灯りの主の正体",
-          "aliases": [],
-          "surface": "",
-          "text": "灯りの主の正体",
-          "trigger": "",
-          "category": "object",
-          "importance": "support",
+          "aliases": [
+            "光源",
+            "人影",
+            "立っているもの",
+            "光の持ち主",
+            "ぼんやりした姿"
+          ],
+          "dc": 8,
+          "surface": "光源の傍らに、誰かが立っているのが見える。その姿はぼんやりとしていて、輪郭が定まらない。胸の辺りが青白く光っている。",
+          "text": "灯りの主は、この場所を守る存在である。彼/彼女の目的は明確な敵意ではない。",
+          "trigger": "光の源に意識を集中させる",
+          "category": "main",
+          "importance": "major",
           "appearances": [],
-          "tags": []
+          "tags": [],
+          "usage": "event"
         },
         {
           "id": "s3b",
-          "entity": "動力と坑道維持",
-          "aliases": [],
-          "surface": "",
-          "text": "動力と坑道維持",
-          "trigger": "",
-          "category": "object",
-          "importance": "support",
+          "entity": "胸の光るもの",
+          "aliases": [
+            "光",
+            "輝き",
+            "ひかり",
+            "発光",
+            "青白い",
+            "青い光",
+            "胸の石",
+            "淡い光"
+          ],
+          "dc": 8,
+          "surface": "胸元に淡い光が宿っている。それはまるで、生きているかのように青く微かに揺らめいている。彼の動力なのか。",
+          "text": "胸の光るもの",
+          "trigger": "その光を注意深く見つめる。",
+          "category": "main",
+          "importance": "major",
           "appearances": [],
-          "tags": []
+          "tags": [],
+          "usage": "event"
         }
       ],
       "completeRequires": {
@@ -298,10 +347,66 @@
       "blockedText": "あの人影の正体を確かめないまま、ここを立ち去る気にはなれない。",
       "authoring": {
         "transitions": [],
-        "exits": [],
-        "dialogueRules": [],
+        "exits": [
+          {
+            "id": "to_cean04",
+            "match": [
+              "村へ",
+              "村に戻る",
+              "里の方角",
+              "元の場所",
+              "集落の道",
+              "家路を急ぐ"
+            ],
+            "to": "scene:4",
+            "requires": {
+              "secretsAll": [
+                "ch1_s3_item_2"
+              ]
+            }
+          }
+        ],
+        "dialogueRules": [
+          {
+            "id": "rule_1",
+            "speaker": "npc",
+            "condition": "胸の光るもの",
+            "priority": "high",
+            "line": "胸の周りに付着している青い欠片を手に取った。",
+            "eventType": "item_grant",
+            "targetId": "心石の欠片",
+            "targetLabel": "",
+            "eventNotes": "",
+            "once": true,
+            "hiddenUntilTriggered": false
+          }
+        ],
         "gmSceneNotes": ""
-      }
+      },
+      "npcSprite": "s3_guardian.png",
+      "npc": {
+        "id": "npc_2",
+        "name": "灯りの番人"
+      },
+      "exits": [
+        {
+          "id": "to_cean04",
+          "match": [
+            "村へ",
+            "村に戻る",
+            "里の方角",
+            "元の場所",
+            "集落の道",
+            "家路を急ぐ"
+          ],
+          "to": 4,
+          "requires": {
+            "secretsAll": [
+              "s3b"
+            ]
+          }
+        }
+      ]
     },
     {
       "id": 4,

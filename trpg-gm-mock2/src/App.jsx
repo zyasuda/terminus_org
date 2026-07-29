@@ -159,12 +159,14 @@ export default function App() {
       <div id="stage" className={eng.underPanelOpen ? "panelUp" : ""}>
         <div id="bgPics" style={{ background: eng.sceneBg }}>
           {/* パララックス(D-027): 空レイヤーがゆっくり横スクロールし、透過前景が手前に重なる。
+              sky/fgは片方だけでもよい(TAS運用: 1枚しか無ければそれをそのまま出す)。
+              指定が無い層は描画しない(存在しないファイル名でurl()を組まない)。
               素材が404の間はレイヤーが透明のままなので、親のsceneBg(単層img)が見える */}
-          {eng.parallax && (
-            <>
-              <div id="bgSky" style={{ backgroundImage: `url("/images/${eng.parallax.sky}")` }}></div>
-              <div id="bgFg" style={{ backgroundImage: `url("/images/${eng.parallax.fg}")` }}></div>
-            </>
+          {eng.parallax && eng.parallax.sky && (
+            <div id="bgSky" style={{ backgroundImage: `url("/images/${eng.parallax.sky}")` }}></div>
+          )}
+          {eng.parallax && eng.parallax.fg && (
+            <div id="bgFg" style={{ backgroundImage: `url("/images/${eng.parallax.fg}")` }}></div>
           )}
         </div>
 

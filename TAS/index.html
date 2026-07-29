@@ -20,7 +20,7 @@
 <body>
 <header><h1>TAS MVP</h1><span class="meta">ストーリー制作ワークスペース</span><span class="spacer"></span><div class="top-actions"><div class="switch-row" style="gap:8px"><span>補助パネル</span><label class="switch"><input type="checkbox" id="toggleRightSwitch"><span class="slider"></span></label></div><button class="ghost" id="btnSaveDraft">保存</button><button class="ghost" id="btnLoadCampaign">読込</button><input class="sr-only" type="file" id="campaignFileInput" accept="application/json"><button id="btnBuild">出力確認</button></div></header>
 <main>
-  <section class="panel scene-panel"><div class="panel-title">キャンペーン</div><div id="sceneList" class="scene-list"></div><div class="bottom"><button class="sub" id="btnNewScene">＋ シーン</button><button class="sub" id="btnNewChapter">＋ チャプター</button><button class="sub" id="btnNewCampaign">＋ キャンペーン</button></div></section>
+  <section class="panel scene-panel"><div class="panel-title">キャンペーン</div><div id="sceneList" class="scene-list"></div></section>
   <section class="panel workspace"><div class="tabs" id="layerTabs"></div><div id="tabContent" class="tab-content"></div></section>
   <aside id="rightPanel" class="panel right-panel"><div class="panel-title">補助パネル</div><div id="rightBody" class="right-body"></div><div class="bottom"><span id="status" class="status">準備中…</span></div></aside>
 </main>
@@ -207,8 +207,8 @@ const DIRECTION_MARK="【TAS発話ルール】";
 const baseDirection=String(merged.direction||"").split(DIRECTION_MARK)[0].trim();
 const directionLines=dlgRules.filter(r=>r.line).map(r=>`${r.condition?`「${r.condition}」の開示後に`:""}${speakerLabel(r.speaker)}が「${r.line}」と伝える${r.once?"（一度だけ）":""}`);
 merged.direction=directionLines.length?`${baseDirection?baseDirection+"\n":""}${DIRECTION_MARK}${directionLines.join(" / ")}`:baseDirection||merged.direction;
-/* シーン敵: 台帳のモンスターをmock2のenemy形式(name/hp/maxHp)へ変換。未選択は元データ維持、「なし」は削除 */
-if(typeof merged.enemyName==="string"){const mon=monsters.find(m=>m.name===merged.enemyName);if(mon)merged.enemy={...(merged.enemy||{}),name:mon.name,hp:Number(mon.hp)||10,maxHp:Number(mon.hp)||10};else delete merged.enemy}
+/* シーン敵: 「なし」の明示選択だけを削除として扱う。台帳に見つからない参照では、既存の敵定義を絶対に消さない。 */
+if(typeof merged.enemyName==="string"){const requestedName=merged.enemyName.trim();if(!requestedName)delete merged.enemy;else{const mon=monsters.find(m=>m.name===requestedName);if(mon)merged.enemy={...(merged.enemy||{}),...definedEnemyFields(mon)}}}
 delete merged.enemyName;delete merged.type;delete merged.index;delete merged.discoveries;delete merged.transitions;delete merged.dialogueRules;delete merged.gmSceneNotes;return merged});const chapter={...baseChapter,title:baseChapter.title||CHAPTERS[activeChapter].name,scenes};return {campaign,chapter,chapterFile:`${CHAPTERS[activeChapter].file.toLowerCase()}.json`}}
 function renderExport(){const folder="/Users/yasuda_k/Desktop/Terminus/trpg-gm-mock2/public/data/campaigns/"+tasCampaignId;const filename=`${runtimeChapterId(activeChapter)}.json`;return `<h2>出力確認</h2><p class="hint">キャンペーンIDと章IDを維持したまま、mock側のcampaigns.jsonとキャンペーン別データへ保存します。</p><div class="field"><label>キャンペーンID</label><input value="${escapeHtml(tasCampaignId)}" readonly></div><div class="field"><label>出力フォルダ</label><input id="exportFolder" value="${escapeHtml(folder)}" readonly></div><div class="field"><label>章ファイル</label><input id="exportFile" value="${escapeHtml(filename)}" readonly></div><div class="field"><label>JSONプレビュー</label><textarea class="large" id="exportPreview">${escapeHtml(JSON.stringify(mockCampaignPayload(),null,2))}</textarea></div><div class="bottom"><button class="sub" id="btnRefreshExport">プレビュー更新</button><button id="btnExportCampaign" onclick="window.__tasRunMockExport(this)">mock側へ出力</button></div>`}
 const INSTRUCTION_TEMPLATES=[
@@ -237,7 +237,7 @@ function bindExport(){const preview=$("exportPreview"),refresh=$("btnRefreshExpo
 window.__tasRunMockExport=async button=>{button.disabled=true;setStatus("mock側へ出力中…");try{if(isLocalFile())throw new Error("ローカルファイルでは出力できません。node server.cjs で起動してください");const payload=mockCampaignPayload();const res=await fetch("/api/export-campaign",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(payload)});const data=await res.json();if(!res.ok||data.error)throw new Error(data.error?.message||res.status);setStatus(`mock側へ出力しました: ${data.saved.join(", ")}`)}catch(e){setStatus(`出力失敗: ${e.message}`)}finally{button.disabled=false}};
 /* 画像はmock2のimagesフォルダへ集約し、下書きにはパス(/images/名前)だけ保持する。
    file://で開いた場合のみ従来のdata URL埋め込みへフォールバック */
-function handleImageInput(file,assign,doneMessage){if(!file)return;const done=url=>{assign(url);saveWorkspaceDraft(true);renderTab();setStatus(doneMessage||"画像を保存しました")};if(isLocalFile()){const r=new FileReader();r.onload=()=>done(r.result);r.readAsDataURL(file);return}const reader=new FileReader();reader.onload=async()=>{try{const res=await fetch("/api/upload-image",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({filename:file.name,dataUrl:reader.result})});const d=await res.json();if(!res.ok||d.error)throw new Error(d.error?.message||res.status);done(d.url)}catch(e){setStatus("画像アップロード失敗: "+e.message)}};reader.readAsDataURL(file)}
+function handleImageInput(file,assign,doneMessage){if(!file)return;const done=url=>{assign(url);saveWorkspaceDraft(true);renderTab();setStatus(doneMessage||"画像を保存しました")};if(isLocalFile()){const r=new FileReader();r.onload=()=>done(r.result);r.readAsDataURL(file);return}const reader=new FileReader();reader.onload=async()=>{try{const res=await fetch("/api/upload-image",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({filename:file.name,dataUrl:reader.result})});const d=await res.json();if(!res.ok||d.error)throw new Error(d.error?.message||res.status);done(d.url)}catch(e){assign(reader.result);saveWorkspaceDraft(true);renderTab();setStatus("画像を一時保存しました（サーバー保存は未接続）")}};reader.readAsDataURL(file)}
 async function callLLM(system,messages,max_tokens){if(isLocalFile())throw new Error("ローカルモードではAI APIを既定で使用しません");const res=await fetch("/api/llm",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({system,messages,max_tokens})});const d=await res.json();if(!res.ok||d.error)throw new Error(d.error?.message||res.status);setStatus(`完了 (in:${d.usage?.input_tokens||0} / out:${d.usage?.output_tokens||0})`);return d.text}
 function sceneGenerationPrompt(instruction){const s=withSceneOverride(scene());const targets=sceneTargets().map(n=>`- ${sceneRef(n)} = ${sceneRefLabel(n)}`).join("\n");return `対象シーンの構造化データの叩き台を作ってください。出力はJSONオブジェクト1個のみ。説明文・コードフェンスは不要です。
 
@@ -274,7 +274,7 @@ function bindDraft(){document.querySelectorAll("[data-instruction-template]").fo
 $("btnWish").onclick=async()=>{const wish=$("wishInput").value.trim();if(!wish){alert("やりたいことを一言で書いてください");return}setStatus("指示文を作成中…");try{const text=await callLLM("あなたはTRPG制作ツールの入力支援です。ユーザーの要望を、シーン生成AIへの具体的な指示文（3〜5行の箇条書き）に清書してください。対象シーンの現状を踏まえ、主線・伏線・禁止事項の観点を含めます。出力は指示文のみ。",[{role:"user",content:`対象シーンの現状:\n${JSON.stringify(withSceneOverride(scene()),null,2)}\n\n要望: ${wish}`}],1000);$("instruction").value=text.trim();setStatus("指示文を作成しました。確認して「叩き台を生成」を押してください")}catch(e){setStatus("指示文の作成に失敗しました: "+e.message)}};
 $("btnGenerate").onclick=async()=>{const inst=$("instruction").value.trim();if(!inst){alert("指示を入力してください");return}setStatus("生成中…");try{const text=await callLLM("あなたはTRPGの共同制作者です。出力は指定スキーマのJSONオブジェクト1個のみ。前置き・説明・コードフェンスを付けない。",[{role:"user",content:sceneGenerationPrompt(inst)}],8000);const parsed=parseGeneratedScene(text);draft=JSON.stringify(parsed,null,2);renderTab();setStatus("生成完了。内容を確認してシーンへ取り込んでください")}catch(e){setStatus("エラー: "+e.message)}};$("btnReview").onclick=async()=>{setStatus("レビュー中…");try{review=await callLLM("TRPGシナリオの品質レビュアーです。シーンの構造化データ案を検査し、矛盾・未定義の参照（存在しない発見済み名やシーン参照）・秘密の早期開示・演出上の弱点を重大度順に指摘してください。",[{role:"user",content:`キャンペーン設定:\n${campaignWorld}\nテーマ: ${campaignTheme}\n\n現在のシーン:\n${JSON.stringify(withSceneOverride(scene()),null,2)}\n\n生成案:\n${$("draft").value}`}],4000);renderTab();setStatus("レビュー完了")}catch(e){setStatus("エラー: "+e.message)}};$("btnApprove").onclick=()=>{try{const data=parseGeneratedScene($("draft").value);applyGeneratedScene(data);activeTab="structure";renderScenes();renderAll();setStatus("シーンへ取り込みました。各タブで内容を確認してください")}catch(e){setStatus("取り込み失敗: "+e.message)}}}
 async function init(){loadWorkspaceDraft();if(isLocalFile()){context={backend:"local",files:{},dataFiles:{}};setStatus("ローカルモード: AI APIは既定で使用しません")}else{try{const r=await fetch("/api/context");context=await r.json();if(context.error)throw new Error(context.error.message);setStatus(`接続済み: ${context.backend}`)}catch(e){context={backend:"local",files:{},dataFiles:{}};setStatus("ローカルモードに切り替えました")}}renderScenes();renderAll()}
-$("layerTabs").onclick=e=>{const b=e.target.closest("[data-tab]");if(!b)return;activeTab=b.dataset.tab;renderScenes();renderAll()};$("btnBuild").onclick=()=>{activeTab="export";renderScenes();renderAll();setStatus("出力内容を確認してください")};$("btnSaveDraft").onclick=()=>saveCampaignFile();$("btnLoadCampaign").onclick=()=>$("campaignFileInput").click();$("campaignFileInput").onchange=e=>loadCampaignFile(e.target.files?.[0]);$("toggleRightSwitch").onchange=e=>{rightPanelEnabled=e.target.checked;syncRightPanel();saveWorkspaceDraft()};$("btnNewScene").onclick=()=>setStatus("新規シーン作成は次段階で接続します");init();
+$("layerTabs").onclick=e=>{const b=e.target.closest("[data-tab]");if(!b)return;activeTab=b.dataset.tab;renderScenes();renderAll()};$("btnBuild").onclick=()=>{activeTab="export";renderScenes();renderAll();setStatus("出力内容を確認してください")};$("btnSaveDraft").onclick=()=>saveCampaignFile();$("btnLoadCampaign").onclick=()=>$("campaignFileInput").click();$("campaignFileInput").onchange=e=>loadCampaignFile(e.target.files?.[0]);$("toggleRightSwitch").onchange=e=>{rightPanelEnabled=e.target.checked;syncRightPanel();saveWorkspaceDraft()};if($("btnNewScene"))$("btnNewScene").onclick=()=>setStatus("新規シーン作成は次段階で接続します");init();
 </script>
 <script>
 /* シーン遷移の簡易編集: 行動、必要な発見済み条件、移動先だけを設定する。 */
@@ -290,9 +290,9 @@ bindStructure=()=>{const input=$("sceneBgInput");const key=sceneKey();const upda
 <script>
 /* シーン全景とは分離してSKY画像だけを入力する。TAS上では重ねて表示しない。 */
 var baseRenderStructureForSky=renderStructure;
-renderStructure=function(){const holder=document.createElement("div");holder.innerHTML=baseRenderStructureForSky();const bgInput=holder.querySelector("#sceneBgInput");if(bgInput){const key=sceneKey();const sky=scene().parallax?.sky||sceneOverrides[key]?.parallaxSky||"";const field=document.createElement("details");field.className="field sky-parallax-field";field.open=Boolean(sky);field.innerHTML=`<summary>SKY画像（パララックス）</summary><p class="hint">ゲーム側で空・遠景レイヤーとして使用します。TAS画面では背景画像と重ねて表示しません。</p><div class="scene-bg">${sky?`<img src="${escapeHtml(importedAssetRef(sky))}">`:"SKY画像なし"}</div><input type="file" accept="image/*" id="sceneSkyInput">`;bgInput.closest(".field")?.after(field)}return holder.innerHTML};
+renderStructure=function(){const holder=document.createElement("div");holder.innerHTML=baseRenderStructureForSky();const bgInput=holder.querySelector("#sceneBgInput");if(bgInput){const key=sceneKey();const override=sceneOverrides[key]||{};const inheritedSky=scene().parallax?.sky||"";const sky=override.parallaxDisabled?"":(override.parallaxSky||inheritedSky);const enabled=!override.parallaxDisabled&&(override.parallaxEnabled===true||Boolean(sky||scene().parallax?.fg));const field=document.createElement("details");field.className="field sky-parallax-field";field.open=enabled;field.innerHTML=`<summary>パララックス（空・遠景 / 前景）</summary><label class="check-row parallax-enabled-row"><input type="checkbox" id="sceneParallaxEnabled" ${enabled?"checked":""}>パララックスを使う</label><p class="hint">上部のシーン画像を前景（fg）、ここで選ぶ画像を空・遠景（sky）として使います。空・遠景だけでも表示できます。</p><label>空・遠景（sky）</label><div class="scene-bg">${sky?`<img src="${escapeHtml(importedAssetRef(sky))}">`:"空・遠景画像なし"}</div><input type="file" accept="image/*" id="sceneSkyInput" ${enabled?"":"disabled"}><button type="button" class="sub assistant-visual-button" data-assistant-visual="parallax">AIに構成を相談</button>`;bgInput.closest(".field")?.after(field)}return holder.innerHTML};
 var baseBindStructureForSky=bindStructure;
-bindStructure=function(){baseBindStructureForSky();const input=$("sceneSkyInput");const key=sceneKey();if(input)input.onchange=e=>handleImageInput(e.target.files?.[0],url=>{sceneOverrides[key]={...(sceneOverrides[key]||{}),parallaxSky:url}},"SKY画像を保存しました")};
+bindStructure=function(){baseBindStructureForSky();const input=$("sceneSkyInput");const toggle=$("sceneParallaxEnabled");const key=sceneKey();if(toggle)toggle.onchange=e=>{const current=sceneOverrides[key]||{};const inheritedSky=scene().parallax?.sky||"";sceneOverrides[key]={...current,parallaxEnabled:e.target.checked,parallaxDisabled:!e.target.checked,...(e.target.checked&&inheritedSky&&!current.parallaxSky?{parallaxSky:inheritedSky}:{})};saveWorkspaceDraft(true);renderTab();setStatus(e.target.checked?"パララックスを有効にしました。空・遠景画像を選べます。":"パララックスを使わない設定にしました")};if(input)input.onchange=e=>handleImageInput(e.target.files?.[0],url=>{sceneOverrides[key]={...(sceneOverrides[key]||{}),parallaxEnabled:true,parallaxDisabled:false,parallaxSky:url}},"空・遠景画像を保存しました")};
 </script>
 <script>
 /* 補助パネルの利用方法を、プロンプト出力とAI実行から切り替える。 */
@@ -306,7 +306,7 @@ renderAll();
 </body>
 <script>
 // ブラウザ標準の prompt に依存せず、キャンペーン名をファイル名として保存する。
-saveCampaignFile=()=>{try{const filename=`${sanitizeFilename(campaignName)}.json`;const payload={version:1,savedAt:new Date().toISOString(),data:localDraftSnapshot()};const blob=new Blob([JSON.stringify(payload,null,2)],{type:"application/json"});const url=URL.createObjectURL(blob);const link=document.createElement("a");link.href=url;link.download=filename;document.body.appendChild(link);link.click();link.remove();setTimeout(()=>URL.revokeObjectURL(url),0);saveWorkspaceDraft();setStatus(`キャンペーンデータを保存しました（画像本体は含めず、ファイル名のみ保存）: ${filename}`)}catch(error){setStatus(`保存に失敗しました: ${error.message}`)}};
+saveCampaignFile=()=>{try{const filename=`${sanitizeFilename(campaignName)}.json`;const payload={version:1,savedAt:new Date().toISOString(),data:localDraftSnapshot()};const blob=new Blob([JSON.stringify(payload,null,2)],{type:"application/json"});const url=URL.createObjectURL(blob);const link=document.createElement("a");link.href=url;link.download=filename;document.body.appendChild(link);link.click();link.remove();setTimeout(()=>URL.revokeObjectURL(url),0);saveWorkspaceDraft();setStatus(`キャンペーンデータを保存しました（画像本体は含めず、ファイル名のみ保存）: ${filename}`);return true}catch(error){setStatus(`保存に失敗しました: ${error.message}`);return false}};
 </script>
 <script>
 /* 補助パネルは親要素でイベントを受け、再描画後も切替を維持する。 */
@@ -367,8 +367,8 @@ bindPlaytest=function(){originalPlaytestBind();var retry=$('retryPlay');if(retry
 </script>
 <script>
 /* 新しいキャンペーンの下書きを開始する。既存の下書きは上書き前に確認する。 */
-function createNewCampaign(){
-  if(!window.confirm("現在のキャンペーン下書きを新しいキャンペーンで置き換えます。必要な場合は先に保存してください。続けますか？"))return;
+function createNewCampaign(skipConfirm=false){
+  if(!skipConfirm&&!window.__tasSkipCampaignConfirm&&!window.confirm("現在のキャンペーン下書きを新しいキャンペーンで置き換えます。必要な場合は先に保存してください。続けますか？"))return;
   campaignName="新しいキャンペーン";campaignImage="";campaignWorld="";campaignTheme="";campaignTerms="";
   freshCampaign=true;customChapterScenes={ch1:[]};chapterNames={ch1:""};chapterOrder=["ch1"];activeChapter="ch1";selectedNode={type:"opening"};extraCompanions=0;npcCount=1;monsters=[];items=[];
   castImages={};castNames={};castProfiles={};castFlags={};sceneBackgrounds={};sceneOverrides={};discoveryFoldState={};
@@ -483,16 +483,22 @@ mockCampaignPayload=function(){
     scenes:(chapter.scenes||[]).map((rawScene,index)=>{
       const node=sceneNodes[index]||{};
       const key=node.type?nodeKey(node):"";
-      const sceneImage=runtimeImageName(sceneBackgrounds[key]);
+      const sceneImage=runtimeImageName(sceneBackgrounds[key]||rawScene.img);
       const npcId=(rawScene.npcs||[])[0];
       const npcImage=runtimeImageName(npcId&&castImages[npcId]);
       const monster=monsters.find(m=>m.name&&m.name===rawScene.enemyName);
       const monsterImage=runtimeImageName(monster?.image);
-      const skyImage=runtimeImageName(sceneOverrides[key]?.parallaxSky||rawScene.parallax?.sky);
+      const parallaxDisabled=Boolean(sceneOverrides[key]?.parallaxDisabled);
+      const skyImage=parallaxDisabled?"":runtimeImageName(sceneOverrides[key]?.parallaxSky||rawScene.parallax?.sky);
       const next={...rawScene};
       if(sceneImage)next.img=sceneImage;
-      if(skyImage)next.parallax={...(next.parallax||{}),sky:skyImage};
+      if(skyImage){
+        next.parallax={...(next.parallax||{}),sky:skyImage};
+        if(sceneImage)next.parallax.fg=sceneImage;
+      }else if(parallaxDisabled)delete next.parallax;
       delete next.parallaxSky;
+      delete next.parallaxDisabled;
+      delete next.parallaxEnabled;
       if(npcImage)next.npcSprite=npcImage;
       if(monsterImage){next.enemy={...(next.enemy||{}),sprite:monsterImage};delete next.enemy.img;}
       delete next.enemyName;
@@ -943,13 +949,28 @@ renderAll=function(){baseRenderAllForTerminology();normalizeTerminologyInPage()}
 normalizeTerminologyInPage();
 </script>
 <script>
-/* 画像フォルダの読み込みと、登録済み画像の復元。 */
+/* 画像フォルダの読み込みと、フォルダ内画像の選択。 */
 let imageLibraryFiles={};
 let imageLibraryFolderName='';
 let imageAssetRefs={};
+let imagePickerUrls=[];
+let imageLibraryDirectoryHandle=null;
+let imageLibraryAccessState='none';
+const IMAGE_LIBRARY_DB_NAME='tas-image-library-v1';
+const IMAGE_LIBRARY_HANDLE_KEY='selected-directory';
+function imageLibraryDb(){return new Promise((resolve,reject)=>{const request=indexedDB.open(IMAGE_LIBRARY_DB_NAME,1);request.onupgradeneeded=()=>request.result.createObjectStore('handles');request.onsuccess=()=>resolve(request.result);request.onerror=()=>reject(request.error)})}
+function imageLibraryRequest(request){return new Promise((resolve,reject)=>{request.onsuccess=()=>resolve(request.result);request.onerror=()=>reject(request.error)})}
+async function savedImageDirectoryHandle(){try{const db=await imageLibraryDb();return await imageLibraryRequest(db.transaction('handles','readonly').objectStore('handles').get(IMAGE_LIBRARY_HANDLE_KEY))}catch(error){return null}}
+async function saveImageDirectoryHandle(handle){try{const db=await imageLibraryDb();const transaction=db.transaction('handles','readwrite');transaction.objectStore('handles').put(handle,IMAGE_LIBRARY_HANDLE_KEY);await new Promise((resolve,reject)=>{transaction.oncomplete=resolve;transaction.onerror=()=>reject(transaction.error)});return true}catch(error){return false}}
+async function readImageDirectory(handle){const files=[];for await(const [,entry] of handle.entries()){if(entry.kind==='file'){const file=await entry.getFile();if(file.type.startsWith('image/'))files.push(file)}else if(entry.kind==='directory'){files.push(...await readImageDirectory(entry))}}return files}
+function applyImageLibraryFiles(files,name,state='ready'){imageLibraryFiles=Object.fromEntries(files.map(file=>[imageFileKey(file.name),file]));imageLibraryFolderName=name||'選択したフォルダ';imageLibraryAccessState=state;renderAll();setStatus(`${files.length}件の画像を読み込みました`)}
+async function connectImageDirectory(handle,requestPermission=false){if(!handle)return false;try{let permission=await handle.queryPermission?.({mode:'read'});if(permission!=='granted'&&requestPermission)permission=await handle.requestPermission?.({mode:'read'});if(permission!=='granted'){imageLibraryDirectoryHandle=handle;imageLibraryFolderName=handle.name||'選択したフォルダ';imageLibraryAccessState='needs-permission';renderAll();setStatus('画像フォルダを再接続してください');return false}const files=await readImageDirectory(handle);imageLibraryDirectoryHandle=handle;await saveImageDirectoryHandle(handle);applyImageLibraryFiles(files,handle.name,'ready');return true}catch(error){imageLibraryAccessState='needs-permission';setStatus(`画像フォルダを開けませんでした: ${error.message}`);return false}}
+async function chooseImageDirectory(){if(!window.showDirectoryPicker){document.querySelector('#imageFolderInput')?.click();return}try{const handle=await window.showDirectoryPicker({mode:'read'});await connectImageDirectory(handle,true)}catch(error){if(error?.name!=='AbortError')setStatus(`画像フォルダの指定に失敗しました: ${error.message}`)}}
+async function restoreImageDirectory(){const handle=await savedImageDirectoryHandle();if(!handle)return;imageLibraryDirectoryHandle=handle;imageLibraryFolderName=handle.name||'選択したフォルダ';await connectImageDirectory(handle,false)}
 function imageFileKey(name){return String(name||'').split(/[\\/]/).pop().toLowerCase()}
 function imageFilename(value){return String(value||'').split(/[\\/]/).pop()}
-function localImageValue(target,value){const registered=imageAssetRefs[target];if(registered)return imageFilename(registered);const raw=String(value||'');return raw.startsWith('data:')?'':imageFilename(raw)}
+function imageRefForTarget(target){if(target.startsWith('scene:')&&target.endsWith(':sky')&&sceneOverrides[target.slice(6,-4)]?.parallaxDisabled)return '';const exact=imageAssetRefs[target];if(exact)return imageFilename(exact);const suffix=target.startsWith('scene:')?target.slice(6):target;const legacy=Object.entries(imageAssetRefs).find(([key])=>key===suffix||key.endsWith(`:${suffix}`));return legacy?imageFilename(legacy[1]):''}
+function localImageValue(target,value){const registered=imageRefForTarget(target);if(registered)return registered;const raw=String(value||'');return raw.startsWith('data:')?'':imageFilename(raw)}
 function localDraftSnapshot(){
   const data=JSON.parse(JSON.stringify(workspaceDraft()));
   // ローカル保存では、現在有効なチャプターだけを正本として保持する。
@@ -1011,6 +1032,7 @@ function localDraftSnapshot(){
 }
 function imageTargetValue(target){
   if(target==='campaign')return campaignImage;
+  if(target.startsWith('scene:')&&target.endsWith(':sky')){const override=sceneOverrides[target.slice(6,-4)]||{};return override.parallaxDisabled?'':(override.parallaxSky||'')}
   if(target.startsWith('scene:'))return sceneBackgrounds[target.slice(6)];
   if(target.startsWith('cast:'))return castImages[target.slice(5)];
   if(target.startsWith('monster:'))return monsters[Number(target.slice(8))]?.image;
@@ -1019,6 +1041,7 @@ function imageTargetValue(target){
 }
 function setImageTargetValue(target,url){
   if(target==='campaign')campaignImage=url;
+  else if(target.startsWith('scene:')&&target.endsWith(':sky')){const key=target.slice(6,-4);sceneOverrides[key]={...(sceneOverrides[key]||{}),parallaxEnabled:true,parallaxDisabled:false,parallaxSky:url}}
   else if(target.startsWith('scene:'))sceneBackgrounds[target.slice(6)]=url;
   else if(target.startsWith('cast:'))castImages[target.slice(5)]=url;
   else if(target.startsWith('monster:')){const i=Number(target.slice(8));if(monsters[i])monsters[i].image=url}
@@ -1027,32 +1050,80 @@ function setImageTargetValue(target,url){
 function applyLibraryImage(target,file){
   if(!target||!file)return;
   imageAssetRefs[target]=file.name;
-  handleImageInput(file,url=>setImageTargetValue(target,url),'登録済み画像を復元しました');
+  handleImageInput(file,url=>setImageTargetValue(target,url),'画像を設定しました');
   saveWorkspaceDraft(true);
+}
+function closeImagePicker(){
+  imagePickerUrls.forEach(url=>URL.revokeObjectURL(url));imagePickerUrls=[];
+  document.querySelector('#imagePickerModal')?.remove();
+}
+function clearLibraryImage(target){
+  setImageTargetValue(target,'');delete imageAssetRefs[target];
+  closeImagePicker();saveWorkspaceDraft(true);renderAll();setStatus('画像を解除しました');
+}
+function openImagePicker(target){
+  const files=Object.values(imageLibraryFiles);
+  if(!files.length){
+    activeTab='world';renderScenes();renderAll();
+    setStatus('世界設定の「画像管理」で画像フォルダを指定してください');
+    return;
+  }
+  closeImagePicker();
+  const current=imageRefForTarget(target)||imageFilename(imageTargetValue(target));
+  const modal=document.createElement('div');modal.id='imagePickerModal';modal.className='image-picker-modal';
+  modal.innerHTML=`<div class="image-picker-dialog" role="dialog" aria-modal="true" aria-label="画像を選ぶ"><div class="image-picker-head"><div><h3>画像を選ぶ</h3><p>画像フォルダ：${escapeHtml(imageLibraryFolderName||'選択済み')}</p></div><button type="button" class="sub" data-close-image-picker>閉じる</button></div><input type="search" class="image-picker-search" placeholder="ファイル名で絞り込む"><div class="image-picker-grid"></div><div class="image-picker-foot"><span>現在：${escapeHtml(current||'未設定')}</span><button type="button" class="sub" data-clear-image-picker ${current?'':'disabled'}>画像を解除</button></div></div>`;
+  const grid=modal.querySelector('.image-picker-grid');
+  files.sort((a,b)=>a.name.localeCompare(b.name)).forEach(file=>{
+    const button=document.createElement('button');button.type='button';button.className=`image-picker-item ${file.name===current?'selected':''}`;button.dataset.imagePickerFile=file.name;
+    const url=URL.createObjectURL(file);imagePickerUrls.push(url);
+    button.innerHTML=`<img src="${url}" alt=""><span>${escapeHtml(file.name)}</span>`;grid.append(button);
+  });
+  modal.querySelector('.image-picker-search').oninput=event=>{const query=event.target.value.trim().toLowerCase();grid.querySelectorAll('.image-picker-item').forEach(button=>{button.hidden=Boolean(query&&!button.dataset.imagePickerFile.toLowerCase().includes(query))})};
+  modal.onclick=event=>{
+    if(event.target===modal||event.target.closest('[data-close-image-picker]')){closeImagePicker();return}
+    if(event.target.closest('[data-clear-image-picker]')){clearLibraryImage(target);return}
+    const item=event.target.closest('[data-image-picker-file]');if(!item)return;
+    const file=imageLibraryFiles[imageFileKey(item.dataset.imagePickerFile)];if(file){closeImagePicker();applyLibraryImage(target,file)}
+  };
+  document.body.append(modal);modal.querySelector('.image-picker-search').focus();
 }
 function decorateImageInputs(){
   const targets=[];
   const campaign=$('campaignImageInput');if(campaign)targets.push([campaign,'campaign']);
   const sceneInput=$('sceneBgInput');if(sceneInput)targets.push([sceneInput,`scene:${sceneKey()}`]);
+  const skyInput=$('sceneSkyInput');if(skyInput)targets.push([skyInput,`scene:${sceneKey()}:sky`]);
   document.querySelectorAll('.cast-image-input').forEach(input=>targets.push([input,`cast:${input.dataset.castId}`]));
   document.querySelectorAll('.monster-image').forEach(input=>targets.push([input,`monster:${input.dataset.monsterIndex}`]));
   document.querySelectorAll('.item-image').forEach(input=>targets.push([input,`item:${input.dataset.itemIndex}`]));
   targets.forEach(([input,target])=>{
+    input.classList.add('direct-image-input');
     input.dataset.imageTarget=target;
-    if(input.dataset.imageReloadDecorated)return;
-    input.dataset.imageReloadDecorated='1';
-    const button=document.createElement('button');button.type='button';button.className='sub image-reload-button';button.textContent='登録済み画像を復元';button.dataset.imageReloadTarget=target;
-    input.parentElement?.append(button);
+    if(input.dataset.imageLibraryDecorated)return;
+    input.dataset.imageLibraryDecorated='1';
+    const field=input.parentElement;
+    if(!field)return;
+    const wrapper=document.createElement('div');wrapper.className='image-library-picker';
+    const label=document.createElement('label');label.textContent='現在使用中';
+    const current=imageRefForTarget(target)||imageFilename(imageTargetValue(target));
+    const names=Object.keys(imageLibraryFiles).sort((a,b)=>a.localeCompare(b));
+    const currentName=document.createElement('div');currentName.className='image-library-current';currentName.textContent=current||'画像未設定';
+    const selectButton=document.createElement('button');selectButton.type='button';selectButton.className='sub image-select-button';
+    selectButton.textContent=names.length?'画像を選ぶ':'世界設定で画像フォルダを指定';
+    selectButton.disabled=Boolean(input.disabled);
+    selectButton.onclick=()=>openImagePicker(target);
+    wrapper.append(label,currentName,selectButton);field.append(wrapper);
   });
 }
 function imageFolderMarkup(){
   const names=Object.keys(imageLibraryFiles);
   const folderText=imageLibraryFolderName?`画像フォルダ：${escapeHtml(imageLibraryFolderName)}`:'画像フォルダ：未指定';
-  const countText=names.length?`読み込み済み：${names.length}件`:'画像フォルダを選択してください';
-  return `<div class="card image-library-card"><h3>画像管理</h3><p class="hint">${folderText}<br>${countText}</p><input id="imageFolderInput" type="file" accept="image/*" webkitdirectory directory multiple></div>`;
+  const countText=names.length?`読み込み済み：${names.length}件`:(imageLibraryAccessState==='needs-permission'?'再接続が必要です':'画像フォルダを選択してください');
+  const action=imageLibraryAccessState==='needs-permission'?'画像フォルダを再接続':(names.length?'画像フォルダを変更':'画像フォルダを指定');
+  const note=window.showDirectoryPicker?'一度許可すると、再読み込み後も同じ画像フォルダへ自動で再接続します。':'このブラウザではフォルダへの再接続に対応していません。再読み込み後は再指定してください。';
+  return `<div class="card image-library-card"><h3>画像管理</h3><p class="hint">${folderText}<br>${countText}<br>${note}</p><button type="button" class="sub image-folder-button" id="btnChooseImageFolder">${action}</button><input id="imageFolderInput" type="file" accept="image/*" webkitdirectory directory multiple></div>`;
 }
 var baseRenderWorldForImageLibrary=renderWorld;
-renderWorld=function(){return baseRenderWorldForImageLibrary()+imageFolderMarkup()};
+renderWorld=function(){return baseRenderWorldForImageLibrary().replace('</p>','</p>'+imageFolderMarkup())};
 var baseRenderTabForImageLibrary=renderTab;
 renderTab=function(){baseRenderTabForImageLibrary();decorateImageInputs()};
 var baseRenderAllForImageLibrary=renderAll;
@@ -1076,23 +1147,26 @@ document.addEventListener('change',event=>{
   if(input?.dataset?.imageTarget&&input.files?.[0]){imageAssetRefs[input.dataset.imageTarget]=input.files[0].name;saveWorkspaceDraft(true)}
   if(input?.id!=='imageFolderInput')return;
   const files=Array.from(input.files||[]).filter(file=>file.type.startsWith('image/'));
-  imageLibraryFiles=Object.fromEntries(files.map(file=>[imageFileKey(file.name),file]));
-  imageLibraryFolderName=files[0]?.webkitRelativePath?.split(/[\\/]/)[0]||'選択したフォルダ';
-  renderAll();setStatus(`${files.length}件の画像を読み込みました`);
+  applyImageLibraryFiles(files,files[0]?.webkitRelativePath?.split(/[\\/]/)[0]||'選択したフォルダ','temporary');
 },true);
-document.addEventListener('click',event=>{
-  const reload=event.target.closest?.('[data-image-reload-target]');
-  if(reload){
-    event.preventDefault();event.stopPropagation();
-    const target=reload.dataset.imageReloadTarget;const ref=imageAssetRefs[target];const file=imageLibraryFiles[imageFileKey(ref)];
-    if(file)applyLibraryImage(target,file);else document.querySelector(`[data-image-target="${CSS.escape(target)}"]`)?.click();
-    return;
-  }
-},true);
+document.addEventListener('click',event=>{if(!event.target.closest?.('#btnChooseImageFolder'))return;event.preventDefault();if(imageLibraryDirectoryHandle&&imageLibraryAccessState==='needs-permission')connectImageDirectory(imageLibraryDirectoryHandle,true);else chooseImageDirectory()},true);
+window.addEventListener('load',()=>{restoreImageDirectory()});
 </script>
+<style>
+.image-library-card #imageFolderInput{display:none}.direct-image-input{display:none}.image-folder-button{display:inline-block;margin-top:4px}.image-library-picker{display:grid;gap:4px;margin-top:8px}.image-library-picker label{display:block;color:var(--dim);font-size:11px}.image-library-current{min-height:32px;padding:6px 8px;border:1px solid var(--border);border-radius:4px;background:#171c23;color:var(--text);font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.image-library-current:empty{color:var(--dim)}.image-select-button{justify-self:start;padding:5px 9px;font-size:12px}.image-picker-modal{position:fixed;inset:0;z-index:100;background:rgba(8,11,15,.72);display:grid;place-items:center;padding:18px}.image-picker-dialog{width:min(820px,100%);max-height:min(760px,100%);display:flex;flex-direction:column;gap:12px;padding:16px;border:1px solid var(--border);border-radius:8px;background:var(--panel2);box-shadow:0 18px 60px rgba(0,0,0,.45)}.image-picker-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px}.image-picker-head h3{margin:0;color:var(--accent);font-size:15px}.image-picker-head p{margin:2px 0 0;color:var(--dim);font-size:12px}.image-picker-search{width:100%;padding:8px;border:1px solid var(--border);border-radius:4px;background:#171c23;color:var(--text)}.image-picker-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:9px;overflow:auto;padding:2px}.image-picker-item{display:grid;gap:5px;padding:6px;border:1px solid var(--border);border-radius:5px;background:#171c23;color:var(--text);text-align:left;font-size:11px;font-weight:500}.image-picker-item:hover,.image-picker-item.selected{border-color:var(--accent);background:#303947}.image-picker-item img{display:block;width:100%;aspect-ratio:16 / 9;object-fit:cover;border-radius:3px;background:#10151b}.image-picker-item span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.image-picker-foot{display:flex;justify-content:space-between;gap:10px;align-items:center;color:var(--dim);font-size:12px;border-top:1px solid var(--border);padding-top:10px}@media(max-width:560px){.image-picker-modal{padding:8px}.image-picker-dialog{padding:12px}.image-picker-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+</style>
 <script>
 /* 補助パネルの操作を再描画後も確実に受け付ける。 */
 document.addEventListener('click',async event=>{
+  const visualAssistant=event.target.closest?.('[data-assistant-visual="parallax"]');
+  if(visualAssistant){
+    event.preventDefault();event.stopPropagation();
+    rightPanelEnabled=true;assistantMode='ai';assistantAiResult='';syncRightPanel();renderRightPanel();renderValidation();
+    const instruction=document.querySelector('#assistantInstruction');
+    if(instruction){instruction.value='このシーンのパララックス構成を確認してください。前景（fg）と空・遠景（sky）の役割、足りない素材、画面演出上の注意を日本語で提案してください。';instruction.focus()}
+    setStatus('補助パネルに、パララックス用の相談内容を用意しました');
+    return;
+  }
   const suggest=event.target.closest?.('#btnSuggest');
   if(suggest){
     event.preventDefault();event.stopPropagation();
@@ -1489,5 +1563,166 @@ var baseBindStructureForEncounters=bindStructure;
 bindStructure=function(){baseBindStructureForEncounters();const section=document.querySelector('.encounter-section');if(!section)return;const update=()=>saveEncounters(collectEncounters());section.querySelectorAll('input,select,textarea').forEach(input=>{input.oninput=update;input.onchange=update});section.querySelectorAll('[data-remove-encounter]').forEach(button=>button.onclick=()=>{saveEncounters(sceneEncounters().filter((_,i)=>i!==Number(button.dataset.removeEncounter)));renderTab()});const add=section.querySelector('#btnAddEncounter');if(add)add.onclick=()=>{saveEncounters([...sceneEncounters(),normalizeEncounter({id:`encounter_${sceneEncounters().length+1}`,type:'conditional'},sceneEncounters().length)]);renderTab()};};
 var baseMockCampaignPayloadForEncounters=mockCampaignPayload;
 mockCampaignPayload=function(){const payload=baseMockCampaignPayloadForEncounters();if(Array.isArray(payload.chapter?.scenes)){const nodes=chapterNodes().filter(n=>n.type==='scene');payload.chapter.scenes=payload.chapter.scenes.map((raw,index)=>{const node=nodes[index];const encounters=(node?.encounters||raw.encounters||[]).map(normalizeEncounter);return encounters.length?{...raw,encounters}:raw})}return payload};
+</script>
+<style>
+/* 管理画面UX: 作者が誤入力箇所をその場で理解できるようにする。 */
+.authoring-checks{margin:12px 0;padding:10px 12px;border:1px solid var(--border);border-radius:7px;background:#1b2129}.authoring-checks.ok{border-color:#3f7d62}.authoring-checks.has-issues{border-color:#a97b2a}.authoring-checks h3{margin:0 0 5px;color:var(--accent);font-size:13px}.authoring-checks p{margin:0;color:var(--dim);font-size:12px}.authoring-checks ul{margin:8px 0 0;padding-left:18px;display:grid;gap:4px;font-size:12px}.authoring-checks .error{color:#ff9b9b}.authoring-checks .warn{color:#f1c36c}.author-section{margin:12px 0}.author-section>summary{cursor:pointer;list-style:none;display:flex;align-items:center;justify-content:space-between;gap:8px;color:var(--text);font-weight:700}.author-section>summary::-webkit-details-marker{display:none}.author-section>summary::before{content:"▸";color:var(--accent);margin-right:6px}.author-section[open]>summary::before{content:"▾"}.author-section-body{padding-top:12px}.author-section .author-section-count{margin-left:auto;color:var(--dim);font-size:12px;font-weight:500}.author-section .author-section-count.has-error{color:#ff9b9b}.field.admin-ux-invalid input,.field.admin-ux-invalid select,.field.admin-ux-invalid textarea{border-color:#d46a6a;box-shadow:0 0 0 1px rgba(212,106,106,.2)}.field.admin-ux-warning input,.field.admin-ux-warning select,.field.admin-ux-warning textarea{border-color:#b88935}.field .admin-ux-field-message{margin:5px 0 0;color:#f1c36c;font-size:11px}.field.admin-ux-invalid .admin-ux-field-message{color:#ff9b9b}.mock2-preview-card{margin-top:12px}.mock2-preview-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap}.mock2-preview-actions a{display:inline-flex;align-items:center;min-height:34px;padding:0 12px;border:1px solid var(--accent);border-radius:5px;color:#1b1f25;background:var(--accent);font-weight:700;text-decoration:none}.mock2-preview-actions a:hover{filter:brightness(1.08)}
+</style>
+<script>
+/* 管理画面UX Phase 1-3: 入力時検証、シーン折りたたみ、mock2確認導線。 */
+let adminUxSectionFoldState={};
+let mock2PreviewBaseUrl=localStorage.getItem('tas_mock2_preview_base_url_v1')||'http://localhost:5173/';
+
+function adminUxSceneKey(){return sceneKey()}
+function adminUxFoldStateForScene(){const key=adminUxSceneKey();return adminUxSectionFoldState[key]||{}}
+function adminUxSetFold(sectionId,open){const key=adminUxSceneKey();adminUxSectionFoldState[key]={...adminUxFoldStateForScene(),[sectionId]:Boolean(open)};saveWorkspaceDraft(true)}
+function adminUxIsBareImageName(value){const raw=String(value||'').trim();return !raw||raw.startsWith('blob:')||raw.startsWith('data:')||(!/[\\/]/.test(raw)&&!/^file:/i.test(raw))}
+function adminUxDiscoveryTokens(n){const set=new Set();(n.discoveries||[]).map((value,index)=>normalizeDiscoveryFor(n,value,index)).forEach(item=>{[item.id,item.label,...(item.aliases||[]),...(item.tags||[])].filter(Boolean).forEach(value=>set.add(value))});return set}
+function adminUxIssue(level,text,target,section){return {level,text,target,section}}
+function adminUxIssues(n=scene()){
+  const issues=[];const key=sceneKey();const valid=adminUxDiscoveryTokens(n);const exits=sceneExits();const seenExitIds=new Map();
+  if(typeof n.enemyName==='string'&&n.enemyName.trim()&&!monsters.some(monster=>monster.name===n.enemyName.trim()))issues.push(adminUxIssue('warn',`「${n.enemyName.trim()}」がモンスター台帳にありません。モンスター画面で登録するか、このシーンの敵を選び直してください。既存の敵データはそのまま保持しています。`,'#sceneEnemy','actors'));
+  exits.forEach((exit,index)=>{
+    const id=String(exit.id||'').trim();
+    if(!id)issues.push(adminUxIssue('error',`出口${index+1}の移動識別子を入力してください`,`.exit-id[data-exit-index="${index}"]`,'exits'));
+    else if(seenExitIds.has(id))issues.push(adminUxIssue('error',`出口${index+1}の移動識別子「${id}」が出口${seenExitIds.get(id)+1}と重複しています`,`.exit-id[data-exit-index="${index}"]`,'exits'));
+    else seenExitIds.set(id,index);
+    if(!exit.match?.length)issues.push(adminUxIssue('error',`出口${index+1}にトリガーする語句を1つ以上指定してください`,`.exit-match[data-exit-index="${index}"]`,'exits'));
+    if(exit.to===''||exit.to===undefined)issues.push(adminUxIssue('warn',`出口${index+1}の移動先を選択してください（行き止まりなら「行き止まり」を選びます）`,`.exit-target[data-exit-index="${index}"]`,'exits'));
+    sceneConditionTokens(exitRequiresText(exit)).forEach(token=>{if(!valid.has(token))issues.push(adminUxIssue('error',`出口${index+1}の必要条件「${token}」は、このシーンのシーン要素にありません`,`.exit-condition-token[data-exit-index="${index}"]`,'exits'))})
+  });
+  const rawEncounters=Array.isArray(n.encounters)?n.encounters:[];
+  sceneEncounters().forEach((encounter,index)=>{
+    const monster=monsters.find(monster=>String(monster.id||monster.name)===encounter.monsterId||monster.name===encounter.monsterName);
+    if(!monster)issues.push(adminUxIssue('error',`遭遇${index+1}の対象モンスターを選択してください`,`.encounter-monster[data-encounter-index="${index}"]`,'actors'));
+    encounter.requiredElements.forEach(name=>{if(name&&!valid.has(name))issues.push(adminUxIssue('error',`遭遇${index+1}の必要なシーン要素「${name}」が見つかりません`,`.encounter-required-elements[data-encounter-index="${index}"]`,'actors'))});
+    const rawProbability=rawEncounters[index]?.probability;
+    if(encounter.type==='random'&&(encounter.probability===null||encounter.probability===undefined))issues.push(adminUxIssue('error',`ランダム遭遇${index+1}には遭遇確率を指定してください`,`.encounter-probability[data-encounter-index="${index}"]`,'actors'));
+    if(rawProbability!==undefined&&rawProbability!==''&&(Number(rawProbability)<0||Number(rawProbability)>100))issues.push(adminUxIssue('error',`遭遇${index+1}の確率は0〜100%で指定してください`,`.encounter-probability[data-encounter-index="${index}"]`,'actors'));
+  });
+  const foreground=sceneBackgrounds[key]||sceneOverrides[key]?.img||n.img||'';
+  const parallaxDisabled=Boolean(sceneOverrides[key]?.parallaxDisabled);
+  const sky=parallaxDisabled?'':(n.parallax?.sky||sceneOverrides[key]?.parallaxSky||'');
+  const foregroundRef=imageRefForTarget(`scene:${key}`)||foreground;
+  const skyRef=imageRefForTarget(`scene:${key}:sky`)||sky;
+  if(!adminUxIsBareImageName(foregroundRef))issues.push(adminUxIssue('error','背景画像はファイル名のみで保存してください', '#sceneBgInput','visuals'));
+  if(!adminUxIsBareImageName(skyRef))issues.push(adminUxIssue('error','SKY画像はファイル名のみで保存してください', '#sceneSkyInput','visuals'));
+  if(sky&&!foregroundRef)issues.push(adminUxIssue('warn','空・遠景だけが設定されています。上部のシーン画像を選ぶと、前景（fg）もゲームへ渡せます。','#sceneBgInput','visuals'));
+  if(Object.prototype.hasOwnProperty.call(sceneOverrides[key]||{},'useParallax'))issues.push(adminUxIssue('warn','`useParallax`はmock2で使われません。パララックスはこの画面のチェックで切り替えてください',' .sky-parallax-field','visuals'));
+  return issues;
+}
+function adminUxIssuesMarkup(issues){
+  if(!issues.length)return '<div class="authoring-checks ok" id="adminUxChecks"><h3>編集チェック</h3><p>この画面の入力に問題は見つかりません。</p></div>';
+  return `<div class="authoring-checks has-issues" id="adminUxChecks"><h3>編集チェック</h3><p>${issues.filter(issue=>issue.level==='error').length}件の修正項目と、${issues.filter(issue=>issue.level!=='error').length}件の確認項目があります。</p><ul>${issues.map(issue=>`<li class="${issue.level}">${escapeHtml(issue.text)}</li>`).join('')}</ul></div>`;
+}
+function adminUxRefreshInlineFeedback(){
+  if(activeTab!=='structure')return;
+  const issues=adminUxIssues();const checks=$('adminUxChecks');if(checks)checks.outerHTML=adminUxIssuesMarkup(issues);
+  document.querySelectorAll('.admin-ux-invalid,.admin-ux-warning').forEach(field=>{field.classList.remove('admin-ux-invalid','admin-ux-warning');field.querySelectorAll('[aria-invalid]').forEach(input=>input.removeAttribute('aria-invalid'));field.querySelector('.admin-ux-field-message')?.remove()});
+  const byTarget=new Map();issues.forEach(issue=>{if(!issue.target)return;const list=byTarget.get(issue.target)||[];list.push(issue);byTarget.set(issue.target,list)});
+  byTarget.forEach((fieldIssues,target)=>{let input;try{input=document.querySelector(target.trim())}catch(error){return}const field=input?.closest('.field')||input;if(!field)return;const hasError=fieldIssues.some(issue=>issue.level==='error');field.classList.add(hasError?'admin-ux-invalid':'admin-ux-warning');const message=document.createElement('p');message.className='admin-ux-field-message';message.textContent=fieldIssues.map(issue=>issue.text).join(' ');field.append(message);if(input?.setAttribute)input.setAttribute('aria-invalid',hasError?'true':'false')});
+}
+
+var baseDesignDiagnosticsForAdminUx=designDiagnostics;
+designDiagnostics=function(node){return [...baseDesignDiagnosticsForAdminUx(node),...adminUxIssues(node).map(issue=>({level:issue.level,text:issue.text}))]};
+var baseRenderValidationForAdminUx=renderValidation;
+renderValidation=function(){baseRenderValidationForAdminUx();adminUxRefreshInlineFeedback()};
+
+function adminUxCreateSection(holder,id,title,nodes,defaultOpen){
+  const present=nodes.filter(Boolean);if(!present.length)return null;
+  const issues=adminUxIssues().filter(issue=>issue.section===id);const state=adminUxFoldStateForScene();const open=Object.prototype.hasOwnProperty.call(state,id)?state[id]:(issues.length?true:defaultOpen);
+  const details=document.createElement('details');details.className='card author-section';details.dataset.adminUxSection=id;details.open=open;
+  const summary=document.createElement('summary');summary.innerHTML=`<span>${escapeHtml(title)}</span><span class="author-section-count ${issues.some(issue=>issue.level==='error')?'has-error':''}">${issues.length?`要確認 ${issues.length}件`:'設定を編集'}</span>`;
+  const body=document.createElement('div');body.className='author-section-body';present.forEach(node=>body.append(node));details.append(summary,body);return details;
+}
+var baseRenderStructureForAdminUx=renderStructure;
+renderStructure=function(){
+  const holder=document.createElement('div');holder.innerHTML=baseRenderStructureForAdminUx();
+  const heading=holder.querySelector('h2');const hint=heading?.nextElementSibling;
+  const background=holder.querySelector('#sceneBgInput')?.closest('.field');const sky=holder.querySelector('.sky-parallax-field');
+  const name=holder.querySelector('#sceneName')?.closest('.field');const brief=holder.querySelector('#sceneBrief')?.closest('.field');
+  const npcs=holder.querySelector('.scene-npc')?.closest('.field');const enemy=holder.querySelector('.enemy-encounter-group');
+  const exits=holder.querySelector('.transition-list')?.closest('.field');
+  if(background){
+    const parallaxEnabled=Boolean(sky?.querySelector('#sceneParallaxEnabled')?.checked);
+    background.classList.add('scene-visual-hero');
+    const label=background.querySelector('label');if(label)label.textContent=parallaxEnabled?'前景画像（fg）':'シーン画像';
+    const visualHint=document.createElement('p');visualHint.className='hint';visualHint.textContent=parallaxEnabled?'パララックスでは、この画像を前景（fg）として使用します。下の空・遠景（sky）と組み合わせます。':'このシーンを見分けるためのメインビジュアルです。';
+    label?.after(visualHint);
+    if(heading)heading.after(background);else holder.prepend(background);
+  }
+  const checks=document.createElement('div');checks.innerHTML=adminUxIssuesMarkup(adminUxIssues());const checkCard=checks.firstElementChild;
+  const sections=[
+    adminUxCreateSection(holder,'basics','基本設定',[name,brief],true),
+    adminUxCreateSection(holder,'visuals','パララックス（必要なときだけ）',[sky],false),
+    adminUxCreateSection(holder,'actors','登場人物・敵・遭遇',[npcs,enemy],Boolean(enemy)),
+    adminUxCreateSection(holder,'exits','出口・分岐',[exits],true)
+  ].filter(Boolean);
+  if(hint)hint.after(checkCard,...sections);else holder.prepend(checkCard,...sections);
+  return holder.innerHTML;
+};
+var baseBindStructureForAdminUx=bindStructure;
+bindStructure=function(){baseBindStructureForAdminUx();document.querySelectorAll('[data-admin-ux-section]').forEach(details=>details.addEventListener('toggle',()=>adminUxSetFold(details.dataset.adminUxSection,details.open)));adminUxRefreshInlineFeedback()};
+var baseWorkspaceDraftForAdminUx=workspaceDraft;
+workspaceDraft=function(){return {...baseWorkspaceDraftForAdminUx(),adminUxSectionFoldState,mock2PreviewBaseUrl}};
+var baseApplyWorkspaceDraftForAdminUx=applyWorkspaceDraft;
+applyWorkspaceDraft=function(data){baseApplyWorkspaceDraftForAdminUx(data);adminUxSectionFoldState=data.adminUxSectionFoldState&&typeof data.adminUxSectionFoldState==='object'?data.adminUxSectionFoldState:{};if(typeof data.mock2PreviewBaseUrl==='string'&&data.mock2PreviewBaseUrl)mock2PreviewBaseUrl=data.mock2PreviewBaseUrl};
+
+function adminUxMock2PreviewUrl(){
+  try{const url=new URL(mock2PreviewBaseUrl,location.href);url.searchParams.set('campaign',tasCampaignId||'campaign');url.searchParams.set('chapter',runtimeChapterId(activeChapter));return url.toString()}catch(error){return mock2PreviewBaseUrl}
+}
+function adminUxPreviewMarkup(){return `<div class="card mock2-preview-card"><h3>mock2で確認</h3><p class="hint">現在の章をmock2で開きます。mock2は現時点でキャンペーン・章の指定まで対応しています。選択中のシーンを直接開くライブプレビューは、mock2側の受信契約追加後に接続します。</p><div class="field"><label>mock2のURL</label><input id="mock2PreviewBaseUrl" value="${escapeHtml(mock2PreviewBaseUrl)}" placeholder="http://localhost:5173/"></div><div class="mock2-preview-actions"><a id="openMock2Preview" href="${escapeHtml(adminUxMock2PreviewUrl())}" target="_blank" rel="noopener">mock2でこの章を開く</a></div></div>`}
+var baseRenderExportForAdminUx=renderExport;
+renderExport=function(){const holder=document.createElement('div');holder.innerHTML=baseRenderExportForAdminUx();holder.append(document.createRange().createContextualFragment(adminUxPreviewMarkup()));return holder.innerHTML};
+var baseBindExportForAdminUx=bindExport;
+bindExport=function(){baseBindExportForAdminUx();const input=$('mock2PreviewBaseUrl');const link=$('openMock2Preview');if(input)input.oninput=event=>{mock2PreviewBaseUrl=event.target.value.trim()||'http://localhost:5173/';localStorage.setItem('tas_mock2_preview_base_url_v1',mock2PreviewBaseUrl);saveWorkspaceDraft(true);if(link)link.href=adminUxMock2PreviewUrl()}};
+renderAll();
+</script>
+<style>
+/* モンスター台帳は、ゲームが読む敵データを隠さず確認できる形にする。 */
+.monster-contract-card .monster-basic-grid{display:grid;grid-template-columns:minmax(0,1fr) 130px 130px;gap:10px}.monster-contract-card .monster-contract-details{margin-top:12px;border-top:1px solid var(--border);padding-top:10px}.monster-contract-card .monster-contract-details summary{cursor:pointer;color:var(--accent);font-weight:700}.monster-contract-card .monster-contract-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin-top:10px}.monster-contract-card .monster-contract-grid .span-2{grid-column:span 2}.monster-contract-card .weakness-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin-top:10px}.monster-contract-card .weakness-grid .span-2{grid-column:span 2}@media(max-width:680px){.monster-contract-card .monster-basic-grid,.monster-contract-card .monster-contract-grid,.monster-contract-card .weakness-grid{grid-template-columns:1fr}.monster-contract-card .monster-contract-grid .span-2,.monster-contract-card .weakness-grid .span-2{grid-column:auto}}
+</style>
+<script>
+/* 敵データ解決の堅牢化: 台帳に無い参照で既存enemyを失わず、契約項目を台帳から編集する。 */
+function monsterTextValue(monster,key){return typeof monster?.[key]==='string'?monster[key]:''}
+function monsterNumberValue(monster,key,fallback=''){const value=Number(monster?.[key]);return Number.isFinite(value)&&value>0?value:fallback}
+function monsterWeaknessValue(monster){const weakness=monster?.weakness&&typeof monster.weakness==='object'?monster.weakness:{};return {triggers:Array.isArray(weakness.triggers)?weakness.triggers:[],effect:weakness.effect==='stun'?'stun':'flee',text:typeof weakness.text==='string'?weakness.text:'',hint:typeof weakness.hint==='string'?weakness.hint:''}}
+function monsterDefinedText(target,key,value){const text=String(value||'').trim();if(text)target[key]=text}
+function definedEnemyFields(monster){
+  const patch={name:String(monster?.name||'').trim()};
+  ['unknownName','surface','trait','identifySecret','revealOnDefeat'].forEach(key=>monsterDefinedText(patch,key,monster?.[key]));
+  if(!patch.trait)monsterDefinedText(patch,'trait',monster?.notes);
+  ['hp','maxHp','atk','defenseDc','fleeDc','agility','ambushDc'].forEach(key=>{const value=Number(monster?.[key]);if(Number.isFinite(value)&&value>0)patch[key]=value});
+  if(patch.hp&&!patch.maxHp)patch.maxHp=patch.hp;
+  ['ambush','presence'].forEach(key=>{if(Object.prototype.hasOwnProperty.call(monster||{},key))patch[key]=Boolean(monster[key])});
+  const weakness=monsterWeaknessValue(monster);if(weakness.triggers.length||weakness.text||weakness.hint)patch.weakness={...weakness,triggers:weakness.triggers.filter(Boolean)};
+  const sprite=runtimeImageName(monster?.image);if(sprite)patch.sprite=sprite;
+  return patch;
+}
+function monsterContractCard(monster,index){
+  const weakness=monsterWeaknessValue(monster);const hp=monsterNumberValue(monster,'hp',10);const maxHp=monsterNumberValue(monster,'maxHp',hp);
+  return `<div class="card monster-contract-card" data-monster-contract-index="${index}"><div class="card-head"><h3 data-monster-title="${index}">${escapeHtml(monster.name||`モンスター${index+1}`)}</h3><button class="sub delete-btn" data-remove-monster="${index}">削除</button></div><div class="cast-media"><div class="cast-thumb">${monster.image?`<img src="${escapeHtml(monster.image)}">`:'画像なし'}</div><div class="field cast-file"><label>画像</label><input type="file" accept="image/*" class="monster-image" data-monster-index="${index}"></div></div><div class="monster-basic-grid"><div class="field"><label>名前</label><input class="monster-name" data-monster-index="${index}" value="${escapeHtml(monster.name||'')}" placeholder="錆喰い"></div><div class="field"><label>HP</label><input type="number" min="1" class="monster-hp" data-monster-index="${index}" value="${hp}"></div><div class="field"><label>最大HP</label><input type="number" min="1" class="monster-max-hp" data-monster-index="${index}" value="${maxHp}"></div></div><details class="monster-contract-details"><summary>戦闘・演出の詳細設定</summary><p class="hint">空欄の項目は、すでに章にある敵データを上書きしません。未識別時の演出や弱点もここで確認・編集できます。</p><div class="monster-contract-grid"><div class="field"><label>未識別時の表示名</label><input class="monster-unknown-name" data-monster-index="${index}" value="${escapeHtml(monsterTextValue(monster,'unknownName'))}" placeholder="不気味な影"></div><div class="field"><label>行動順（敏捷）</label><input type="number" min="1" class="monster-agility" data-monster-index="${index}" value="${escapeHtml(monsterNumberValue(monster,'agility',''))}" placeholder="例：8"></div><div class="field span-2"><label>未識別時の外見描写</label><textarea class="monster-surface" data-monster-index="${index}" placeholder="正体が分かる前に見聞きする姿・音・気配">${escapeHtml(monsterTextValue(monster,'surface'))}</textarea></div><div class="field span-2"><label>正体判明後の特徴・行動指針</label><textarea class="monster-trait" data-monster-index="${index}" placeholder="正体が分かった後の特徴、行動、演出上の注意">${escapeHtml(monsterTextValue(monster,'trait')||monsterTextValue(monster,'notes'))}</textarea></div><div class="field"><label>攻撃力</label><input type="number" min="1" class="monster-atk" data-monster-index="${index}" value="${escapeHtml(monsterNumberValue(monster,'atk',''))}" placeholder="例：1"></div><div class="field"><label>防御難易度</label><input type="number" min="1" class="monster-defense-dc" data-monster-index="${index}" value="${escapeHtml(monsterNumberValue(monster,'defenseDc',''))}" placeholder="例：12"></div><div class="field"><label>離脱難易度</label><input type="number" min="1" class="monster-flee-dc" data-monster-index="${index}" value="${escapeHtml(monsterNumberValue(monster,'fleeDc',''))}" placeholder="例：10"></div><div class="field"><label>常在する敵</label><label class="check-row"><input type="checkbox" class="monster-presence" data-monster-index="${index}" ${monster.presence?'checked':''}>シーン開始時から姿を見せる</label></div><div class="field"><label>正体が分かるシーン要素ID</label><input class="monster-identify-secret" data-monster-index="${index}" value="${escapeHtml(monsterTextValue(monster,'identifySecret'))}" placeholder="例：s3a"></div><div class="field"><label>撃破時に開示する要素ID</label><input class="monster-reveal-on-defeat" data-monster-index="${index}" value="${escapeHtml(monsterTextValue(monster,'revealOnDefeat'))}" placeholder="例：s3a"></div></div><div class="section-divider"><h4>奇襲</h4></div><div class="monster-contract-grid"><div class="field"><label class="check-row"><input type="checkbox" class="monster-ambush" data-monster-index="${index}" ${monster.ambush?'checked':''}>奇襲する</label></div><div class="field"><label>奇襲の難易度</label><input type="number" min="1" class="monster-ambush-dc" data-monster-index="${index}" value="${escapeHtml(monsterNumberValue(monster,'ambushDc',''))}" placeholder="例：12"></div><div class="field span-2"><label>奇襲が起きる条件</label><textarea class="monster-ambush-trigger" data-monster-index="${index}" placeholder="例：暗がりへ不用意に踏み込んだ時">${escapeHtml(monsterTextValue(monster,'ambushTrigger'))}</textarea></div></div><div class="section-divider"><h4>弱点</h4></div><div class="weakness-grid"><div class="field span-2"><label>弱点として反応する語句（カンマ区切り）</label><input class="monster-weakness-triggers" data-monster-index="${index}" value="${escapeHtml(weakness.triggers.join(', '))}" placeholder="例：ランタン, 光, 照らす"></div><div class="field"><label>効果</label><select class="monster-weakness-effect" data-monster-index="${index}"><option value="flee" ${weakness.effect==='flee'?'selected':''}>退散する</option><option value="stun" ${weakness.effect==='stun'?'selected':''}>ひるむ</option></select></div><div class="field"><label>仲間が出すヒント（任意）</label><input class="monster-weakness-hint" data-monster-index="${index}" value="${escapeHtml(weakness.hint)}" placeholder="例：光を嫌っているようだ"></div><div class="field span-2"><label>弱点が成功した時の説明</label><textarea class="monster-weakness-text" data-monster-index="${index}" placeholder="例：光を浴びた錆喰いは坑道の奥へ退いていった">${escapeHtml(weakness.text)}</textarea></div></div></details></div>`;
+}
+var baseRenderMonstersForEnemyContract=renderMonsters;
+renderMonsters=function(){const holder=document.createElement('div');holder.innerHTML=baseRenderMonstersForEnemyContract();holder.querySelectorAll('[data-monster-title]').forEach(title=>{const index=Number(title.dataset.monsterTitle);title.closest('.card')?.replaceWith(document.createRange().createContextualFragment(monsterContractCard(monsters[index]||{},index)))});return holder.innerHTML};
+function monsterFieldValue(card,selector){return card.querySelector(selector)?.value.trim()||''}
+function monsterNumberField(card,selector){const value=Number(card.querySelector(selector)?.value);return Number.isFinite(value)&&value>0?value:undefined}
+function monsterOptional(target,key,value){if(value!==undefined&&value!==''&&!(Array.isArray(value)&&!value.length))target[key]=value;else delete target[key]}
+function collectMonsterContract(card,index){const old=monsters[index]||{};const next={...old,id:old.id||`monster_${index+1}`,name:monsterFieldValue(card,'.monster-name'),hp:monsterNumberField(card,'.monster-hp')||Number(old.hp)||10,maxHp:monsterNumberField(card,'.monster-max-hp')||monsterNumberField(card,'.monster-hp')||Number(old.maxHp)||Number(old.hp)||10};monsterOptional(next,'unknownName',monsterFieldValue(card,'.monster-unknown-name'));monsterOptional(next,'surface',monsterFieldValue(card,'.monster-surface'));monsterOptional(next,'trait',monsterFieldValue(card,'.monster-trait'));monsterOptional(next,'agility',monsterNumberField(card,'.monster-agility'));monsterOptional(next,'atk',monsterNumberField(card,'.monster-atk'));monsterOptional(next,'defenseDc',monsterNumberField(card,'.monster-defense-dc'));monsterOptional(next,'fleeDc',monsterNumberField(card,'.monster-flee-dc'));monsterOptional(next,'identifySecret',monsterFieldValue(card,'.monster-identify-secret'));monsterOptional(next,'revealOnDefeat',monsterFieldValue(card,'.monster-reveal-on-defeat'));next.presence=Boolean(card.querySelector('.monster-presence')?.checked);next.ambush=Boolean(card.querySelector('.monster-ambush')?.checked);if(next.ambush){monsterOptional(next,'ambushDc',monsterNumberField(card,'.monster-ambush-dc'));monsterOptional(next,'ambushTrigger',monsterFieldValue(card,'.monster-ambush-trigger'))}else{delete next.ambushDc;delete next.ambushTrigger}const triggers=monsterFieldValue(card,'.monster-weakness-triggers').split(',').map(value=>value.trim()).filter(Boolean);const weakness={triggers,effect:card.querySelector('.monster-weakness-effect')?.value==='stun'?'stun':'flee',text:monsterFieldValue(card,'.monster-weakness-text'),hint:monsterFieldValue(card,'.monster-weakness-hint')};if(weakness.triggers.length||weakness.text||weakness.hint)next.weakness=weakness;else delete next.weakness;delete next.notes;return next}
+var baseBindMonstersForEnemyContract=bindMonsters;
+bindMonsters=function(){baseBindMonstersForEnemyContract();const sync=()=>{const cards=Array.from(document.querySelectorAll('.monster-contract-card'));monsters=cards.map((card,index)=>collectMonsterContract(card,index));document.querySelectorAll('[data-monster-title]').forEach(title=>{const index=Number(title.dataset.monsterTitle);title.textContent=monsters[index]?.name||`モンスター${index+1}`});saveWorkspaceDraft(true);renderRightPanel();renderValidation()};document.querySelectorAll('.monster-contract-card input:not(.monster-image),.monster-contract-card select,.monster-contract-card textarea').forEach(input=>{input.oninput=sync;input.onchange=sync})};
+</script>
+<style>
+.campaign-reset-card{border-color:#8f5b54;background:#251f22}.campaign-reset-card h3{color:#ffb36d}.campaign-reset-card .hint{margin-bottom:8px}.campaign-reset-card button{margin-top:3px}
+.scene-visual-hero{margin:0 0 16px;padding:10px;border:1px solid var(--border);border-radius:7px;background:#202630}.scene-visual-hero>label{color:var(--accent);font-weight:700;font-size:13px}.scene-visual-hero>.hint{margin:3px 0 9px}.scene-visual-hero .scene-bg{height:clamp(210px,42vw,360px);margin:0 0 10px}.scene-visual-hero .image-library-picker{margin-top:0}.scene-visual-hero .image-library-current{font-size:13px}.scene-visual-hero .image-select-button{padding:7px 12px}
+</style>
+<script>
+/* キャンペーン初期化は世界設定に一本化する。初期化前の保存を明示的に確認する。 */
+function campaignResetMarkup(){return '<div class="card campaign-reset-card"><h3>キャンペーン管理</h3><p class="hint">現在のキャンペーンを空の状態に戻し、新しいキャンペーンとして作り直します。</p><button class="sub" id="btnResetCampaign">現在のキャンペーンを初期化</button></div>'}
+var baseRenderWorldForCampaignReset=renderWorld;
+renderWorld=function(){return baseRenderWorldForCampaignReset()+campaignResetMarkup()};
+var baseBindWorldForCampaignReset=bindWorld;
+bindWorld=function(){baseBindWorldForCampaignReset();const button=$('btnResetCampaign');if(button)button.onclick=()=>{const save=window.confirm('初期化前に、現在のキャンペーンデータを保存しますか？\n\nOK：保存して初期化\nキャンセル：保存せず初期化するか、次に確認します');if(save&&!saveCampaignFile())return;if(!save&&!window.confirm('現在のキャンペーンデータを保存せずに初期化しますか？\n\nこの操作は元に戻せません。'))return;window.__tasSkipCampaignConfirm=true;try{createNewCampaign()}finally{window.__tasSkipCampaignConfirm=false}}};
+renderAll();
 </script>
 </html>

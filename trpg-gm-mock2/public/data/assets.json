@@ -1,16 +1,16 @@
 {
   "version": 1,
-  "updated": "2026-07-22",
+  "updated": "2026-07-29",
   "assets": {
     "mine_entrance": {
-      "file": "mine_entrance.jpg",
+      "file": "mine_entrance.png",
       "kind": "background",
       "status": "approved",
       "size": "1376x768",
       "usedBy": [
         "chapter_01.scenes.1.img"
       ],
-      "notes": "既存素材。1920x1080版への更新候補。"
+      "notes": "透過前景レイヤー(左上に山の稜線状の透過あり)。パララックス前景として使用。対応する新しいsky画像はTASに再生成依頼中(s1_skyは旧デザインのまま暫定使用)。"
     },
     "scraped_track": {
       "file": "scraped_track.jpg",
@@ -31,10 +31,10 @@
     },
     "locked_iron_gate": {
       "file": "locked_iron_gate.jpg",
-      "kind": "legacy",
+      "kind": "campaign",
       "status": "approved",
       "usedBy": [
-        "ui.popup.intro"
+        "campaign.image"
       ],
       "notes": "依頼(intro)ポップアップの挿絵に採用(2026-07-13)"
     },
@@ -85,7 +85,7 @@
     },
     "s1_sky": {
       "file": "s1_sky.jpg",
-      "kind": "parallax-sky",
+      "kind": "parallax.sky",
       "status": "approved",
       "target": "2400x1080",
       "usedBy": [
@@ -97,16 +97,14 @@
     },
     "s1_foreground": {
       "file": "s1_foreground.png",
-      "kind": "parallax-foreground",
+      "kind": "parallax.fg",
       "status": "approved",
       "target": "1920x1080",
       "alpha": true,
-      "usedBy": [
-        "chapter_01.scenes.1.parallax.fg"
-      ],
+      "usedBy": [],
       "source": "imagegen",
       "promptVersion": 1,
-      "notes": "坑道入口、岩壁、レール、木の札を含む透過前景。空部分を透明化し1920x1080へ整形済み。"
+      "notes": "坑道入口、岩壁、レール、木の札を含む透過前景。空部分を透明化し1920x1080へ整形済み。旧デザイン。mine_entrance.pngに置き換えられ未使用(2026-07-28)。"
     },
     "s2_junction": {
       "file": "s2_junction.jpg",
@@ -230,12 +228,12 @@
     },
     "portrait_gareth_alt": {
       "file": "portrait_gareth_alt.png",
-      "kind": "portrait-variant",
+      "kind": "portrait",
       "status": "approved",
       "target": "waist-up transparent PNG",
       "alpha": true,
       "usedBy": [
-        "ui.stage.partySlotR1"
+        "campaign.companions.member_2.sprite"
       ],
       "source": "imagegen",
       "promptVersion": 2,
@@ -243,172 +241,16 @@
     },
     "portrait_lydia_alt": {
       "file": "portrait_lydia_alt.png",
-      "kind": "portrait-variant",
+      "kind": "portrait",
       "status": "approved",
       "target": "waist-up transparent PNG",
       "alpha": true,
       "usedBy": [
-        "ui.stage.partySlotL1"
+        "campaign.companions.member_1.sprite"
       ],
       "source": "imagegen",
       "promptVersion": 1,
       "notes": "手がかりを指し示す調査・遺工向けの差分。"
-    },
-    "portrait_gareth_alt-png": {
-      "file": "portrait_gareth_alt.png",
-      "kind": "portrait",
-      "status": "candidate",
-      "usedBy": [
-        "campaign.companions.gareth.sprite"
-      ],
-      "width": 1024,
-      "height": 1536,
-      "format": "png",
-      "bytes": 1612476
-    },
-    "portrait_lydia_alt-png": {
-      "file": "portrait_lydia_alt.png",
-      "kind": "portrait",
-      "status": "candidate",
-      "usedBy": [
-        "campaign.companions.lydia.sprite"
-      ],
-      "width": 1024,
-      "height": 1536,
-      "format": "png",
-      "bytes": 1914828
-    },
-    "mine_entrance-jpg": {
-      "file": "mine_entrance.jpg",
-      "kind": "background",
-      "status": "candidate",
-      "usedBy": [
-        "chapter_01.scenes.1.img"
-      ],
-      "width": 1376,
-      "height": 768,
-      "format": "jpg",
-      "bytes": 848347
-    },
-    "s1_sky-jpg": {
-      "file": "s1_sky.jpg",
-      "kind": "parallax.sky",
-      "status": "candidate",
-      "usedBy": [
-        "chapter_01.scenes.1.parallax.sky"
-      ],
-      "width": 2400,
-      "height": 1080,
-      "format": "jpg",
-      "bytes": 419968
-    },
-    "s1_foreground-png": {
-      "file": "s1_foreground.png",
-      "kind": "parallax.fg",
-      "status": "candidate",
-      "usedBy": [
-        "chapter_01.scenes.1.parallax.fg"
-      ],
-      "width": 1920,
-      "height": 1080,
-      "format": "png",
-      "bytes": 3110287
-    },
-    "s2_junction-jpg": {
-      "file": "s2_junction.jpg",
-      "kind": "background",
-      "status": "candidate",
-      "usedBy": [
-        "chapter_01.scenes.2.img"
-      ],
-      "width": 1920,
-      "height": 1080,
-      "format": "jpg",
-      "bytes": 473530
-    },
-    "rust_eater-jpg": {
-      "file": "rust_eater.jpg",
-      "kind": "enemy",
-      "status": "candidate",
-      "usedBy": [
-        "chapter_01.scenes.2.enemy.img"
-      ],
-      "width": 1376,
-      "height": 768,
-      "format": "jpg",
-      "bytes": 784832
-    },
-    "s2_rust_eater-png": {
-      "file": "s2_rust_eater.png",
-      "kind": "sprite",
-      "status": "candidate",
-      "usedBy": [
-        "chapter_01.scenes.2.enemy.sprite"
-      ],
-      "width": 1536,
-      "height": 1024,
-      "format": "png",
-      "bytes": 1194094
-    },
-    "s3_chamber-jpg": {
-      "file": "s3_chamber.jpg",
-      "kind": "background",
-      "status": "candidate",
-      "usedBy": [
-        "chapter_01.scenes.3.img"
-      ],
-      "width": 1920,
-      "height": 1080,
-      "format": "jpg",
-      "bytes": 64454
-    },
-    "s3_guardian-png": {
-      "file": "s3_guardian.png",
-      "kind": "sprite",
-      "status": "candidate",
-      "usedBy": [
-        "chapter_01.scenes.3.enemy.sprite"
-      ],
-      "width": 1024,
-      "height": 1536,
-      "format": "png",
-      "bytes": 1698379
-    },
-    "s4_village_square-jpg": {
-      "file": "s4_village_square.jpg",
-      "kind": "background",
-      "status": "candidate",
-      "usedBy": [
-        "chapter_01.scenes.4.img"
-      ],
-      "width": 1920,
-      "height": 1080,
-      "format": "jpg",
-      "bytes": 426314
-    },
-    "s4_myra_room-jpg": {
-      "file": "s4_myra_room.jpg",
-      "kind": "background",
-      "status": "candidate",
-      "usedBy": [
-        "chapter_01.scenes.5.img"
-      ],
-      "width": 1920,
-      "height": 1080,
-      "format": "jpg",
-      "bytes": 370852
-    },
-    "s4_myra-png": {
-      "file": "s4_myra.png",
-      "kind": "sprite",
-      "status": "candidate",
-      "usedBy": [
-        "chapter_01.scenes.5.npcSprite"
-      ],
-      "width": 1024,
-      "height": 1536,
-      "format": "png",
-      "bytes": 1705052
     }
   }
 }

@@ -341,11 +341,19 @@ const server = http.createServer((req, res) => {
 
   if (req.method === "GET" && req.url.startsWith("/images/")) {
     const name = path.basename(decodeURIComponent(req.url)); // basename でパストラバーサルを防ぐ
-    fs.readFile(path.join(__dirname, "images", name), (err, data) => {
-      if (err) { res.writeHead(404); res.end(); return; }
-      const type = name.toLowerCase().endsWith(".png") ? "image/png" : "image/jpeg";
-      res.writeHead(200, { "Content-Type": type, "Cache-Control": "max-age=3600" });
-      res.end(data);
+    const filePath = path.join(__dirname, "images", name);
+    fs.stat(filePath, (statErr, stat) => {
+      if (statErr) { res.writeHead(404); res.end(); return; }
+      // TAS側が同名ファイルを差し替えた場合にブラウザキャッシュが古いままにならないよう、
+      // mtimeベースのLast-Modifiedで検証させる(max-ageだけだと差し替えに気づけない)
+      const lastModified = stat.mtime.toUTCString();
+      if (req.headers["if-modified-since"] === lastModified) { res.writeHead(304); res.end(); return; }
+      fs.readFile(filePath, (err, data) => {
+        if (err) { res.writeHead(404); res.end(); return; }
+        const type = name.toLowerCase().endsWith(".png") ? "image/png" : "image/jpeg";
+        res.writeHead(200, { "Content-Type": type, "Cache-Control": "max-age=3600, must-revalidate", "Last-Modified": lastModified });
+        res.end(data);
+      });
     });
     return;
   }
