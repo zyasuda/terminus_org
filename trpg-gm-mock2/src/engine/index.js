@@ -97,6 +97,14 @@ function setSceneInfo() {
     title: SCENARIO.title, name: sc.name || ""
   } });
 }
+// intro / ending はシーン配列には入れず、同じ表示経路だけを使う対話ノード。
+// 左パネルと中央オーバーレイにも、そのノード自身の説明を出す。
+function setDialogueNodeInfo(node) {
+  setStore({ sceneInfo: {
+    num: state.sceneIndex + 1, total: SCENARIO.scenes.length, brief: node.brief || node.text || "", report: false,
+    title: SCENARIO.title, name: node.name || ""
+  } });
+}
 // シーン切替の演出: 下パネルを閉じてシーン説明をフェードイン表示(#sceneDesc、CSSで
 // 1sイン→約10s表示→1sアウト)し、フェードインが終わったところで下パネルをスライドインさせる
 let overlayTimer = null;
@@ -108,6 +116,23 @@ function showSceneOverlay() {
   }));
   clearTimeout(overlayTimer);
   overlayTimer = setTimeout(() => setStore({ underPanelOpen: true }), 1000); // フェードイン(1s)完了と同時
+}
+function showDialogueNode(node) {
+  // intro.img が未指定の旧データ互換では、従来の導入画像へフォールバックする。
+  const backdropNode = state.pendingIntro && !node.img ? { ...node, img: "locked_iron_gate.jpg" } : node;
+  setSceneBackdrop(backdropNode);
+  setDialogueNodeInfo(node);
+  setStore(s => ({
+    overlay: { text: node.brief || node.text || "", seq: s.overlay.seq + 1 },
+    underPanelOpen: false,
+    curtain: false,
+    companionBubbles: {},
+    npcBubble: { text: "", seq: 0 }
+  }));
+  clearTimeout(overlayTimer);
+  overlayTimer = setTimeout(() => setStore({ underPanelOpen: true }), 1000);
+  addGm(node.brief || node.text || "", "Neutral");
+  renderDebug();
 }
 
 // ダイス結果・開示画像は一旦ポップアップで表示する(下パネル=会話専用の暫定措置。表示方法は別途検討)
@@ -121,8 +146,12 @@ export function dismissPopup() {
     // 開幕シーケンス: 幕が開く(1.2s) → シーン説明フェードイン(1s) → GM自己紹介+下パネルのスライドイン
     setStore({ curtain: false });
     setTimeout(() => {
-      showSceneOverlay(); // テキストのフェードイン開始。フェードイン完了時に下パネルが開く(showSceneOverlay内)
-      setTimeout(() => addGm("今回のGMを担当するダイス先輩です。よろしくぅ", "Happy"), 1000);
+      if (state.pendingIntro) {
+        showDialogueNode(SCENARIO.intro);
+      } else {
+        showSceneOverlay(); // テキストのフェードイン開始。フェードイン完了時に下パネルが開く(showSceneOverlay内)
+        setTimeout(() => addGm("今回のGMを担当するダイス先輩です。よろしくぅ", "Happy"), 1000);
+      }
     }, 1200);
   }
 }
@@ -131,7 +160,7 @@ function setSceneBackdrop(sc) {
   let src = sc && sc.img;
   // D-025: 背景はシーン単位ではなくGMの語りの節目(secret開示)で切り替わる。
   // 開示状態(revealed)から導出するので、リロード復元後も開示済みの背景が維持される
-  if (sc && revealed) sc.secrets.forEach(s => { if (s.bg && revealed.has(s.id)) src = s.bg; });
+  if (sc && revealed) (sc.secrets || []).forEach(s => { if (s.bg && revealed.has(s.id)) src = s.bg; });
   // 画像の下にグラデーションを敷く: 素材が404(未作成)でも無地グラデーションで破綻しない
   const value = src
     ? `url("/images/${src}") center / cover no-repeat, linear-gradient(135deg, #151720 0%, #1e2230 100%)`
@@ -247,7 +276,9 @@ export function resetGame() {
   revealed = new Set();
   chron = [];
   busy = false;
-  setSceneBackdrop(SCENARIO.scenes[0]);
+  const intro = SCENARIO.intro;
+  const introIsObject = intro && typeof intro === "object";
+  setSceneBackdrop(introIsObject ? (intro.img ? intro : { ...intro, img: "locked_iron_gate.jpg" }) : SCENARIO.scenes[0]);
   clearChat();
   // 依頼導入(intro)は通知型ポップアップで提示し、シーン説明(brief)は主画面オーバーレイ+左パネルへ。
   // 下パネルのチャットは会話専用にする(UI_REDESIGN.md / EVENT_MAP.mdの「シナリオ開始=依頼ポップアップ」)。
@@ -258,21 +289,17 @@ export function resetGame() {
   // opening/introはnull運用(TAS_導入終端ノード出力仕様_null運用_2026-07-22):
   // null=未作成(ポップアップを出さない)、文字列=旧形式、オブジェクト(exits[]あり)=新形式。
   // 新形式の場合、"はじめる"の後はシーン0へ直行せず、intro.exits[]の解決を待つ(sendAction側で処理)
-  const intro = SCENARIO.intro;
-  const introIsObject = intro && typeof intro === "object";
   state.pendingIntro = introIsObject;
   const popups = [];
   if (CAMPAIGN.opening) {
-    popups.push({ kind: "intro", title: CAMPAIGN.opening.name || "オープニング", body: CAMPAIGN.opening.brief || CAMPAIGN.opening.text || "", img: "locked_iron_gate.jpg" });
+    popups.push({ kind: "intro", title: CAMPAIGN.opening.name || "オープニング", body: CAMPAIGN.opening.brief || CAMPAIGN.opening.text || "", img: CAMPAIGN.opening.img || "locked_iron_gate.jpg" });
   }
-  if (introIsObject) {
-    popups.push({ kind: "intro", title: intro.name || "依頼", body: intro.brief || "", img: "locked_iron_gate.jpg" });
-  } else if (typeof intro === "string" && intro) {
+  if (!introIsObject && typeof intro === "string" && intro) {
     popups.push({ kind: "intro", title: "依頼", body: intro, img: "locked_iron_gate.jpg" });
   }
   setStore({
     diceLog: [], popups,
-    overlay: { text: "", seq: 0 }, curtain: true,
+    overlay: { text: "", seq: 0 }, curtain: popups.length > 0,
     leftPanelOpen: false, rightPanelOpen: false, underPanelOpen: false
   });
   setSceneInfo();
@@ -281,6 +308,8 @@ export function resetGame() {
   history.push({ role: "user", content: "【システム】セッションが始まった。" });
   history.push({ role: "assistant", content: JSON.stringify({ narration: openingBrief, companion: null, npc: null, check: null, state_updates: null, engage_enemy: false, flee_enemy: false, scene_complete: false, meta_request: null }) });
   renderDebug();
+  // 新形式introにはポップアップを挟まない。既存の幕開けと同じく、説明を表示してから入力を受ける。
+  if (introIsObject && popups.length === 0) showDialogueNode(intro);
 }
 
 /* ---------------- 動詞チップ(入力補助の実験) ----------------
@@ -587,6 +616,11 @@ function renderDebug() {
       }
       if (curScene.enemy && curScene.enemy.presence && curScene.enemy.sprite && !state.defeated.includes(curScene.enemy.name)) {
         return { enemySprite: { src: curScene.enemy.sprite, identified: revealed.has(curScene.enemy.identifySecret) }, sceneNpcName: null };
+      }
+      // intro / ending もシーンNPCと同じスロット・表示ロジックを使う。
+      const dialogueNode = state.pendingIntro ? SCENARIO.intro : (state.pendingEnding ? SCENARIO.ending : null);
+      if (dialogueNode && dialogueNode.npcSprite) {
+        return { enemySprite: { src: dialogueNode.npcSprite, identified: true }, sceneNpcName: (dialogueNode.npc && dialogueNode.npc.name) || null };
       }
       if (curScene.npcSprite) {
         return { enemySprite: { src: curScene.npcSprite, identified: true }, sceneNpcName: (curScene.npc && curScene.npc.name) || null };
@@ -1209,6 +1243,8 @@ function requiresMet(requires) {
   if (!requires) return true;
   if (requires.secretsAny && !requires.secretsAny.some(id => revealed.has(id))) return false;
   if (requires.secretsAll && !requires.secretsAll.every(id => revealed.has(id))) return false;
+  if (requires.itemsAny && !requires.itemsAny.some(n => state.items.includes(n))) return false;
+  if (requires.itemsAll && !requires.itemsAll.every(n => state.items.includes(n))) return false;
   return true;
 }
 // 宣言文とexits[].matchの部分一致で出口を選ぶ。配列の先頭から順に評価し、最初に一致したものを採用
@@ -1356,6 +1392,72 @@ targetの規則(厳守):
   }
 }
 
+const CONSENT_GAP_MS = 350;       // 同行者が順に答える間隔
+const CONSENT_LAST_HOLD_MS = 900; // 最後の同意を読ませてからシーンへ進むまでの間
+
+// 同行者の同意は参加者ごとの応答として記録する。CPU自動応答はこの入口を呼ぶ実装の一つであり、
+// 将来人間プレイヤーが操作する場合も、この関数へ応答を渡せば同じ進行になる。
+function submitCompanionConsent(who, response) {
+  const waiting = state.pendingCompanionConsents;
+  if (!waiting) return;
+  const participant = waiting.find(p => p.who === who && p.response === null);
+  if (!participant) return;
+  participant.response = response;
+  addCompanion(response, who);
+  renderDebug();
+  const next = waiting.find(p => p.response === null);
+  if (next) {
+    setTimeout(() => resolveCpuCompanionConsent(next.who), CONSENT_GAP_MS);
+    return;
+  }
+  // 最後の1人の吹き出しも読ませてからシーンへ進む。advanceSceneは冒頭でcompanionBubblesを
+  // 空にするため、ここで間を置かないと最後の同意だけ一瞬も表示されない
+  // (実測: 100ms間隔で監視しても一度も描画されなかった)。
+  // 進行状態は先に畳んでおく(この間にプレイヤーが入力しても同意フローへ再突入させない)
+  const targetIdx = state.pendingIntroTarget;
+  state.pendingCompanionConsents = null;
+  state.pendingIntroTarget = null;
+  setTimeout(() => advanceScene(targetIdx), CONSENT_LAST_HOLD_MS);
+}
+
+function companionConsentLine(companion) {
+  // voiceRule()はLLM経路と同じ人格制約の唯一の組み立て口。定型CPU応答も必ずここを通す。
+  const rule = voiceRule(companion);
+  if (companion.gender === "female") {
+    return { rule, say: `${companion.firstPerson || "あたし"}も賛成。${companion.addressTerm || "あなた"}が受けるなら、同行するわ。` };
+  }
+  if (companion.gender === "male") {
+    return { rule, say: `${companion.firstPerson || "俺"}も賛成だ。${companion.addressTerm || "お前"}が受けるなら、同行する。` };
+  }
+  return { rule, say: "同行する。" };
+}
+
+function resolveCpuCompanionConsent(who) {
+  const companion = CAST[who];
+  if (!companion) return;
+  const response = companionConsentLine(companion);
+  // response.rule は上記で voiceRule() を通過した人格制約。CPU応答を差し替える実装もここを置換する。
+  submitCompanionConsent(who, response.say);
+}
+
+function beginCompanionConsent(targetIdx) {
+  const participants = Object.keys(CAST).map(who => ({ who, response: null }));
+  if (!participants.length) { advanceScene(targetIdx); return; }
+  state.pendingCompanionConsents = participants;
+  state.pendingIntroTarget = targetIdx;
+  addGm("同行する者にも、意思を確かめよう。", "Neutral");
+  resolveCpuCompanionConsent(participants[0].who);
+}
+
+function finishChapter() {
+  if (state.chapterEnded) return;
+  state.chapterEnded = true;
+  captureWorldFlags();
+  const campaignEnding = CAMPAIGN.ending;
+  if (campaignEnding) addGm(campaignEnding.brief || campaignEnding.text || "", "Neutral");
+  addNote("—— 物語は決着した。おつかれさま。「最初から」で別の選択を試せる ——");
+}
+
 // シーン遷移の実行(LLM経路・scripted経路の両方から使う)。最終シーンなら章を締める
 // targetIndexを渡すとexits[]の任意遷移先へジャンプする(未指定なら従来通り次のシーン)
 function advanceScene(targetIndex) {
@@ -1383,15 +1485,17 @@ function advanceScene(targetIndex) {
     history.push({ role: "assistant", content: JSON.stringify({ narration: newBrief, companion: null, npc: null, check: null, state_updates: null, engage_enemy: false, flee_enemy: false, scene_complete: false, meta_request: null }) });
   } else {
     if (state.chapterEnded) return; // 終幕後にLLMが再度scene_completeを申告しても二重記録しない
-    state.chapterEnded = true;
-    captureWorldFlags();
     // chapter.ending/campaign.endingはnull運用(TAS_導入終端ノード出力仕様_null運用_2026-07-22):
     // 未作成(null)なら何も再生せず、従来通りの定型文にフォールバックする
     const chapterEnding = SCENARIO.ending;
+    if (chapterEnding && typeof chapterEnding === "object") {
+      state.pendingEnding = true;
+      showDialogueNode(chapterEnding);
+      return;
+    }
+    // 旧形式(ending=nullを含む)は従来通り、定型文で即時終了する。
     if (chapterEnding) addGm(chapterEnding.brief || chapterEnding.text || "", "Neutral");
-    const campaignEnding = CAMPAIGN.ending;
-    if (campaignEnding) addGm(campaignEnding.brief || campaignEnding.text || "", "Neutral");
-    addNote("—— 物語は決着した。おつかれさま。「最初から」で別の選択を試せる ——");
+    finishChapter();
   }
 }
 
@@ -1721,6 +1825,16 @@ export async function sendAction(text) {
   addPlayer(text);
   recordVerb(text); // 述語を頻度辞書へ記録(動詞チップの学習)
 
+  // 導入受諾後は、参加者ごとの応答が揃うまでシーンへ進めない。
+  if (state.pendingCompanionConsents) {
+    const waiting = state.pendingCompanionConsents.find(p => p.response === null);
+    if (waiting) addGm(`${(CAST[waiting.who] && CAST[waiting.who].name) || waiting.who}の返事を待っている。`, "Neutral");
+    busy = false;
+    setStore({ busy: false });
+    renderDebug();
+    return;
+  }
+
   // 導入ノード(intro)がオブジェクト形式(exits[]あり)の間は、シーンロジックより先に
   // intro.exits[]の解決を試みる(null運用: TAS_導入終端ノード出力仕様_null運用_2026-07-22)
   if (state.pendingIntro) {
@@ -1734,7 +1848,27 @@ export async function sendAction(text) {
       state.pendingIntro = false;
       const targetIdx = exit.to === null || exit.to === undefined ? 0 : resolveExitTargetIndex(exit.to);
       if (exit.arrivalText) addGm(exit.arrivalText, "Neutral");
-      advanceScene(targetIdx >= 0 ? targetIdx : 0);
+      beginCompanionConsent(targetIdx >= 0 ? targetIdx : 0);
+    }
+    busy = false;
+    setStore({ busy: false });
+    renderDebug();
+    return;
+  }
+
+  // 終端ノード(ending)もintroと同じく、通常シーンの解決より先にexits[]を解決する。
+  if (state.pendingEnding) {
+    const ending = SCENARIO.ending;
+    const exit = resolveExit(ending, text);
+    if (!exit) {
+      addGm(ending.blockedText || "どう締めくくるか、はっきりしない。別の言い方を試してくれ。", "Neutral");
+    } else if (!requiresMet(exit.requires)) {
+      addGm(exit.blockedText || ending.blockedText || "まだ進めない。", "Neutral");
+    } else {
+      if (Array.isArray(exit.removeItems)) applyUpdates({ remove_items: exit.removeItems });
+      state.pendingEnding = false;
+      if (exit.arrivalText) addGm(exit.arrivalText, "Neutral");
+      finishChapter();
     }
     busy = false;
     setStore({ busy: false });

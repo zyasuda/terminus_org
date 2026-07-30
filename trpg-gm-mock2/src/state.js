@@ -19,6 +19,9 @@ export function initialState() {
            flags: {}, // プレイヤーの選択で確定したフラグ(scenes[].stateUpdatesのflag_set由来。例: heartstone_choice)
            flagsFired: [], // 発火済みのstateUpdates識別子("シーン番号:配列index")。onceの重複発火を防ぐ
            pendingIntro: false, // 導入ノード(intro)がオブジェクト形式の間、exits[]解決待ちであることを示す
+           pendingEnding: false, // 終端ノード(ending)がオブジェクト形式の間、exits[]解決待ちであることを示す
+           pendingCompanionConsents: null, // 導入受諾後の同行者ごとの応答待ち { who, response }[]
+           pendingIntroTarget: null, // 同行者全員の応答後に進むintro.exitの行き先
            encounterCounts: {} // 発生済みエンカウント回数 {encounterId: count}。maxOccurrencesの上限判定に使う
          };
 }
