@@ -1,0 +1,3 @@
+
+var baseBindWorldForLedger=bindWorld;
+bindWorld=function(){baseBindWorldForLedger();document.querySelectorAll("[data-ledger-tab]").forEach(button=>button.onclick=()=>{const tab=button.dataset.ledgerTab;const chapter=button.dataset.ledgerChapter;const index=button.dataset.ledgerIndex;if(chapter&&chapter!==activeChapter){activeChapter=chapter;selectedNode={type:"scene",index:Number(index)||0}}else if(tab==="state"&&index!==""){selectedNode={type:"scene",index:Number(index)||0}}if(tab==="cast")pendingCastFocus=button.dataset.ledgerFocus||null;activeTab=tab;renderScenes();renderAll();setStatus(`${button.textContent}の登録画面へ移動しました`)})}

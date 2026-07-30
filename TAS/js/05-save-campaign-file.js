@@ -1,0 +1,3 @@
+
+// ブラウザ標準の prompt に依存せず、キャンペーン名をファイル名として保存する。
+saveCampaignFile=()=>{try{const filename=`${sanitizeFilename(campaignName)}.json`;const payload={version:1,savedAt:new Date().toISOString(),data:localDraftSnapshot()};const blob=new Blob([JSON.stringify(payload,null,2)],{type:"application/json"});const url=URL.createObjectURL(blob);const link=document.createElement("a");link.href=url;link.download=filename;document.body.appendChild(link);link.click();link.remove();setTimeout(()=>URL.revokeObjectURL(url),0);saveWorkspaceDraft();setStatus(`キャンペーンデータを保存しました（画像本体は含めず、ファイル名のみ保存）: ${filename}`);return true}catch(error){setStatus(`保存に失敗しました: ${error.message}`);return false}};

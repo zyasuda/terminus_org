@@ -1,0 +1,7 @@
+
+/* シーンに登場するエンティティを、プレイヤー行動の対象チップとして提示する。 */
+function playtestEntityActions(){const s=scene();const actions=[];playtestDiscoveryEntries(s).forEach(d=>{if(d.label)actions.push({label:d.label,action:`${d.label}を調べる`,kind:"調査"})});(s.npcs||[]).forEach(id=>{const name=castName(id,id);if(name)actions.push({label:name,action:`${name}に話しかける`,kind:"会話"})});if(s.enemy?.name)actions.push({label:s.enemy.name,action:`${s.enemy.name}を調べる`,kind:"調査"});const seen=new Set();return actions.filter(x=>!seen.has(x.action)&&seen.add(x.action))}
+var baseRenderPlaytestForEntityChips=renderPlaytest;
+renderPlaytest=function(){const html=baseRenderPlaytestForEntityChips();const chips=playtestEntityActions();const block=`<div class="card entity-action-card"><h3>行動対象</h3><p class="hint">対象を選ぶと、プレイヤーの行動文が入力欄に入ります。</p><div class="chips">${chips.length?chips.map(x=>`<button class="chip play-entity-chip" data-play-object="${escapeHtml(x.action)}"><span class="chip-kind">${escapeHtml(x.kind)}</span> ${escapeHtml(x.label)}</button>`).join(""):`<span class="chip">このシーンの行動対象は未登録です</span>`}</div></div>`;return html.replace('<div class="play-input">',block+'<div class="play-input">')}
+var baseBindPlaytestForEntityChips=bindPlaytest;
+bindPlaytest=function(){baseBindPlaytestForEntityChips();document.querySelectorAll("[data-play-object]").forEach(button=>button.onclick=()=>{const input=$("playInput");if(!input)return;input.value=button.dataset.playObject||"";input.focus()})}
