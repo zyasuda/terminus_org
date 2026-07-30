@@ -25,31 +25,120 @@
   "monsters": [],
   "items": [
     {
+      "id": "item_lantern",
+      "ja": "ランタン",
+      "aliases": [
+        "ランプ",
+        "灯り",
+        "ていとう",
+        "らんたん",
+        "手元灯",
+        "照明"
+      ],
+      "kind": "item",
+      "parentConceptId": "",
+      "scope": "campaign",
+      "acquisition": "starting_inventory",
+      "persistent": true,
+      "capabilities": [
+        "inspect",
+        "use"
+      ],
+      "requires": "",
+      "surface": "金属製の小さな灯りである。ガラスのなかで火が揺れている。暗い場所を照らす。",
+      "visual": "",
+      "name": "ランタン",
+      "notes": "金属製の小さな灯りである。ガラスのなかで火が揺れている。暗い場所を照らす。",
+      "image": ""
+    },
+    {
+      "id": "item_rope",
+      "ja": "ロープ",
+      "aliases": [
+        "綱",
+        "紐",
+        "麻縄",
+        "つな",
+        "ひも",
+        "あさなわ",
+        "コード"
+      ],
+      "kind": "item",
+      "parentConceptId": "",
+      "scope": "campaign",
+      "acquisition": "starting_inventory",
+      "persistent": true,
+      "capabilities": [
+        "inspect",
+        "use"
+      ],
+      "requires": "",
+      "surface": "麻で編んだ丈夫な綱である。物を縛るのに使う。",
+      "visual": "",
+      "name": "ロープ",
+      "notes": "麻で編んだ丈夫な綱である。物を縛るのに使う。",
+      "image": ""
+    },
+    {
+      "id": "item_knife",
+      "ja": "ナイフ",
+      "aliases": [
+        "刃物",
+        "刀",
+        "小刀",
+        "ないふ",
+        "はもの",
+        "かたな",
+        "ブレード"
+      ],
+      "kind": "item",
+      "parentConceptId": "",
+      "scope": "campaign",
+      "acquisition": "starting_inventory",
+      "persistent": true,
+      "capabilities": [
+        "inspect",
+        "use"
+      ],
+      "requires": "",
+      "surface": "柄の短い小さな刃物である。銀色の刃は冷たく光る。ものを切るために使う。",
+      "visual": "",
+      "name": "ナイフ",
+      "notes": "柄の短い小さな刃物である。銀色の刃は冷たく光る。ものを切るために使う。",
+      "image": ""
+    },
+    {
       "id": "item_heartstone_fragment",
-      "name": "心石の欠片",
-      "parentConceptId": "concept_heartstone",
+      "ja": "心石の欠片",
       "aliases": [
         "心石",
+        "こころいし",
         "青い石",
         "光る石",
+        "かけら",
+        "破片",
         "石",
         "あおいし",
         "ひかるいし",
         "いし",
         "心臓の石"
       ],
+      "kind": "item",
+      "parentConceptId": "concept_heartstone",
       "scope": "scene",
-      "acquisition": "scene",
-      "persistent": false,
-      "requires": "ch1_s3_item_2",
+      "acquisition": "dialogue",
+      "persistent": true,
       "capabilities": [
         "inspect",
         "take",
-        "give",
-        "lose",
-        "use"
+        "give"
       ],
-      "notes": "シーン入手品"
+      "requires": "ch1_s3_item_2",
+      "surface": "青く光る小さな石の破片である。手に取るとかすかに温かい。強い力を秘めている。",
+      "visual": "",
+      "name": "心石の欠片",
+      "notes": "青く光る小さな石の破片である。手に取るとかすかに温かい。強い力を秘めている。",
+      "image": ""
     }
   ],
   "castImages": {
@@ -173,7 +262,11 @@
       "truth": "何かの動力源になるような不思議な力を宿す"
     }
   ],
-  "initialInventory": [],
+  "initialInventory": [
+    "item_lantern",
+    "item_rope",
+    "item_knife"
+  ],
   "structureChapters": {
     "ch1": {
       "title": "廃坑の灯",

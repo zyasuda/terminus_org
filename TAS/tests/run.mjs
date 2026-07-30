@@ -47,7 +47,8 @@ const FIXTURES = [
   { name: "authored", draft: "authored.json", note: "イントロ・アウトロを画面で書いた状態" },
   { name: "fresh", draft: "fresh.json", note: "新規キャンペーンを作った直後" },
   { name: "outro-from-base", draft: "outro-from-base.json", note: "アウトロの本文だけ書き、出口は元データのまま" },
-  { name: "outro-brief-only", draft: "outro-brief-only.json", note: "アウトロの本文だけ書き、画像は画面で選んでいない" }
+  { name: "outro-brief-only", draft: "outro-brief-only.json", note: "アウトロの本文だけ書き、画像は画面で選んでいない" },
+  { name: "flags-and-rules", draft: "flags-and-rules.json", note: "状態変換ルール・ゲームオーバー文言・発話ルールを入れた状態" }
 ];
 
 let failures = 0;
@@ -206,9 +207,40 @@ function diffText(a, b) {
   return lines.join("\n      ");
 }
 
+/* 11段のラッパーが書く項目。どれか1つのフィクスチャで埋まっていればよい。
+   全部空になったら、そのラッパーを通す入力が無くなったということなので落とす。
+   出力の1本化はこの網羅を前提にしているため、減らすときは理由を残すこと。 */
+const COVERAGE = [
+  ["campaign.entities", g => (g.campaign?.entities || []).length],
+  ["campaign.concepts", g => (g.campaign?.concepts || []).length],
+  ["campaign.items", g => (g.campaign?.items || []).length],
+  ["campaign.initialInventory", g => (g.campaign?.initialInventory || []).length],
+  ["campaign.castAttributes", g => Object.keys(g.campaign?.castAttributes || {}).length],
+  ["campaign.flags", g => Object.keys(g.campaign?.flags || {}).length],
+  ["campaign.style.gameOverText", g => (g.campaign?.style?.gameOverText ? 1 : 0)],
+  ["chapter.flagsOut", g => (g.chapter?.flagsOut || []).length],
+  ["chapter.flagRules", g => Object.keys(g.chapter?.flagRules || {}).length],
+  ["chapter.intro（オブジェクト）", g => (g.chapter?.intro && typeof g.chapter.intro === "object" ? 1 : 0)],
+  ["chapter.intro（文字列）", g => (typeof g.chapter?.intro === "string" && g.chapter.intro ? 1 : 0)],
+  ["chapter.ending.exits", g => (g.chapter?.ending?.exits || []).length],
+  ["scenes[].npc", g => (g.chapter?.scenes || []).filter(s => s.npc).length],
+  ["scenes[].npcSprite", g => (g.chapter?.scenes || []).filter(s => s.npcSprite).length],
+  ["scenes[].encounters", g => (g.chapter?.scenes || []).filter(s => (s.encounters || []).length).length],
+  ["scenes[].stateUpdates", g => (g.chapter?.scenes || []).filter(s => (s.stateUpdates || []).length).length],
+  ["scenes[].enemy", g => (g.chapter?.scenes || []).filter(s => s.enemy).length],
+  ["scenes[].loot", g => (g.chapter?.scenes || []).filter(s => (s.loot || []).length).length],
+  ["scenes[].exits", g => (g.chapter?.scenes || []).filter(s => (s.exits || []).length).length],
+  ["scenes[].completeRequires", g => (g.chapter?.scenes || []).filter(s => Object.keys(s.completeRequires || {}).length).length],
+  ["scenes[].secrets", g => (g.chapter?.scenes || []).filter(s => (s.secrets || []).length).length],
+  ["scenes[].direction", g => (g.chapter?.scenes || []).filter(s => s.direction).length],
+  ["scenes[].parallax", g => (g.chapter?.scenes || []).filter(s => s.parallax).length],
+  ["assets", g => Object.keys(g.assets || {}).length]
+];
+
 async function runSnapshot(browser, update) {
   section(update ? "出力JSONの基準を作り直す" : "出力JSONの基準比較");
   fs.mkdirSync(goldenDir, { recursive: true });
+  const captured = [];
   for (const fixture of FIXTURES) {
     const draftPath = fixture.draft && path.join(draftsDir, fixture.draft);
     if (draftPath && !fs.existsSync(draftPath)) {
@@ -224,6 +256,7 @@ async function runSnapshot(browser, update) {
       await page.close();
     }
     ok(pageErrors.length === 0, `${fixture.name}: 画面実行エラーが出ない`, pageErrors.join(" / "));
+    captured.push({ name: fixture.name, payload });
 
     const goldenPath = path.join(goldenDir, `${fixture.name}.json`);
     const text = JSON.stringify(payload, null, 2) + "\n";
@@ -240,6 +273,13 @@ async function runSnapshot(browser, update) {
     ok(text === JSON.stringify(golden, null, 2) + "\n",
       `${fixture.name}: 出力JSONが基準と完全一致する（${fixture.note}）`,
       diffText(golden, payload));
+  }
+
+  section("ラッパーが書く項目の網羅");
+  for (const [label, count] of COVERAGE) {
+    const hits = captured.filter(entry => { try { return count(entry.payload) > 0; } catch { return false; } });
+    ok(hits.length > 0, `${label} を埋めるフィクスチャがある`,
+      "この項目を出すラッパーを通す入力が無くなりました。フィクスチャを足すか、項目を減らした理由を残してください");
   }
 }
 
@@ -494,6 +534,36 @@ async function makeFixtures(browser) {
   })();
   fs.writeFileSync(path.join(draftsDir, "outro-brief-only.json"), JSON.stringify(outroBriefOnly, null, 2) + "\n", "utf8");
   results.push("  --  drafts/outro-brief-only.json を書き出した");
+
+  /* 27-flags-contract が書く項目を通す。元データ(TAS/data)には flagRules も
+     gameOverText も無いため、この入力が無いと chapter.flagsOut / chapter.flagRules /
+     style.gameOverText / scenes[].stateUpdates がどの基準出力でも空のままになる。
+     条件語彙 defeated / revealed / itemsInclude / else は mock2 の evaluateFlagRules に合わせる。 */
+  const flagsAndRules = await (async () => {
+    const { page } = await openPage(browser, null);
+    try {
+      return await page.evaluate(() => {
+        gameOverText = "君は坑道の暗がりで力尽きた。";
+        flagRulesByChapter[activeChapter] = {
+          guardian_alive: [{ if: { defeated: "守護機構" }, value: false }, { else: true, value: true }],
+          learned_heartstone: [{ if: { revealed: "ch1_s3_item_2" }, value: true }, { else: true, value: false }],
+          heartstone_choice: [{ if: { itemsInclude: "心石の欠片" }, value: "持っている" }, { else: true, value: "持っていない" }]
+        };
+        const sceneNode = chapterNodes().find(n => n.type === "scene");
+        const key = nodeKey(sceneNode);
+        sceneOverrides[key] = {
+          ...(sceneOverrides[key] || {}),
+          dialogueRules: [
+            { speaker: "gm", condition: "見取り図", eventType: "flag_set", targetId: "heartstone_choice=渡した", line: "図を折りたたんで懐へ入れた。", once: true },
+            { speaker: "npc", condition: "ランタン", eventType: "item_grant", targetId: "ランタン", line: "灯りは持っていくといい。" }
+          ]
+        };
+        return workspaceDraft();
+      });
+    } finally { await page.close(); }
+  })();
+  fs.writeFileSync(path.join(draftsDir, "flags-and-rules.json"), JSON.stringify(flagsAndRules, null, 2) + "\n", "utf8");
+  results.push("  --  drafts/flags-and-rules.json を書き出した");
   results.push("  --  作り直したら --update で基準出力も更新すること");
 }
 

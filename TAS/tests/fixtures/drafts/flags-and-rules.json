@@ -141,23 +141,30 @@
       "image": ""
     }
   ],
-  "castImages": {
-    "npc_1": "s4_myra_full_transparent.png"
-  },
-  "castNames": {
-    "npc_1": "マイラ"
-  },
+  "castImages": {},
+  "castNames": {},
   "castProfiles": {},
   "castFlags": {},
   "castAttributes": {},
-  "sceneBackgrounds": {
-    "ch1:ending:ending": "s4_myra_room.jpg"
-  },
+  "sceneBackgrounds": {},
   "sceneOverrides": {
-    "ch1:ending:ending": {
-      "brief": "帰還の報告をする場面。出口は元データのまま使う。",
-      "npcs": [
-        "npc_1"
+    "ch1:scene:0": {
+      "dialogueRules": [
+        {
+          "speaker": "gm",
+          "condition": "見取り図",
+          "eventType": "flag_set",
+          "targetId": "heartstone_choice=渡した",
+          "line": "図を折りたたんで懐へ入れた。",
+          "once": true
+        },
+        {
+          "speaker": "npc",
+          "condition": "ランタン",
+          "eventType": "item_grant",
+          "targetId": "ランタン",
+          "line": "灯りは持っていくといい。"
+        }
       ]
     }
   },
@@ -705,9 +712,46 @@
     ]
   },
   "flagRulesByChapter": {
-    "ch1": {}
+    "ch1": {
+      "guardian_alive": [
+        {
+          "if": {
+            "defeated": "守護機構"
+          },
+          "value": false
+        },
+        {
+          "else": true,
+          "value": true
+        }
+      ],
+      "learned_heartstone": [
+        {
+          "if": {
+            "revealed": "ch1_s3_item_2"
+          },
+          "value": true
+        },
+        {
+          "else": true,
+          "value": false
+        }
+      ],
+      "heartstone_choice": [
+        {
+          "if": {
+            "itemsInclude": "心石の欠片"
+          },
+          "value": "持っている"
+        },
+        {
+          "else": true,
+          "value": "持っていない"
+        }
+      ]
+    }
   },
-  "gameOverText": "",
+  "gameOverText": "君は坑道の暗がりで力尽きた。",
   "adminUxSectionFoldState": {},
   "mock2PreviewBaseUrl": "http://localhost:5173/"
 }

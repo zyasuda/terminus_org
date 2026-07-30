@@ -161,14 +161,15 @@ MOCK2_DIR=/Users/yasuda_k/Desktop/Terminus/trpg-gm-mock2 node server.cjs
 cd TAS && npm test
 ```
 
-依存は入っていません。ブラウザは`trpg-gm-mock2`の`node_modules`の`playwright`を借りるので、あちらで`npm install`が済んでいれば動きます。約3秒、131件です。
+依存は入っていません。ブラウザは`trpg-gm-mock2`の`node_modules`の`playwright`を借りるので、あちらで`npm install`が済んでいれば動きます。約4秒、181件です。
 
-検査は4つに分かれています。
+検査は5つに分かれています。
 
 | 対象 | 内容 |
 |---|---|
 | 分割構造 | `index.html`の`<script src>`と`js/`の対応、読み込み順、`</script>`混入、ラッパー段数の上限 |
-| 出力JSON | 5つの下書きから`mockCampaignPayload()`を作り、基準出力と**完全一致**するか |
+| 出力JSON | 6つの下書きから`mockCampaignPayload()`を作り、基準出力と**完全一致**するか |
+| 網羅 | 11段のラッパーが書く24項目が、どれか1つのフィクスチャで埋まっているか |
 | 取り込み（読込） | `gamePayloadToWorkspaceDraft()`がイントロ・アウトロの本文と背景を下書きへ入れるか |
 | 出力API | `assets.json`のマージが人の書いた`status`/`notes`を壊さないか、べき等か、異常系で上書きしないか |
 
@@ -195,6 +196,9 @@ npm run test:fixtures                 # 下書きフィクスチャを作り直�
 | `fresh` | 新規キャンペーンを作った直後 |
 | `outro-from-base` | アウトロの本文だけ書き、出口は元データのまま。**`01i-output.js`側の出口変換を通す唯一の入力**。イントロが文字列で流れる経路も通る |
 | `outro-brief-only` | アウトロの本文だけ書き、画像は画面で選んでいない。**元データの背景が消えた事故の再現**。基準出力に`img`が残っていることが修正の証拠 |
+| `flags-and-rules` | 状態変換ルール・ゲームオーバー文言・発話ルールを入れた状態。`27-flags-contract`が書く`flagsOut`/`flagRules`/`gameOverText`/`stateUpdates`を通す唯一の入力 |
+
+「網羅」の検査は、ラッパーが書く24項目のどれかが**全フィクスチャで空**になったら落ちます。フィクスチャを消すと、そのラッパーを通す入力が無くなったことに気づけます。
 
 守ること。
 

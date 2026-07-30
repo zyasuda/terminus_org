@@ -23,6 +23,11 @@ function itemId(name,index=0){const known={'心石の欠片':'item_heartstone_fr
 function legacyItemCandidates(){
   const base=sourceJson('campaign.json');
   const candidates=[];
+  /* 現行の campaign.json は所持品を items[] で持つ。ここが旧形式(entities の kind に「所持品」)
+     しか見ていなかったため、下書きにアイテムが無い状態で出力すると開始所持品が消えた。
+     台帳の内部項目名は notes / image なので、出力形式の surface / visual から読み替える。
+     entities より先に積むのは、同名があればこちら(情報量の多い側)を採るため。 */
+  (base.items||[]).forEach(x=>{const name=x&&(x.ja||x.name);if(!name)return;candidates.push({...x,name,notes:x.notes??x.surface??'',image:x.image??x.visual??''})});
   (base.entities||[]).filter(x=>x&&String(x.kind||'').includes('所持品')).forEach(x=>candidates.push({id:x.id||itemId(x.ja||x.name,candidates.length),name:x.ja||x.name,scope:'campaign',acquisition:'starting_inventory',persistent:true,capabilities:['inspect','use','give','lose'],notes:x.surface||x.visual||''}));
   const chapterFiles=['chapter_01.json','chapter_02.json'];
   chapterFiles.forEach(file=>{const chapter=sourceJson(file);(chapter.scenes||[]).forEach(sceneData=>(sceneData.loot||[]).forEach(raw=>{const loot=typeof raw==='string'?{name:raw}:raw||{};if(!loot.name)return;const concept=ensureConcepts().find(x=>loot.name.includes(x.name)||x.name.includes(loot.name));candidates.push({id:itemId(loot.name,candidates.length),name:loot.name,parentConceptId:concept?.id||'',aliases:concept?[concept.name,...concept.aliases]:[],scope:'scene',acquisition:'scene',persistent:false,requires:loot.requires||'',capabilities:['inspect','take','give','lose','use'],notes:'シーン入手品'})}))});
