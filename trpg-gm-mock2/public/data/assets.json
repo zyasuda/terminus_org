@@ -15,18 +15,14 @@
     "scraped_track": {
       "file": "scraped_track.jpg",
       "kind": "popup",
-      "status": "approved",
-      "usedBy": [
-        "chapter_01.scenes.1.secrets.s1b.img"
-      ]
+      "status": "archived",
+      "usedBy": []
     },
     "rust_eater_popup": {
       "file": "rust_eater.jpg",
       "kind": "popup",
-      "status": "approved",
-      "usedBy": [
-        "chapter_01.scenes.2.enemy.img"
-      ],
+      "status": "archived",
+      "usedBy": [],
       "notes": "旧プレゼン用画像。s2_rust_eater.png(スプライト)承認済みのため、表示はスプライト優先に変更(2026-07-12)。スプライトが無い敵のフォールバック用に残置"
     },
     "locked_iron_gate": {
@@ -41,28 +37,28 @@
     "mining_automaton": {
       "file": "mining_automaton.jpg",
       "kind": "legacy",
-      "status": "rejected",
+      "status": "archived",
       "usedBy": [],
       "notes": "番人の正体が背景に描き込まれているため使用しない。"
     },
     "portrait_gareth": {
       "file": "portrait_gareth.png",
       "kind": "portrait",
-      "status": "rejected",
+      "status": "archived",
       "usedBy": [],
       "notes": "旧ガレス。男性キャラの見た目に合わないため不採用(2026-07-12)。portrait_gareth_altを採用"
     },
     "portrait_lydia": {
       "file": "portrait_lydia.png",
       "kind": "portrait",
-      "status": "approved",
+      "status": "archived",
       "usedBy": [],
       "notes": "パーティ枠はalt版(portrait_lydia_alt)を使用中"
     },
     "player_avatar": {
       "file": "player_avatar.png",
       "kind": "player-sprite",
-      "status": "approved",
+      "status": "archived",
       "target": "full-body transparent PNG",
       "alpha": true,
       "usedBy": [],
@@ -98,7 +94,7 @@
     "s1_foreground": {
       "file": "s1_foreground.png",
       "kind": "parallax.fg",
-      "status": "approved",
+      "status": "archived",
       "target": "1920x1080",
       "alpha": true,
       "usedBy": [],
@@ -121,11 +117,9 @@
     "s2_barrier": {
       "file": "s2_barrier.jpg",
       "kind": "background",
-      "status": "approved",
+      "status": "archived",
       "target": "1920x1080",
-      "usedBy": [
-        "chapter_01.scenes.2.secrets.s2a.bg"
-      ],
+      "usedBy": [],
       "source": "imagegen",
       "promptVersion": 1,
       "notes": "2026-07-12生成。現行シナリオの封鎖の木柵に合わせた。16:9にクロップして配置。"
