@@ -165,6 +165,7 @@ function renderPlaytest(){const s=scene();const label=s.type==="scene"?`シー�
 const CHAPTERS={ch1:{name:"第1話「廃坑の灯」",file:"CHAPTER_01"},ch2:{name:"第2話「心石の在処」",file:"CHAPTER_02"}};function chapter(){return CHAPTERS[activeChapter]}
 function exportPayload(){return {campaign:{name:campaignName,world:campaignWorld,theme:campaignTheme,terms:campaignTerms,image:campaignImage?"assets/campaign/campaign_image.png":null},casts:{gm:{id:"gm",name:castName("gm","GM"),profile:castProfile("gm","ゲームマスター。確定した結果を説明し、プレイヤーを案内する。"),flags:castFlagSet("gm","GM"),image:castImages.gm?"assets/casts/gm.png":null},companions:[{id:"gareth",name:castName("gareth","ガレス"),profile:castProfile("gareth","普通の戦士・用心棒。短く実用的に話す。"),flags:castFlagSet("gareth","メンバー"),image:castImages.gareth?"assets/casts/gareth.png":null},...Array.from({length:extraCompanions},(_,i)=>({id:`member_${i+2}`,name:castName(`member_${i+2}`,`メンバー${i+2}`),profile:castProfile(`member_${i+2}`,"未設定。必要ならメンバーの役割・口調を定義する。"),flags:castFlagSet(`member_${i+2}`,"メンバー"),image:castImages[`member_${i+2}`]?`assets/casts/member_${i+2}.png`:null}))],npcs:npcList().map(n=>({id:n.id,name:n.name,profile:castProfile(n.id,"シーンごとに設定するNPC。"),flags:castFlagSet(n.id,"NPC"),image:castImages[n.id]?`assets/casts/${n.id}.png`:null}))},chapters:Object.entries(CHAPTERS).map(([id,c])=>({id,title:c.name,file:c.file,scenes:id===activeChapter?chapterNodes():[]})),generatedAt:new Date().toISOString()}}
 function mockCampaignPayload(){const baseCampaign=JSON.parse(context?.dataFiles?.["campaign.json"]||"{}");const baseChapter=JSON.parse(context?.dataFiles?.[CHAPTERS[activeChapter].file.toLowerCase()+".json"]||"{}");const campaign={...baseCampaign,meta:{...(baseCampaign.meta||{}),title:campaignName},style:{...(baseCampaign.style||{}),world:campaignWorld}};
+const exitRequires=(text,resolveSecretId)=>{const raw=String(text||"").trim();if(!raw)return undefined;const hasOr=/\s+OR\s+/i.test(raw);const hasAnd=/\s+AND\s+/i.test(raw);const tokens=sceneConditionTokens(raw).map(resolveSecretId).filter(Boolean);if(!tokens.length)return undefined;if(hasOr&&!hasAnd)return {secretsAny:[...new Set(tokens)]};return {secretsAll:[...new Set(tokens)]}};
 /* モンスター・アイテム台帳の名前をエンティティ台帳へ自動登録する(mock2の正名の原則) */
 const entityNames=new Set((campaign.entities||[]).map(e=>e.ja));
 const extraEntities=[...monsters.map(m=>m.name),...items.map(x=>x.name)].filter(n=>n&&!entityNames.has(n)).map(n=>({ja:n,note:"TAS台帳から自動登録"}));
@@ -195,9 +196,8 @@ if(conditionTokens.length||Object.keys(merged.completeRequires||{}).some(key=>ke
 /* v0.2: TASの出口設定をmock2のscenes[].exitsへ変換する。未設定の旧transitionsは互換変換する。 */
 const configuredExits=Array.isArray(merged.exits)?merged.exits.map(normalizeExit):(merged.transitions||[]).map(transitionToExit);
 const exitSecretId=(token)=>secretIdByToken[String(token||"").trim().replace(/^(flag|discovery|item|npc|scene|battle):/i,"")];
-const exitRequires=(text)=>{const raw=String(text||"").trim();if(!raw)return undefined;const hasOr=/\s+OR\s+/i.test(raw);const hasAnd=/\s+AND\s+/i.test(raw);const tokens=sceneConditionTokens(raw).map(exitSecretId).filter(Boolean);if(!tokens.length)return undefined;if(hasOr&&!hasAnd)return {secretsAny:[...new Set(tokens)]};return {secretsAll:[...new Set(tokens)]}};
 if(configuredExits.length){
-  merged.exits=configuredExits.map((x,i)=>{const e=normalizeExit(x);const requires=e.requires&&typeof e.requires==="object"?e.requires:{};const converted=requires.text?exitRequires(requires.text):requires;const to=e.to===null?null:e.to==="end"?"end":Number.isFinite(Number(e.to))?Number(e.to):e.to||null;return {id:e.id||`exit_${i+1}`,match:e.match, ...(to===null?{to:null}:{to}), ...(converted&&Object.keys(converted).length?{requires:converted}:{}), ...(e.blockedText?{blockedText:e.blockedText}:{}), ...(e.text?{text:e.text}:{})}});
+  merged.exits=configuredExits.map((x,i)=>{const e=normalizeExit(x);const requires=e.requires&&typeof e.requires==="object"?e.requires:{};const converted=requires.text?exitRequires(requires.text,exitSecretId):Object.keys(requires).some(key=>key!=="text")?requires:undefined;const to=e.to===null?null:e.to==="end"?"end":Number.isFinite(Number(e.to))?Number(e.to):e.to||null;return {id:e.id||`exit_${i+1}`,match:e.match, ...(to===null?{to:null}:{to}), ...(converted&&Object.keys(converted).length?{requires:converted}:{}), ...(e.blockedText?{blockedText:e.blockedText}:{}), ...(e.text?{text:e.text}:{})}});
 }
 /* mock2が読まないTAS独自フィールドはauthoringキーへまとめ、mock2が安全に無視できる形で保存する */
 merged.authoring={transitions:merged.transitions||[],exits:merged.exits||[],dialogueRules:Array.isArray(override.dialogueRules)?override.dialogueRules.map(normalizeDialogueRule):merged.dialogueRules||[],gmSceneNotes:typeof override.gmSceneNotes==="string"?override.gmSceneNotes:merged.gmSceneNotes||""};
@@ -214,7 +214,20 @@ const directionLines=dlgRules.filter(r=>r.line).map(r=>`${r.condition?`「${r.co
 merged.direction=directionLines.length?`${baseDirection?baseDirection+"\n":""}${DIRECTION_MARK}${directionLines.join(" / ")}`:baseDirection||merged.direction;
 /* シーン敵: 「なし」の明示選択だけを削除として扱う。台帳に見つからない参照では、既存の敵定義を絶対に消さない。 */
 if(typeof merged.enemyName==="string"){const requestedName=merged.enemyName.trim();if(!requestedName)delete merged.enemy;else{const mon=monsters.find(m=>m.name===requestedName);if(mon)merged.enemy={...(merged.enemy||{}),...definedEnemyFields(mon)}}}
-delete merged.enemyName;delete merged.type;delete merged.index;delete merged.discoveries;delete merged.transitions;delete merged.dialogueRules;delete merged.gmSceneNotes;return merged});const chapter={...baseChapter,title:baseChapter.title||CHAPTERS[activeChapter].name,scenes};return {campaign,chapter,chapterFile:`${CHAPTERS[activeChapter].file.toLowerCase()}.json`}}
+delete merged.enemyName;delete merged.type;delete merged.index;delete merged.discoveries;delete merged.transitions;delete merged.dialogueRules;delete merged.gmSceneNotes;return merged});const chapter={...baseChapter,title:baseChapter.title||CHAPTERS[activeChapter].name,scenes};
+const opening=chapterNodes().find(n=>n.type==="opening")||{};
+const ending=chapterNodes().find(n=>n.type==="ending")||{};
+const openingOverride=sceneOverrides[nodeKey({type:"opening",id:"opening"})]||{};
+const endingOverride=sceneOverrides[nodeKey({type:"ending",id:"ending"})]||{};
+const openingBrief=String(openingOverride.brief||"").trim();
+const endingBrief=String(endingOverride.brief||"").trim();
+/* 初期説明文や空欄は作者が作成した終端ノードではない。既存 chapter の実績済み intro/ending を
+   空の下書きで黙って潰さないため、sceneOverrides の brief が既定文言と異なる場合だけ上書きする。 */
+const authoredOpening=openingBrief&&openingBrief!=="依頼を受け、坑道へ向かう目的を理解する。"&&openingBrief!=="依頼と今回の目的を提示する。";
+const authoredEnding=endingBrief&&endingBrief!=="依頼の結果を締めくくり、章の余韻を残す。";
+if(authoredOpening){const npcId=(opening.npcs||[])[0];const img=runtimeImageName(sceneBackgrounds[nodeKey(opening)]);const npcSprite=runtimeImageName(castImages[npcId]);const exits=(opening.exits||[]).map((x,i)=>{const e=normalizeExit(x);const requires=e.requires&&typeof e.requires==="object"?e.requires:{};const converted=requires.text?exitRequires(requires.text,()=>undefined):Object.keys(requires).some(key=>key!=="text")?requires:undefined;const to=e.to===null?null:e.to==="end"?"end":Number.isFinite(Number(e.to))?Number(e.to):e.to||null;return {id:e.id||`exit_${i+1}`,match:e.match,...(to===null?{to:null}:{to}),...(converted&&Object.keys(converted).length?{requires:converted}:{}),...(e.blockedText?{blockedText:e.blockedText}:{}),...(e.text?{text:e.text}:{})}});chapter.intro={id:"ch1_intro",name:opening.name,brief:openingBrief,...(img?{img}:{}),...(npcSprite?{npcSprite}:{}),...(npcId?{npc:{id:npcId,name:castName(npcId)}}:{}),...(opening.blockedText?{blockedText:opening.blockedText}:{}),...(exits.length?{exits}:{})};}
+if(authoredEnding){const npcId=(ending.npcs||[])[0];const img=runtimeImageName(sceneBackgrounds[nodeKey(ending)]);const npcSprite=runtimeImageName(castImages[npcId]);const exits=(ending.exits||[]).map((x,i)=>{const e=normalizeExit(x);const requires=e.requires&&typeof e.requires==="object"?e.requires:{};const converted=requires.text?exitRequires(requires.text,()=>undefined):Object.keys(requires).some(key=>key!=="text")?requires:undefined;const to=e.to===null?null:e.to==="end"?"end":Number.isFinite(Number(e.to))?Number(e.to):e.to||null;return {id:e.id||`exit_${i+1}`,match:e.match,...(to===null?{to:null}:{to}),...(converted&&Object.keys(converted).length?{requires:converted}:{}),...(e.blockedText?{blockedText:e.blockedText}:{}),...(e.text?{text:e.text}:{})}});chapter.ending={id:"ch1_ending",name:ending.name,brief:endingBrief,...(img?{img}:{}),...(npcSprite?{npcSprite}:{}),...(npcId?{npc:{id:npcId,name:castName(npcId)}}:{}),...(ending.blockedText?{blockedText:ending.blockedText}:{}),...(exits.length?{exits}:{})};}
+return {campaign,chapter,chapterFile:`${CHAPTERS[activeChapter].file.toLowerCase()}.json`}}
 function renderExport(){const folder="/Users/yasuda_k/Desktop/Terminus/trpg-gm-mock2/public/data/campaigns/"+tasCampaignId;const filename=`${runtimeChapterId(activeChapter)}.json`;return `<h2>出力確認</h2><p class="hint">キャンペーンIDと章IDを維持したまま、mock側のcampaigns.jsonとキャンペーン別データへ保存します。</p><div class="field"><label>キャンペーンID</label><input value="${escapeHtml(tasCampaignId)}" readonly></div><div class="field"><label>出力フォルダ</label><input id="exportFolder" value="${escapeHtml(folder)}" readonly></div><div class="field"><label>章ファイル</label><input id="exportFile" value="${escapeHtml(filename)}" readonly></div><div class="field"><label>JSONプレビュー</label><textarea class="large" id="exportPreview">${escapeHtml(JSON.stringify(mockCampaignPayload(),null,2))}</textarea></div><div class="bottom"><button class="sub" id="btnRefreshExport">プレビュー更新</button><button id="btnExportCampaign" onclick="window.__tasRunMockExport(this)">mock側へ出力</button></div>`}
 const INSTRUCTION_TEMPLATES=[
 {label:"基本形（要素を厚くする）",text:"【主線にしたい要素】を主線にする。調査すると【判明する事実】が分かるようにする。【伏線にしたい要素】を補助の伏線として置き、この時点では正体を断定しない。禁止事項：【書いてはいけないこと・出してはいけない情報】"},
@@ -1343,19 +1356,6 @@ var baseExportPayloadWithoutTheme=exportPayload;
 exportPayload=function(){const payload=baseExportPayloadWithoutTheme();if(payload.campaign){delete payload.campaign.theme;if(payload.campaign.style)delete payload.campaign.style.theme}return payload};
 var baseSceneGenerationPromptWithoutTheme=sceneGenerationPrompt;
 sceneGenerationPrompt=function(instruction){return baseSceneGenerationPromptWithoutTheme(instruction).replace(/\\nテーマ: [^\\n]*/g,'')};
-</script>
-<script>
-/* mock2の現行契約(chapter.intro:string)へ、TASのチャプター・オープニングを接続する。 */
-var baseMockCampaignPayloadForChapterIntro=mockCampaignPayload;
-mockCampaignPayload=function(){
-  const payload=baseMockCampaignPayloadForChapterIntro();
-  const chapter=payload.chapter||{};
-  const opening=chapterNodes().find(n=>n.type==='opening');
-  const openingOverride=sceneOverrides[nodeKey({type:'opening',id:'opening'})]||{};
-  const authoredIntro=String(openingOverride.brief||'').trim();
-  const existingIntro=typeof chapter.intro==='string'?chapter.intro.trim():'';
-  return {...payload,chapter:{...chapter,intro:authoredIntro||existingIntro||null}};
-};
 </script>
 <script>
 /* テキストプレイAI: mock2のGMプロンプト契約を、TAS内の安全な会話確認用に移植する。 */
