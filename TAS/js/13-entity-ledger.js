@@ -27,5 +27,6 @@ var baseRenderRightPanelForEntityLedger=renderRightPanel;
 renderRightPanel=function(){baseRenderRightPanelForEntityLedger();if(activeTab==="entities"){const target=$("rightBody")?.querySelector(".right-section p");if(target)target.textContent="キャンペーン／エンティティ台帳"}}
 var baseEntityLedgerEntriesForEntityLedger=entityLedgerEntries;
 entityLedgerEntries=function(){return ensureEntityLedger().map(x=>({category:entityKindLabel(x.kind),name:x.name,tab:"entities",focus:x.id,source:"エンティティ台帳"}))}
-var baseMockCampaignPayloadForEntityLedger=mockCampaignPayload;
-mockCampaignPayload=function(){const payload=baseMockCampaignPayloadForEntityLedger();const entities=ensureEntityLedger().map(x=>({id:x.id,ja:x.name,aliases:x.aliases,kind:x.kind,importance:x.importance,surface:x.surface,truth:x.truth,visual:x.image||"",affordances:x.affordances}));payload.campaign={...(payload.campaign||{}),entities};return payload}
+
+/* 出力の段: campaign.entities をエンティティ台帳から作る。段の並びは js/43-output-pipeline.js */
+function outputEntityLedger(payload){const entities=ensureEntityLedger().map(x=>({id:x.id,ja:x.name,aliases:x.aliases,kind:x.kind,importance:x.importance,surface:x.surface,truth:x.truth,visual:x.image||"",affordances:x.affordances}));payload.campaign={...(payload.campaign||{}),entities};return payload}

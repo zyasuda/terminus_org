@@ -100,9 +100,10 @@ tasPlaytestAiPrompt=function(node){return baseTasPlaytestAiPromptForGlossary(nod
 var baseAdminUxIssueForGlossary=adminUxIssue;
 adminUxIssue=function(level,text,target,section){return baseAdminUxIssueForGlossary(level,normalizeTerminologyText(text),target,section)};
 renderAll();
-var baseMockCampaignPayloadForMatchWords=mockCampaignPayload;
-mockCampaignPayload=function(){
-  const payload=baseMockCampaignPayloadForMatchWords();const chapter={...(payload.chapter||{})};
+
+/* 出力の段: イントロ・アウトロの出口を画面の入力で上書きする。段の並びは js/43-output-pipeline.js */
+function outputMatchWordExits(payload){
+  const chapter={...(payload.chapter||{})};
   [['opening','intro'],['ending','ending']].forEach(([type,key])=>{
     const node=matchWordNodes().find(value=>value.type===type);const override=node?sceneOverrides[nodeKey(node)]:null;
     if(!node||!Array.isArray(override?.exits))return;

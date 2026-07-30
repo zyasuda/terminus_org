@@ -106,10 +106,10 @@ TASのブラウザ操作と作者向けUXを確認するSkillです。
 
 ## ファイル構成
 
-`index.html`はHTMLとCSSだけで約27,000字です。JavaScriptは`js/`配下の54ファイルに分かれています（2026-07-30に、元のインライン`<script>`42個を1対1で切り出し、そのうち最大だった`01-core.js`を関心事で13分割しました）。1ファイルは最大約15KBです。
+`index.html`はHTMLとCSSだけで約27,000字です。JavaScriptは`js/`配下の55ファイルに分かれています（2026-07-30に、元のインライン`<script>`42個を1対1で切り出し、最大だった`01-core.js`を関心事で13分割し、出力の段を並べる`43-output-pipeline.js`を追加しました）。1ファイルは最大約20KBです。
 
 - ファイル名の番号が読み込み順です。`index.html`の`<script src>`の並びと一致します
-- **順序を入れ替えてはいけません。** 後続ファイルが`var base=fn; fn=function(){…}`で先行ファイルの関数を包む作りになっており、順序が変わると出力内容が変わります
+- **順序を入れ替えてはいけません。** 後続ファイルが`var base=fn; fn=function(){…}`で先行ファイルの描画関数（`renderStructure`など）を包む作りが残っており、順序が変わると画面が変わります。出力処理についてはこの包み込みを廃止済みで、並びは`43-output-pipeline.js`が決めます
 - ファイルを追加する場合は末尾に置きます
 - クラシックスクリプトなので、トップレベルの`function`と`var`は全ファイルで共有されます。`let`/`const`は先に読み込まれたファイルのものだけ参照できます
 
@@ -117,6 +117,7 @@ TASのブラウザ操作と作者向けUXを確認するSkillです。
 
 | 探しているもの | ファイル |
 |---|---|
+| **出力の段の並び（どの項目をどの段が確定させるか）** | `43-output-pipeline.js` |
 | 状態を持つ変数、定数、見本シーン | `01a-state.js` |
 | 正規化とラベル（`normalizeExit` / `normalizeDiscoveryFor` など） | `01b-normalize.js` |
 | 下書きの保存・読込・キャンペーンの取り込み | `01c-draft.js` |
@@ -161,15 +162,15 @@ MOCK2_DIR=/Users/yasuda_k/Desktop/Terminus/trpg-gm-mock2 node server.cjs
 cd TAS && npm test
 ```
 
-依存は入っていません。ブラウザは`trpg-gm-mock2`の`node_modules`の`playwright`を借りるので、あちらで`npm install`が済んでいれば動きます。約4秒、181件です。
+依存は入っていません。ブラウザは`trpg-gm-mock2`の`node_modules`の`playwright`を借りるので、あちらで`npm install`が済んでいれば動きます。約4秒、306件です。
 
 検査は5つに分かれています。
 
 | 対象 | 内容 |
 |---|---|
-| 分割構造 | `index.html`の`<script src>`と`js/`の対応、読み込み順、`</script>`混入、ラッパー段数の上限 |
+| 分割構造 | `index.html`の`<script src>`と`js/`の対応、読み込み順、`</script>`混入、**包み込みの不在と出力の段の定義** |
 | 出力JSON | 6つの下書きから`mockCampaignPayload()`を作り、基準出力と**完全一致**するか |
-| 網羅 | 11段のラッパーが書く24項目が、どれか1つのフィクスチャで埋まっているか |
+| 網羅 | 出力の12段が書く24項目が、どれか1つのフィクスチャで埋まっているか |
 | 取り込み（読込） | `gamePayloadToWorkspaceDraft()`がイントロ・アウトロの本文と背景を下書きへ入れるか |
 | 出力API | `assets.json`のマージが人の書いた`status`/`notes`を壊さないか、べき等か、異常系で上書きしないか |
 
@@ -198,7 +199,7 @@ npm run test:fixtures                 # 下書きフィクスチャを作り直�
 | `outro-brief-only` | アウトロの本文だけ書き、画像は画面で選んでいない。**元データの背景が消えた事故の再現**。基準出力に`img`が残っていることが修正の証拠 |
 | `flags-and-rules` | 状態変換ルール・ゲームオーバー文言・発話ルールを入れた状態。`27-flags-contract`が書く`flagsOut`/`flagRules`/`gameOverText`/`stateUpdates`を通す唯一の入力 |
 
-「網羅」の検査は、ラッパーが書く24項目のどれかが**全フィクスチャで空**になったら落ちます。フィクスチャを消すと、そのラッパーを通す入力が無くなったことに気づけます。
+「網羅」の検査は、出力の段が書く24項目のどれかが**全フィクスチャで空**になったら落ちます。フィクスチャを消すと、どの段を通せなくなったかに気づけます。
 
 守ること。
 
@@ -209,13 +210,31 @@ npm run test:fixtures                 # 下書きフィクスチャを作り直�
 
 自動テストが成功しても、ブラウザの表示や画像復元まで確認できたことにはしません。最終報告では、自動検証とブラウザ検証を分けて記載します。
 
-### 出力パイプラインの現状と方針
+### 出力パイプライン
 
-`mockCampaignPayload`は`var base=fn; fn=function(){…}`で**11段に包まれています**。どの項目の正がどの段なのかコードから読み取れず、「空の値で既存データを黙って潰す」不具合が繰り返し出ています（2026-07-29以降で7件）。
+ゲーム側へ渡すJSONを作る段は、**`js/43-output-pipeline.js`の配列1つ**が並びを決めます。
 
-- **段を増やさないこと。** 静的検査が11段を上限に落とします
-- 1本化する場合は、`codex/tas-ollama-gemma4`ブランチに`mockCampaignPayloadUnified()`として実装済みの前例があります（未マージ、mainと大きく乖離）。設計の参考にはなりますが、そのまま持ってこられません
-- 1本化したら`tests/run.mjs`の`WRAPPER_CEILING`を下げます
+```js
+const OUTPUT_STEPS = [
+  ["outputBaseChapter",   "01i-output.js",         "章とキャンペーンの土台を組む"],
+  ["outputFreshCampaign", "09-new-campaign.js",    "新規キャンペーンのときだけ…"],
+  …
+];
+function mockCampaignPayload() { return OUTPUT_STEPS.reduce((payload, [name]) => window[name](payload), undefined) }
+```
+
+各段は`payload`を受けて`payload`を返す普通の関数です。**出力の入口はこのファイルの1箇所だけ**です。
+
+2026-07-30まで、各ファイルが`var base=mockCampaignPayload; mockCampaignPayload=function(){ const payload=base(); … }`で前段を包んでいました。11段が9ファイルに散り、どの項目をどの段が確定させるのかコードから追えず、「空の値・解決できない値で既存データを黙って潰す」不具合が2026-07-29以降で8件出ていました。
+
+守ること。
+
+- **包み込み（`mockCampaignPayload=function`）を作らないこと。** 静的検査が落とします
+- 段を足すときは、関数を該当ファイルへ書き、配列へ名前を足す
+- **順序を入れ替えると出力内容が変わります。** 変えたら`npm test`で基準出力の差分を確認する
+- 段を消すと「網羅」の検査が落ちます。その段が書いていた項目が空になるためです
+
+`codex/tas-ollama-gemma4`ブランチには`mockCampaignPayloadUnified()`として1本の関数へ畳む別案が実装されています（未マージ、mainと大きく乖離）。こちらは各段を関数として残し、並びだけを1箇所に集める形を採りました。段ごとの責務が読めるほうが追いやすいためです。
 
 ## 出力エラーの伝え方
 

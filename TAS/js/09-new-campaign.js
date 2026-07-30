@@ -68,9 +68,10 @@ renderRightPanel=function(){
   const target=$("rightBody")?.querySelector(".right-section p");
   if(target&&!["world","cast","monsters","items","rules","export"].includes(activeTab))target.textContent=`${currentFreshChapterLabel()} / ${scene().type==="scene"?`シーン${scene().id}「${scene().name}」`:scene().name}`;
 };
-var baseMockCampaignPayloadForFresh=mockCampaignPayload;
-mockCampaignPayload=function(){
-  const payload=baseMockCampaignPayloadForFresh();
+
+/* 出力の段: 新規キャンペーンのときだけ章と同行者を作り直す。段の並びは js/43-output-pipeline.js */
+function outputFreshCampaign(payload){
+  
   if(!freshCampaign)return payload;
   const chapterInfo=CHAPTERS[activeChapter]||{name:currentFreshChapterLabel(),file:`CHAPTER_${String(chapterOrder.indexOf(activeChapter)+1).padStart(2,"0")}`};
   const entities=[...monsters.map(m=>m.name),...items.map(i=>i.name)].filter(Boolean).map(ja=>({ja,note:"TAS台帳から登録"}));

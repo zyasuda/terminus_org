@@ -9,8 +9,10 @@
  * 使い方:
  *   npm test                            全部
  *   node tests/run.mjs --only=structure  分割構造の静的検査だけ
- *   node tests/run.mjs --only=snapshot   出力JSONの基準比較だけ
+ *   node tests/run.mjs --only=snapshot   出力JSONの基準比較と網羅だけ
+ *   node tests/run.mjs --only=import     取り込み時の下書き生成だけ
  *   node tests/run.mjs --only=export     出力APIの不変条件だけ
+ *   node tests/run.mjs --verbose         通った項目も並べる
  *   node tests/run.mjs --update          基準出力を作り直す（意図した仕様変更のときだけ）
  *   node tests/run.mjs --make-fixtures   下書きフィクスチャを作り直す
  *
@@ -101,17 +103,31 @@ function runStructureCheck() {
     ok(!body.includes("</script>"), `${file} に </script> が含まれない`);
   }
 
-  /* ラッパー段数の上限。減るのは1本化の方向なので通す。増えるのは「どの段が正か」が
-     さらに分からなくなる方向なので落とす。1本化したらこの数値を下げる。 */
-  const WRAPPER_CEILING = 11;
-  const wrappers = files.reduce((sum, file) =>
-    sum + (fs.readFileSync(path.join(jsDir, file), "utf8").match(/mockCampaignPayload=function/g) || []).length, 0);
-  ok(wrappers <= WRAPPER_CEILING,
-    `mockCampaignPayload のラッパー段数が ${WRAPPER_CEILING} 段を超えない`,
-    `現在 ${wrappers} 段。増やすのではなく1本化する`);
-  if (wrappers < WRAPPER_CEILING) {
-    results.push(`  --  ラッパーが ${wrappers} 段に減っている。tests/run.mjs の WRAPPER_CEILING も下げること`);
+  /* 出力の段の組み立て方。2026-07-30に、前段を包む形（var base=fn; fn=function(){…}）を
+     やめて、js/43-output-pipeline.js の配列1つで並べる形にした。包み込みへ戻すと、
+     どの項目をどの段が確定させるのかが再び追えなくなるので落とす。 */
+  const PIPELINE_FILE = "43-output-pipeline.js";
+  ok(files.includes(PIPELINE_FILE), `${PIPELINE_FILE} がある`);
+  ok(files[files.length - 1] === PIPELINE_FILE,
+    `${PIPELINE_FILE} が最後に読み込まれる`, `現在の最後: ${files[files.length - 1]}`);
+
+  for (const file of files.filter(f => f !== PIPELINE_FILE)) {
+    const body = fs.readFileSync(path.join(jsDir, file), "utf8");
+    ok(!/mockCampaignPayload\s*=\s*function/.test(body),
+      `${file} が mockCampaignPayload を関数で上書きしていない`);
+    ok(!body.includes("baseMockCampaignPayload"),
+      `${file} に前段を包む基底参照が残っていない`);
   }
+
+  const pipeline = fs.readFileSync(path.join(jsDir, PIPELINE_FILE), "utf8");
+  const stepNames = [...pipeline.matchAll(/\["(output[A-Za-z]+)",/g)].map(m => m[1]);
+  ok(stepNames.length >= 12, "出力の段が配列に並んでいる", `${stepNames.length}段`);
+  const allJs = files.map(f => fs.readFileSync(path.join(jsDir, f), "utf8")).join("\n");
+  for (const name of stepNames) {
+    ok(allJs.includes(`function ${name}(`), `出力の段 ${name} が js/ に定義されている`);
+  }
+  const entries = (allJs.match(/function mockCampaignPayload\s*\(/g) || []).length;
+  ok(entries === 1, "出力の入口の定義が1箇所だけ（43-output-pipeline.js）", `${entries}箇所`);
 }
 
 /* ------------------------------------------------------------ サーバ・画面 */

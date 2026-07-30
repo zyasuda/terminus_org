@@ -11,9 +11,10 @@ try{const rawStable=localStorage.getItem(DRAFT_KEY);if(rawStable){const parsedSt
 function runtimeChapterId(key){if(!tasChapterIds[key]){const n=Math.max(1,chapterOrder.indexOf(key)+1);tasChapterIds[key]=`chapter_${String(n).padStart(2,"0")}`}return tasChapterIds[key]}
 function runtimeImageName(value){const raw=String(value||"");if(!raw||raw.startsWith("data:"))return "";return raw.replace(/^.*[\\/]/,"")}
 function runtimeAssetId(file){return stableId(String(file).replace(/\\.[^.]+$/,""),"asset")}
-var baseMockCampaignPayloadForContract=mockCampaignPayload;
-mockCampaignPayload=function(){
-  const payload=baseMockCampaignPayloadForContract();
+
+/* 出力の段: 安定ID・style・素材台帳(assets)を付ける。段の並びは js/43-output-pipeline.js */
+function outputStableIds(payload){
+  
   const chapterKey=activeChapter;
   const chapterId=runtimeChapterId(chapterKey);
   const baseCampaign=payload.campaign||{};

@@ -4,12 +4,13 @@ document.addEventListener('input',event=>{const input=event.target.closest?.('.c
 document.addEventListener('change',event=>{const input=event.target.closest?.('.cast-gender-input,.cast-first-person-input,.cast-addressing-input,.cast-speech-rules-input');if(input)input.dispatchEvent(new Event('input',{bubbles:true}))});
 var baseExportPayloadForCastAttributes=exportPayload;
 exportPayload=function(){const payload=baseExportPayloadForCastAttributes();const decorate=entry=>entry?({...entry,...castAttribute(entry.id)}):entry;if(payload.casts){payload.casts.gm=decorate(payload.casts.gm);payload.casts.companions=(payload.casts.companions||[]).map(decorate);payload.casts.npcs=(payload.casts.npcs||[]).map(decorate)}return payload};
-var baseMockCampaignPayloadForCastAttributes=mockCampaignPayload;
+
 /* 声の属性は、値が入っているものだけ重ねる。空欄やunspecifiedでcampaign.json側の
    gender/firstPerson/addressTermを潰さない。IDは実際のcompanionsから取り、
    旧ID('gareth'等)のハードコードには companions が空の時だけ頼る */
 function definedCastAttribute(id){const a=castAttribute(id)||{};return Object.fromEntries(Object.entries(a).filter(([,v])=>v!==""&&v!=null&&v!=="unspecified"))}
-mockCampaignPayload=function(){const payload=baseMockCampaignPayloadForCastAttributes();const companionIds=(payload.campaign&&payload.campaign.companions||[]).map(c=>c&&c.id).filter(Boolean);const legacyIds=['gareth',...Array.from({length:extraCompanions},(_,i)=>`member_${i+2}`)];const ids=[...new Set(['gm',...(companionIds.length?companionIds:legacyIds),...npcList().map(x=>x.id)])];const attributes=Object.fromEntries(ids.map(id=>[id,castAttribute(id)]));if(payload.campaign){payload.campaign={...payload.campaign,companions:(payload.campaign.companions||[]).map(entry=>({...entry,...definedCastAttribute(entry.id)})),castAttributes:attributes}}return payload};
+/* 出力の段: campaign.castAttributes を作る。段の並びは js/43-output-pipeline.js */
+function outputCastAttributes(payload){const companionIds=(payload.campaign&&payload.campaign.companions||[]).map(c=>c&&c.id).filter(Boolean);const legacyIds=['gareth',...Array.from({length:extraCompanions},(_,i)=>`member_${i+2}`)];const ids=[...new Set(['gm',...(companionIds.length?companionIds:legacyIds),...npcList().map(x=>x.id)])];const attributes=Object.fromEntries(ids.map(id=>[id,castAttribute(id)]));if(payload.campaign){payload.campaign={...payload.campaign,companions:(payload.campaign.companions||[]).map(entry=>({...entry,...definedCastAttribute(entry.id)})),castAttributes:attributes}}return payload};
 var baseAssistantTargetContextForCastAttributes=assistantTargetContext;
 assistantTargetContext=function(){const result=baseAssistantTargetContextForCastAttributes();if(activeTab==='cast'){const decorate=entry=>({...entry,...castAttribute(entry.id)});result.data=Array.isArray(result.data)?result.data.map(decorate):decorate(result.data)}return result};
 var baseCreateNewCampaignForCastAttributes=createNewCampaign;
@@ -32,5 +33,6 @@ var baseBindStructureForExitLabels=bindStructure;
 bindStructure=function(){baseBindStructureForExitLabels();bindExitConditionEditors()};
 if(activeTab==='structure')renderTab();
 /* TASのシーンNPC選択をmock2のnpc形式へ変換する。 */
-var baseMockCampaignPayloadForNpcShape=mockCampaignPayload;
-mockCampaignPayload=function(){const payload=baseMockCampaignPayloadForNpcShape();if(Array.isArray(payload.chapter?.scenes)){const nodes=chapterNodes().filter(n=>n.type==='scene');payload.chapter.scenes=payload.chapter.scenes.map((sceneData,index)=>{const node=nodes[index]||{};const npcId=(sceneData.npcs||node.npcs||[])[0];if(!npcId)return sceneData;const npc=npcList().find(x=>x.id===npcId);if(!npc)return sceneData;const sprite=runtimeImageName(castImages[npcId]);const next={...sceneData,npc:{id:npc.id,name:npc.name}};if(sprite)next.npcSprite=sprite;delete next.npcs;return next})}return payload};
+
+/* 出力の段: scenes[].npc / npcSprite を確定させる。段の並びは js/43-output-pipeline.js */
+function outputSceneNpc(payload){if(Array.isArray(payload.chapter?.scenes)){const nodes=chapterNodes().filter(n=>n.type==='scene');payload.chapter.scenes=payload.chapter.scenes.map((sceneData,index)=>{const node=nodes[index]||{};const npcId=(sceneData.npcs||node.npcs||[])[0];if(!npcId)return sceneData;const npc=npcList().find(x=>x.id===npcId);if(!npc)return sceneData;const sprite=runtimeImageName(castImages[npcId]);const next={...sceneData,npc:{id:npc.id,name:npc.name}};if(sprite)next.npcSprite=sprite;delete next.npcs;return next})}return payload};
