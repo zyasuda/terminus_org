@@ -1,0 +1,210 @@
+{
+  "campaign": {
+    "meta": {
+      "title": "新しいキャンペーン",
+      "id": "campaign",
+      "version": "0.2"
+    },
+    "style": {
+      "world": "",
+      "terms": "",
+      "narration": "である調。地の文は短く、確定事実を優先する。",
+      "readingLevel": "平易な日本語を使う。"
+    },
+    "entities": [
+      {
+        "id": "npc1",
+        "ja": "NPC1",
+        "kind": "npc",
+        "importance": "support",
+        "visual": "",
+        "affordances": [
+          "talk",
+          "inspect"
+        ]
+      },
+      {
+        "id": "gareth",
+        "ja": "ガレス",
+        "kind": "character",
+        "importance": "support",
+        "visual": "",
+        "affordances": [
+          "talk",
+          "inspect"
+        ]
+      },
+      {
+        "id": "concept_heartstone",
+        "ja": "心石",
+        "aliases": [
+          "青い石",
+          "光る石",
+          "石",
+          "あおいし",
+          "ひかるいし",
+          "いし",
+          "心臓の石"
+        ],
+        "kind": "concept",
+        "role": "main",
+        "usage": "dialogue_condition",
+        "scope": "campaign",
+        "storyKey": true,
+        "surface": "ゆっくりと脈動している青く光る石",
+        "truth": "何かの動力源になるような不思議な力を宿す"
+      }
+    ],
+    "companions": [
+      {
+        "id": "gareth",
+        "name": "ガレス",
+        "persona": "寡黙で実用的な戦士。短く話す。"
+      }
+    ],
+    "image": null,
+    "concepts": [
+      {
+        "id": "concept_heartstone",
+        "ja": "心石",
+        "aliases": [
+          "青い石",
+          "光る石",
+          "石",
+          "あおいし",
+          "ひかるいし",
+          "いし",
+          "心臓の石"
+        ],
+        "kind": "concept",
+        "role": "main",
+        "usage": "dialogue_condition",
+        "scope": "campaign",
+        "storyKey": true,
+        "surface": "ゆっくりと脈動している青く光る石",
+        "truth": "何かの動力源になるような不思議な力を宿す"
+      }
+    ],
+    "items": [],
+    "initialInventory": [],
+    "initialInventoryIds": [],
+    "castAttributes": {
+      "gm": {
+        "gender": "unspecified",
+        "firstPerson": "",
+        "addressTerm": ""
+      },
+      "gareth": {
+        "gender": "unspecified",
+        "firstPerson": "",
+        "addressTerm": ""
+      },
+      "npc_1": {
+        "gender": "unspecified",
+        "firstPerson": "",
+        "addressTerm": ""
+      }
+    },
+    "flags": {
+      "guardian_fate": [
+        "対話",
+        "撃破",
+        "回避"
+      ],
+      "learned_heartstone": [
+        true,
+        false
+      ],
+      "heartstone_choice": [
+        "渡した",
+        "隠した",
+        "砕いた"
+      ],
+      "guardian_alive": [
+        true,
+        false
+      ]
+    }
+  },
+  "chapter": {
+    "id": 1,
+    "title": "チャプター1",
+    "quest": "灯りの正体を確かめ、坑道が使えるか村に報告する(依頼人:村の顔役マイラ・ヴェイン)",
+    "flagsOut": [],
+    "intro": "夕暮れの村。マイラ・ヴェインは机に坑道の古い見取り図を広げ、消えた作業員と坑道の奥から聞こえる金属音について語り始める。",
+    "flagRules": {},
+    "reference": {
+      "genre": "ミステリ / ロー・ファンタジー",
+      "themes": [
+        "孤独",
+        "献身",
+        "継承"
+      ],
+      "mood": "静かで神秘的、少し切ない",
+      "palette": [
+        "ランタンの琥珀色",
+        "坑道の闇",
+        "錆の赤"
+      ]
+    },
+    "scenes": [],
+    "ending": {
+      "id": "ch1_ending",
+      "name": "報告",
+      "brief": "君と仲間は、無事マイラの部屋に帰還した。マイラはやさしく出迎えてくれたが、何か言いたげな様子でこっちを見ている。君の方から何か切り出してみてくれ。",
+      "img": "s4_myra_room.jpg",
+      "npcSprite": "s4_myra.png",
+      "npc": {
+        "id": "npc_1",
+        "name": "マイラ・ヴェイン"
+      },
+      "blockedText": "まだ渡していないものがある。",
+      "exits": [
+        {
+          "id": "hand_over",
+          "match": [
+            "渡す",
+            "手渡す",
+            "心石",
+            "差し出す",
+            "報告"
+          ],
+          "to": "end",
+          "requires": {
+            "itemsAll": [
+              "心石の欠片"
+            ]
+          },
+          "removeItems": [
+            "心石の欠片"
+          ],
+          "addItems": [
+            "30ゴールド"
+          ],
+          "npcSay": "よくやってくれた。これは謝礼だ。しかし、この欠片にはまだ秘密がある。もう少し手伝ってくれないか?"
+        }
+      ]
+    }
+  },
+  "chapterFile": "chapter_01.json",
+  "assets": {
+    "s4_myra_room-jpg": {
+      "file": "s4_myra_room.jpg",
+      "kind": "background",
+      "status": "candidate",
+      "usedBy": [
+        "chapter_01.ending.img"
+      ]
+    },
+    "s4_myra-png": {
+      "file": "s4_myra.png",
+      "kind": "sprite",
+      "status": "candidate",
+      "usedBy": [
+        "chapter_01.ending.npcSprite"
+      ]
+    }
+  },
+  "campaignId": "campaign",
+  "chapterId": "chapter_01"
+}

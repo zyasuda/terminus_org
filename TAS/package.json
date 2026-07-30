@@ -1,0 +1,12 @@
+{
+  "name": "tas",
+  "private": true,
+  "description": "TAS ストーリー制作ワークスペース。依存は入れず、テスト用のブラウザは trpg-gm-mock2 の playwright を借りる。",
+  "scripts": {
+    "start": "node server.cjs",
+    "test": "node tests/run.mjs",
+    "test:update": "node tests/run.mjs --update",
+    "test:fixtures": "node tests/run.mjs --make-fixtures",
+    "validate:data": "node data/validate.cjs"
+  }
+}

@@ -143,13 +143,49 @@ MOCK2_DIR=/Users/yasuda_k/Desktop/Terminus/trpg-gm-mock2 node server.cjs
 
 ## 自動検証
 
-シーンカードの回帰テスト：
+**出力に関わる変更をしたら、報告の前に必ず実行します。**
 
 ```bash
-node tests/tas-scene-cards-harness.mjs
+cd TAS && npm test
 ```
 
+依存は入っていません。ブラウザは`trpg-gm-mock2`の`node_modules`の`playwright`を借りるので、あちらで`npm install`が済んでいれば動きます。約2秒、117件です。
+
+検査は3つに分かれています。
+
+| 対象 | 内容 |
+|---|---|
+| 分割構造 | `index.html`の`<script src>`と`js/`の対応、読み込み順、`</script>`混入、ラッパー段数の上限 |
+| 出力JSON | 3つの下書きから`mockCampaignPayload()`を作り、基準出力と**完全一致**するか |
+| 出力API | `assets.json`のマージが人の書いた`status`/`notes`を壊さないか、べき等か、異常系で上書きしないか |
+
+一部だけ回すとき、および基準を更新するとき：
+
+```bash
+node tests/run.mjs --only=structure   # ブラウザ不要
+node tests/run.mjs --only=snapshot
+node tests/run.mjs --only=export
+node tests/run.mjs --verbose          # 通った項目も並べる
+npm run test:update                   # 基準出力を作り直す（意図した仕様変更のときだけ）
+npm run test:fixtures                 # 下書きフィクスチャを作り直す
+```
+
+守ること。
+
+- **`tests/fixtures/golden/*.json` を手で編集しない。** 出力が変わったら、それが意図した変更かを判断してから`--update`する
+- `--update`したときは、**基準出力の差分そのものを報告に貼る**。「更新しました」だけでは、意図しない変化を見逃す
+- 基準出力は`TAS/data/*.json`に依存する。あちらを変えたら`--update`が必要
+- テストは`MOCK2_DIR`を一時ディレクトリへ向けて動く。**実データに対して出力して検証しない**
+
 自動テストが成功しても、ブラウザの表示や画像復元まで確認できたことにはしません。最終報告では、自動検証とブラウザ検証を分けて記載します。
+
+### 出力パイプラインの現状と方針
+
+`mockCampaignPayload`は`var base=fn; fn=function(){…}`で**11段に包まれています**。どの項目の正がどの段なのかコードから読み取れず、「空の値で既存データを黙って潰す」不具合が繰り返し出ています（2026-07-29以降で7件）。
+
+- **段を増やさないこと。** 静的検査が11段を上限に落とします
+- 1本化する場合は、`codex/tas-ollama-gemma4`ブランチに`mockCampaignPayloadUnified()`として実装済みの前例があります（未マージ、mainと大きく乖離）。設計の参考にはなりますが、そのまま持ってこられません
+- 1本化したら`tests/run.mjs`の`WRAPPER_CEILING`を下げます
 
 ## 出力エラーの伝え方
 

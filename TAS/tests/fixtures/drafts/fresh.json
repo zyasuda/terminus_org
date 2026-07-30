@@ -1,0 +1,122 @@
+{
+  "campaignName": "新しいキャンペーン",
+  "campaignImage": "",
+  "campaignWorld": "",
+  "campaignTerms": "",
+  "freshCampaign": true,
+  "customChapterScenes": {
+    "ch1": []
+  },
+  "chapterNames": {
+    "ch1": "チャプター1"
+  },
+  "chapterOrder": [
+    "ch1"
+  ],
+  "activeChapter": "ch1",
+  "selectedNode": {
+    "type": "opening"
+  },
+  "extraCompanions": 0,
+  "npcCount": 1,
+  "monsters": [],
+  "items": [],
+  "castImages": {},
+  "castNames": {},
+  "castProfiles": {},
+  "castFlags": {},
+  "castAttributes": {},
+  "sceneBackgrounds": {},
+  "sceneOverrides": {},
+  "discoveryFoldState": {},
+  "rightPanelEnabled": false,
+  "assistantMode": "prompt",
+  "collapsedCampaign": false,
+  "collapsedChapters": {
+    "ch1": false
+  },
+  "campaignId": "campaign",
+  "chapterIds": {
+    "ch1": "chapter_01"
+  },
+  "entityLedger": [
+    {
+      "name": "NPC1",
+      "kind": "npc",
+      "importance": "support",
+      "affordances": [
+        "talk",
+        "inspect"
+      ],
+      "id": "npc1"
+    },
+    {
+      "id": "gareth",
+      "name": "ガレス",
+      "kind": "character",
+      "importance": "support",
+      "affordances": [
+        "talk",
+        "inspect"
+      ]
+    }
+  ],
+  "concepts": [
+    {
+      "id": "concept_heartstone",
+      "name": "心石",
+      "aliases": [
+        "青い石",
+        "光る石",
+        "石",
+        "あおいし",
+        "ひかるいし",
+        "いし",
+        "心臓の石"
+      ],
+      "scope": "campaign",
+      "role": "main",
+      "usage": "dialogue_condition",
+      "storyKey": true,
+      "surface": "ゆっくりと脈動している青く光る石",
+      "truth": "何かの動力源になるような不思議な力を宿す"
+    }
+  ],
+  "initialInventory": [],
+  "structureChapters": {
+    "ch1": {
+      "title": "チャプター1",
+      "scenes": [],
+      "opening": {},
+      "ending": {},
+      "intermission": {}
+    }
+  },
+  "imageAssetRefs": {},
+  "flagDeclarations": {
+    "guardian_fate": [
+      "対話",
+      "撃破",
+      "回避"
+    ],
+    "learned_heartstone": [
+      true,
+      false
+    ],
+    "heartstone_choice": [
+      "渡した",
+      "隠した",
+      "砕いた"
+    ],
+    "guardian_alive": [
+      true,
+      false
+    ]
+  },
+  "flagRulesByChapter": {
+    "ch1": {}
+  },
+  "gameOverText": "",
+  "adminUxSectionFoldState": {},
+  "mock2PreviewBaseUrl": "http://localhost:5173/"
+}

@@ -1,0 +1,38 @@
+{
+  "version": 1,
+  "updated": "2026-01-01",
+  "assets": {
+    "keep_notes": {
+      "file": "s2_junction.jpg",
+      "kind": "background",
+      "status": "approved",
+      "size": "1376x768",
+      "usedBy": [
+        "chapter_01.scenes.99.img"
+      ],
+      "notes": "人が手で書いた覚え書き。出力で消えてはいけない。usedByは古い値にしてあり、出力で更新される"
+    },
+    "keep_manual_usedby": {
+      "file": "gm_mascot.png",
+      "kind": "gm-mascot",
+      "status": "approved",
+      "alpha": true,
+      "usedBy": [
+        "ui.stage.gmPet"
+      ]
+    },
+    "keep_archived": {
+      "file": "s2_barrier.jpg",
+      "kind": "background",
+      "status": "archived",
+      "usedBy": []
+    },
+    "renamed_id": {
+      "file": "rust_eater.jpg",
+      "kind": "popup",
+      "status": "rejected",
+      "usedBy": [],
+      "notes": "IDとファイル名が一致しない登録。fileの値で突き合わせられることの確認用"
+    }
+  }
+}
