@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updated": "2026-07-29",
+  "updated": "2026-07-30",
   "assets": {
     "mine_entrance": {
       "file": "mine_entrance.png",
@@ -8,7 +8,8 @@
       "status": "approved",
       "size": "1376x768",
       "usedBy": [
-        "chapter_01.scenes.1.img"
+        "chapter_01.scenes.1.img",
+        "chapter_01.scenes.1.parallax.fg"
       ],
       "notes": "透過前景レイヤー(左上に山の稜線状の透過あり)。パララックス前景として使用。対応する新しいsky画像はTASに再生成依頼中(s1_skyは旧デザインのまま暫定使用)。"
     },
@@ -152,7 +153,8 @@
       "target": "height 800px",
       "alpha": true,
       "usedBy": [
-        "chapter_01.scenes.3.enemy.sprite"
+        "chapter_01.scenes.3.enemy.sprite",
+        "chapter_01.scenes.3.npcSprite"
       ],
       "source": "imagegen",
       "promptVersion": 1,
@@ -187,7 +189,8 @@
       "status": "approved",
       "target": "1920x1080",
       "usedBy": [
-        "chapter_01.scenes.5.img"
+        "chapter_01.ending.img",
+        "chapter_01.intro.img"
       ],
       "source": "imagegen",
       "promptVersion": 1,
@@ -212,7 +215,7 @@
       "target": "portrait equivalent",
       "alpha": true,
       "usedBy": [
-        "chapter_01.scenes.5.npcSprite"
+        "chapter_01.ending.npcSprite"
       ],
       "source": "imagegen",
       "promptVersion": 1,
@@ -243,6 +246,22 @@
       "source": "imagegen",
       "promptVersion": 1,
       "notes": "手がかりを指し示す調査・遺工向けの差分。"
+    },
+    "s4_myra_full_transparent": {
+      "file": "s4_myra_full_transparent.png",
+      "kind": "sprite",
+      "status": "candidate",
+      "usedBy": [
+        "chapter_01.intro.npcSprite"
+      ]
+    },
+    "s1_sky_parallax": {
+      "file": "s1_sky_parallax.png",
+      "kind": "parallax.sky",
+      "status": "candidate",
+      "usedBy": [
+        "chapter_01.scenes.1.parallax.sky"
+      ]
     }
   }
 }

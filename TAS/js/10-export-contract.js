@@ -68,10 +68,15 @@ mockCampaignPayload=function(){
     image:runtimeImageName(campaignImage)||baseCampaign.image||null
   };
   const assets={};
-  const addAsset=(file,kind,usedBy)=>{if(!file)return;const id=runtimeAssetId(file);assets[id]={file,kind,status:"candidate",usedBy:[usedBy]}};
+  const addAsset=(file,kind,usedBy)=>{if(!file)return;const id=runtimeAssetId(file);if(assets[id]){if(!assets[id].usedBy.includes(usedBy))assets[id].usedBy.push(usedBy);return}assets[id]={file,kind,status:"candidate",usedBy:[usedBy]}};
   addAsset(runtimeImageName(campaignImage),"campaign",`campaign.image`);
   campaign.companions.forEach(c=>addAsset(c.sprite,"portrait",`campaign.companions.${c.id}.sprite`));
+  addAsset(normalizedChapter.intro?.img,"background",`${chapterId}.intro.img`);
+  addAsset(normalizedChapter.intro?.npcSprite,"sprite",`${chapterId}.intro.npcSprite`);
   normalizedChapter.scenes.forEach((s,i)=>{const base=`${chapterId}.scenes.${s.id||i+1}`;addAsset(s.img,"background",`${base}.img`);addAsset(s.npcSprite,"sprite",`${base}.npcSprite`);addAsset(s.parallax?.sky,"parallax.sky",`${base}.parallax.sky`);addAsset(s.parallax?.fg,"parallax.fg",`${base}.parallax.fg`);addAsset(s.enemy?.img,"enemy",`${base}.enemy.img`);addAsset(s.enemy?.sprite,"sprite",`${base}.enemy.sprite`);(s.secrets||[]).forEach(secret=>{addAsset(secret.img,"popup",`${base}.secrets.${secret.id}.img`);addAsset(secret.bg,"background",`${base}.secrets.${secret.id}.bg`)})});
+  addAsset(normalizedChapter.ending?.img,"background",`${chapterId}.ending.img`);
+  addAsset(normalizedChapter.ending?.npcSprite,"sprite",`${chapterId}.ending.npcSprite`);
+  Object.values(assets).forEach(asset=>asset.usedBy.sort());
   return {...payload,campaign,chapter:normalizedChapter,assets,campaignId:tasCampaignId,chapterId,chapterFile:`${chapterId}.json`};
 }
 var baseCreateNewCampaignForStable=createNewCampaign;

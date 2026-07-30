@@ -32,6 +32,7 @@ loadEnv();
 const MOCK2_DIR = process.env.MOCK2_DIR || '/Users/yasuda_k/Desktop/Terminus/trpg-gm-mock2';
 const MOCK2_IMAGES_DIR = path.join(MOCK2_DIR, 'images');
 const MOCK2_CAMPAIGNS_DIR = path.join(MOCK2_DIR, 'public', 'data', 'campaigns');
+const MOCK2_ASSETS_FILE = path.join(MOCK2_DIR, 'public', 'data', 'assets.json');
 const MOCKDOCS_DIR = process.env.MOCKDOCS_DIR || '';
 
 const KEYS = {
@@ -109,6 +110,35 @@ function dataUrlBuffer(dataUrl) {
   if (!match) throw new Error('画像データの形式が不正です');
   return Buffer.from(match[1], 'base64');
 }
+function mergeAssetsLedger(ledger, exportedAssets) {
+  if (!ledger || typeof ledger !== 'object' || Array.isArray(ledger) || !ledger.assets || typeof ledger.assets !== 'object' || Array.isArray(ledger.assets)) throw new Error('素材台帳の形式が不正です');
+  const assets = ledger.assets;
+  const exportedByFile = new Map();
+  for (const asset of Object.values(exportedAssets)) {
+    if (!asset || typeof asset !== 'object' || !asset.file) continue;
+    const file = safeFileName(asset.file, '');
+    if (!file) continue;
+    const usedBy = Array.isArray(asset.usedBy) ? [...new Set(asset.usedBy.filter(value => typeof value === 'string'))].sort() : [];
+    exportedByFile.set(file, { ...asset, file, usedBy });
+  }
+  const existingByFile = new Map();
+  for (const [id, asset] of Object.entries(assets)) if (asset && typeof asset === 'object' && asset.file) existingByFile.set(asset.file, { id, asset });
+  // "ui." で始まるusedByは、mock2のコードからの直参照を人間が手で登録したもの。
+  // TASの出力には現れないため、上書きせず残す(残さないとgm_mascotの"ui.stage.gmPet"が消える)。
+  const keepManualUsedBy = usedBy => (Array.isArray(usedBy) ? usedBy : []).filter(value => typeof value === 'string' && value.startsWith('ui.'));
+  const added = [];
+  for (const [file, exported] of exportedByFile) {
+    const existing = existingByFile.get(file);
+    if (existing) assets[existing.id] = { ...existing.asset, usedBy: [...new Set([...keepManualUsedBy(existing.asset.usedBy), ...exported.usedBy])].sort() };
+    else {
+      const baseId = safeSegment(path.parse(file).name, 'asset'); let id = baseId; let suffix = 2;
+      while (assets[id]) id = `${baseId}_${suffix++}`;
+      assets[id] = { file, kind: exported.kind, status: 'candidate', usedBy: exported.usedBy }; added.push(file);
+    }
+  }
+  for (const { id, asset } of existingByFile.values()) if (!exportedByFile.has(asset.file)) assets[id] = { ...asset, usedBy: keepManualUsedBy(asset.usedBy) };
+  return { ledger: { ...ledger, updated: new Date().toISOString().slice(0, 10), assets }, added };
+}
 async function serveFile(res, file, cache = 'no-store') {
   try {
     const body = await fsp.readFile(file);
@@ -183,9 +213,18 @@ const server = http.createServer(async (req, res) => {
       const chapterFile = safeFileName(payload.chapterFile, 'chapter_01.json'); const targetDir = path.join(MOCK2_CAMPAIGNS_DIR, campaignId);
       await fsp.mkdir(targetDir, { recursive: true });
       const entries = [{ path: `${campaignId}/campaign.json`, absolute: path.join(targetDir, 'campaign.json'), value: payload.campaign || {} }, { path: `${campaignId}/${chapterFile}`, absolute: path.join(targetDir, chapterFile), value: payload.chapter || {} }];
+      let assetsAdded = [];
+      if (payload.assets && typeof payload.assets === 'object' && !Array.isArray(payload.assets) && Object.keys(payload.assets).length) {
+        let ledger;
+        try { ledger = JSON.parse(await fsp.readFile(MOCK2_ASSETS_FILE, 'utf8')); }
+        catch (cause) { throw new Error(`素材台帳を読み込めません: ${cause.message}`); }
+        const merged = mergeAssetsLedger(ledger, payload.assets);
+        entries.push({ path: 'assets.json', absolute: MOCK2_ASSETS_FILE, value: merged.ledger });
+        assetsAdded = merged.added;
+      }
       const files = [];
       for (const entry of entries) { const content = `${JSON.stringify(entry.value, null, 2)}\n`; await fsp.writeFile(entry.absolute, content, 'utf8'); files.push({ path: entry.path, content }); }
-      return json(res, 200, { saved: files.map(file => file.path), files });
+      return json(res, 200, { saved: files.map(file => file.path), files, assetsAdded });
     }
     if (req.method === 'POST' && url.pathname === '/api/llm') {
       const result = await callLlmOnceWithRetry(await readJsonBody(req)); return json(res, 200, result);
