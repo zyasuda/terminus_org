@@ -173,16 +173,35 @@ async function capturePayload(page) {
 }
 
 /* -------------------------------------------------------- 出力JSONの基準比較 */
-function firstDifference(a, b, at = "") {
-  if (JSON.stringify(a) === JSON.stringify(b)) return null;
+/* 差分は全件並べる。1件目だけ見せると、意図した変更かどうかを判断できない。
+   長い値は端を残して省略する（どこが変わったかは分かる長さにする）。 */
+const DIFF_LIMIT = 40;
+function shorten(value) {
+  const text = JSON.stringify(value) ?? "undefined";
+  return text.length <= 90 ? text : `${text.slice(0, 60)}…${text.slice(-25)}`;
+}
+function differences(a, b, at = "", found = []) {
+  if (found.length >= DIFF_LIMIT || JSON.stringify(a) === JSON.stringify(b)) return found;
   if (a === null || b === null || typeof a !== "object" || typeof b !== "object") {
-    return `${at || "(根)"}: ${JSON.stringify(a)} → ${JSON.stringify(b)}`;
+    found.push(`${at || "(根)"}: ${shorten(a)} → ${shorten(b)}`);
+    return found;
   }
-  for (const key of new Set([...Object.keys(a), ...Object.keys(b)])) {
-    const found = firstDifference(a[key], b[key], at ? `${at}.${key}` : key);
-    if (found) return found;
+  const keysA = Object.keys(a);
+  const keysB = Object.keys(b);
+  if (JSON.stringify(keysA) !== JSON.stringify(keysB) && JSON.stringify(keysA.slice().sort()) === JSON.stringify(keysB.slice().sort())) {
+    found.push(`${at || "(根)"}: キーの並びが違う ${JSON.stringify(keysA)} → ${JSON.stringify(keysB)}`);
   }
-  return `${at || "(根)"}: キーの並びが違う`;
+  for (const key of new Set([...keysA, ...keysB])) {
+    differences(a[key], b[key], at ? `${at}.${key}` : key, found);
+    if (found.length >= DIFF_LIMIT) break;
+  }
+  return found;
+}
+function diffText(a, b) {
+  const found = differences(a, b);
+  const lines = found.slice(0, DIFF_LIMIT);
+  if (found.length >= DIFF_LIMIT) lines.push(`（${DIFF_LIMIT}件で打ち切り）`);
+  return lines.join("\n      ");
 }
 
 async function runSnapshot(browser, update) {
@@ -218,7 +237,7 @@ async function runSnapshot(browser, update) {
     const golden = JSON.parse(fs.readFileSync(goldenPath, "utf8"));
     ok(text === JSON.stringify(golden, null, 2) + "\n",
       `${fixture.name}: 出力JSONが基準と完全一致する（${fixture.note}）`,
-      firstDifference(golden, payload) || "");
+      diffText(golden, payload));
   }
 }
 

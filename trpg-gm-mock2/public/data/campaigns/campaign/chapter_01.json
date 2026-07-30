@@ -8,7 +8,7 @@
     "name": "イントロ",
     "brief": "夕暮れの村。マイラ・ヴェインは机に坑道の古い見取り図を広げ、消えた作業員と坑道の奥から聞こえる金属音について語り始める。",
     "img": "s4_myra_room.jpg",
-    "npcSprite": "s4_myra.png",
+    "npcSprite": "s4_myra_full_transparent.png",
     "npc": {
       "id": "npc_1",
       "name": "マイラ"
@@ -137,7 +137,7 @@
       },
       "entityRefs": [],
       "parallax": {
-        "sky": "s1_sky.jpg",
+        "sky": "s1_sky_parallax.png",
         "fg": "mine_entrance.png"
       },
       "parallaxFg": "/images/mine_entrance.png",
@@ -449,10 +449,10 @@
     "name": "報告",
     "brief": "君と仲間は、無事マイラの部屋に帰還した。マイラはやさしく出迎えてくれたが、何か言いたげな様子でこっちを見ている。君の方から何か切り出してみてくれ。",
     "img": "s4_myra_room.jpg",
-    "npcSprite": "s4_myra.png",
+    "npcSprite": "s4_myra_full_transparent.png",
     "npc": {
       "id": "npc_1",
-      "name": "マイラ・ヴェイン"
+      "name": "マイラ"
     },
     "blockedText": "まだ渡していないものがある。",
     "exits": [

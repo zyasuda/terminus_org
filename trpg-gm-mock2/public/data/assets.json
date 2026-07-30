@@ -211,12 +211,10 @@
     "s4_myra": {
       "file": "s4_myra.png",
       "kind": "portrait",
-      "status": "approved",
+      "status": "archived",
       "target": "portrait equivalent",
       "alpha": true,
-      "usedBy": [
-        "chapter_01.ending.npcSprite"
-      ],
+      "usedBy": [],
       "source": "imagegen",
       "promptVersion": 1,
       "notes": "元行商人で村の顔役のマイラ・ヴェイン。"
@@ -252,6 +250,7 @@
       "kind": "sprite",
       "status": "candidate",
       "usedBy": [
+        "chapter_01.ending.npcSprite",
         "chapter_01.intro.npcSprite"
       ]
     },

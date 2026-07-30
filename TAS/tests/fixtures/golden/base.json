@@ -673,10 +673,10 @@
       "name": "報告",
       "brief": "君と仲間は、無事マイラの部屋に帰還した。マイラはやさしく出迎えてくれたが、何か言いたげな様子でこっちを見ている。君の方から何か切り出してみてくれ。",
       "img": "s4_myra_room.jpg",
-      "npcSprite": "s4_myra.png",
+      "npcSprite": "s4_myra_full_transparent.png",
       "npc": {
         "id": "npc_1",
-        "name": "マイラ・ヴェイン"
+        "name": "マイラ"
       },
       "blockedText": "まだ渡していないものがある。",
       "exits": [
@@ -790,8 +790,8 @@
         "chapter_01.ending.img"
       ]
     },
-    "s4_myra-png": {
-      "file": "s4_myra.png",
+    "s4_myra_full_transparent-png": {
+      "file": "s4_myra_full_transparent.png",
       "kind": "sprite",
       "status": "candidate",
       "usedBy": [
