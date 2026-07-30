@@ -62,58 +62,13 @@
   "castFlags": {},
   "castAttributes": {},
   "sceneBackgrounds": {
-    "ch1:opening:opening": "s4_myra_room.jpg",
     "ch1:ending:ending": "s4_myra_room.jpg"
   },
   "sceneOverrides": {
-    "ch1:opening:opening": {
-      "brief": "夕暮れの村。マイラは机に坑道の古い見取り図を広げ、消えた作業員について語り始める。",
-      "npcs": [
-        "npc_1"
-      ],
-      "discoveries": [
-        {
-          "id": "intro_map",
-          "label": "坑道の見取り図",
-          "surface": "机に広げられた古い見取り図。",
-          "fact": "見取り図の奥半分が、後から描き足された筆跡になっている。",
-          "dc": 10
-        }
-      ],
-      "exits": [
-        {
-          "id": "to_scene01",
-          "match": "引き受け, 承知, わかった, 任せ",
-          "to": "1"
-        },
-        {
-          "id": "to_scene01_informed",
-          "match": "見取り図を持って出る",
-          "to": "1",
-          "requires": {
-            "text": "坑道の見取り図"
-          }
-        }
-      ]
-    },
     "ch1:ending:ending": {
-      "brief": "君と仲間は、無事マイラの部屋に帰還した。マイラは何か言いたげな様子でこっちを見ている。",
+      "brief": "帰還の報告をする場面。出口は元データのまま使う。",
       "npcs": [
         "npc_1"
-      ],
-      "blockedText": "まだ渡していないものがある。",
-      "exits": [
-        {
-          "id": "hand_over",
-          "match": "渡す, 手渡す, 心石, 差し出す",
-          "to": "end",
-          "requires": {
-            "text": "心石の欠片"
-          },
-          "removeItems": "心石の欠片",
-          "addItems": "30ゴールド",
-          "npcSay": "よくやってくれた。これは謝礼だ。"
-        }
       ]
     }
   },

@@ -45,7 +45,8 @@ const wants = section => !only || only === section;
 const FIXTURES = [
   { name: "base", draft: null, note: "下書きなし。TAS/data だけから組み立てる" },
   { name: "authored", draft: "authored.json", note: "イントロ・アウトロを画面で書いた状態" },
-  { name: "fresh", draft: "fresh.json", note: "新規キャンペーンを作った直後" }
+  { name: "fresh", draft: "fresh.json", note: "新規キャンペーンを作った直後" },
+  { name: "outro-from-base", draft: "outro-from-base.json", note: "アウトロの本文だけ書き、出口は元データのまま" }
 ];
 
 let failures = 0;
@@ -362,11 +363,23 @@ async function makeFixtures(browser) {
         castImages.npc_1 = "s4_myra_full_transparent.png";
         sceneBackgrounds[openingKey] = "s4_myra_room.jpg";
         sceneBackgrounds[endingKey] = "s4_myra_room.jpg";
+        /* イントロに調査対象を1つ置き、出口の必要条件からそれを参照する。
+           必要条件の語をどのノードの調査対象と突き合わせるかを、この入力で確かめる
+           （選択中のシーンを見てしまうと解決できず requires が消える）。
+           もう1つの出口は必要条件を空にして、requires.text が漏れないことを見る。 */
         sceneOverrides[openingKey] = {
           ...(sceneOverrides[openingKey] || {}),
           brief: "夕暮れの村。マイラは机に坑道の古い見取り図を広げ、消えた作業員について語り始める。",
           npcs: ["npc_1"],
-          exits: [{ id: "to_scene01", match: "引き受け, 承知, わかった, 任せ", to: "1" }]
+          discoveries: [{
+            id: "intro_map", label: "坑道の見取り図",
+            surface: "机に広げられた古い見取り図。",
+            fact: "見取り図の奥半分が、後から描き足された筆跡になっている。", dc: 10
+          }],
+          exits: [
+            { id: "to_scene01", match: "引き受け, 承知, わかった, 任せ", to: "1" },
+            { id: "to_scene01_informed", match: "見取り図を持って出る", to: "1", requires: { text: "坑道の見取り図" } }
+          ]
         };
         sceneOverrides[endingKey] = {
           ...(sceneOverrides[endingKey] || {}),
@@ -395,6 +408,30 @@ async function makeFixtures(browser) {
   })();
   fs.writeFileSync(path.join(draftsDir, "fresh.json"), JSON.stringify(fresh, null, 2) + "\n", "utf8");
   results.push("  --  drafts/fresh.json を書き出した");
+
+  /* アウトロの本文だけを書き、出口は画面に持たない状態。
+     42-match-words は override.exits が無いと何もしないので、01-core 側の
+     イントロ・アウトロ出口の変換が最終出力になる。ここを通す入力が他に無い。
+     イントロは書かないので、元データの文字列イントロがそのまま流れる経路も通る。 */
+  const outroFromBase = await (async () => {
+    const { page } = await openPage(browser, null);
+    try {
+      return await page.evaluate(() => {
+        const endingKey = nodeKey({ type: "ending", id: "ending" });
+        castNames.npc_1 = "マイラ";
+        castImages.npc_1 = "s4_myra_full_transparent.png";
+        sceneBackgrounds[endingKey] = "s4_myra_room.jpg";
+        sceneOverrides[endingKey] = {
+          ...(sceneOverrides[endingKey] || {}),
+          brief: "帰還の報告をする場面。出口は元データのまま使う。",
+          npcs: ["npc_1"]
+        };
+        return workspaceDraft();
+      });
+    } finally { await page.close(); }
+  })();
+  fs.writeFileSync(path.join(draftsDir, "outro-from-base.json"), JSON.stringify(outroFromBase, null, 2) + "\n", "utf8");
+  results.push("  --  drafts/outro-from-base.json を書き出した");
   results.push("  --  作り直したら --update で基準出力も更新すること");
 }
 
