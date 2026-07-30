@@ -487,8 +487,10 @@ const addCompanion = (t, who = Object.keys(CAST)[0]) => {
   highlightPortrait(who);
 };
 // シーンNPC(依頼人マイラ等)の台詞。話者名はシーン定義から取る(モデルに選ばせない)
-const addNpc = t => {
-  const npc = SCENARIO.scenes[state.sceneIndex].npc;
+// 話者は既定でシーン常在のNPC。イントロ・アウトロのようにシーン外のノードで喋らせる場合は
+// そのノードのnpcを渡す(シーン側にnpcが無いと、渡さない限り何も出ない)
+const addNpc = (t, speaker) => {
+  const npc = speaker || SCENARIO.scenes[state.sceneIndex].npc;
   if (!npc) return;
   t = sanitizeSay(t);
   if (!t) return;
@@ -1392,6 +1394,18 @@ targetの規則(厳守):
   }
 }
 
+// 作者が章データに書いた品物を渡す。add_items(LLM経由)は「今のシーンのlootにある物」しか
+// 通さない絞り込みがあるが、あれはLLMが品物を捏造するのを防ぐためのもの。
+// 作者が書いた報酬はその対象外なので、こちらの入口を使う
+function grantAuthoredItems(names) {
+  if (!Array.isArray(names)) return;
+  names.forEach(n => {
+    if (typeof n !== "string" || !n || state.items.includes(n)) return;
+    state.items.push(n);
+    logSceneEvent(`「${n}」を手に入れた`);
+  });
+}
+
 const CONSENT_GAP_MS = 350;       // 同行者が順に答える間隔
 const CONSENT_LAST_HOLD_MS = 900; // 最後の同意を読ませてからシーンへ進むまでの間
 
@@ -1866,8 +1880,10 @@ export async function sendAction(text) {
       addGm(exit.blockedText || ending.blockedText || "まだ進めない。", "Neutral");
     } else {
       if (Array.isArray(exit.removeItems)) applyUpdates({ remove_items: exit.removeItems });
+      grantAuthoredItems(exit.addItems); // 謝礼など、作者が書いた報酬
       state.pendingEnding = false;
       if (exit.arrivalText) addGm(exit.arrivalText, "Neutral");
+      if (exit.npcSay) addNpc(exit.npcSay, ending.npc); // 締めの台詞はNPCの吹き出しへ(GMの地の文にしない)
       finishChapter();
     }
     busy = false;
