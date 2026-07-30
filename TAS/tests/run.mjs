@@ -453,7 +453,7 @@ async function makeFixtures(browser) {
   results.push("  --  drafts/fresh.json を書き出した");
 
   /* アウトロの本文だけを書き、出口は画面に持たない状態。
-     42-match-words は override.exits が無いと何もしないので、01-core 側の
+     42-match-words は override.exits が無いと何もしないので、01i-output 側の
      イントロ・アウトロ出口の変換が最終出力になる。ここを通す入力が他に無い。
      イントロは書かないので、元データの文字列イントロがそのまま流れる経路も通る。 */
   const outroFromBase = await (async () => {

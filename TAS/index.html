@@ -27,7 +27,19 @@
 <!-- js/ は元のインライン<script>を1対1で切り出したもの。番号順に読み込むこと。
      後続ファイルが `var base=fn; fn=function(){…}` で先行ファイルの関数を包む作りなので、
      順序を入れ替えると出力内容が変わる。ファイルの追加は末尾へ。 -->
-<script src="/js/01-core.js"></script>
+<script src="/js/01a-state.js"></script>
+<script src="/js/01b-normalize.js"></script>
+<script src="/js/01c-draft.js"></script>
+<script src="/js/01d-validation.js"></script>
+<script src="/js/01e-render-scenes.js"></script>
+<script src="/js/01f-render-state.js"></script>
+<script src="/js/01g-render-ledgers.js"></script>
+<script src="/js/01h-render-shell.js"></script>
+<script src="/js/01i-output.js"></script>
+<script src="/js/01j-render-export.js"></script>
+<script src="/js/01k-bind.js"></script>
+<script src="/js/01l-generate.js"></script>
+<script src="/js/01m-init.js"></script>
 <script src="/js/02-exit-editor-simple.js"></script>
 <script src="/js/03-sky-image.js"></script>
 <script src="/js/04-assist-panel-mode.js"></script>

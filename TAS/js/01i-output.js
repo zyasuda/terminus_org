@@ -1,0 +1,92 @@
+/* 出口の必要条件を、出力用の形に決める。
+   requires.text は画面の入力欄でありゲーム側の契約には無い。解決できる条件が1つも無ければ
+   requires ごと出力しない。同じ判断がイントロ・アウトロの出力(01-core)とトリガー語句側の
+   上書き出力(42-match-words)に二重に書かれ、後者にこの除外が無かったため
+   requires:{text:""} がゲームJSONへ漏れていた(2026-07-30)。判断はここ1箇所に置く。
+   node を渡すのは、条件の語をそのノードの調査対象と突き合わせるため。省略すると
+   exitRequires が選択中のシーンを見てしまい、別のシーンの調査対象に一致しうる。
+   exitRequires は mockCampaignPayload の内側で window へ載るので window 経由で参照する。 */
+function outputExitRequires(requires,resolveSecretId,node){
+  const source=requires&&typeof requires==="object"?requires:{};
+  if(source.text)return window.exitRequires(source.text,resolveSecretId,node);
+  const rest=Object.fromEntries(Object.entries(source).filter(([key])=>key!=="text"));
+  return Object.keys(rest).length?rest:undefined;
+}
+function exportPayload(){return {campaign:{name:campaignName,world:campaignWorld,theme:campaignTheme,terms:campaignTerms,image:campaignImage?"assets/campaign/campaign_image.png":null},casts:{gm:{id:"gm",name:castName("gm","GM"),profile:castProfile("gm","ゲームマスター。確定した結果を説明し、プレイヤーを案内する。"),flags:castFlagSet("gm","GM"),image:castImages.gm?"assets/casts/gm.png":null},companions:[{id:"gareth",name:castName("gareth","ガレス"),profile:castProfile("gareth","普通の戦士・用心棒。短く実用的に話す。"),flags:castFlagSet("gareth","メンバー"),image:castImages.gareth?"assets/casts/gareth.png":null},...Array.from({length:extraCompanions},(_,i)=>({id:`member_${i+2}`,name:castName(`member_${i+2}`,`メンバー${i+2}`),profile:castProfile(`member_${i+2}`,"未設定。必要ならメンバーの役割・口調を定義する。"),flags:castFlagSet(`member_${i+2}`,"メンバー"),image:castImages[`member_${i+2}`]?`assets/casts/member_${i+2}.png`:null}))],npcs:npcList().map(n=>({id:n.id,name:n.name,profile:castProfile(n.id,"シーンごとに設定するNPC。"),flags:castFlagSet(n.id,"NPC"),image:castImages[n.id]?`assets/casts/${n.id}.png`:null}))},chapters:Object.entries(CHAPTERS).map(([id,c])=>({id,title:c.name,file:c.file,scenes:id===activeChapter?chapterNodes():[]})),generatedAt:new Date().toISOString()}}
+function mockCampaignPayload(){const baseCampaign=JSON.parse(context?.dataFiles?.["campaign.json"]||"{}");const baseChapter=JSON.parse(context?.dataFiles?.[CHAPTERS[activeChapter].file.toLowerCase()+".json"]||"{}");const campaign={...baseCampaign,meta:{...(baseCampaign.meta||{}),title:campaignName},style:{...(baseCampaign.style||{}),world:campaignWorld}};
+/* <script>ブロックごとにスコープが切れるため、constのままだと後続ブロック
+   (イントロ・アウトロの出力)から参照できない。windowへ載せて共有する */
+const exitRequires=window.exitRequires=(text,resolveSecretId,n=scene())=>{const raw=String(text||"").trim();if(!raw)return undefined;const parts=exitConditionParts(raw);const discoveries=(n.discoveries||[]).map((value,index)=>normalizeDiscoveryFor(n,value,index));const itemNames=new Set(items.map(item=>String(item.name||"").trim()).filter(Boolean));const resolved=parts.tokens.map((token,index)=>{const normalized=String(token||"").trim();const discovery=discoveries.find(item=>item.id===normalized||item.label===normalized);if(discovery)return {kind:"discovery",value:resolveSecretId(discovery.id)||discovery.id,join:index?parts.connectors[index-1]||"AND":null};if(itemNames.has(normalized))return {kind:"item",value:normalized,join:index?parts.connectors[index-1]||"AND":null};return null}).filter(Boolean);if(!resolved.length)return undefined;const mixed=new Set(resolved.map(item=>item.kind)).size>1;const output={};for(const kind of ["discovery","item"]){const values=resolved.filter(item=>item.kind===kind);if(!values.length)continue;const any=!mixed&&resolved.length>1&&values.every((item,index)=>index===0||item.join==="OR");const key=kind==="discovery"?(any?"secretsAny":"secretsAll"):(any?"itemsAny":"itemsAll");output[key]=[...new Set(values.map(item=>item.value))]}return output};
+/* モンスター・アイテム台帳の名前をエンティティ台帳へ自動登録する(mock2の正名の原則) */
+const entityNames=new Set((campaign.entities||[]).map(e=>e.ja));
+const extraEntities=[...monsters.map(m=>m.name),...items.map(x=>x.name)].filter(n=>n&&!entityNames.has(n)).map(n=>({ja:n,note:"TAS台帳から自動登録"}));
+if(extraEntities.length)campaign.entities=[...(campaign.entities||[]),...extraEntities];const scenes=chapterNodes().filter(n=>n.type==="scene").map((node,i)=>{const original=baseChapter.scenes?.[i]||{};const override=sceneOverrides[nodeKey(node)]||{};const merged={...original,...node,...override};
+/* enemyだけは浅いコピーで潰さない。下書き(node)や画面上書き(override)が薄いenemyを持っていても、
+   章データ(original)のunknownName・ambush・weakness等を落とさずに重ねる。
+   ponytail: 深いマージはenemyに限定する。他のキーで同じ事故が出たらここに足す */
+const enemyLayers=[original.enemy,node.enemy,override.enemy].filter(e=>e&&typeof e==="object");
+if(enemyLayers.length)merged.enemy=Object.assign({},...enemyLayers);if(Array.isArray(node.discoveries)){merged.secrets=node.discoveries.map((raw,j)=>{const d=normalizeDiscoveryFor(node,raw,j);const old=(original.secrets||[]).find(o=>o.id===d.id)||{};return {...old,id:d.id||`s${node.id}_${j+1}`,entity:d.label||old.entity||`発見項目${j+1}`,aliases:d.aliases.length?d.aliases:old.aliases||[],dc:d.dc||undefined,surface:d.surface||old.surface||d.trigger||"",text:d.fact||old.text||d.label||old.entity||"",trigger:d.trigger||old.trigger||"",category:d.category||old.category||"object",importance:d.importance||old.importance||"support",appearances:d.appearances||old.appearances||[],tags:d.tags||old.tags||[]}})}
+/* TASの出口の必要条件をmock2の進行ゲートへ変換する。
+   条件トークン(発見済み名・項目キー・要素名・別名)をsecret idへ引き当てる。
+   OR条件はsecretsAny、AND条件はsecretsAllへ出力する。 */
+const secretIdByToken={};(merged.secrets||[]).forEach(s=>{secretIdByToken[s.id]=s.id;if(s.entity&&!secretIdByToken[s.entity])secretIdByToken[s.entity]=s.id;[...(s.tags||[]),...(s.aliases||[])].forEach(t=>{if(t&&!secretIdByToken[t])secretIdByToken[t]=s.id})});
+const transitionConditions=(merged.transitions||[]).map(t=>String(t.requires??t.conditionValue??"").trim()).filter(Boolean);
+const conditionText=transitionConditions.join(" ");
+const conditionTokens=[...new Set(transitionConditions.flatMap(value=>value.split(/\s+(?:AND|OR)\s+/i)).map(v=>v.trim().replace(/^(flag|discovery|item|npc|scene|battle):/i,"")).filter(Boolean).map(token=>secretIdByToken[token]).filter(Boolean))];
+const hasAnd=/\s+AND\s+/i.test(conditionText);
+const hasOr=/\s+OR\s+/i.test(conditionText);
+const completeRequires={...(merged.completeRequires||{})};
+delete completeRequires.secretsAny;
+delete completeRequires.secretsAll;
+if(conditionTokens.length){
+  /* mock2のcompleteRequiresはAny/Allを別キーで表現する。AND/OR混在は
+     現行契約でそのまま表現できないため、条件未達による早期進行を避けてAllにする。 */
+  completeRequires[hasOr&&!hasAnd?"secretsAny":"secretsAll"]=conditionTokens;
+}
+if(conditionTokens.length||Object.keys(merged.completeRequires||{}).some(key=>key!=="secretsAny"&&key!=="secretsAll"))merged.completeRequires=completeRequires;
+/* v0.2: TASの出口設定をmock2のscenes[].exitsへ変換する。未設定の旧transitionsは互換変換する。 */
+const configuredExits=Array.isArray(merged.exits)?merged.exits.map(normalizeExit):(merged.transitions||[]).map(transitionToExit);
+const exitSecretId=(token)=>secretIdByToken[String(token||"").trim().replace(/^(flag|discovery|item|npc|scene|battle):/i,"")];
+if(configuredExits.length){
+  merged.exits=configuredExits.map((x,i)=>{const e=normalizeExit(x);const requires=e.requires&&typeof e.requires==="object"?e.requires:{};const converted=requires.text?exitRequires(requires.text,exitSecretId,merged):Object.keys(requires).some(key=>key!=="text")?requires:undefined;const to=e.to===null?null:e.to==="end"?"end":Number.isFinite(Number(e.to))?Number(e.to):e.to||null;return {id:e.id||`exit_${i+1}`,match:e.match, ...(to===null?{to:null}:{to}), ...(converted&&Object.keys(converted).length?{requires:converted}:{}), ...(e.removeItems?.length?{removeItems:e.removeItems}:{}), ...(e.addItems?.length?{addItems:e.addItems}:{}), ...(e.npcSay?{npcSay:e.npcSay}:{}), ...(e.blockedText?{blockedText:e.blockedText}:{}), ...(e.text?{text:e.text}:{})}});
+}
+/* mock2が読まないTAS独自フィールドはauthoringキーへまとめ、mock2が安全に無視できる形で保存する */
+merged.authoring={transitions:merged.transitions||[],exits:merged.exits||[],dialogueRules:Array.isArray(override.dialogueRules)?override.dialogueRules.map(normalizeDialogueRule):merged.dialogueRules||[],gmSceneNotes:typeof override.gmSceneNotes==="string"?override.gmSceneNotes:merged.gmSceneNotes||""};
+/* 発話ルールをmock2が実際に読む形へ変換する。
+   item_grant → loot（条件が要素に対応すればrequires=secret id付き）、発言 → direction（GM演出指示）へ追記。
+   directionはマーカー以降を作り直すため、再エクスポートしても重複しない */
+const dlgRules=merged.authoring.dialogueRules;
+const firstToken=cond=>String(cond||"").split(/\s+(?:AND|OR)\s+/i)[0]?.trim().replace(/^(flag|discovery|item|npc|scene|battle):/i,"")||"";
+const lootAdd=dlgRules.filter(r=>r.eventType==="item_grant"&&r.targetId).map(r=>{const req=secretIdByToken[firstToken(r.condition)];return req?{name:r.targetId,requires:req}:r.targetId});
+if(lootAdd.length){const lootName=x=>typeof x==="string"?x:x.name;merged.loot=[...(merged.loot||[]).filter(x=>!lootAdd.some(a=>lootName(a)===lootName(x))),...lootAdd]}
+const DIRECTION_MARK="【TAS発話ルール】";
+const baseDirection=String(merged.direction||"").split(DIRECTION_MARK)[0].trim();
+const directionLines=dlgRules.filter(r=>r.line).map(r=>`${r.condition?`「${r.condition}」の開示後に`:""}${speakerLabel(r.speaker)}が「${r.line}」と伝える${r.once?"（一度だけ）":""}`);
+merged.direction=directionLines.length?`${baseDirection?baseDirection+"\n":""}${DIRECTION_MARK}${directionLines.join(" / ")}`:baseDirection||merged.direction;
+/* シーン敵: 「なし」の明示選択だけを削除として扱う。台帳に見つからない参照では、既存の敵定義を絶対に消さない。 */
+if(typeof merged.enemyName==="string"){const requestedName=merged.enemyName.trim();if(!requestedName)delete merged.enemy;else{const mon=monsters.find(m=>m.name===requestedName);if(mon)merged.enemy={...(merged.enemy||{}),...definedEnemyFields(mon)}}}
+delete merged.enemyName;delete merged.type;delete merged.index;delete merged.discoveries;delete merged.transitions;delete merged.dialogueRules;delete merged.gmSceneNotes;return merged});const chapter={...baseChapter,title:baseChapter.title||CHAPTERS[activeChapter].name,scenes};
+const opening=chapterNodes().find(n=>n.type==="opening")||{};
+const ending=chapterNodes().find(n=>n.type==="ending")||{};
+const openingOverride=sceneOverrides[nodeKey({type:"opening",id:"opening"})]||{};
+const endingOverride=sceneOverrides[nodeKey({type:"ending",id:"ending"})]||{};
+/* イントロ・アウトロは、元データ(chapter)の上に画面の入力だけを重ねる。
+   以前は「作者が書いたか」を brief と既定文言の文字列比較で判定し、真ならノードを
+   丸ごと作り直していた。そのため画面で設定していない項目が黙って消え、実際に
+   アウトロの背景が失われた(2026-07-30)。既定文言を変えるだけで判定が壊れる形でもあった。
+   画面の入力は sceneOverrides / sceneBackgrounds / castImages にしか無いので、
+   「作者が触ったか」はそこだけで判定し、値は元データへ重ねる。 */
+const terminalNodeOutput=(baseValue,fallbackId,node,override)=>{
+  const img=runtimeImageName(sceneBackgrounds[nodeKey(node)]);
+  const npcId=(override.npcs||[])[0];
+  const brief=String(override.brief||"").trim();
+  const touched=[brief,img,npcId,override.name,override.blockedText,(override.exits||[]).length].some(Boolean);
+  if(!touched)return baseValue;
+  const base=baseValue&&typeof baseValue==="object"?baseValue:{};
+  const npcSprite=runtimeImageName(castImages[npcId]);
+  const exits=(node.exits||[]).map((x,i)=>{const e=normalizeExit(x);const converted=outputExitRequires(e.requires,()=>undefined,node);const to=e.to===null?null:e.to==="end"?"end":Number.isFinite(Number(e.to))?Number(e.to):e.to||null;return {id:e.id||`exit_${i+1}`,match:e.match,...(to===null?{to:null}:{to}),...(converted&&Object.keys(converted).length?{requires:converted}:{}),...(e.removeItems?.length?{removeItems:e.removeItems}:{}),...(e.addItems?.length?{addItems:e.addItems}:{}),...(e.npcSay?{npcSay:e.npcSay}:{}),...(e.blockedText?{blockedText:e.blockedText}:{}),...(e.text?{text:e.text}:{})}});
+  return {id:base.id||fallbackId,name:override.name||base.name||node.name,...base,...(brief?{brief}:{}),...(img?{img}:{}),...(npcSprite?{npcSprite}:{}),...(npcId?{npc:{id:npcId,name:castName(npcId)}}:{}),...(node.blockedText?{blockedText:node.blockedText}:{}),...(exits.length?{exits}:{})};
+};
+chapter.intro=terminalNodeOutput(chapter.intro,"ch1_intro",opening,openingOverride);
+chapter.ending=terminalNodeOutput(chapter.ending,"ch1_ending",ending,endingOverride);
+return {campaign,chapter,chapterFile:`${CHAPTERS[activeChapter].file.toLowerCase()}.json`}}

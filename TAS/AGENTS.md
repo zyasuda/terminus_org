@@ -106,7 +106,7 @@ TASのブラウザ操作と作者向けUXを確認するSkillです。
 
 ## ファイル構成
 
-`index.html`はHTMLとCSSだけで約26,000字です。JavaScriptは`js/`配下の42ファイルに分かれています（2026-07-30に、元のインライン`<script>`を1対1で切り出しました）。
+`index.html`はHTMLとCSSだけで約27,000字です。JavaScriptは`js/`配下の54ファイルに分かれています（2026-07-30に、元のインライン`<script>`42個を1対1で切り出し、そのうち最大だった`01-core.js`を関心事で13分割しました）。1ファイルは最大約15KBです。
 
 - ファイル名の番号が読み込み順です。`index.html`の`<script src>`の並びと一致します
 - **順序を入れ替えてはいけません。** 後続ファイルが`var base=fn; fn=function(){…}`で先行ファイルの関数を包む作りになっており、順序が変わると出力内容が変わります
@@ -117,7 +117,19 @@ TASのブラウザ操作と作者向けUXを確認するSkillです。
 
 | 探しているもの | ファイル |
 |---|---|
-| 出力処理（`mockCampaignPayload`）、画面描画の本体 | `01-core.js`（約108KB。ここだけは大きい） |
+| 状態を持つ変数、定数、見本シーン | `01a-state.js` |
+| 正規化とラベル（`normalizeExit` / `normalizeDiscoveryFor` など） | `01b-normalize.js` |
+| 下書きの保存・読込・キャンペーンの取り込み | `01c-draft.js` |
+| 入力時検証・設計診断・補助AIのプロンプト | `01d-validation.js` |
+| シーン一覧・世界設定・シーン構造の描画 | `01e-render-scenes.js` |
+| 調査対象と演出の描画 | `01f-render-state.js` |
+| キャスト・モンスター・アイテム・共通ルールの描画 | `01g-render-ledgers.js` |
+| タブ・補助パネル・プレイテストの描画 | `01h-render-shell.js` |
+| **ゲーム側への出力**（`mockCampaignPayload` / `exitRequires` / `terminalNodeOutput`） | `01i-output.js` |
+| 出力画面と全体描画（`renderAll`） | `01j-render-export.js` |
+| 入力欄のイベント接続、画像の受け取り | `01k-bind.js` |
+| AIによるシーン生成 | `01l-generate.js` |
+| 起動（`init`） | `01m-init.js` |
 | 出口の編集 | `02-exit-editor-simple.js` |
 | プレイテスト | `07-playtest-runtime.js` / `29-playtest-ai.js` |
 | エンティティ台帳 | `13-entity-ledger.js` |
@@ -181,7 +193,7 @@ npm run test:fixtures                 # 下書きフィクスチャを作り直�
 | `base` | 下書きなし。`TAS/data`だけから組み立てる |
 | `authored` | イントロ・アウトロを画面で書いた状態。品物の必要条件、調査対象を参照する必要条件 |
 | `fresh` | 新規キャンペーンを作った直後 |
-| `outro-from-base` | アウトロの本文だけ書き、出口は元データのまま。**01-core側の出口変換を通す唯一の入力**。イントロが文字列で流れる経路も通る |
+| `outro-from-base` | アウトロの本文だけ書き、出口は元データのまま。**`01i-output.js`側の出口変換を通す唯一の入力**。イントロが文字列で流れる経路も通る |
 | `outro-brief-only` | アウトロの本文だけ書き、画像は画面で選んでいない。**元データの背景が消えた事故の再現**。基準出力に`img`が残っていることが修正の証拠 |
 
 守ること。
