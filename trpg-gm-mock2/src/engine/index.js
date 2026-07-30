@@ -1195,6 +1195,20 @@ function matchSecretByText(sc, text, wantRevealed) {
   return hits.length === 1 ? hits[0] : null;
 }
 
+// 作者がsecret.triggerへ書いた発火条件との照合。カンマ・読点で区切って語彙として扱うので、
+// 「調べる,見る,手に取る」のような列挙にも「その場に立ち止まり、空気を深く吸い込む。」のような
+// 一文にも効く。複数の秘密が該当したら曖昧なので決めない(matchSecretByTextと同じ方針)
+function matchSecretByTrigger(sc, text) {
+  const hits = (sc.secrets || []).filter(s => {
+    if (revealed.has(s.id) || !s.trigger) return false;
+    return String(s.trigger).split(/[,、]/)
+      .map(t => t.trim().replace(/[。.]$/, ""))
+      .filter(t => t.length >= 2)
+      .some(t => text.includes(t));
+  });
+  return hits.length === 1 ? hits[0] : null;
+}
+
 // 調査のscripted処理: 判定→成功で開示(既存の開示機構=ポップアップ・背景切替・チップがそのまま動く)
 // 初めて判定を振った調査対象をチップ化する(失敗しても対象名は「知った」扱い。再挑戦を2タップに)
 function markExamined(entity) {
@@ -1317,9 +1331,14 @@ async function tryScripted(text) {
     addGm(state.enemy ? "(scripted戦闘は未実装だ。GMモードを切り替えて戦ってくれ)" : "敵はいない。", "Neutral");
     return true;
   }
-  if (EXAMINE_RE.test(text)) {
+  // EXAMINE_REは汎用動詞の辞書なので、作者がsecret.triggerへ書いた「触れてみる」
+  // 「意識を集中させる」のような言い回しを拾えない。triggerが一致した時も調査として扱う
+  const triggerHit = matchSecretByTrigger(sc, text);
+  if (EXAMINE_RE.test(text) || triggerHit) {
     const { actorName, rest } = extractActor(text);
-    const secret = matchSecretByText(sc, rest, false);
+    // 対象の特定はentity/aliasを優先する。triggerには「調べる」のような汎用語が
+    // 書かれることがあり、それを優先すると別の対象を調べた時に取り違える
+    const secret = matchSecretByText(sc, rest, false) || triggerHit;
     if (secret) { await scriptedExamine(secret, actorName); return true; }
     const known = matchSecretByText(sc, rest, true);
     if (known) { addGm("改めて確かめる。" + (known.playerText || known.text), "Neutral"); return true; }
@@ -1327,6 +1346,10 @@ async function tryScripted(text) {
     return false; // hybrid: secretのない対象の描写はLLMの領分
   }
   if (BACK_RE.test(text) && !MOVE_RE.test(text)) {
+    // 行き止まりの部屋のように、作者が「戻る」出口を用意している場合はそちらを使う。
+    // 出口が無い時だけ、寄り道を止める従来の定型文にする(出口を見ずに一律拒否すると
+    // 引き返すしかない部屋から永久に出られない)
+    if (Array.isArray(sc.exits) && resolveExit(sc, text)) { scriptedMoveForward(text); return true; }
     addGm("今は戻らない。依頼がまだ残っている。", "Neutral");
     return true;
   }
