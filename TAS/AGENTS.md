@@ -149,14 +149,15 @@ MOCK2_DIR=/Users/yasuda_k/Desktop/Terminus/trpg-gm-mock2 node server.cjs
 cd TAS && npm test
 ```
 
-依存は入っていません。ブラウザは`trpg-gm-mock2`の`node_modules`の`playwright`を借りるので、あちらで`npm install`が済んでいれば動きます。約2秒、117件です。
+依存は入っていません。ブラウザは`trpg-gm-mock2`の`node_modules`の`playwright`を借りるので、あちらで`npm install`が済んでいれば動きます。約3秒、131件です。
 
-検査は3つに分かれています。
+検査は4つに分かれています。
 
 | 対象 | 内容 |
 |---|---|
 | 分割構造 | `index.html`の`<script src>`と`js/`の対応、読み込み順、`</script>`混入、ラッパー段数の上限 |
-| 出力JSON | 3つの下書きから`mockCampaignPayload()`を作り、基準出力と**完全一致**するか |
+| 出力JSON | 5つの下書きから`mockCampaignPayload()`を作り、基準出力と**完全一致**するか |
+| 取り込み（読込） | `gamePayloadToWorkspaceDraft()`がイントロ・アウトロの本文と背景を下書きへ入れるか |
 | 出力API | `assets.json`のマージが人の書いた`status`/`notes`を壊さないか、べき等か、異常系で上書きしないか |
 
 一部だけ回すとき、および基準を更新するとき：
@@ -164,11 +165,24 @@ cd TAS && npm test
 ```bash
 node tests/run.mjs --only=structure   # ブラウザ不要
 node tests/run.mjs --only=snapshot
+node tests/run.mjs --only=import
 node tests/run.mjs --only=export
 node tests/run.mjs --verbose          # 通った項目も並べる
 npm run test:update                   # 基準出力を作り直す（意図した仕様変更のときだけ）
 npm run test:fixtures                 # 下書きフィクスチャを作り直す
 ```
+
+### 下書きフィクスチャの役割
+
+それぞれ通したい経路が違います。消したり作り直したりする前に、何を守っているか確認してください。
+
+| 名前 | 通す経路 |
+|---|---|
+| `base` | 下書きなし。`TAS/data`だけから組み立てる |
+| `authored` | イントロ・アウトロを画面で書いた状態。品物の必要条件、調査対象を参照する必要条件 |
+| `fresh` | 新規キャンペーンを作った直後 |
+| `outro-from-base` | アウトロの本文だけ書き、出口は元データのまま。**01-core側の出口変換を通す唯一の入力**。イントロが文字列で流れる経路も通る |
+| `outro-brief-only` | アウトロの本文だけ書き、画像は画面で選んでいない。**元データの背景が消えた事故の再現**。基準出力に`img`が残っていることが修正の証拠 |
 
 守ること。
 

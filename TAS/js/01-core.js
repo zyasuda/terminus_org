@@ -95,7 +95,15 @@ function gamePayloadToWorkspaceDraft(raw){
   const monsters=[];const seenMonsters=new Set();scenes.forEach(s=>{const e=s&&s.enemy;if(e&&e.name&&!seenMonsters.has(e.name)){seenMonsters.add(e.name);const image=importedAssetRef(e.sprite||e.img);const monster={...e};delete monster.img;delete monster.sprite;if(image)monster.image=image;monsters.push(monster)}});
   const items=Array.isArray(campaign.items)?campaign.items.map(item=>({...item,name:item.name||item.ja||item.id||"",image:importedAssetRef(item.image||item.img)})).filter(item=>item.name):[];
   const sceneBackgrounds={};scenes.forEach((s,i)=>{if(s&&s.img)sceneBackgrounds[`ch1:scene:${i}`]=importedAssetRef(s.img)});
-  const sceneOverrides={"ch1:opening:opening":{brief:typeof chapter.intro==="string"?chapter.intro:(chapter.intro?.brief||""),goal:chapter.intro?.goal||""}};
+  /* イントロ・アウトロの背景も下書きへ入れる。入れないと画面の「シーン画像」が空欄で表示され、
+     作者は設定済みだと思ったまま本文を編集する。2026-07-30にアウトロで実際に起きた。 */
+  const terminalObject=value=>value&&typeof value==="object"?value:{};
+  if(terminalObject(chapter.intro).img)sceneBackgrounds["ch1:opening:opening"]=importedAssetRef(chapter.intro.img);
+  if(terminalObject(chapter.ending).img)sceneBackgrounds["ch1:ending:ending"]=importedAssetRef(chapter.ending.img);
+  /* アウトロもイントロと同じように下書きへ入れる。イントロだけを入れていたため、アウトロは
+     画面の入力が常に空として扱われ、画面で編集しても出力へ反映されなかった(2026-07-30)。 */
+  const terminalOverride=value=>({brief:typeof value==="string"?value:(terminalObject(value).brief||""),goal:terminalObject(value).goal||""});
+  const sceneOverrides={"ch1:opening:opening":terminalOverride(chapter.intro),"ch1:ending:ending":terminalOverride(chapter.ending)};
   scenes.forEach((s,i)=>{const key=`ch1:scene:${i}`;const image=sceneBackgrounds[key];const sky=importedAssetRef(s?.parallax?.sky);if(image||sky)sceneOverrides[key]={...(image?{img:image}:{}),...(sky?{parallaxSky:sky}:{})};});
   return {campaignName:campaign.meta?.title||campaign.title||payload.title||"",campaignImage:importedAssetRef(campaign.image||campaign.img),campaignWorld:campaign.style?.world||campaign.world||"",campaignTerms:campaign.style?.terms||campaign.terms||"",freshCampaign:true,customChapterScenes:{ch1:scenes},chapterNames:{ch1:chapter.title||"チャプター1"},chapterOrder:["ch1"],activeChapter:"ch1",selectedNode:{type:"opening"},extraCompanions:Math.max(0,companions.filter(c=>c.id&&c.id!=="gareth").length),npcCount:Math.max(1,Array.isArray(chapter.scenes?.[0]?.npcs)?chapter.scenes[0].npcs.length:1),monsters,items,castImages,castNames,castProfiles,castAttributes,sceneBackgrounds,sceneOverrides,rightPanelEnabled:false,collapsedCampaign:false,collapsedChapters:{ch1:false},campaignId:payload.campaignId||campaign.meta?.id||"campaign",chapterIds:{ch1:payload.chapterId||"chapter_01"}};
 }
@@ -209,14 +217,25 @@ const opening=chapterNodes().find(n=>n.type==="opening")||{};
 const ending=chapterNodes().find(n=>n.type==="ending")||{};
 const openingOverride=sceneOverrides[nodeKey({type:"opening",id:"opening"})]||{};
 const endingOverride=sceneOverrides[nodeKey({type:"ending",id:"ending"})]||{};
-const openingBrief=String(openingOverride.brief||"").trim();
-const endingBrief=String(endingOverride.brief||"").trim();
-/* 初期説明文や空欄は作者が作成した終端ノードではない。既存 chapter の実績済み intro/ending を
-   空の下書きで黙って潰さないため、sceneOverrides の brief が既定文言と異なる場合だけ上書きする。 */
-const authoredOpening=openingBrief&&openingBrief!=="依頼を受け、坑道へ向かう目的を理解する。"&&openingBrief!=="依頼と今回の目的を提示する。";
-const authoredEnding=endingBrief&&endingBrief!=="依頼の結果を締めくくり、章の余韻を残す。";
-if(authoredOpening){const npcId=(opening.npcs||[])[0];const img=runtimeImageName(sceneBackgrounds[nodeKey(opening)]);const npcSprite=runtimeImageName(castImages[npcId]);const exits=(opening.exits||[]).map((x,i)=>{const e=normalizeExit(x);const converted=outputExitRequires(e.requires,()=>undefined,opening);const to=e.to===null?null:e.to==="end"?"end":Number.isFinite(Number(e.to))?Number(e.to):e.to||null;return {id:e.id||`exit_${i+1}`,match:e.match,...(to===null?{to:null}:{to}),...(converted&&Object.keys(converted).length?{requires:converted}:{}),...(e.removeItems?.length?{removeItems:e.removeItems}:{}),...(e.addItems?.length?{addItems:e.addItems}:{}),...(e.npcSay?{npcSay:e.npcSay}:{}),...(e.blockedText?{blockedText:e.blockedText}:{}),...(e.text?{text:e.text}:{})}});chapter.intro={id:"ch1_intro",name:opening.name,brief:openingBrief,...(img?{img}:{}),...(npcSprite?{npcSprite}:{}),...(npcId?{npc:{id:npcId,name:castName(npcId)}}:{}),...(opening.blockedText?{blockedText:opening.blockedText}:{}),...(exits.length?{exits}:{})};}
-if(authoredEnding){const npcId=(ending.npcs||[])[0];const img=runtimeImageName(sceneBackgrounds[nodeKey(ending)]);const npcSprite=runtimeImageName(castImages[npcId]);const exits=(ending.exits||[]).map((x,i)=>{const e=normalizeExit(x);const converted=outputExitRequires(e.requires,()=>undefined,ending);const to=e.to===null?null:e.to==="end"?"end":Number.isFinite(Number(e.to))?Number(e.to):e.to||null;return {id:e.id||`exit_${i+1}`,match:e.match,...(to===null?{to:null}:{to}),...(converted&&Object.keys(converted).length?{requires:converted}:{}),...(e.removeItems?.length?{removeItems:e.removeItems}:{}),...(e.addItems?.length?{addItems:e.addItems}:{}),...(e.npcSay?{npcSay:e.npcSay}:{}),...(e.blockedText?{blockedText:e.blockedText}:{}),...(e.text?{text:e.text}:{})}});chapter.ending={id:"ch1_ending",name:ending.name,brief:endingBrief,...(img?{img}:{}),...(npcSprite?{npcSprite}:{}),...(npcId?{npc:{id:npcId,name:castName(npcId)}}:{}),...(ending.blockedText?{blockedText:ending.blockedText}:{}),...(exits.length?{exits}:{})};}
+/* イントロ・アウトロは、元データ(chapter)の上に画面の入力だけを重ねる。
+   以前は「作者が書いたか」を brief と既定文言の文字列比較で判定し、真ならノードを
+   丸ごと作り直していた。そのため画面で設定していない項目が黙って消え、実際に
+   アウトロの背景が失われた(2026-07-30)。既定文言を変えるだけで判定が壊れる形でもあった。
+   画面の入力は sceneOverrides / sceneBackgrounds / castImages にしか無いので、
+   「作者が触ったか」はそこだけで判定し、値は元データへ重ねる。 */
+const terminalNodeOutput=(baseValue,fallbackId,node,override)=>{
+  const img=runtimeImageName(sceneBackgrounds[nodeKey(node)]);
+  const npcId=(override.npcs||[])[0];
+  const brief=String(override.brief||"").trim();
+  const touched=[brief,img,npcId,override.name,override.blockedText,(override.exits||[]).length].some(Boolean);
+  if(!touched)return baseValue;
+  const base=baseValue&&typeof baseValue==="object"?baseValue:{};
+  const npcSprite=runtimeImageName(castImages[npcId]);
+  const exits=(node.exits||[]).map((x,i)=>{const e=normalizeExit(x);const converted=outputExitRequires(e.requires,()=>undefined,node);const to=e.to===null?null:e.to==="end"?"end":Number.isFinite(Number(e.to))?Number(e.to):e.to||null;return {id:e.id||`exit_${i+1}`,match:e.match,...(to===null?{to:null}:{to}),...(converted&&Object.keys(converted).length?{requires:converted}:{}),...(e.removeItems?.length?{removeItems:e.removeItems}:{}),...(e.addItems?.length?{addItems:e.addItems}:{}),...(e.npcSay?{npcSay:e.npcSay}:{}),...(e.blockedText?{blockedText:e.blockedText}:{}),...(e.text?{text:e.text}:{})}});
+  return {id:base.id||fallbackId,name:override.name||base.name||node.name,...base,...(brief?{brief}:{}),...(img?{img}:{}),...(npcSprite?{npcSprite}:{}),...(npcId?{npc:{id:npcId,name:castName(npcId)}}:{}),...(node.blockedText?{blockedText:node.blockedText}:{}),...(exits.length?{exits}:{})};
+};
+chapter.intro=terminalNodeOutput(chapter.intro,"ch1_intro",opening,openingOverride);
+chapter.ending=terminalNodeOutput(chapter.ending,"ch1_ending",ending,endingOverride);
 return {campaign,chapter,chapterFile:`${CHAPTERS[activeChapter].file.toLowerCase()}.json`}}
 function renderExport(){const folder="/Users/yasuda_k/Desktop/Terminus/trpg-gm-mock2/public/data/campaigns/"+tasCampaignId;const filename=`${runtimeChapterId(activeChapter)}.json`;return `<h2>出力確認</h2><p class="hint">キャンペーンIDと章IDを維持したまま、mock側のcampaigns.jsonとキャンペーン別データへ保存します。</p><div class="field"><label>キャンペーンID</label><input value="${escapeHtml(tasCampaignId)}" readonly></div><div class="field"><label>出力フォルダ</label><input id="exportFolder" value="${escapeHtml(folder)}" readonly></div><div class="field"><label>章ファイル</label><input id="exportFile" value="${escapeHtml(filename)}" readonly></div><div class="field"><label>JSONプレビュー</label><textarea class="large" id="exportPreview">${escapeHtml(JSON.stringify(mockCampaignPayload(),null,2))}</textarea></div><div class="bottom"><button class="sub" id="btnRefreshExport">プレビュー更新</button><button id="btnExportCampaign" onclick="window.__tasRunMockExport(this)">mock側へ出力</button></div>`}
 const INSTRUCTION_TEMPLATES=[

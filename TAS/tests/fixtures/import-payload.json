@@ -1,0 +1,49 @@
+{
+  "campaign": {
+    "meta": { "id": "campaign", "title": "取り込みテスト" },
+    "style": { "world": "取り込み確認用の世界設定。", "terms": "現代語彙を避ける。" },
+    "companions": [{ "id": "member_1", "name": "リディア", "sprite": "portrait_lydia_alt.png" }],
+    "items": [{ "id": "item_1", "ja": "ランタン" }]
+  },
+  "chapter": {
+    "id": "chapter_01",
+    "title": "第1話",
+    "intro": {
+      "id": "ch1_intro",
+      "name": "イントロ",
+      "brief": "イントロの本文。取り込み後に画面へ出ること。",
+      "img": "s4_myra_room.jpg",
+      "npcSprite": "s4_myra_full_transparent.png",
+      "npc": { "id": "npc_1", "name": "マイラ" },
+      "exits": [{ "id": "to_scene01", "match": ["引き受け"], "to": 1 }]
+    },
+    "scenes": [
+      {
+        "id": 1,
+        "name": "シーン1",
+        "brief": "シーン1の本文。",
+        "img": "mine_entrance.png",
+        "parallax": { "sky": "s1_sky_parallax.png", "fg": "mine_entrance.png" },
+        "secrets": [],
+        "exits": []
+      }
+    ],
+    "ending": {
+      "id": "ch1_ending",
+      "name": "報告",
+      "brief": "アウトロの本文。取り込み後に画面へ出ること。",
+      "img": "s4_myra_room.jpg",
+      "npcSprite": "s4_myra_full_transparent.png",
+      "npc": { "id": "npc_1", "name": "マイラ" },
+      "blockedText": "まだ渡していないものがある。",
+      "exits": [
+        {
+          "id": "hand_over",
+          "match": ["渡す", "手渡す"],
+          "to": "end",
+          "requires": { "itemsAll": ["心石の欠片"] }
+        }
+      ]
+    }
+  }
+}

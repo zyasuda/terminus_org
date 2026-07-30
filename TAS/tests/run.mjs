@@ -46,7 +46,8 @@ const FIXTURES = [
   { name: "base", draft: null, note: "下書きなし。TAS/data だけから組み立てる" },
   { name: "authored", draft: "authored.json", note: "イントロ・アウトロを画面で書いた状態" },
   { name: "fresh", draft: "fresh.json", note: "新規キャンペーンを作った直後" },
-  { name: "outro-from-base", draft: "outro-from-base.json", note: "アウトロの本文だけ書き、出口は元データのまま" }
+  { name: "outro-from-base", draft: "outro-from-base.json", note: "アウトロの本文だけ書き、出口は元データのまま" },
+  { name: "outro-brief-only", draft: "outro-brief-only.json", note: "アウトロの本文だけ書き、画像は画面で選んでいない" }
 ];
 
 let failures = 0;
@@ -346,6 +347,48 @@ async function runExport(browser, mock2Dir) {
   }
 }
 
+/* ------------------------------------------- 取り込み時の下書き生成（読込） */
+// gamePayloadToWorkspaceDraft はキャンペーンJSONを読み込んだときに下書きを作る。
+// イントロだけを下書きへ入れてアウトロを入れておらず、アウトロは画面の入力が常に
+// 空として扱われていた（2026-07-30）。出力側の基準比較では通らない経路なので個別に見る。
+async function runImportCheck(browser) {
+  section("取り込み時の下書き生成（読込）");
+  const payload = JSON.parse(fs.readFileSync(path.join(fixturesDir, "import-payload.json"), "utf8"));
+  const { page, pageErrors } = await openPage(browser, null);
+  try {
+    const draft = await page.evaluate(value => gamePayloadToWorkspaceDraft(value), payload);
+    ok(draft && typeof draft === "object", "下書きが作られる");
+    const overrides = draft?.sceneOverrides || {};
+    const backgrounds = draft?.sceneBackgrounds || {};
+
+    ok(overrides["ch1:opening:opening"]?.brief === payload.chapter.intro.brief,
+      "イントロの本文が下書きへ入る", JSON.stringify(overrides["ch1:opening:opening"]));
+    ok(overrides["ch1:ending:ending"]?.brief === payload.chapter.ending.brief,
+      "アウトロの本文が下書きへ入る", JSON.stringify(overrides["ch1:ending:ending"]));
+    ok(backgrounds["ch1:opening:opening"] === "/images/s4_myra_room.jpg",
+      "イントロの背景が下書きへ入る", String(backgrounds["ch1:opening:opening"]));
+    ok(backgrounds["ch1:ending:ending"] === "/images/s4_myra_room.jpg",
+      "アウトロの背景が下書きへ入る", String(backgrounds["ch1:ending:ending"]));
+    ok(backgrounds["ch1:scene:0"] === "/images/mine_entrance.png",
+      "シーンの背景は今までどおり下書きへ入る", String(backgrounds["ch1:scene:0"]));
+    ok(overrides["ch1:scene:0"]?.parallaxSky === "/images/s1_sky_parallax.png" || overrides["ch1:scene:0"]?.sky === "/images/s1_sky_parallax.png",
+      "シーンのパララックス空も下書きへ入る", JSON.stringify(overrides["ch1:scene:0"]));
+
+    // 文字列イントロ（旧形式）でも落ちないこと
+    const stringIntro = await page.evaluate(value => {
+      const next = { ...value, chapter: { ...value.chapter, intro: "文字列のイントロ。" } };
+      const result = gamePayloadToWorkspaceDraft(next);
+      return { brief: result?.sceneOverrides?.["ch1:opening:opening"]?.brief, img: result?.sceneBackgrounds?.["ch1:opening:opening"] };
+    }, payload);
+    ok(stringIntro.brief === "文字列のイントロ。", "イントロが文字列でも本文が下書きへ入る", JSON.stringify(stringIntro));
+    ok(stringIntro.img === undefined, "イントロが文字列なら背景は下書きへ入らない", String(stringIntro.img));
+
+    ok(pageErrors.length === 0, "画面実行エラーが出ない", pageErrors.join(" / "));
+  } finally {
+    await page.close();
+  }
+}
+
 /* ------------------------------------------------------------ フィクスチャ */
 // 下書きの形は app 側の workspaceDraft() が正。手で書くと項目が抜けるので、
 // 画面の状態を作ってから workspaceDraft() に出力させる。
@@ -432,6 +475,25 @@ async function makeFixtures(browser) {
   })();
   fs.writeFileSync(path.join(draftsDir, "outro-from-base.json"), JSON.stringify(outroFromBase, null, 2) + "\n", "utf8");
   results.push("  --  drafts/outro-from-base.json を書き出した");
+
+  /* 実際に起きた事故の再現。アウトロの本文だけを書き、画像は画面で選んでいない状態。
+     以前はこの状態で「作者が書いた」と判定され、アウトロが丸ごと作り直されて
+     元データの背景(img)が消えた。基準出力に img が残っていることが修正の証拠。 */
+  const outroBriefOnly = await (async () => {
+    const { page } = await openPage(browser, null);
+    try {
+      return await page.evaluate(() => {
+        const endingKey = nodeKey({ type: "ending", id: "ending" });
+        sceneOverrides[endingKey] = {
+          ...(sceneOverrides[endingKey] || {}),
+          brief: "本文だけを書き換えた。画像は画面で選んでいない。"
+        };
+        return workspaceDraft();
+      });
+    } finally { await page.close(); }
+  })();
+  fs.writeFileSync(path.join(draftsDir, "outro-brief-only.json"), JSON.stringify(outroBriefOnly, null, 2) + "\n", "utf8");
+  results.push("  --  drafts/outro-brief-only.json を書き出した");
   results.push("  --  作り直したら --update で基準出力も更新すること");
 }
 
@@ -442,7 +504,7 @@ let tempMock2 = null;
 try {
   if (wants("structure")) runStructureCheck();
 
-  const needsBrowser = flag("make-fixtures") || wants("snapshot") || wants("export");
+  const needsBrowser = flag("make-fixtures") || wants("snapshot") || wants("export") || wants("import");
   if (needsBrowser) {
     const chromium = loadChromium();
     tempMock2 = fs.mkdtempSync(path.join(os.tmpdir(), "tas-test-mock2-"));
@@ -453,6 +515,7 @@ try {
     if (flag("make-fixtures")) await makeFixtures(browser);
     else {
       if (wants("snapshot")) await runSnapshot(browser, flag("update"));
+      if (wants("import")) await runImportCheck(browser);
       if (wants("export")) await runExport(browser, tempMock2);
     }
   }
