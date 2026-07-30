@@ -82,11 +82,9 @@
     "s1_sky": {
       "file": "s1_sky.jpg",
       "kind": "parallax.sky",
-      "status": "approved",
+      "status": "archived",
       "target": "2400x1080",
-      "usedBy": [
-        "chapter_01.scenes.1.parallax.sky"
-      ],
+      "usedBy": [],
       "source": "imagegen",
       "promptVersion": 1,
       "notes": "夕暮れの空と雲、遠い山の奥レイヤー。2400x1080へ整形済み。"
