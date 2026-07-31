@@ -79,9 +79,7 @@ try{const rawSemanticDraft=localStorage.getItem(DRAFT_KEY);if(rawSemanticDraft){
 var baseCreateNewCampaignForSemantics=createNewCampaign;
 createNewCampaign=function(){concepts=[];initialInventoryIds=[];baseCreateNewCampaignForSemantics()};
 var baseRenderScenesForConcepts=renderScenes;
-renderScenes=function(){if(activeTab==='entities')activeTab='world';baseRenderScenesForConcepts();const list=$('sceneList');if(!list||list.querySelector('[data-global="concepts"]'))return;const cast=list.querySelector('[data-global="cast"]');if(!cast)return;cast.insertAdjacentHTML('beforebegin',`<button class="global-item ${activeTab==='concepts'?'active':''}" data-global="concepts">├─ 重要語・概念</button>`);list.querySelector('[data-global="concepts"]').onclick=()=>{activeTab='concepts';renderScenes();renderAll()}};
-var baseRenderTabsForConcepts=renderTabs;
-renderTabs=function(){baseRenderTabsForConcepts();if(activeTab==='concepts')$('layerTabs').innerHTML=''};
+renderScenes=function(){if(activeTab==='entities')activeTab='world';baseRenderScenesForConcepts()};
 var baseRenderTabForConcepts=renderTab;
 renderTab=function(){if(activeTab==='concepts'){const c=$('tabContent');c.innerHTML=renderConcepts();bindConcepts();return}baseRenderTabForConcepts()};
 var baseRenderRightPanelForConcepts=renderRightPanel;

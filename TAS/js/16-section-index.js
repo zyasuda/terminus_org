@@ -66,6 +66,4 @@ var baseRenderScenesForSplitLedger=renderScenes;
 renderScenes=function(){
   if(activeTab==="entities")activeTab="world";
   baseRenderScenesForSplitLedger();
-  const button=$("sceneList")?.querySelector('[data-global="entities"]');
-  if(button)button.remove();
 };

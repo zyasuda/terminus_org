@@ -34,7 +34,8 @@ const draftsDir = path.join(fixturesDir, "drafts");
 const goldenDir = path.join(fixturesDir, "golden");
 const mock2FixtureDir = path.join(fixturesDir, "mock2");
 const PORT = Number(process.env.TAS_TEST_PORT || 8897);
-const baseUrl = `http://127.0.0.1:${PORT}`;
+/* 実際に bind できたポートは起動時に決まる。startServerOnFreePort が確定させる */
+let baseUrl = `http://127.0.0.1:${PORT}`;
 const DRAFT_KEY = "tas_campaign_draft_v1";
 
 const argv = process.argv.slice(2);
@@ -50,7 +51,9 @@ const FIXTURES = [
   { name: "fresh", draft: "fresh.json", note: "新規キャンペーンを作った直後" },
   { name: "outro-from-base", draft: "outro-from-base.json", note: "アウトロの本文だけ書き、出口は元データのまま" },
   { name: "outro-brief-only", draft: "outro-brief-only.json", note: "アウトロの本文だけ書き、画像は画面で選んでいない" },
-  { name: "flags-and-rules", draft: "flags-and-rules.json", note: "状態変換ルール・ゲームオーバー文言・発話ルールを入れた状態" }
+  { name: "flags-and-rules", draft: "flags-and-rules.json", note: "状態変換ルール・ゲームオーバー文言・発話ルールを入れた状態" },
+  /* 幕間はイントロで入、アウトロで切。切でも本文を残すため、interlude が消えないことをここで押さえる */
+  { name: "interlude", draft: "interlude.json", note: "幕間演出をイントロで入、アウトロで切にした状態" }
 ];
 
 let failures = 0;
@@ -108,8 +111,19 @@ function runStructureCheck() {
      どの項目をどの段が確定させるのかが再び追えなくなるので落とす。 */
   const PIPELINE_FILE = "43-output-pipeline.js";
   ok(files.includes(PIPELINE_FILE), `${PIPELINE_FILE} がある`);
-  ok(files[files.length - 1] === PIPELINE_FILE,
-    `${PIPELINE_FILE} が最後に読み込まれる`, `現在の最後: ${files[files.length - 1]}`);
+  /* 出力の段はパイプラインより先に定義されていなければならない。
+     パイプラインより後に置けるのは、段を定義しない画面専用のファイルだけ。 */
+  const AFTER_PIPELINE_ALLOWED=["44-chapter-overview.js","45-interlude.js"];
+  const after=files.slice(files.indexOf(PIPELINE_FILE)+1);
+  ok(after.every(f=>AFTER_PIPELINE_ALLOWED.includes(f)),
+    `${PIPELINE_FILE} より後にあるのは画面専用ファイルだけ`, `想定外: ${after.filter(f=>!AFTER_PIPELINE_ALLOWED.includes(f)).join(", ")}`);
+  ok(files.includes("44-chapter-overview.js") && files.includes("45-interlude.js"), "チャプター画面と幕間演出のスクリプトがある");
+  const sceneFile = fs.readFileSync(path.join(jsDir, "01e-render-scenes.js"), "utf8");
+  ok(!sceneFile.includes("data-global="), "左ツリーに data-global が残っていない");
+  const stateFile = fs.readFileSync(path.join(jsDir, "01a-state.js"), "utf8");
+  for (const name of ["CAMPAIGN_TABS", "CHAPTER_TABS", "SCENE_TABS"]) ok(stateFile.includes(`const ${name}`), `${name} が状態ファイルに定義されている`);
+  const shellFile = fs.readFileSync(path.join(jsDir, "01h-render-shell.js"), "utf8");
+  ok(!shellFile.includes('["world","cast","monsters","items","rules","export"]'), "旧タブ配列のハードコードが残っていない");
 
   for (const file of files.filter(f => f !== PIPELINE_FILE)) {
     const body = fs.readFileSync(path.join(jsDir, file), "utf8");
@@ -142,19 +156,38 @@ function loadChromium() {
   }
 }
 
-function startServer(mock2Dir) {
+/* サーバーは 127.0.0.1 へ bind させる。全インターフェースへの bind を許さない実行環境でも動くようにする。
+   起動に失敗したときは server.cjs の標準エラーをそのまま渡す。推測に置き換えると原因が追えない。 */
+function startServer(mock2Dir, port) {
   const child = spawn(process.execPath, ["server.cjs"], {
     cwd: tasDir,
-    env: { ...process.env, PORT: String(PORT), MOCK2_DIR: mock2Dir },
+    env: { ...process.env, PORT: String(port), HOST: "127.0.0.1", MOCK2_DIR: mock2Dir },
     stdio: ["ignore", "pipe", "pipe"]
   });
+  let stderr = "";
+  child.stderr.on("data", text => { stderr += String(text) });
   return new Promise((resolve, reject) => {
-    const timer = setTimeout(() => reject(new Error(`テストサーバーの起動がタイムアウトしました (port ${PORT})`)), 15000);
+    const timer = setTimeout(() => reject(new Error(`テストサーバーの起動がタイムアウトしました (port ${port})${stderr ? `\n  server.cjs の出力: ${stderr.trim()}` : ""}`)), 15000);
     const done = error => { clearTimeout(timer); error ? reject(error) : resolve(child); };
     child.once("error", done);
-    child.once("exit", code => done(new Error(`テストサーバーが終了しました (code ${code})。ポート ${PORT} が使用中かもしれません`)));
-    child.stdout.on("data", text => { if (String(text).includes(`http://localhost:${PORT}`)) done(); });
+    child.once("exit", code => done(new Error(
+      `テストサーバーが終了しました (code ${code}, port ${port})` +
+      (stderr ? `\n  server.cjs の出力: ${stderr.trim()}` : "\n  server.cjs は何も出力していません。node server.cjs を単体で実行して確認してください")
+    )));
+    child.stdout.on("data", text => { if (String(text).includes(`http://localhost:${port}`)) done(); });
   });
+}
+
+/* 固定ポートが埋まっているだけの失敗と、bind そのものができない失敗を切り分ける。
+   ponytail: 3回で諦める。それ以上試しても原因はポート競合ではない */
+async function startServerOnFreePort(mock2Dir) {
+  let last;
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const port = PORT + attempt;
+    try { return { child: await startServer(mock2Dir, port), port } }
+    catch (cause) { last = cause }
+  }
+  throw last;
 }
 
 // 下書きは localStorage に「そのまま」入る（{version,data} で包まない）。
@@ -238,6 +271,8 @@ const COVERAGE = [
   ["chapter.flagRules", g => Object.keys(g.chapter?.flagRules || {}).length],
   ["chapter.intro（オブジェクト）", g => (g.chapter?.intro && typeof g.chapter.intro === "object" ? 1 : 0)],
   ["chapter.intro（文字列）", g => (typeof g.chapter?.intro === "string" && g.chapter.intro ? 1 : 0)],
+  ["chapter.intro.interlude（入）", g => (g.chapter?.intro?.interlude?.enabled ? 1 : 0)],
+  ["chapter.ending.interlude（切でも本文を保つ）", g => (g.chapter?.ending?.interlude && !g.chapter.ending.interlude.enabled && g.chapter.ending.interlude.text ? 1 : 0)],
   ["chapter.ending.exits", g => (g.chapter?.ending?.exits || []).length],
   ["scenes[].npc", g => (g.chapter?.scenes || []).filter(s => s.npc).length],
   ["scenes[].npcSprite", g => (g.chapter?.scenes || []).filter(s => s.npcSprite).length],
@@ -595,7 +630,9 @@ try {
     const chromium = loadChromium();
     tempMock2 = fs.mkdtempSync(path.join(os.tmpdir(), "tas-test-mock2-"));
     fs.cpSync(mock2FixtureDir, tempMock2, { recursive: true });
-    server = await startServer(tempMock2);
+    const started = await startServerOnFreePort(tempMock2);
+    server = started.child;
+    baseUrl = `http://127.0.0.1:${started.port}`;
     browser = await chromium.launch({ headless: true });
 
     if (flag("make-fixtures")) await makeFixtures(browser);
