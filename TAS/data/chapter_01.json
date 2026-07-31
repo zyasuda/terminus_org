@@ -119,7 +119,7 @@
       },
       "entityRefs": [],
       "parallax": {
-        "sky": "s1_sky.jpg",
+        "sky": "s1_sky_parallax.png",
         "fg": "mine_entrance.png"
       }
     },

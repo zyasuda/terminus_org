@@ -20,6 +20,7 @@
     "type": "scene",
     "index": 0
   },
+  "selectedTarget": "campaign",
   "extraCompanions": 0,
   "npcCount": 1,
   "monsters": [],
@@ -332,7 +333,7 @@
           },
           "entityRefs": [],
           "parallax": {
-            "sky": "s1_sky.jpg",
+            "sky": "s1_sky_parallax.png",
             "fg": "mine_entrance.png"
           }
         },

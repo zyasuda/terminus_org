@@ -559,7 +559,7 @@
         },
         "entityRefs": [],
         "parallax": {
-          "sky": "s1_sky.jpg",
+          "sky": "s1_sky_parallax.png",
           "fg": "mine_entrance.png"
         }
       },
@@ -942,8 +942,8 @@
         "chapter_01.scenes.1.parallax.fg"
       ]
     },
-    "s1_sky-jpg": {
-      "file": "s1_sky.jpg",
+    "s1_sky_parallax-png": {
+      "file": "s1_sky_parallax.png",
       "kind": "parallax.sky",
       "status": "candidate",
       "usedBy": [

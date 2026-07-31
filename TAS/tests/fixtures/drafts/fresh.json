@@ -17,6 +17,7 @@
   "selectedNode": {
     "type": "opening"
   },
+  "selectedTarget": "campaign",
   "extraCompanions": 0,
   "npcCount": 1,
   "monsters": [],
