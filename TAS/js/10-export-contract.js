@@ -41,8 +41,6 @@ function outputStableIds(payload){
       const sceneImage=runtimeImageName(sceneBackgrounds[key]||rawScene.img);
       const npcId=(rawScene.npcs||[])[0];
       const npcImage=runtimeImageName(npcId&&castImages[npcId]);
-      const monster=monsters.find(m=>m.name&&m.name===rawScene.enemyName);
-      const monsterImage=runtimeImageName(monster?.image);
       const parallaxDisabled=Boolean(sceneOverrides[key]?.parallaxDisabled);
       const skyImage=parallaxDisabled?"":runtimeImageName(sceneOverrides[key]?.parallaxSky||rawScene.parallax?.sky);
       const next={...rawScene};
@@ -57,7 +55,7 @@ function outputStableIds(payload){
       if(npcImage)next.npcSprite=npcImage;
       /* スプライトは常にファイル名だけへ正規化する。下書き側の値は importedAssetRef により
          "/images/名前" になっていることがあり、そのまま出すとmock2が /images/ を二重に前置して404になる */
-      if(next.enemy){const sprite=monsterImage||runtimeImageName(next.enemy.sprite||next.enemy.img);next.enemy={...next.enemy};if(sprite)next.enemy.sprite=sprite;delete next.enemy.img;}
+      if(next.enemy){const sprite=runtimeImageName(next.enemy.sprite||next.enemy.img);next.enemy={...next.enemy};if(sprite)next.enemy.sprite=sprite;delete next.enemy.img;}
       delete next.enemyName;
       return next;
     })

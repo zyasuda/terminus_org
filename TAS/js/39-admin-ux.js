@@ -13,7 +13,8 @@ function adminUxDiscoveryTokens(n){const set=new Set();(n.discoveries||[]).map((
 function adminUxIssue(level,text,target,section){return {level,text,target,section}}
 function adminUxIssues(n=scene()){
   const issues=[];const key=sceneKey();const valid=adminUxDiscoveryTokens(n);const exits=sceneExits();const seenExitIds=new Map();
-  if(typeof n.enemyName==='string'&&n.enemyName.trim()&&!monsters.some(monster=>monster.name===n.enemyName.trim()))issues.push(adminUxIssue('warn',`「${n.enemyName.trim()}」がモンスター台帳にありません。モンスター画面で登録するか、このシーンの敵を選び直してください。既存の敵データはそのまま保持しています。`,'#sceneEnemy','actors'));
+  const enemyId=typeof n.enemyId==='string'?n.enemyId.trim():'';const enemyName=typeof n.enemyName==='string'?n.enemyName.trim():'';const enemy=enemyId||enemyName?monsters.find(monster=>String(monster.id||monster.name)===enemyId)||monsters.find(monster=>monster.name===enemyName):null;
+  if(n.enemyId!==null&&(enemyId||enemyName)&&!enemy)issues.push(adminUxIssue('warn',`「${enemyId||enemyName}」がモンスター台帳にありません。モンスター画面で登録するか、このシーンの敵を選び直してください。既存の敵データはそのまま保持しています。`,'#sceneEnemy','actors'));
   exits.forEach((exit,index)=>{
     const id=String(exit.id||'').trim();
     if(!id)issues.push(adminUxIssue('error',`出口${index+1}の出口IDを入力してください`,`.exit-id[data-exit-index="${index}"]`,'exits'));

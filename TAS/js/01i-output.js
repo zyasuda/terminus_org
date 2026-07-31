@@ -47,9 +47,10 @@ const DIRECTION_MARK="【TAS発話ルール】";
 const baseDirection=String(merged.direction||"").split(DIRECTION_MARK)[0].trim();
 const directionLines=dlgRules.filter(r=>r.line).map(r=>`${r.condition?`「${r.condition}」の開示後に`:""}${speakerLabel(r.speaker)}が「${r.line}」と伝える${r.once?"（一度だけ）":""}`);
 merged.direction=directionLines.length?`${baseDirection?baseDirection+"\n":""}${DIRECTION_MARK}${directionLines.join(" / ")}`:baseDirection||merged.direction;
-/* シーン敵: 「なし」の明示選択だけを削除として扱う。台帳に見つからない参照では、既存の敵定義を絶対に消さない。 */
-if(typeof merged.enemyName==="string"){const requestedName=merged.enemyName.trim();if(!requestedName)delete merged.enemy;else{const mon=monsters.find(m=>m.name===requestedName);if(mon)merged.enemy={...(merged.enemy||{}),...definedEnemyFields(mon)}}}
-delete merged.enemyName;delete merged.type;delete merged.index;delete merged.discoveries;delete merged.transitions;delete merged.dialogueRules;delete merged.gmSceneNotes;return merged});const chapter={...baseChapter,title:baseChapter.title||CHAPTERS[activeChapter].name,scenes};
+/* シーン敵: enemyIdを優先し、旧下書きのenemyNameへフォールバックする。enemyId:nullだけを「なし」の明示選択として扱い、未操作の既存enemyは消さない。 */
+const requestedId=typeof merged.enemyId==="string"?merged.enemyId.trim():"";const requestedName=typeof merged.enemyName==="string"?merged.enemyName.trim():"";
+if(merged.enemyId===null)delete merged.enemy;else if(requestedId||requestedName){const mon=monsters.find(m=>String(m.id||m.name)===requestedId)||monsters.find(m=>m.name===requestedName);if(mon)merged.enemy={...(merged.enemy||{}),...definedEnemyFields(mon)}}
+delete merged.enemyId;delete merged.enemyName;delete merged.type;delete merged.index;delete merged.discoveries;delete merged.transitions;delete merged.dialogueRules;delete merged.gmSceneNotes;return merged});const chapter={...baseChapter,title:baseChapter.title||CHAPTERS[activeChapter].name,scenes};
 const opening=chapterNodes().find(n=>n.type==="opening")||{};
 const ending=chapterNodes().find(n=>n.type==="ending")||{};
 const openingOverride=sceneOverrides[nodeKey({type:"opening",id:"opening"})]||{};
