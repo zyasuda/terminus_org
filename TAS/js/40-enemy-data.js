@@ -6,7 +6,7 @@ function monsterWeaknessValue(monster){const weakness=monster?.weakness&&typeof 
 function monsterDefinedText(target,key,value){const text=String(value||'').trim();if(text)target[key]=text}
 function definedEnemyFields(monster){
   const patch={name:String(monster?.name||'').trim()};
-  ['unknownName','surface','trait','identifySecret','revealOnDefeat'].forEach(key=>monsterDefinedText(patch,key,monster?.[key]));
+  ['unknownName','surface','trait','identifySecret','revealOnDefeat','ambushTrigger'].forEach(key=>monsterDefinedText(patch,key,monster?.[key]));
   if(!patch.trait)monsterDefinedText(patch,'trait',monster?.notes);
   ['hp','maxHp','atk','defenseDc','fleeDc','agility','ambushDc'].forEach(key=>{const value=Number(monster?.[key]);if(Number.isFinite(value)&&value>0)patch[key]=value});
   if(patch.hp&&!patch.maxHp)patch.maxHp=patch.hp;

@@ -774,7 +774,33 @@
             "maxOccurrences": null,
             "blockedBy": [],
             "onsetText": "得体の知れない影が近づく",
-            "notes": ""
+            "notes": "",
+            "enemy": {
+              "name": "錆喰い",
+              "unknownName": "不気味な影",
+              "surface": "レールの錆を食べる、犬くらいの大きさの虫のような魔物だ。縄張りに入ると、おどして襲ってくる。",
+              "trait": "レールの錆を食べる、犬くらいの大きさの虫のような魔物だ。縄張りに入ると、おどして襲ってくる。光が苦手だ。",
+              "ambushTrigger": "プレイヤーが敵の気配を確かめないまま、暗がり・穴・殻の散らばる場所へ不用意に踏み込んだ時のみ",
+              "hp": 8,
+              "maxHp": 8,
+              "atk": 1,
+              "defenseDc": 12,
+              "fleeDc": 10,
+              "agility": 8,
+              "ambushDc": 12,
+              "ambush": true,
+              "weakness": {
+                "triggers": [
+                  "ランタン",
+                  "光",
+                  "照ら"
+                ],
+                "effect": "flee",
+                "text": "光を浴びた錆喰いは身を縮め、坑道の奥へ退いていった",
+                "hint": "こいつ、光を嫌がってる——ランタンで照らせ!"
+              },
+              "sprite": "s2_rust_eater.png"
+            }
           },
           {
             "id": "encounter_2",
@@ -797,18 +823,17 @@
             "enemy": {
               "name": "坑道蝙蝠",
               "unknownName": "羽ばたく影",
-              "hp": 6,
-              "maxHp": 6,
               "surface": "天井の隙間から降りてくる、掌ほどの蝙蝠の群れだ。",
               "trait": "天井の隙間から降りてくる、掌ほどの蝙蝠の群れだ。物音に反応する。",
-              "sprite": "s2_mine_bat.png",
-              "ambush": true,
-              "ambushDc": 12,
               "ambushTrigger": "プレイヤーが頭上の気配を確かめないまま、崩れた坑道の隙間へ近づいた時のみ",
-              "agility": 8,
+              "hp": 6,
+              "maxHp": 6,
               "atk": 1,
               "defenseDc": 12,
               "fleeDc": 10,
+              "agility": 8,
+              "ambushDc": 12,
+              "ambush": true,
               "weakness": {
                 "triggers": [
                   "大きな音",
@@ -818,7 +843,8 @@
                 "effect": "flee",
                 "text": "大きな物音に驚いた坑道蝙蝠は、坑道の奥へ飛び去っていった",
                 "hint": "こいつら、物音に反応してる——大きな音を立てれば追い払えるかもしれない!"
-              }
+              },
+              "sprite": "s2_mine_bat.png"
             }
           }
         ]

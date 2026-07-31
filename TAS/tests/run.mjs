@@ -113,7 +113,7 @@ function runStructureCheck() {
   ok(files.includes(PIPELINE_FILE), `${PIPELINE_FILE} がある`);
   /* 出力の段はパイプラインより先に定義されていなければならない。
      パイプラインより後に置けるのは、段を定義しない画面専用のファイルだけ。 */
-  const AFTER_PIPELINE_ALLOWED=["44-chapter-overview.js","45-interlude.js"];
+  const AFTER_PIPELINE_ALLOWED=["44-chapter-overview.js","45-interlude.js","46-monster-registry.js"];
   const after=files.slice(files.indexOf(PIPELINE_FILE)+1);
   ok(after.every(f=>AFTER_PIPELINE_ALLOWED.includes(f)),
     `${PIPELINE_FILE} より後にあるのは画面専用ファイルだけ`, `想定外: ${after.filter(f=>!AFTER_PIPELINE_ALLOWED.includes(f)).join(", ")}`);
