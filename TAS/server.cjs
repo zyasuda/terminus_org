@@ -240,4 +240,9 @@ const server = http.createServer(async (req, res) => {
   } catch (cause) { error(res, 500, cause.message || 'サーバーエラー'); }
 });
 
-server.listen(PORT, () => console.log(`TASサーバー起動: http://localhost:${PORT} (LLM: ${BACKEND} / ${MODEL})`));
+/* HOST を指定できるようにする。既定は従来どおり全インターフェース。
+   ループバックへの bind しか許さない実行環境（サンドボックス）では HOST=127.0.0.1 を渡す。 */
+const HOST = process.env.HOST || undefined;
+/* listen が失敗したときの理由を標準エラーへ出す。出さないと呼び出し側が code 1 しか受け取れない */
+server.on('error', cause => { console.error(`TASサーバーを起動できません (${HOST || '0.0.0.0'}:${PORT}): ${cause.code || ''} ${cause.message}`); process.exit(1) });
+server.listen(PORT, HOST, () => console.log(`TASサーバー起動: http://localhost:${PORT} (LLM: ${BACKEND} / ${MODEL})`));
