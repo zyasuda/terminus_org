@@ -17,7 +17,10 @@ function normalizeEncounter(value,index=0){
     maxOccurrences:numberOrNull(x.maxOccurrences??x.maxCount),
     blockedBy:parseList(x.blockedBy||x.preventedBy||''),
     onsetText:String(x.onsetText||x.text||x.description||''),
-    notes:String(x.notes||'')
+    notes:String(x.notes||''),
+    /* この遭遇専用の敵能力。1シーンに複数の敵を出す分岐で使う（scenes[].enemyは1体しか持てないため）。
+       画面入力は未対応で、現状は作者データ・インポートに書かれた値をそのまま通すだけ */
+    ...(x.enemy&&typeof x.enemy==='object'?{enemy:x.enemy}:{})
   };
 }
 function sceneEncounters(){return (scene().encounters||[]).map(normalizeEncounter)}

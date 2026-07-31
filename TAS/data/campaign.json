@@ -250,6 +250,20 @@
       ]
     },
     {
+      "id": "monster_3",
+      "ja": "坑道蝙蝠",
+      "aliases": [
+        "羽ばたく影"
+      ],
+      "kind": "enemy",
+      "importance": "support",
+      "visual": "/images/s2_rust_eater.png",
+      "affordances": [
+        "inspect",
+        "fight"
+      ]
+    },
+    {
       "id": "concept_heartstone",
       "ja": "心石",
       "aliases": [

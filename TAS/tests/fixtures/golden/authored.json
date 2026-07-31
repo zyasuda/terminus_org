@@ -567,12 +567,13 @@
         "id": 2,
         "name": "分かれ道",
         "brief": "封鎖の木柵と左右の坑道。奥に灯りが揺れる。",
-        "img": "s2_junction.jpg",
+        "img": "s2_barrier.jpg",
         "goal": "第三坑道へ入る手段を見つける",
         "completeRequires": {
           "secretsAny": [
             "s2a",
-            "s2b"
+            "s2b",
+            "s2c"
           ]
         },
         "direction": "封鎖柵は「外から閉じ込める」ためではなく「内側の意思で維持されている」という違和感を、断定せずに漂わせよ。危険の予感と同時に、奥にあるものへの哀感を予感させよ。",
@@ -642,6 +643,25 @@
             "appearances": [],
             "tags": [],
             "usage": "inspect"
+          },
+          {
+            "id": "s2c",
+            "entity": "崩れた坑道",
+            "aliases": [
+              "崩れた",
+              "崩落",
+              "岩",
+              "隙間"
+            ],
+            "dc": 8,
+            "surface": "左の坑道は崩れた岩で塞がれているが、上のほうに人がくぐれる隙間がある。",
+            "text": "崩落は最近のもので、誰かが通った跡がある。",
+            "trigger": "崩れた坑道を調べる",
+            "category": "object",
+            "importance": "support",
+            "appearances": [],
+            "tags": [],
+            "usage": "inspect"
           }
         ],
         "blockedText": "先へ続いているのは右の坑道だけだが、封鎖の木柵が行く手をふさいでいる。古い木のはずなのに、崩れる気配がない。左の坑道は崩れて行き止まりだ。",
@@ -651,9 +671,9 @@
             "match": [
               "右",
               "さく",
-              "奥",
-              "灯り",
-              "灯りのほう"
+              "木柵",
+              "柵をこわす",
+              "柵を越える"
             ],
             "to": 3,
             "requires": {
@@ -662,8 +682,28 @@
                 "s2b"
               ]
             },
-            "blockedText": "何かの匂いが立ち込めている",
-            "text": "左の坑道は既に崩れた岩が道を塞いでいる。"
+            "blockedText": "柵の板は内側から打ち直されている。何をどう外せばいいのか、まだ見当がつかない。",
+            "text": "木柵を越え、右の坑道を抜けて灯りの部屋へ進んだ。"
+          },
+          {
+            "id": "to_scene03_collapse",
+            "match": [
+              "左",
+              "崩れた",
+              "崩落",
+              "岩",
+              "隙間",
+              "岩をどける",
+              "隙間をくぐる"
+            ],
+            "to": 3,
+            "requires": {
+              "secretsAll": [
+                "s2c"
+              ]
+            },
+            "blockedText": "崩れた岩の山は高い。どこから登れるのか、まだ見当がつかない。",
+            "text": "岩の隙間をくぐり、左の坑道を抜けて灯りの部屋へ進んだ。"
           }
         ],
         "authoring": {
@@ -674,9 +714,9 @@
               "match": [
                 "右",
                 "さく",
-                "奥",
-                "灯り",
-                "灯りのほう"
+                "木柵",
+                "柵をこわす",
+                "柵を越える"
               ],
               "to": 3,
               "requires": {
@@ -685,8 +725,28 @@
                   "s2b"
                 ]
               },
-              "blockedText": "何かの匂いが立ち込めている",
-              "text": "左の坑道は既に崩れた岩が道を塞いでいる。"
+              "blockedText": "柵の板は内側から打ち直されている。何をどう外せばいいのか、まだ見当がつかない。",
+              "text": "木柵を越え、右の坑道を抜けて灯りの部屋へ進んだ。"
+            },
+            {
+              "id": "to_scene03_collapse",
+              "match": [
+                "左",
+                "崩れた",
+                "崩落",
+                "岩",
+                "隙間",
+                "岩をどける",
+                "隙間をくぐる"
+              ],
+              "to": 3,
+              "requires": {
+                "secretsAll": [
+                  "s2c"
+                ]
+              },
+              "blockedText": "崩れた岩の山は高い。どこから登れるのか、まだ見当がつかない。",
+              "text": "岩の隙間をくぐり、左の坑道を抜けて灯りの部屋へ進んだ。"
             }
           ],
           "dialogueRules": [],
@@ -711,6 +771,51 @@
             "blockedBy": [],
             "onsetText": "得体の知れない影が近づく",
             "notes": ""
+          },
+          {
+            "id": "encounter_2",
+            "type": "conditional",
+            "monsterId": "monster_3",
+            "monsterName": "坑道蝙蝠",
+            "triggerTerms": [
+              "崩れた坑道を調べる"
+            ],
+            "requiredElements": [
+              "崩れた坑道"
+            ],
+            "requiredOperator": "all",
+            "probability": null,
+            "timing": "player_action",
+            "maxOccurrences": null,
+            "blockedBy": [],
+            "onsetText": "頭上で羽ばたきが響く",
+            "notes": "",
+            "enemy": {
+              "name": "坑道蝙蝠",
+              "unknownName": "羽ばたく影",
+              "hp": 6,
+              "maxHp": 6,
+              "surface": "天井の隙間から降りてくる、掌ほどの蝙蝠の群れだ。",
+              "trait": "天井の隙間から降りてくる、掌ほどの蝙蝠の群れだ。物音に反応する。",
+              "sprite": "s2_mine_bat.png",
+              "ambush": true,
+              "ambushDc": 12,
+              "ambushTrigger": "プレイヤーが頭上の気配を確かめないまま、崩れた坑道の隙間へ近づいた時のみ",
+              "agility": 8,
+              "atk": 1,
+              "defenseDc": 12,
+              "fleeDc": 10,
+              "weakness": {
+                "triggers": [
+                  "大きな音",
+                  "物音",
+                  "叫ぶ"
+                ],
+                "effect": "flee",
+                "text": "大きな物音に驚いた坑道蝙蝠は、坑道の奥へ飛び去っていった",
+                "hint": "こいつら、物音に反応してる——大きな音を立てれば追い払えるかもしれない!"
+              }
+            }
           }
         ]
       },
@@ -950,8 +1055,8 @@
         "chapter_01.scenes.1.parallax.sky"
       ]
     },
-    "s2_junction-jpg": {
-      "file": "s2_junction.jpg",
+    "s2_barrier-jpg": {
+      "file": "s2_barrier.jpg",
       "kind": "background",
       "status": "candidate",
       "usedBy": [
