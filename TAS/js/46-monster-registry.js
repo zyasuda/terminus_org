@@ -27,6 +27,6 @@ function ensureMonsters(){
   return monsters;
 }
 var baseRenderAllForMonsterRegistry=renderAll;
-renderAll=function(){ensureMonsters();baseRenderAllForMonsterRegistry()};
+renderAll=function(){ensureMonsters();migrateIdentifyRevealToScenes();baseRenderAllForMonsterRegistry()};
 var baseWorkspaceDraftForMonsterRegistry=workspaceDraft;
 workspaceDraft=function(){ensureMonsters();return baseWorkspaceDraftForMonsterRegistry()};
