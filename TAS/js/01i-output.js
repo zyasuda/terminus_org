@@ -60,13 +60,13 @@ const endingOverride=sceneOverrides[nodeKey({type:"ending",id:"ending"})]||{};
    アウトロの背景が失われた(2026-07-30)。既定文言を変えるだけで判定が壊れる形でもあった。
    画面の入力は sceneOverrides / sceneBackgrounds / castImages にしか無いので、
    「作者が触ったか」はそこだけで判定し、値は元データへ重ねる。 */
-const terminalNodeOutput=(baseValue,fallbackId,node,override)=>{
+const terminalNodeOutput=(baseValue,fallbackId,node,override,interludeOverride)=>{
   const img=runtimeImageName(sceneBackgrounds[nodeKey(node)]);
   const npcId=(override.npcs||[])[0];
   const brief=String(override.brief||"").trim();
   const touched=[brief,img,npcId,override.name,override.blockedText,(override.exits||[]).length].some(Boolean);
   /* 幕間は作者がトグルに触ったときだけ出す。触っていない章の intro は文字列のまま返し、契約を変えない。 */
-  const raw=override.interlude;
+  const raw=interludeOverride;
   const interlude=raw&&typeof raw==="object"?{enabled:Boolean(raw.enabled),text:typeof raw.text==="string"?raw.text:""}:null;
   if(!touched&&!interlude)return baseValue;
   const base=baseValue&&typeof baseValue==="object"?baseValue:{brief:typeof baseValue==="string"?baseValue:""};
@@ -75,6 +75,6 @@ const terminalNodeOutput=(baseValue,fallbackId,node,override)=>{
   const exits=(node.exits||[]).map((x,i)=>{const e=normalizeExit(x);const converted=outputExitRequires(e.requires,()=>undefined,node);const to=e.to===null?null:e.to==="end"?"end":Number.isFinite(Number(e.to))?Number(e.to):e.to||null;return {id:e.id||`exit_${i+1}`,match:e.match,...(to===null?{to:null}:{to}),...(converted&&Object.keys(converted).length?{requires:converted}:{}),...(e.removeItems?.length?{removeItems:e.removeItems}:{}),...(e.addItems?.length?{addItems:e.addItems}:{}),...(e.npcSay?{npcSay:e.npcSay}:{}),...(e.blockedText?{blockedText:e.blockedText}:{}),...(e.text?{text:e.text}:{})}});
   return {id:base.id||fallbackId,name:override.name||base.name||node.name,...base,...(brief?{brief}:{}),...(img?{img}:{}),...(npcSprite?{npcSprite}:{}),...(npcId?{npc:{id:npcId,name:castName(npcId)}}:{}),...(node.blockedText?{blockedText:node.blockedText}:{}),...(exits.length?{exits}:{}),...(interlude?{interlude}:{})};
 };
-chapter.intro=terminalNodeOutput(chapter.intro,"ch1_intro",opening,openingOverride);
-chapter.ending=terminalNodeOutput(chapter.ending,"ch1_ending",ending,endingOverride);
+chapter.intro=terminalNodeOutput(chapter.intro,"ch1_intro",opening,openingOverride,chapterInterludes[activeChapter]?.opening);
+chapter.ending=terminalNodeOutput(chapter.ending,"ch1_ending",ending,endingOverride,chapterInterludes[activeChapter]?.ending);
 return {campaign,chapter,chapterFile:`${CHAPTERS[activeChapter].file.toLowerCase()}.json`}}
