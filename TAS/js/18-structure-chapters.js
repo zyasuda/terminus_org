@@ -24,6 +24,25 @@ function ensureStructureChapters(){
   });
   return structureChapters;
 }
+function migrateSceneOverrideKeys(){
+  if(migrateSceneOverrideKeys._done)return;
+  if(!freshCampaign&&!context)return;
+  migrateSceneOverrideKeys._done=true;
+  ensureStructureChapters();
+  chapterOrder.forEach(chapterKey=>{
+    const scenes=structureChapters[chapterKey]?.scenes||[];
+    /* 先に旧キーの値を全部スナップショットしてから書き込む。書きながら読むと、
+       newKeyが次の反復のoldKeyと重なり、データが連鎖的に後ろのシーンへ
+       押し流される（実測で発見・修正済み。id=index+1のときnewKey(i)===oldKey(i+1)になるため）。 */
+    [sceneOverrides,sceneBackgrounds].forEach(map=>{
+      const moves=scenes.map((scene,index)=>({oldKey:`${chapterKey}:scene:${index}`,newKey:`${chapterKey}:scene:${scene.id}`}))
+        .filter(({oldKey,newKey})=>oldKey!==newKey)
+        .map(({oldKey,newKey})=>({oldKey,newKey,data:map[oldKey]}));
+      moves.forEach(({oldKey})=>{delete map[oldKey]});
+      moves.forEach(({newKey,data})=>{if(data!==undefined&&!map[newKey])map[newKey]=data});
+    });
+  });
+}
 var baseChapterDataForStructure=chapterData;
 chapterData=()=>{ensureStructureChapters();return structureChapters[activeChapter]||baseChapterDataForStructure()};
 function structureChapterLabel(key,index){return chapterNames[key]||structureChapters?.[key]?.title||`チャプター${index+1}（未命名）`}
@@ -48,7 +67,7 @@ function addManagedScene(key){
 function addManagedChapter(){
   ensureStructureChapters();let n=chapterOrder.length+1;let key=`ch${n}`;while(chapterOrder.includes(key)){n++;key=`ch${n}`};chapterOrder=[...chapterOrder,key];structureChapters[key]={title:`チャプター${n}`,scenes:[],opening:{},ending:{},intermission:{}};chapterNames[key]=`チャプター${n}`;collapsedChapters[key]=false;CHAPTERS[key]={name:`チャプター${n}`,file:`CHAPTER_${String(n).padStart(2,'0')}`};activeChapter=key;selectedNode={type:'opening'};selectedTarget='chapter';activeTab='chapterOverview';structureSaveAndRender(`チャプター${n}を作成しました`)}
 function renameManagedChapter(key,value){ensureStructureChapters();if(!structureChapters[key])return;const name=value.trim()||'未命名チャプター';structureChapters[key].title=name;chapterNames[key]=name;if(CHAPTERS[key])CHAPTERS[key].name=name;saveWorkspaceDraft(true);renderScenes();setStatus('チャプター名を更新しました')}
-function renameManagedScene(key,index,value){ensureStructureChapters();const item=structureChapters[key]?.scenes?.[index];if(!item)return;const name=value.trim()||`シーン${item.id||index+1}`;item.name=name;sceneOverrides[`${key}:scene:${index}`]={...(sceneOverrides[`${key}:scene:${index}`]||{}),name};saveWorkspaceDraft(true);renderScenes();setStatus('シーン名を更新しました')}
+function renameManagedScene(key,index,value){ensureStructureChapters();const item=structureChapters[key]?.scenes?.[index];if(!item)return;const name=value.trim()||`シーン${item.id||index+1}`;item.name=name;sceneOverrides[`${key}:scene:${item.id}`]={...(sceneOverrides[`${key}:scene:${item.id}`]||{}),name};saveWorkspaceDraft(true);renderScenes();setStatus('シーン名を更新しました')}
 function moveManagedChapter(key,delta){const i=chapterOrder.indexOf(key),next=i+delta;if(i<0||next<0||next>=chapterOrder.length)return;[chapterOrder[i],chapterOrder[next]]=[chapterOrder[next],chapterOrder[i]];structureSaveAndRender('チャプターの順番を変更しました')}
 function moveManagedScene(key,index,delta){ensureStructureChapters();const scenes=structureChapters[key]?.scenes||[];const next=index+delta;if(next<0||next>=scenes.length)return;[scenes[index],scenes[next]]=[scenes[next],scenes[index]];if(activeChapter===key&&selectedNode.type==='scene'){if(selectedNode.index===index)selectedNode.index=next;else if(selectedNode.index===next)selectedNode.index=index}structureSaveAndRender('シーンの順番を変更しました')}
 function deleteManagedScene(key,index){ensureStructureChapters();const scenes=structureChapters[key]?.scenes||[];if(!scenes[index])return;const label=`シーン${scenes[index].id||index+1}`;scenes.splice(index,1);if(activeChapter===key){selectedNode=scenes.length?{type:'scene',index:Math.min(index,scenes.length-1)}:{type:'opening'}}structureSaveAndRender(`${label}を削除しました`)}
@@ -74,12 +93,12 @@ renderWorld=function(){const html=baseRenderWorldForStructure();return html+'<di
 var baseBindWorldForStructure=bindWorld;
 bindWorld=function(){baseBindWorldForStructure();bindStructureManager()};
 var baseWorkspaceDraftForStructure=workspaceDraft;
-workspaceDraft=function(){ensureStructureChapters();return {...baseWorkspaceDraftForStructure(),structureChapters:deepCopyStructure(structureChapters)}};
+workspaceDraft=function(){migrateSceneOverrideKeys();return {...baseWorkspaceDraftForStructure(),structureChapters:deepCopyStructure(structureChapters)}};
 var baseApplyWorkspaceDraftForStructure=applyWorkspaceDraft;
-applyWorkspaceDraft=function(data){baseApplyWorkspaceDraftForStructure(data);structureChapters=data.structureChapters&&typeof data.structureChapters==='object'?deepCopyStructure(data.structureChapters):null};
+applyWorkspaceDraft=function(data){baseApplyWorkspaceDraftForStructure(data);structureChapters=data.structureChapters&&typeof data.structureChapters==='object'?deepCopyStructure(data.structureChapters):null;migrateSceneOverrideKeys._done=false};
 var baseCreateNewCampaignForStructure=createNewCampaign;
 createNewCampaign=function(){structureChapters=null;baseCreateNewCampaignForStructure()};
 if(newSceneButton)newSceneButton.onclick=()=>addManagedScene(activeChapter);
 if(newChapterButton)newChapterButton.onclick=addManagedChapter;
 var baseRenderAllForStructure=renderAll;
-renderAll=function(){ensureStructureChapters();baseRenderAllForStructure()};
+renderAll=function(){migrateSceneOverrideKeys();baseRenderAllForStructure()};
