@@ -10,7 +10,8 @@
     "test:battle": "node src/battle/core.test.mjs && node src/battle/battleResult.test.mjs",
     "smoke:battle": "node src/battle/smoke.mjs",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "test:inventory": "node src/inventory.test.mjs"
   },
   "dependencies": {
     "@litert-lm/core": "^0.14.0",

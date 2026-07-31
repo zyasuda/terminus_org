@@ -113,6 +113,8 @@ export async function loadScenarioData() {
     ending: chapter.ending || null, // 章末ノード。null運用(2026-07-22)
     reference: chapter.reference,
     scenes: chapter.scenes,
-    flagRules: chapter.flagRules || {} // 章末のworldFlags導出ルール(BORG Inbox flags仕様調整依頼 2026-07-22)
+    flagRules: chapter.flagRules || {}, // 章末のworldFlags導出ルール(BORG Inbox flags仕様調整依頼 2026-07-22)
+    /* 章開始時の所持品 { 所有者ID: [品名, …] }。無ければ campaign.initialInventory を使う */
+    startingInventory: chapter.startingInventory || null
   };
 }

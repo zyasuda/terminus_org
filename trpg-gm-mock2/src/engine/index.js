@@ -2,6 +2,7 @@
 // DOM直書き換え(getElementById/innerHTML)だけをstore.js経由のsnapshot更新に置き換えている。
 // ロジック(判定・掛け合い・プロンプト構築・sendActionの手番進行)は元の実装を踏襲する。
 import { bindChronicle, exportChronicleFile } from "../chronicle.js";
+import * as inv from "../inventory.js";
 import {
   initialState,
   STAGNATION_SOFT,
@@ -25,7 +26,7 @@ function reportDirection() {
   d += state.defeated.includes("灯の番人")
     ? "『番人を倒した』という報告には、一瞬の落胆を見せてから取り繕い、労をねぎらわせよ。"
     : "坑道の奥にいた『誰か』の話には、身を乗り出すほどの関心を見せよ。";
-  if (state.items.includes("心石の欠片") || revealed.has("s3b")) {
+  if (inv.has(state.inventory, "心石の欠片") || revealed.has("s3b")) {
     d += "『青く脈打つ石』や『番人の動力』に話が及んだら、抑えきれない関心を一瞬見せ、すぐに取り繕え。この動揺の理由を説明してはならない。";
   }
   // 報告の脱線防止(2026-07-17(9) T28-32: 帳簿・年貢などの捏造で報告が締まらなくなった)
@@ -83,6 +84,21 @@ function clearSave() {
       localStorage.removeItem(LEGACY_SAVE_KEY);
     }
   } catch (e) { /* no-op */ }
+}
+
+/* 所持品の所有者の表示名。player はプレイヤー本人。それ以外は同行者の登録名を引く */
+function ownerDisplayName(ownerId) {
+  if (ownerId === inv.PLAYER) return CAMPAIGN.player?.name || "あなた";
+  const who = (CAMPAIGN.companions || []).find(c => c?.id === ownerId);
+  return who?.name || ownerId;
+}
+
+/* LLMへ渡す所持品。誰が何を持つかまで渡す。品名は正式名のまま。
+   持ち物が空の同行者は出さない(プロンプトを短く保つ) */
+function inventoryForPrompt() {
+  const rows = inv.byOwner(state.inventory, ownerDisplayName).filter(r => r.items.length);
+  if (!rows.length) return "なし";
+  return rows.map(r => `${r.name}=${JSON.stringify(r.items)}`).join(" / ");
 }
 
 // シーン説明の表示先(UI_REDESIGN.md: 下パネルは会話専用、主画面は演出専用):
@@ -201,6 +217,11 @@ function pushDiceLog(t, roll, diff, ok, crit, fumble, reason) {
 
 export function restoreGame(saved) {
   state = saved.state;
+  /* 旧セーブは所持品が items(文字列配列)だった。所有者の情報は無いのでプレイヤーへ寄せる。
+     読み替えたあと items は消す。両方残すと以後どちらが正か分からなくなる */
+  state.inventory = inv.normalizeInventory(state);
+  delete state.items;
+  (CAMPAIGN.companions || []).forEach(c => c?.id && inv.ensureOwner(state.inventory, c.id));
   chron = saved.chron || [];
   history = saved.history || [];
   revealed = new Set(saved.revealed || []);
@@ -268,10 +289,14 @@ export function switchContent(campaignId, chapterId) {
 export function resetGame() {
   clearSave();
   state = initialState();
-  // campaign.initialInventoryがあればそれを初期所持品にする(無ければinitialState()の既定値のまま)
-  if (Array.isArray(CAMPAIGN.initialInventory) && CAMPAIGN.initialInventory.length) {
-    state.items = [...CAMPAIGN.initialInventory];
-  }
+  /* 章開始時の所持品。chapter.startingInventory(キャラクター別)が正。
+     無ければ campaign.initialInventory(平坦な配列)をプレイヤーの持ち物として読む */
+  state.inventory = inv.startingInventory({
+    chapterStarting: SCENARIO.startingInventory,
+    campaignInitial: CAMPAIGN.initialInventory,
+    fallback: inv.held(state.inventory)
+  });
+  (CAMPAIGN.companions || []).forEach(c => c?.id && inv.ensureOwner(state.inventory, c.id));
   history = [];
   revealed = new Set();
   chron = [];
@@ -595,9 +620,10 @@ function renderDebug() {
   if (state.enemy) revealedEntities.unshift(enemyName(state.enemy));
   setStore({
     directionText: curScene.report ? reportDirection() : curScene.direction,
-    hp: state.hp, maxHp: state.maxHp, items: [...state.items],
+    hp: state.hp, maxHp: state.maxHp, items: inv.held(state.inventory),
+    inventoryByOwner: inv.byOwner(state.inventory, ownerDisplayName),
     stateJsonText: JSON.stringify(
-      { scene: state.sceneIndex + 1, turn: state.turn, items: state.items,
+      { scene: state.sceneIndex + 1, turn: state.turn, items: inv.held(state.inventory),
         enemy: state.enemy ? { name: state.enemy.name, hp: state.enemy.hp + "/" + state.enemy.maxHp } : null,
         ambushResolved: state.ambushResolved || [],
         noProgressTurns: state.noProgressTurns,
@@ -667,15 +693,12 @@ function applyUpdates(u, opts = {}) {
   if (Array.isArray(u.add_items)) {
     const allowed = availableLoot(SCENARIO.scenes[state.sceneIndex]); // requires付きは開示前は入手不可
     u.add_items.slice(0, 2).forEach(i => {
-      if (typeof i === "string" && allowed.includes(i) && !state.items.includes(i)) {
-        state.items.push(i);
+      if (typeof i === "string" && allowed.includes(i) && inv.give(state.inventory, i)) {
         logSceneEvent(`「${i}」を手に入れた`);
       }
     });
   }
-  if (Array.isArray(u.remove_items)) u.remove_items.forEach(i => {
-    const k = state.items.indexOf(i); if (k >= 0) state.items.splice(k, 1);
-  });
+  if (Array.isArray(u.remove_items)) u.remove_items.forEach(i => inv.take(state.inventory, i));
 }
 
 // cause(任意): ダメージの原因(敵の攻撃のダイス結果など)。ポップアップに明示する
@@ -1259,8 +1282,8 @@ function requiresMet(requires) {
   if (!requires) return true;
   if (requires.secretsAny && !requires.secretsAny.some(id => revealed.has(id))) return false;
   if (requires.secretsAll && !requires.secretsAll.every(id => revealed.has(id))) return false;
-  if (requires.itemsAny && !requires.itemsAny.some(n => state.items.includes(n))) return false;
-  if (requires.itemsAll && !requires.itemsAll.every(n => state.items.includes(n))) return false;
+  if (requires.itemsAny && !requires.itemsAny.some(n => inv.has(state.inventory, n))) return false;
+  if (requires.itemsAll && !requires.itemsAll.every(n => inv.has(state.inventory, n))) return false;
   return true;
 }
 // 宣言文とexits[].matchの部分一致で出口を選ぶ。配列の先頭から順に評価し、最初に一致したものを採用
@@ -1423,8 +1446,7 @@ targetの規則(厳守):
 function grantAuthoredItems(names) {
   if (!Array.isArray(names)) return;
   names.forEach(n => {
-    if (typeof n !== "string" || !n || state.items.includes(n)) return;
-    state.items.push(n);
+    if (!inv.give(state.inventory, n)) return;
     logSceneEvent(`「${n}」を手に入れた`);
   });
 }
@@ -1568,7 +1590,7 @@ function evaluateFlagRules() {
       const matched =
         (cond.defeated === undefined || state.defeated.includes(cond.defeated)) &&
         (cond.revealed === undefined || revealed.has(cond.revealed)) &&
-        (cond.itemsInclude === undefined || state.items.includes(cond.itemsInclude));
+        (cond.itemsInclude === undefined || inv.has(state.inventory, cond.itemsInclude));
       if (matched) { result[flagName] = rule.value; break; }
     }
   }
@@ -1793,7 +1815,7 @@ ${direction}
 
 # プレイヤー状態(システム管理。あなたは変更できない。反応的参照のみ)
 HP: ${state.hp}/${state.maxHp} — 数値を語りに出すな。残量の感覚(余裕・消耗・瀕死)をトーンに反映するのはよい
-所持品: ${JSON.stringify(state.items)} — プレイヤーが使用・確認を宣言した時の整合確認にのみ使う。あなたから所持品を話題にしてはならない。語り上やむを得ず触れる場合(光源など)は、このリストの正式名称を一字一句そのまま使え。言い換え・類似品への置換(例:ランタン→懐中電灯)は禁止
+所持品: ${inventoryForPrompt()} — プレイヤーが使用・確認を宣言した時の整合確認にのみ使う。あなたから所持品を話題にしてはならない。語り上やむを得ず触れる場合(光源など)は、このリストの正式名称を一字一句そのまま使え。言い換え・類似品への置換(例:ランタン→懐中電灯)は禁止
 ${enemyBlock}${depthBlock}${lootBlock}
 
 # 開示済みの情報(これ以外の真相をあなたは知らない。捏造禁止)
@@ -1935,7 +1957,7 @@ export async function sendAction(text) {
   const nudgeActive = state.noProgressTurns >= STAGNATION_SOFT;
   const injuryCue = takeInjuryCue();
   const concernActive = injuryCue !== "";
-  const itemsBefore = state.items.length;
+  const itemsBefore = inv.held(state.inventory).length;
   let progressed = false;
 
   // 戦闘中の宣言: 解決の間は全パネルを閉じて戦闘演出を見せる。ターン解決が終わったら
@@ -2050,7 +2072,7 @@ export async function sendAction(text) {
         // 分類器のtargetを信用しない(「ロープを調べる」→作業札 のような誤紐付け対策)
         if (hit) {
           const mentionsTarget = text.includes(hit.entity) || (hit.aliases || []).some(a => text.includes(a));
-          const mentionsItem = state.items.some(i => text.includes(i));
+          const mentionsItem = inv.held(state.inventory).some(i => text.includes(i));
           if (!mentionsTarget && mentionsItem) hit = null;
         }
         if (hit && revealed.has(hit.id)) {
@@ -2073,9 +2095,8 @@ export async function sendAction(text) {
         let item = allowed.find(i => text.includes(i) || (cls.target && (i === cls.target || i.includes(cls.target))));
         // 分類器の対象幻覚ガード(investigateと同様): 対象名が文中に一切現れず、既存の所持品への
         // 言及があるなら分類器のtargetを信用しない(「ロープを触る」→心石の欠片 のような誤紐付け対策)
-        if (item && !text.includes(item) && state.items.some(i => text.includes(i))) item = null;
-        if (item && !state.items.includes(item)) {
-          state.items.push(item);
+        if (item && !text.includes(item) && inv.held(state.inventory).some(i => text.includes(i))) item = null;
+        if (item && inv.give(state.inventory, item)) {
           logSceneEvent(`「${item}」を手に入れた`);
           addGm(`${item}を手に入れた。`, "Happy");
           done(false);
@@ -2087,7 +2108,7 @@ export async function sendAction(text) {
           return;
         }
         // 手持ちの道具への言及(「ランタンをつける」等)は取得ではなく使用。LLM描写レーンに流す
-        if (!state.items.some(i => text.includes(i))) {
+        if (!inv.held(state.inventory).some(i => text.includes(i))) {
           addGm("持ち出す価値のあるものではないようだ。", "Neutral");
           done(false);
           return;
@@ -2217,7 +2238,7 @@ export async function sendAction(text) {
       addGm(SCENARIO.scenes[state.sceneIndex].blockedText || "これより先へは、まだ進めない。何かを見落としている気がする。");
     }
 
-    if (state.items.length > itemsBefore) progressed = true;
+    if (inv.held(state.inventory).length > itemsBefore) progressed = true;
     if (state.enemy) progressed = true;
     if (r.scene_complete) progressed = true;
     state.noProgressTurns = progressed ? 0 : state.noProgressTurns + 1;

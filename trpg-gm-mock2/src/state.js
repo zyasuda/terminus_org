@@ -1,8 +1,14 @@
+import { normalizeInventory, held } from "./inventory.js";
+
 export const STAGNATION_SOFT = 3;
 export const STAGNATION_STRONG = 6;
 
 export function initialState() {
-  return { hp: 10, maxHp: 10, items: ["ランタン", "ロープ", "ナイフ"], sceneIndex: 0, turn: 0,
+  return { hp: 10, maxHp: 10,
+           /* 所持品の正本。キャラクター別に持つ。平坦な一覧は inventory.js の held() で取る。
+              旧セーブ（items が文字列配列）は normalizeInventory() が読み替える */
+           inventory: normalizeInventory({ items: ["ランタン", "ロープ", "ナイフ"] }),
+           sceneIndex: 0, turn: 0,
            enemy: null, defeated: [], lastCompanionTurn: -9,
            banterCharge: {},
            pendingRetort: null,
@@ -49,7 +55,7 @@ export function stateFingerprint({ SCENARIO, state, revealed }) {
   return JSON.stringify({
     scene: state.sceneIndex,
     hp: state.hp,
-    items: [...state.items].sort(),
+    items: held(state.inventory).sort(),
     enemy: state.enemy ? { name: state.enemy.name, hp: state.enemy.hp } : null,
     revealed: revealedInScene
   });

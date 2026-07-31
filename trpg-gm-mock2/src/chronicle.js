@@ -1,3 +1,4 @@
+import { held, has, byOwner, PLAYER } from "./inventory.js";
 let SCENARIO, CAST, state, chron, revealed;
 
 export function bindChronicle(context) {
@@ -24,9 +25,16 @@ function deriveFootprints() {
   if (state.defeated.includes("灯の番人")) f.push("灯の番人を退けた");
   // シーン3を「通過した」場合のみ(在室中はまだ決着していない=日記の原則で先走らない)
   else if (state.sceneIndex >= 3) f.push("灯の番人と刃を交えず、対話か回避で切り抜けた");
-  if (state.items.includes("心石の欠片")) f.push("心石の欠片を持ち帰った");
+  if (has(state.inventory, "心石の欠片")) f.push("心石の欠片を持ち帰った");
   f.push(reached > SCENARIO.scenes.length - 1 ? "依頼を果たし、村へ帰還した" : `シーン${reached}まで足を進めた`);
   return f;
+}
+
+/* 年代記に残す所持品。誰が何を持っていたかまで残す。持ち物が空の同行者は出さない */
+function inventoryLine() {
+  const rows = byOwner(state.inventory, id => (id === PLAYER ? "あなた" : (CAST[id]?.name || id)))
+    .filter(r => r.items.length);
+  return rows.length ? rows.map(r => `${r.name}=${r.items.join("、")}`).join(" / ") : "なし";
 }
 
 // 発見したもの: 開示済み秘密(revealedのみ)と、物語上意味のある入手品から。未開示の真相は載せない
@@ -36,7 +44,7 @@ function deriveDiscoveries() {
     if (revealed.has(sec.id)) d.push(`**${sec.entity || "?"}** — ${sec.text}`);
   }));
   const baseItems = ["ランタン", "ロープ", "ナイフ"];
-  state.items.filter(i => !baseItems.includes(i)).forEach(i => d.push(`**${i}** — 冒険で手に入れた品`));
+  held(state.inventory).filter(i => !baseItems.includes(i)).forEach(i => d.push(`**${i}** — 冒険で手に入れた品`));
   return d;
 }
 
@@ -54,7 +62,7 @@ function deriveStoryReference() {
   if (state.sceneIndex >= SCENARIO.scenes.length - 1) cast.push("マイラ・ヴェイン(依頼人)");
   // 重要アイテム
   const baseItems = ["ランタン", "ロープ", "ナイフ"];
-  const keyItems = ["ランタン", ...state.items.filter(i => !baseItems.includes(i))];
+  const keyItems = ["ランタン", ...held(state.inventory).filter(i => !baseItems.includes(i))];
   // セリフ: 同行者の実際の言葉(chronから。最大4つ)。
   // 単純な先頭+末尾3件だと、間にしか喋らなかったキャラが picks から丸ごと消える
   // (2026-07-04プレイで実際に発生:ガレス3件・リディア5件のうちガレスが0件に)。
@@ -174,7 +182,7 @@ ${highlights}
 - プレイ時間: ${playtimeLabel}(全${state.turn}ターン)
 - 判定: ${dice.length}回中${okCount}回成功(クリティカル${crits.length}回 / ファンブル${fumbles.length}回)
 - 倒した敵: ${state.defeated.join("、") || "なし"}
-- 現在のHP: ${state.hp}/${state.maxHp} / 所持品: ${state.items.join("、")}
+- 現在のHP: ${state.hp}/${state.maxHp} / 所持品: ${inventoryLine()}
 
 ## 発見したもの(この冒険で知り得たこと)
 

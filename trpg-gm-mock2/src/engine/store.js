@@ -24,7 +24,7 @@ let snapshot = {
   npcBubble: { text: "", seq: 0 }, // シーンNPC(依頼人マイラ等)の吹き出し。中央のnpcSpriteの上に表示
   thinking: {},          // AI応答待ちの「考え中」表示 {gm: true, lydia: true, npc: true など}。対象の吹き出し位置に「…」を出す
   busy: false,
-  hp: 10, maxHp: 10, items: [],
+  hp: 10, maxHp: 10, items: [], inventoryByOwner: [],
   tokenText: "",
   modelText: "(取得中)",
   directionText: "",

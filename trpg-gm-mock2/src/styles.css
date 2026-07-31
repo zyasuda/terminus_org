@@ -639,6 +639,9 @@ body {
 .hpbar .fill { height: 100%; background: var(--success); transition: width .3s, background .3s; }
 .itemsView { display: flex; flex-direction: column; gap: 4px; }
 .itemsView .item { font-size: .9em; opacity: .9; }
+.itemOwner { display: flex; flex-direction: column; gap: 2px; }
+.itemOwnerName { font-size: .8em; opacity: .6; letter-spacing: .04em; }
+.itemsView .itemNone { opacity: .45; font-style: italic; }
 
 .panelMenu { display: flex; flex-direction: column; gap: 6px; margin-top: 12%; }
 .panelMenu button {

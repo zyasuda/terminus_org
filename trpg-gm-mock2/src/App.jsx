@@ -362,7 +362,15 @@ export default function App() {
           </div>
           <div className="panelTitle">持ち物</div>
           <div className="itemsView">
-            {eng.items.map((i, idx) => <div key={idx} className="item">・{i}</div>)}
+            {/* 所持品はキャラクター別。持ち物が空の同行者も欄を残す(誰が手ぶらかが分かるように) */}
+            {(eng.inventoryByOwner || []).map(row => (
+              <div key={row.owner} className="itemOwner">
+                <div className="itemOwnerName">{row.name}</div>
+                {row.items.length
+                  ? row.items.map((i, idx) => <div key={idx} className="item">・{i}</div>)
+                  : <div className="item itemNone">・なし</div>}
+              </div>
+            ))}
           </div>
           <div className="panelMenu">
             <button onClick={eng.exportChronicle}>Chronicle書き出し</button>
