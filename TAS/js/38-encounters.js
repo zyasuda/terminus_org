@@ -35,6 +35,9 @@ function normalizeEncounter(value,index=0){
 function sceneEncounters(){return (scene().encounters||[]).map(normalizeEncounter)}
 function encounterMonsterOptions(selected){return `<option value="">選択してください</option>${monsters.filter(x=>x.name).map(x=>{const id=String(x.id||x.name);return `<option value="${escapeHtml(id)}" ${selected===id?'selected':''}>${escapeHtml(x.name)}${x.id?`（${escapeHtml(x.id)}）`:''}</option>`}).join('')}`}
 function encounterDiscoveryNames(){return (scene().discoveries||[]).map((x,i)=>normalizeDiscoveryFor(scene(),x,i).label).filter(Boolean)}
+/* blockedByはmock2側で「撃破済み・離脱済みの敵名」としてしか照合されない(engine/index.jsのresolveEncounterIfNeeded)。
+   フラグやイベントIDを入れても効かないため、モンスター名の候補だけを出す */
+function encounterMonsterNames(){return monsters.filter(x=>x.name).map(x=>x.name)}
 function renderEncounterCard(enc,index){
   const typeLabel=ENCOUNTER_TYPES.find(([id])=>id===enc.type)?.[1]||'通常遭遇';
   const selectedMonster=resolveEncounterMonster(enc.monsterId,enc.monsterName);
@@ -48,7 +51,7 @@ function renderEncounterCard(enc,index){
     <div class="field"><label>判定タイミング</label><select class="encounter-timing" data-encounter-index="${index}">${ENCOUNTER_TIMINGS.map(([id,label])=>`<option value="${id}" ${enc.timing===id?'selected':''}>${label}</option>`).join('')}</select></div>
     <div class="field"><label>遭遇確率（%）</label><input type="number" min="0" max="100" class="encounter-probability" data-encounter-index="${index}" value="${enc.probability??''}" placeholder="例：25"><p class="hint">ランダム遭遇だけで使用します。</p></div>
     <div class="field"><label>最大遭遇回数</label><input type="number" min="1" class="encounter-max-occurrences" data-encounter-index="${index}" value="${enc.maxOccurrences??''}" placeholder="空欄なら制限なし"></div>
-    <div class="field span-2"><label>発生禁止条件（カンマ区切り）</label><input class="encounter-blocked-by" data-encounter-index="${index}" value="${escapeHtml(enc.blockedBy.join(', '))}" placeholder="灯の番人を撃破済み, encounter_done"></div>
+    <div class="field span-2"><label>発生禁止条件（撃破済み・離脱済みの敵名。カンマ区切り）</label><input class="encounter-blocked-by" data-encounter-index="${index}" list="encounterMonsterNameList" value="${escapeHtml(enc.blockedBy.join(', '))}" placeholder="灯の番人"><p class="hint">モンスター名だけが判定に使われます。フラグやイベントIDを入れても発生条件には反映されません。</p></div>
     <div class="field span-2"><label>遭遇時の演出</label><textarea class="encounter-onset-text" data-encounter-index="${index}" placeholder="暗がりから錆喰いが飛び出してくる。">${escapeHtml(enc.onsetText)}</textarea></div>
     <div class="field span-2"><label>GM補足メモ</label><textarea class="encounter-notes" data-encounter-index="${index}" placeholder="この遭遇を発生させる意図や例外条件">${escapeHtml(enc.notes)}</textarea></div>
     <div class="field"><label>出口ID</label><input class="encounter-id" data-encounter-index="${index}" value="${escapeHtml(enc.id)}" placeholder="encounter_s2_rust_eater"></div>
@@ -58,7 +61,8 @@ function renderEncounterCard(enc,index){
 function renderEncounterSection(){
   const encounters=sceneEncounters();
   const names=encounterDiscoveryNames();
-  return `<div class="card encounter-section"><h3>エンカウンター設定</h3><p class="hint">このシーンで敵との遭遇が発生する条件を設定します。通常・条件付き・任意・ランダムを同じ一覧で管理できます。現在はTASで保存・ゲーム側JSONへ出力する試作段階です。</p><datalist id="encounterDiscoveryNameList">${names.map(name=>`<option value="${escapeHtml(name)}">`).join('')}</datalist>${encounters.length?encounters.map(renderEncounterCard).join(''):`<div class="empty-card"><p class="hint">遭遇設定はありません。敵が登場するシーンだけ追加してください。</p></div>`}<div class="bottom"><button class="sub" id="btnAddEncounter">＋ 遭遇を追加</button></div></div>`;
+  const monsterNames=encounterMonsterNames();
+  return `<div class="card encounter-section"><h3>エンカウンター設定</h3><p class="hint">このシーンで敵との遭遇が発生する条件を設定します。通常・条件付き・任意・ランダムを同じ一覧で管理できます。現在はTASで保存・ゲーム側JSONへ出力する試作段階です。</p><datalist id="encounterDiscoveryNameList">${names.map(name=>`<option value="${escapeHtml(name)}">`).join('')}</datalist><datalist id="encounterMonsterNameList">${monsterNames.map(name=>`<option value="${escapeHtml(name)}">`).join('')}</datalist>${encounters.length?encounters.map(renderEncounterCard).join(''):`<div class="empty-card"><p class="hint">遭遇設定はありません。敵が登場するシーンだけ追加してください。</p></div>`}<div class="bottom"><button class="sub" id="btnAddEncounter">＋ 遭遇を追加</button></div></div>`;
 }
 function collectEncounters(){
   return Array.from(document.querySelectorAll('.encounter-card')).map((card,index)=>normalizeEncounter({
