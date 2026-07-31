@@ -116,12 +116,12 @@
     "s2_barrier": {
       "file": "s2_barrier.jpg",
       "kind": "background",
-      "status": "archived",
+      "status": "approved",
       "target": "1920x1080",
       "usedBy": [],
       "source": "imagegen",
       "promptVersion": 1,
-      "notes": "2026-07-12生成。現行シナリオの封鎖の木柵に合わせた。16:9にクロップして配置。"
+      "notes": "2026-07-12生成。封鎖の木柵に合わせた。16:9にクロップして配置。2026-07-31にシーン2の柵ルートで再利用するためimages/へ戻した。"
     },
     "s2_rust_eater": {
       "file": "s2_rust_eater.png",
@@ -261,6 +261,27 @@
       "usedBy": [
         "chapter_01.scenes.1.parallax.sky"
       ]
+    },
+    "s2_collapse": {
+      "file": "s2_collapse.jpg",
+      "kind": "background",
+      "status": "approved",
+      "target": "1920x1080",
+      "usedBy": [],
+      "source": "imagegen",
+      "promptVersion": 1,
+      "notes": "2026-07-31生成（Codex組み込みimage_gen / gpt-image-2）。シーン2の崩落ルート用。1536x1024で生成し中央基準で1920x1080へクロップ。下3割はUIの文字領域のため平坦な床にしている。"
+    },
+    "s2_mine_bat": {
+      "file": "s2_mine_bat.png",
+      "kind": "sprite",
+      "status": "approved",
+      "target": "height 600px",
+      "alpha": true,
+      "usedBy": [],
+      "source": "imagegen",
+      "promptVersion": 1,
+      "notes": "2026-07-31生成（Codex組み込みimage_gen / gpt-image-2）。坑道蝙蝠。純黒背景で生成し、sharpで輝度しきい値18/48の二段で透過へ変換（透過率71.2%）。"
     }
   }
 }

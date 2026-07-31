@@ -977,8 +977,13 @@ function encounterRequiredElementsMet(enc, sc) {
 
 async function resolveEncounterIfNeeded(playerText, sc) {
   for (const enc of sc.encounters) {
-    if (!sc.enemy || enc.monsterName !== sc.enemy.name) continue; // 対応するモンスター定義(scenes[].enemy)が無ければ扱えない
-    if (state.defeated.includes(sc.enemy.name) || (state.fled || []).includes(sc.enemy.name)) continue;
+    /* 敵の能力は encounters[].enemy に直接書かれていればそれを使い、無ければ scenes[].enemy を使う。
+       1つのシーンに複数の敵を出す分岐（シーン2の柵=錆喰い／崩落=坑道蝙蝠）に必要。
+       scenes[].enemy は1体しか置けないため、それだけでは片方の遭遇が発生しなかった */
+    const foe = enc.enemy && enc.enemy.name ? enc.enemy : sc.enemy;
+    if (!foe) continue; // 敵の能力がどこにも無い遭遇は扱えない
+    if (enc.monsterName && enc.monsterName !== foe.name) continue;
+    if (state.defeated.includes(foe.name) || (state.fled || []).includes(foe.name)) continue;
     if ((enc.blockedBy || []).some(n => state.defeated.includes(n) || (state.fled || []).includes(n))) continue;
     const count = (state.encounterCounts || {})[enc.id] || 0;
     if (enc.maxOccurrences != null && count >= enc.maxOccurrences) continue;
@@ -988,7 +993,7 @@ async function resolveEncounterIfNeeded(playerText, sc) {
 
     state.encounterCounts = state.encounterCounts || {};
     state.encounterCounts[enc.id] = count + 1;
-    engageEnemy(sc.enemy);
+    engageEnemy(foe);
     addGm(`${enemyName(state.enemy)}が現れた。${enc.onsetText || state.enemy.surface || state.enemy.trait || ""}`, "Fear");
     addNote(`⚔ エンカウンター発生:${enc.id}`);
     pushEncounterPopup();
