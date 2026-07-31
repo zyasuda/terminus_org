@@ -16,10 +16,10 @@ function adminUxIssues(n=scene()){
   if(typeof n.enemyName==='string'&&n.enemyName.trim()&&!monsters.some(monster=>monster.name===n.enemyName.trim()))issues.push(adminUxIssue('warn',`「${n.enemyName.trim()}」がモンスター台帳にありません。モンスター画面で登録するか、このシーンの敵を選び直してください。既存の敵データはそのまま保持しています。`,'#sceneEnemy','actors'));
   exits.forEach((exit,index)=>{
     const id=String(exit.id||'').trim();
-    if(!id)issues.push(adminUxIssue('error',`出口${index+1}の移動識別子を入力してください`,`.exit-id[data-exit-index="${index}"]`,'exits'));
-    else if(seenExitIds.has(id))issues.push(adminUxIssue('error',`出口${index+1}の移動識別子「${id}」が出口${seenExitIds.get(id)+1}と重複しています`,`.exit-id[data-exit-index="${index}"]`,'exits'));
+    if(!id)issues.push(adminUxIssue('error',`出口${index+1}の出口IDを入力してください`,`.exit-id[data-exit-index="${index}"]`,'exits'));
+    else if(seenExitIds.has(id))issues.push(adminUxIssue('error',`出口${index+1}の出口ID「${id}」が出口${seenExitIds.get(id)+1}と重複しています`,`.exit-id[data-exit-index="${index}"]`,'exits'));
     else seenExitIds.set(id,index);
-    if(!exit.match?.length)issues.push(adminUxIssue('error',`出口${index+1}にトリガーする語句を1つ以上指定してください`,`.exit-match[data-exit-index="${index}"]`,'exits'));
+    if(!exit.match?.length)issues.push(adminUxIssue('error',`出口${index+1}にトリガー語句を1つ以上指定してください`,`.exit-match[data-exit-index="${index}"]`,'exits'));
     if(exit.to===''||exit.to===undefined)issues.push(adminUxIssue('warn',`出口${index+1}の移動先を選択してください（行き止まりなら「行き止まり」を選びます）`,`.exit-target[data-exit-index="${index}"]`,'exits'));
     sceneConditionTokens(exitRequiresText(exit)).forEach(token=>{if(!valid.has(token))issues.push(adminUxIssue('error',`出口${index+1}の必要条件「${token}」は、このシーンの調査対象にも品物にもありません`,`.exit-condition-token[data-exit-index="${index}"]`,'exits'))})
   });
@@ -27,7 +27,7 @@ function adminUxIssues(n=scene()){
   sceneEncounters().forEach((encounter,index)=>{
     const monster=monsters.find(monster=>String(monster.id||monster.name)===encounter.monsterId||monster.name===encounter.monsterName);
     if(!monster)issues.push(adminUxIssue('error',`遭遇${index+1}の対象モンスターを選択してください`,`.encounter-monster[data-encounter-index="${index}"]`,'actors'));
-    encounter.requiredElements.forEach(name=>{if(name&&!valid.has(name))issues.push(adminUxIssue('error',`遭遇${index+1}の必要なシーン要素「${name}」が見つかりません`,`.encounter-required-elements[data-encounter-index="${index}"]`,'actors'))});
+    encounter.requiredElements.forEach(name=>{if(name&&!valid.has(name))issues.push(adminUxIssue('error',`遭遇${index+1}の必要な調査対象「${name}」が見つかりません`,`.encounter-required-elements[data-encounter-index="${index}"]`,'actors'))});
     const rawProbability=rawEncounters[index]?.probability;
     if(encounter.type==='random'&&(encounter.probability===null||encounter.probability===undefined))issues.push(adminUxIssue('error',`ランダム遭遇${index+1}には遭遇確率を指定してください`,`.encounter-probability[data-encounter-index="${index}"]`,'actors'));
     if(rawProbability!==undefined&&rawProbability!==''&&(Number(rawProbability)<0||Number(rawProbability)>100))issues.push(adminUxIssue('error',`遭遇${index+1}の確率は0〜100%で指定してください`,`.encounter-probability[data-encounter-index="${index}"]`,'actors'));
@@ -88,7 +88,7 @@ renderStructure=function(){
     adminUxCreateSection(holder,'basics','基本設定',[name,brief],true),
     adminUxCreateSection(holder,'visuals','パララックス（必要なときだけ）',[sky],false),
     adminUxCreateSection(holder,'actors','登場人物・敵・遭遇',[npcs,enemy],Boolean(enemy)),
-    adminUxCreateSection(holder,'exits','出口・分岐',[exits],true)
+    adminUxCreateSection(holder,'exits','出口',[exits],true)
   ].filter(Boolean);
   if(hint)hint.after(checkCard,...sections);else holder.prepend(checkCard,...sections);
   return holder.innerHTML;

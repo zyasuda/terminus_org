@@ -15,7 +15,7 @@ ${JSON.stringify(s,null,2)}
  "name": "シーン名",
  "brief": "開始時の説明",
  "goal": "このシーンの目的",
- "discoveries": [{"label":"要素名","category":"main|place|image|sense|object|foreshadow|npc","importance":"major|support|flavor","surface":"プレイヤーが見聞きする情報","trigger":"開示方法","fact":"ゲームが保持する確定事実","tags":["発見済み名"],"aliases":["プレイヤー入力の照合語。短い別名"],"dc":"0|8|12|15|18（調べる判定の難易度。0は判定なしで即開示）"}],
+ "discoveries": [{"label":"要素名","category":"main|place|image|sense|object|foreshadow|npc","importance":"major|support|flavor","surface":"プレイヤーが見聞きする情報","trigger":"開示方法","fact":"ゲームが保持する確定事実","tags":["発見済み名"],"aliases":["プレイヤー入力のトリガー語句。短い別名"],"dc":"0|8|12|15|18（調べる判定の難易度。0は判定なしで即開示）"}],
  "transitions": [{"trigger":"プレイヤーの行動","requires":"必要な発見済み名（AND / OR 可。不要なら空文字）","target":"下記のシーン参照のいずれか"}],
  "dialogueRules": [{"speaker":"gm|member|npc|system","condition":"発火条件（flag:発見済み名 / discovery:項目キー。常時なら空文字）","priority":"high|medium|low","line":"発言内容","eventType":"空文字|flag_add|item_grant|npc_join|scene_unlock|battle_start|discovery_reveal","targetId":"イベント対象","eventNotes":"補足","once":true,"hiddenUntilTriggered":false}],
  "gmSceneNotes": "GM向け補足メモ"

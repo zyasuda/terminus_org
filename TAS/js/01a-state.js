@@ -8,7 +8,7 @@ let freshCampaign=false;let customChapterScenes={ch1:[],ch2:[]};let chapterNames
 /* 左ツリーで選んだ対象ごとのタブ。renderTabs / renderRightPanel / renderTab がこの定義を共有する。 */
 const CAMPAIGN_TABS=[["world","設定"],["concepts","重要語・概念"],["cast","キャラクター"],["monsters","モンスター"],["items","アイテム"],["rules","共通ルール"]];
 const CHAPTER_TABS=[["chapterOverview","構成・進行"]];
-const SCENE_TABS=[["structure","シーン設定"],["state","シーン要素"],["expression","表現・会話"],["playtest","テキストプレイ"],["draft","生成レビュー"]];
+const SCENE_TABS=[["structure","シーン設定"],["state","調査対象"],["expression","表現・会話"],["playtest","テキストプレイ"],["draft","生成レビュー"]];
 const CAMPAIGN_TAB_IDS=CAMPAIGN_TABS.map(([id])=>id);
 const CHAPTER_TAB_IDS=CHAPTER_TABS.map(([id])=>id);
 let chapterData=()=>{if(freshCampaign)return {title:activeChapter==="ch2"?"新しい章":"新しい章",scenes:Array.isArray(customChapterScenes[activeChapter])?customChapterScenes[activeChapter]:[]};try{const file=activeChapter==="ch2"?"chapter_02.json":"chapter_01.json";const raw=context?.dataFiles?.[file]||context?.dataFiles?.["chapter_01.json"];if(raw)return JSON.parse(raw)}catch(e){}return {title:activeChapter==="ch2"?"心石の在処":"廃坑の灯",scenes:activeChapter==="ch2"?fallbackScenes.slice(0,2):fallbackScenes}};
@@ -22,16 +22,16 @@ const sceneRef=n=>n.type==="scene"?`scene:${n.id}`:n.type;
 const sceneRefLabel=n=>n.type==="scene"?`シーン${n.id}：${n.name}`:n.name;
 const sceneTargets=()=>chapterNodes().filter(n=>sceneRef(n)!==sceneRef(scene()));
 const TRANSITION_TYPES=[
-  ["flag","フラグ"],["discovery","発見項目"],["item","所持アイテム"],
+  ["flag","フラグ"],["discovery","調査対象"],["item","所持アイテム"],
   ["check","判定結果"],["combat","戦闘結果"],["conversation","会話結果"]
 ];
 const DISCOVERY_CATEGORIES=[["main","メイン進行"],["place","場所・背景"],["image","画像内要素"],["sense","音・匂い・感覚"],["object","調査対象"],["foreshadow","伏線・世界設定"],["npc","人物・痕跡"]];
 const DISCOVERY_IMPORTANCE=[["major","主線"],["support","補助"],["flavor","演出"]];
 const DISCOVERY_TEMPLATE_SETS=[
   {category:"main",importance:"major",label:"進行に関わる要素",surface:"プレイヤーが必ず認識する導線や障害。",trigger:"最初の確認動作",fact:"このシーンの進行に必要な事実を記録する。",tags:["主線確認"]},
-  {category:"place",importance:"support",label:"場所の違和感",surface:"地形や配置、使われ方の不自然さ。",trigger:"周囲を見る",fact:"場所に関する確定情報を記録する。",tags:["背景観察"]},
+  {category:"place",importance:"support",label:"場所の違和感",surface:"地形や配置、使われ方の不自然さ。",trigger:"周囲を見る",fact:"場所に関する確定事実を記録する。",tags:["背景観察"]},
   {category:"image",importance:"support",label:"画像で目に入るもの",surface:"立ち絵や背景画像で視認できる要素。",trigger:"画像を確認する",fact:"視覚情報から分かる確定事実を記録する。",tags:["視認済み"]},
-  {category:"sense",importance:"flavor",label:"匂い・音・気配",surface:"音、匂い、温度、違和感など。",trigger:"耳を澄ます / 匂いを確かめる",fact:"感覚的に把握できる確定情報を記録する。",tags:["感覚手掛かり"]},
+  {category:"sense",importance:"flavor",label:"匂い・音・気配",surface:"音、匂い、温度、違和感など。",trigger:"耳を澄ます / 匂いを確かめる",fact:"感覚的に把握できる確定事実を記録する。",tags:["感覚手掛かり"]},
   {category:"object",importance:"support",label:"補助的な調査対象",surface:"本筋でなくても触れられる小物や痕跡。",trigger:"個別に調べる",fact:"寄り道で得られる追加情報を記録する。",tags:["寄り道"]},
   {category:"foreshadow",importance:"flavor",label:"伏線・世界設定",surface:"今は意味が分からないが後で効く要素。",trigger:"違和感として拾う",fact:"後続シーンで参照したい伏線を記録する。",tags:["伏線"]}
 ];

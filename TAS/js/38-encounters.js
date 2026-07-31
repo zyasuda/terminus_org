@@ -30,16 +30,16 @@ function renderEncounterCard(enc,index){
   return `<details class="card encounter-card" open><summary>遭遇${index+1}：${escapeHtml(typeLabel)} ／ ${escapeHtml(monsterName)}</summary><div class="encounter-grid" data-encounter-index="${index}">
     <div class="field"><label>遭遇種別</label><select class="encounter-type" data-encounter-index="${index}">${ENCOUNTER_TYPES.map(([id,label])=>`<option value="${id}" ${enc.type===id?'selected':''}>${label}</option>`).join('')}</select></div>
     <div class="field"><label>対象モンスター</label><select class="encounter-monster" data-encounter-index="${index}">${encounterMonsterOptions(enc.monsterId||selectedMonster?.id||selectedMonster?.name||'')}</select></div>
-    <div class="field span-2"><label>トリガーする語句（カンマ区切り）</label><input class="encounter-trigger-terms" data-encounter-index="${index}" value="${escapeHtml(enc.triggerTerms.join(', '))}" placeholder="踏み込む, 殻を調べる"></div>
-    <div class="field span-2"><label>必要なシーン要素（カンマ区切り）</label><input class="encounter-required-elements" data-encounter-index="${index}" list="encounterDiscoveryNameList" value="${escapeHtml(enc.requiredElements.join(', '))}" placeholder="気配, 殻の散らばり"></div>
-    <div class="field"><label>必要なシーン要素の条件</label><select class="encounter-required-operator" data-encounter-index="${index}"><option value="all" ${enc.requiredOperator==='all'?'selected':''}>すべて必要（AND）</option><option value="any" ${enc.requiredOperator==='any'?'selected':''}>いずれか（OR）</option></select></div>
+    <div class="field span-2"><label>遭遇のトリガー語句（カンマ区切り）</label><input class="encounter-trigger-terms" data-encounter-index="${index}" value="${escapeHtml(enc.triggerTerms.join(', '))}" placeholder="踏み込む, 殻を調べる"></div>
+    <div class="field span-2"><label>必要な調査対象（カンマ区切り）</label><input class="encounter-required-elements" data-encounter-index="${index}" list="encounterDiscoveryNameList" value="${escapeHtml(enc.requiredElements.join(', '))}" placeholder="気配, 殻の散らばり"></div>
+    <div class="field"><label>必要な調査対象の条件</label><select class="encounter-required-operator" data-encounter-index="${index}"><option value="all" ${enc.requiredOperator==='all'?'selected':''}>すべて必要（AND）</option><option value="any" ${enc.requiredOperator==='any'?'selected':''}>いずれか（OR）</option></select></div>
     <div class="field"><label>判定タイミング</label><select class="encounter-timing" data-encounter-index="${index}">${ENCOUNTER_TIMINGS.map(([id,label])=>`<option value="${id}" ${enc.timing===id?'selected':''}>${label}</option>`).join('')}</select></div>
     <div class="field"><label>遭遇確率（%）</label><input type="number" min="0" max="100" class="encounter-probability" data-encounter-index="${index}" value="${enc.probability??''}" placeholder="例：25"><p class="hint">ランダム遭遇だけで使用します。</p></div>
     <div class="field"><label>最大遭遇回数</label><input type="number" min="1" class="encounter-max-occurrences" data-encounter-index="${index}" value="${enc.maxOccurrences??''}" placeholder="空欄なら制限なし"></div>
     <div class="field span-2"><label>発生禁止条件（カンマ区切り）</label><input class="encounter-blocked-by" data-encounter-index="${index}" value="${escapeHtml(enc.blockedBy.join(', '))}" placeholder="灯の番人を撃破済み, encounter_done"></div>
     <div class="field span-2"><label>遭遇時の演出</label><textarea class="encounter-onset-text" data-encounter-index="${index}" placeholder="暗がりから錆喰いが飛び出してくる。">${escapeHtml(enc.onsetText)}</textarea></div>
     <div class="field span-2"><label>GM補足メモ</label><textarea class="encounter-notes" data-encounter-index="${index}" placeholder="この遭遇を発生させる意図や例外条件">${escapeHtml(enc.notes)}</textarea></div>
-    <div class="field"><label>移動識別子</label><input class="encounter-id" data-encounter-index="${index}" value="${escapeHtml(enc.id)}" placeholder="encounter_s2_rust_eater"></div>
+    <div class="field"><label>出口ID</label><input class="encounter-id" data-encounter-index="${index}" value="${escapeHtml(enc.id)}" placeholder="encounter_s2_rust_eater"></div>
     <div class="field encounter-actions"><button class="sub delete-btn" data-remove-encounter="${index}">削除</button></div>
   </div></details>`;
 }

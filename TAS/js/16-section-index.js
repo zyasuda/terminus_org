@@ -24,7 +24,7 @@ function monsterSectionRows(){return monsters.map((x,i)=>({id:String(i),name:x.n
 function itemSectionRows(){return items.map((x,i)=>({id:String(i),name:x.name||`アイテム${i+1}`,meta:x.notes?"説明あり":"未設定"}))}
 function discoverySectionRows(){
   const s=scene();
-  return (s.discoveries||[]).map((raw,i)=>{const x=normalizeDiscoveryFor(s,raw,i);return {id:String(i),name:x.label||`発見項目${i+1}`,meta:`${categoryLabel(x.category)}・${importanceLabel(x.importance)}`}});
+  return (s.discoveries||[]).map((raw,i)=>{const x=normalizeDiscoveryFor(s,raw,i);return {id:String(i),name:x.label||`調査対象${i+1}`,meta:`${categoryLabel(x.category)}・${importanceLabel(x.importance)}`}});
 }
 var baseRenderWorldForSplitLedger=renderWorld;
 renderWorld=function(){
@@ -56,11 +56,11 @@ bindItems=function(){
   document.querySelectorAll('[data-section-focus]').forEach(button=>button.onclick=()=>{const i=Number(button.dataset.sectionFocus);focusSection(`.item-name[data-item-index="${i}"]`,`${items[i]?.name||`アイテム${i+1}`}の詳細入力へ移動しました`)});
 };
 var baseRenderStateForSplitLedger=renderState;
-renderState=function(){return insertSectionIndex(baseRenderStateForSplitLedger(),sectionIndex("シーン要素一覧",discoverySectionRows(),"シーン要素がありません。"))};
+renderState=function(){return insertSectionIndex(baseRenderStateForSplitLedger(),sectionIndex("調査対象一覧",discoverySectionRows(),"調査対象がありません。"))};
 var baseBindStateForSplitLedger=bindState;
 bindState=function(){
   baseBindStateForSplitLedger();
-  document.querySelectorAll('[data-section-focus]').forEach(button=>button.onclick=()=>{const i=Number(button.dataset.sectionFocus);focusSection(`.state-discovery[data-discovery-index="${i}"]`,`${discoverySectionRows()[i]?.name||"シーン要素"}の詳細入力へ移動しました`)});
+  document.querySelectorAll('[data-section-focus]').forEach(button=>button.onclick=()=>{const i=Number(button.dataset.sectionFocus);focusSection(`.state-discovery[data-discovery-index="${i}"]`,`${discoverySectionRows()[i]?.name||"調査対象"}の詳細入力へ移動しました`)});
 };
 var baseRenderScenesForSplitLedger=renderScenes;
 renderScenes=function(){
