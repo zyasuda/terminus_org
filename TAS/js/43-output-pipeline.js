@@ -17,6 +17,7 @@ const OUTPUT_STEPS = [
   ["outputStableIds",      "10-export-contract.js", "安定ID・style・素材台帳(assets)を付ける"],
   ["outputEntityLedger",   "13-entity-ledger.js",   "campaign.entities をエンティティ台帳から作る"],
   ["outputConceptsItems",  "17-concepts-items.js",  "campaign.concepts / items / initialInventory を作る"],
+  ["outputStartingInventory", "42a-starting-inventory.js", "chapter.startingInventoryを所有者別のアイテムIDから品名へ解決して作る"],
   ["outputCastAttributes", "26-cast-attributes.js", "campaign.castAttributes を作る"],
   ["outputSceneNpc",       "26-cast-attributes.js", "scenes[].npc / npcSprite を確定させる"],
   ["outputFlagContract",   "27-flags-contract.js",  "campaign.flags / chapter.flagRules / stateUpdates / gameOverText"],

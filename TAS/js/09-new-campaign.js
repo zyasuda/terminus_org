@@ -4,7 +4,7 @@ function createNewCampaign(skipConfirm=false){
   if(!skipConfirm&&!window.__tasSkipCampaignConfirm&&!window.confirm("現在のキャンペーン下書きを新しいキャンペーンで置き換えます。必要な場合は先に保存してください。続けますか？"))return;
   campaignName="新しいキャンペーン";campaignImage="";campaignWorld="";campaignTheme="";campaignTerms="";
   freshCampaign=true;customChapterScenes={ch1:[]};chapterNames={ch1:""};chapterOrder=["ch1"];activeChapter="ch1";selectedNode={type:"opening"};extraCompanions=0;npcCount=1;monsters=[];items=[];
-  castImages={};castNames={};castProfiles={};castFlags={};sceneBackgrounds={};sceneOverrides={};discoveryFoldState={};
+  castImages={};castNames={};castProfiles={};castFlags={};sceneBackgrounds={};sceneOverrides={};chapterStartingInventory={};discoveryFoldState={};
   collapsedCampaign=false;collapsedChapters={ch1:false};activeTab="world";rightPanelEnabled=false;
   saveWorkspaceDraft(true);renderScenes();renderAll();setStatus("新しいキャンペーンを作成しました");
 }

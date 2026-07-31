@@ -1,0 +1,2 @@
+/* 出力の段: 章開始時の所持品を、下書きのアイテムIDからmock2が読む品名へ解決する。 */
+function outputStartingInventory(payload){const chapter={...(payload.chapter||{})};const idToName=Object.fromEntries(items.map(item=>[item.id,item.name]));const raw=chapterStartingInventory[activeChapter]||{};const resolved=Object.fromEntries(Object.entries(raw).map(([owner,ids])=>[owner,Array.isArray(ids)?ids.map(id=>idToName[id]).filter(Boolean):[]]));if(Object.values(resolved).some(ids=>ids.length))chapter.startingInventory=resolved;else delete chapter.startingInventory;return {...payload,chapter}}
