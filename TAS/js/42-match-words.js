@@ -18,7 +18,7 @@ function matchWordNodeInput(node){return {
 }}
 function matchWordGenerationPrompt(){return `章全体のトリガー語句候補を作ってください。出力はJSONオブジェクト1個のみ。説明文・コードフェンスは不要です。
 
-対象は、入力にある既存の exits[].match と discoveries[].aliases だけです。新しい出口・調査対象・本文・transitions は作らないでください。各候補は、対応する node（type と scene の index）、exit id、discovery id を必ず指定してください。
+対象は、入力にある既存の exits[].match と discoveries[].aliases だけです。新しい出口・調査対象・本文は作らないでください。各候補は、対応する node（type と scene の index）、exit id、discovery id を必ず指定してください。
 
 # トリガー語句の仕組み（必ず守ること）
 - 照合は部分一致である。プレイヤーの宣言文にトリガー語句が含まれていれば一致する。

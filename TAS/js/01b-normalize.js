@@ -1,7 +1,4 @@
-const transitionTypeLabel=id=>TRANSITION_TYPES.find(([key])=>key===id)?.[1]||"フラグ";
 const normalizeTransition=t=>({conditionType:(t.conditionType||t.type)==="secret"?"discovery":t.conditionType||t.type||"flag",conditionValue:t.conditionValue??t.value??t.condition??"",target:t.target||""});
-const conditionTypeFromValue=(value,n=scene())=>{const raw=String(value||"").trim();const prefix=raw.match(/^([a-z]+)\s*:/i)?.[1]?.toLowerCase();if(prefix&&TRANSITION_TYPES.some(([id])=>id===prefix))return prefix;const key=raw.toLowerCase();const discoveries=(n?.discoveries||[]).map((x,i)=>normalizeDiscoveryFor(n,x,i));if(discoveries.some(x=>x.id.toLowerCase()===key||x.label===raw))return "discovery";const flags=discoveries.flatMap(x=>(Array.isArray(x.tags)?x.tags:String(x.tags||"").split(",")).map(v=>String(v).trim().toLowerCase()).filter(Boolean));if(flags.includes(key))return "flag";return prefix||"flag"};
-const conditionTypeHint=(value,n=scene())=>{const type=conditionTypeFromValue(value,n);return value?transitionTypeLabel(type):"入力待ち"};
 const slugifyKeyPart=(value,fallback)=>String(value||"").normalize("NFKC").toLowerCase().replace(/[^a-z0-9]+/g,"_").replace(/^_+|_+$/g,"")||fallback;
 const discoveryKeyPrefixFor=n=>`${activeChapter}_${n?.type==="scene"?`s${n.id}`:slugifyKeyPart(n?.type,"section")}`;
 const discoveryKey=(value,index,n=scene())=>`${discoveryKeyPrefixFor(n)}_${slugifyKeyPart(value,`item_${index+1}`)}`;

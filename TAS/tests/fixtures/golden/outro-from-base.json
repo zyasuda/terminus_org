@@ -497,7 +497,6 @@
           }
         ],
         "authoring": {
-          "transitions": [],
           "exits": [
             {
               "id": "to_scean02",
@@ -673,7 +672,6 @@
           }
         ],
         "authoring": {
-          "transitions": [],
           "exits": [
             {
               "id": "to_scean03",
@@ -891,7 +889,6 @@
         },
         "blockedText": "あの人影の正体を確かめないまま、ここを立ち去る気にはなれない。",
         "authoring": {
-          "transitions": [],
           "exits": [
             {
               "id": "to_cean04",
@@ -950,7 +947,6 @@
         "loot": [],
         "secrets": [],
         "authoring": {
-          "transitions": [],
           "exits": [],
           "dialogueRules": [],
           "gmSceneNotes": ""

@@ -28,32 +28,14 @@ if(extraEntities.length)campaign.entities=[...(campaign.entities||[]),...extraEn
    ponytail: 深いマージはenemyに限定する。他のキーで同じ事故が出たらここに足す */
 const enemyLayers=[original.enemy,node.enemy,override.enemy].filter(e=>e&&typeof e==="object");
 if(enemyLayers.length)merged.enemy=Object.assign({},...enemyLayers);if(Array.isArray(node.discoveries)){merged.secrets=node.discoveries.map((raw,j)=>{const d=normalizeDiscoveryFor(node,raw,j);const old=(original.secrets||[]).find(o=>o.id===d.id)||{};return {...old,id:d.id||`s${node.id}_${j+1}`,entity:d.label||old.entity||`発見項目${j+1}`,aliases:d.aliases.length?d.aliases:old.aliases||[],dc:d.dc||undefined,surface:d.surface||old.surface||d.trigger||"",text:d.fact||old.text||d.label||old.entity||"",trigger:d.trigger||old.trigger||"",category:d.category||old.category||"object",importance:d.importance||old.importance||"support",appearances:d.appearances||old.appearances||[],tags:d.tags||old.tags||[]}})}
-/* TASの出口の必要条件をmock2の進行ゲートへ変換する。
-   条件トークン(発見済み名・項目キー・要素名・別名)をsecret idへ引き当てる。
-   OR条件はsecretsAny、AND条件はsecretsAllへ出力する。 */
 const secretIdByToken={};(merged.secrets||[]).forEach(s=>{secretIdByToken[s.id]=s.id;if(s.entity&&!secretIdByToken[s.entity])secretIdByToken[s.entity]=s.id;[...(s.tags||[]),...(s.aliases||[])].forEach(t=>{if(t&&!secretIdByToken[t])secretIdByToken[t]=s.id})});
-const transitionConditions=(merged.transitions||[]).map(t=>String(t.requires??t.conditionValue??"").trim()).filter(Boolean);
-const conditionText=transitionConditions.join(" ");
-const conditionTokens=[...new Set(transitionConditions.flatMap(value=>value.split(/\s+(?:AND|OR)\s+/i)).map(v=>v.trim().replace(/^(flag|discovery|item|npc|scene|battle):/i,"")).filter(Boolean).map(token=>secretIdByToken[token]).filter(Boolean))];
-const hasAnd=/\s+AND\s+/i.test(conditionText);
-const hasOr=/\s+OR\s+/i.test(conditionText);
-const completeRequires={...(merged.completeRequires||{})};
-delete completeRequires.secretsAny;
-delete completeRequires.secretsAll;
-if(conditionTokens.length){
-  /* mock2のcompleteRequiresはAny/Allを別キーで表現する。AND/OR混在は
-     現行契約でそのまま表現できないため、条件未達による早期進行を避けてAllにする。 */
-  completeRequires[hasOr&&!hasAnd?"secretsAny":"secretsAll"]=conditionTokens;
-}
-if(conditionTokens.length||Object.keys(merged.completeRequires||{}).some(key=>key!=="secretsAny"&&key!=="secretsAll"))merged.completeRequires=completeRequires;
-/* v0.2: TASの出口設定をmock2のscenes[].exitsへ変換する。未設定の旧transitionsは互換変換する。 */
-const configuredExits=Array.isArray(merged.exits)?merged.exits.map(normalizeExit):(merged.transitions||[]).map(transitionToExit);
+const configuredExits=Array.isArray(merged.exits)?merged.exits.map(normalizeExit):[];
 const exitSecretId=(token)=>secretIdByToken[String(token||"").trim().replace(/^(flag|discovery|item|npc|scene|battle):/i,"")];
 if(configuredExits.length){
   merged.exits=configuredExits.map((x,i)=>{const e=normalizeExit(x);const requires=e.requires&&typeof e.requires==="object"?e.requires:{};const converted=requires.text?exitRequires(requires.text,exitSecretId,merged):Object.keys(requires).some(key=>key!=="text")?requires:undefined;const to=e.to===null?null:e.to==="end"?"end":Number.isFinite(Number(e.to))?Number(e.to):e.to||null;return {id:e.id||`exit_${i+1}`,match:e.match, ...(to===null?{to:null}:{to}), ...(converted&&Object.keys(converted).length?{requires:converted}:{}), ...(e.removeItems?.length?{removeItems:e.removeItems}:{}), ...(e.addItems?.length?{addItems:e.addItems}:{}), ...(e.npcSay?{npcSay:e.npcSay}:{}), ...(e.blockedText?{blockedText:e.blockedText}:{}), ...(e.text?{text:e.text}:{})}});
 }
 /* mock2が読まないTAS独自フィールドはauthoringキーへまとめ、mock2が安全に無視できる形で保存する */
-merged.authoring={transitions:merged.transitions||[],exits:merged.exits||[],dialogueRules:Array.isArray(override.dialogueRules)?override.dialogueRules.map(normalizeDialogueRule):merged.dialogueRules||[],gmSceneNotes:typeof override.gmSceneNotes==="string"?override.gmSceneNotes:merged.gmSceneNotes||""};
+merged.authoring={exits:merged.exits||[],dialogueRules:Array.isArray(override.dialogueRules)?override.dialogueRules.map(normalizeDialogueRule):merged.dialogueRules||[],gmSceneNotes:typeof override.gmSceneNotes==="string"?override.gmSceneNotes:merged.gmSceneNotes||""};
 /* 発話ルールをmock2が実際に読む形へ変換する。
    item_grant → loot（条件が要素に対応すればrequires=secret id付き）、発言 → direction（GM演出指示）へ追記。
    directionはマーカー以降を作り直すため、再エクスポートしても重複しない */
