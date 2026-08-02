@@ -92,21 +92,13 @@
     "companionsHint": "場面に合う方を選べ(戦闘寄り=ガレス、調査・遺工・慎重論=リディア)",
     "entities": [
       {
-        "id": "npc1",
-        "ja": "NPC1",
-        "kind": "npc",
-        "importance": "support",
-        "visual": "",
-        "affordances": [
-          "talk",
-          "inspect"
-        ]
-      },
-      {
-        "id": "gareth",
-        "ja": "ガレス",
+        "id": "member_1",
+        "ja": "リディア",
+        "aliases": [],
         "kind": "character",
         "importance": "support",
+        "surface": "",
+        "truth": "",
         "visual": "",
         "affordances": [
           "talk",
@@ -114,24 +106,32 @@
         ]
       },
       {
-        "id": "concept_heartstone",
-        "ja": "心石",
-        "aliases": [
-          "青い石",
-          "光る石",
-          "石",
-          "あおいし",
-          "ひかるいし",
-          "いし",
-          "心臓の石"
-        ],
-        "kind": "concept",
-        "role": "main",
-        "usage": "dialogue_condition",
-        "scope": "campaign",
-        "storyKey": true,
-        "surface": "ゆっくりと脈動している青く光る石",
-        "truth": "何かの動力源になるような不思議な力を宿す"
+        "id": "member_2",
+        "ja": "ガレス",
+        "aliases": [],
+        "kind": "character",
+        "importance": "support",
+        "surface": "",
+        "truth": "",
+        "visual": "",
+        "affordances": [
+          "talk",
+          "inspect"
+        ]
+      },
+      {
+        "id": "npc_1",
+        "ja": "NPC1",
+        "aliases": [],
+        "kind": "npc",
+        "importance": "support",
+        "surface": "",
+        "truth": "",
+        "visual": "",
+        "affordances": [
+          "talk",
+          "inspect"
+        ]
       },
       {
         "id": "item_lantern",
@@ -236,6 +236,70 @@
         "requires": "ch1_s3_item_2",
         "surface": "青く光る小さな石の破片である。手に取るとかすかに温かい。強い力を秘めている。",
         "visual": ""
+      },
+      {
+        "id": "monster_1",
+        "ja": "錆喰い",
+        "aliases": [],
+        "kind": "enemy",
+        "importance": "support",
+        "surface": "",
+        "truth": "/images/s2_rust_eater.png",
+        "visual": "/images/s2_rust_eater.png",
+        "affordances": [
+          "inspect",
+          "fight"
+        ]
+      },
+      {
+        "id": "monster_2",
+        "ja": "灯りの番人",
+        "aliases": [],
+        "kind": "enemy",
+        "importance": "support",
+        "surface": "",
+        "truth": "/images/s3_guardian.png",
+        "visual": "/images/s3_guardian.png",
+        "affordances": [
+          "inspect",
+          "fight"
+        ]
+      },
+      {
+        "id": "monster_3",
+        "ja": "坑道蝙蝠",
+        "aliases": [
+          "羽ばたく影"
+        ],
+        "kind": "enemy",
+        "importance": "support",
+        "surface": "",
+        "truth": "/images/s2_rust_eater.png",
+        "visual": "/images/s2_mine_bat.png",
+        "affordances": [
+          "inspect",
+          "fight"
+        ]
+      },
+      {
+        "id": "concept_heartstone",
+        "ja": "心石",
+        "aliases": [
+          "青い石",
+          "光る石",
+          "石",
+          "あおいし",
+          "ひかるいし",
+          "いし",
+          "心臓の石"
+        ],
+        "kind": "concept",
+        "role": "main",
+        "usage": "dialogue_condition",
+        "scope": "campaign",
+        "storyKey": true,
+        "surface": "ゆっくりと脈動している青く光る石",
+        "truth": "何かの動力源になるような不思議な力を宿す"
       }
     ],
     "gmSprite": "gm_mascot.png",

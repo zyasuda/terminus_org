@@ -13,10 +13,13 @@
     },
     "entities": [
       {
-        "id": "npc1",
-        "ja": "NPC1",
-        "kind": "npc",
+        "id": "member_1",
+        "ja": "リディア",
+        "aliases": [],
+        "kind": "character",
         "importance": "support",
+        "surface": "",
+        "truth": "",
         "visual": "",
         "affordances": [
           "talk",
@@ -24,14 +27,158 @@
         ]
       },
       {
-        "id": "gareth",
+        "id": "member_2",
         "ja": "ガレス",
+        "aliases": [],
         "kind": "character",
         "importance": "support",
+        "surface": "",
+        "truth": "",
         "visual": "",
         "affordances": [
           "talk",
           "inspect"
+        ]
+      },
+      {
+        "id": "npc_1",
+        "ja": "NPC1",
+        "aliases": [],
+        "kind": "npc",
+        "importance": "support",
+        "surface": "",
+        "truth": "",
+        "visual": "",
+        "affordances": [
+          "talk",
+          "inspect"
+        ]
+      },
+      {
+        "id": "item_lantern",
+        "ja": "ランタン",
+        "aliases": [
+          "ランプ",
+          "灯り",
+          "ていとう",
+          "らんたん",
+          "手元灯",
+          "照明"
+        ],
+        "kind": "item",
+        "importance": "background",
+        "surface": "金属製の小さな灯りである。ガラスのなかで火が揺れている。暗い場所を照らす。",
+        "truth": "",
+        "visual": "",
+        "affordances": [
+          "inspect"
+        ]
+      },
+      {
+        "id": "item_rope",
+        "ja": "ロープ",
+        "aliases": [
+          "綱",
+          "紐",
+          "麻縄",
+          "つな",
+          "ひも",
+          "あさなわ",
+          "コード"
+        ],
+        "kind": "item",
+        "importance": "background",
+        "surface": "麻で編んだ丈夫な綱である。物を縛るのに使う。",
+        "truth": "",
+        "visual": "",
+        "affordances": [
+          "inspect"
+        ]
+      },
+      {
+        "id": "item_knife",
+        "ja": "ナイフ",
+        "aliases": [
+          "刃物",
+          "刀",
+          "小刀",
+          "ないふ",
+          "はもの",
+          "かたな",
+          "ブレード"
+        ],
+        "kind": "item",
+        "importance": "background",
+        "surface": "柄の短い小さな刃物である。銀色の刃は冷たく光る。ものを切るために使う。",
+        "truth": "",
+        "visual": "",
+        "affordances": [
+          "inspect"
+        ]
+      },
+      {
+        "id": "item_heartstone_fragment",
+        "ja": "心石の欠片",
+        "aliases": [
+          "心石",
+          "こころいし",
+          "青い石",
+          "光る石",
+          "かけら",
+          "破片",
+          "石"
+        ],
+        "kind": "item",
+        "importance": "background",
+        "surface": "青く光る小さな石の破片である。手に取るとかすかに温かい。強い力を秘めている。",
+        "truth": "",
+        "visual": "",
+        "affordances": [
+          "inspect"
+        ]
+      },
+      {
+        "id": "monster_1",
+        "ja": "錆喰い",
+        "aliases": [],
+        "kind": "enemy",
+        "importance": "support",
+        "surface": "",
+        "truth": "/images/s2_rust_eater.png",
+        "visual": "/images/s2_rust_eater.png",
+        "affordances": [
+          "inspect",
+          "fight"
+        ]
+      },
+      {
+        "id": "monster_2",
+        "ja": "灯りの番人",
+        "aliases": [],
+        "kind": "enemy",
+        "importance": "support",
+        "surface": "",
+        "truth": "/images/s3_guardian.png",
+        "visual": "/images/s3_guardian.png",
+        "affordances": [
+          "inspect",
+          "fight"
+        ]
+      },
+      {
+        "id": "monster_3",
+        "ja": "坑道蝙蝠",
+        "aliases": [
+          "羽ばたく影"
+        ],
+        "kind": "enemy",
+        "importance": "support",
+        "surface": "",
+        "truth": "/images/s2_rust_eater.png",
+        "visual": "/images/s2_rust_eater.png",
+        "affordances": [
+          "inspect",
+          "fight"
         ]
       },
       {
