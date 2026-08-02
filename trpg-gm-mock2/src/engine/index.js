@@ -770,23 +770,42 @@ function matchesNpc(w, npc) {
     s.toLowerCase().includes(npc.id);
 }
 
-function maybeCompanion(r, addressed) {
+function resolveCompanion(r) {
   if (!r.companion || !r.companion.say) return;
   const say = String(r.companion.say).slice(0, 120);
   const who = normalizeWho(r.companion.who, null);
+  if (who) return { say, who };
+  // 同行者に解決できない話者はガレス/リディアへ倒さない(誤帰属で人格が入れ替わる)。
+  // シーンNPC(マイラ等)ならNPCとして表示し、それ以外は台詞を捨てる(欠落の方が害が小さい)
+  const npc = sceneNpc();
+  if (matchesNpc(r.companion.who, npc)) return { say, npc };
+  console.warn("companion.who を解決できないため台詞を破棄:", r.companion.who, say);
+}
+
+function shouldShowCompanion(companion, addressed) {
+  return companion && (!companion.who || addressed || state.turn - state.lastCompanionTurn >= 3);
+}
+
+function maybeCompanion(r, addressed, companion = resolveCompanion(r)) {
+  if (!shouldShowCompanion(companion, addressed)) return false;
+  const { say, who } = companion;
   if (!who) {
-    // 同行者に解決できない話者はガレス/リディアへ倒さない(誤帰属で人格が入れ替わる)。
-    // シーンNPC(マイラ等)ならNPCとして表示し、それ以外は台詞を捨てる(欠落の方が害が小さい)
-    const npc = sceneNpc();
-    if (matchesNpc(r.companion.who, npc)) { addNpc(say); return; }
-    console.warn("companion.who を解決できないため台詞を破棄:", r.companion.who, say);
-    return;
+    addNpc(say);
+    return true;
   }
-  if (addressed || state.turn - state.lastCompanionTurn >= 3) {
-    addCompanion(say, who);
-    state.lastCompanionTurn = state.turn;
-    if (r.companion.aside && !addressed) registerBoke(who, say);
-  }
+  addCompanion(say, who);
+  state.lastCompanionTurn = state.turn;
+  if (r.companion.aside && !addressed) registerBoke(who, say);
+  return true;
+}
+
+async function revealTurnBeats(r, addressed) {
+  const companion = resolveCompanion(r);
+  const willSpeak = companion && companion.who && shouldShowCompanion(companion, addressed);
+  if (willSpeak) setThinking(companion.who, true);
+  await sleep(CONSENT_GAP_MS);
+  if (willSpeak) setThinking(companion.who, false);
+  return maybeCompanion(r, addressed, companion);
 }
 
 // メイン応答のnpc.sayフィールドはスキーマ上の「受け皿」としてだけ残し、表示には使わない
@@ -797,7 +816,7 @@ function maybeCompanion(r, addressed) {
 // NPCの部分エージェント化: revealFlavorと同じ「専用の小さな呼び出し・非同期・本編を待たせない」
 // パターンで、シーンNPC(依頼人マイラ等)の一言を生成する。メインGMのJSONから独立した
 // コンテキストを持つため、briefの複写や他キャラとの混同が構造的に起きない
-function npcAgentReply(playerText) {
+function npcAgentReply(playerText, revealGate) {
   const npc = sceneNpc();
   if (!npc) return;
   const sc = SCENARIO.scenes[state.sceneIndex];
@@ -816,11 +835,12 @@ function npcAgentReply(playerText) {
       `プレイヤーが新しい情報を伝えたら、それを聞いた反応を返せ。応答はJSONのみ: {"say":"一言"}`,
     messages: [{ role: "user", content: `直近のやり取り:\n${recent}\n\nプレイヤーの最新の発言・行動:「${playerText}」\n${npc.name}が返す一言だけをJSONで。` }],
     maxTokens: 80
-  }).then(data => {
+  }).then(async data => {
     const raw = ((data && data.content) || []).map(b => b.text || "").join("");
     const m = raw.match(/\{[\s\S]*\}/);
     const r = JSON.parse(m ? m[0] : raw);
     const say = sanitizeSay(String(r.say || "").slice(0, 120));
+    if (revealGate && await revealGate) await sleep(CONSENT_GAP_MS);
     // 前回と同じ一言は表示しない(固定化の再発防止。沈黙の方が壊れて見えない)
     if (!say || say === state.lastNpcLine) return;
     state.lastNpcLine = say;
@@ -1464,7 +1484,7 @@ function grantAuthoredItems(names) {
   });
 }
 
-const CONSENT_GAP_MS = 350;       // 同行者が順に答える間隔
+const CONSENT_GAP_MS = 350;       // 同行者が順に答える/会話ターンの表示を分ける間隔
 const CONSENT_LAST_HOLD_MS = 900; // 最後の同意を読ませてからシーンへ進むまでの間
 
 // 同行者の同意は参加者ごとの応答として記録する。CPU自動応答はこの入口を呼ぶ実装の一つであり、
@@ -2150,13 +2170,13 @@ export async function sendAction(text) {
     setThinking("gm", false);
     state.pendingFailedCheck = null; state.blockedMove = false;
     if (r.narration) addGmNarration(trimNarration(r.narration), r.emotion);
+    if (addressedWho) setThinking(addressedWho, false);
     // 報告シーンの対話の主役はNPCとプレイヤー。同行者のスロットル解除は「直接話しかけられた時」
     // だけに限定する(停滞・負傷の割り込みでは口を挟ませない)
-    maybeCompanion(r, addressed ||
+    const revealGate = revealTurnBeats(r, addressed ||
       ((nudgeActive || concernActive) && !SCENARIO.scenes[state.sceneIndex].report));
-    if (addressedWho) setThinking(addressedWho, false);
     // NPCの一言は専用エージェント(npcAgentReply)が非同期で生成する。r.npc.sayは受け皿として捨てる
-    npcAgentReply(text);
+    npcAgentReply(text, revealGate);
     if (r.meta_request) {
       addNote(`⚖ メタ発言を検知(${r.meta_request.topic || "内容不明"}) — GMが確認中。状態は変更されていない`);
       r.state_updates = null;
@@ -2232,7 +2252,7 @@ export async function sendAction(text) {
       );
       setThinking("gm", false);
       if (r2.narration) addGmNarration(trimNarration(r2.narration), r2.emotion);
-      maybeCompanion(r2, false);
+      await revealTurnBeats(r2, false);
       // NPCの一言はメイン応答側(npcAgentReply)で1ターン1回だけ生成済み。r2側では発火しない
       maybeEngage(r2);
       applyUpdatesLogged(r2.state_updates, { allowEnemyDamage: ok, allowPlayerDamage: !!state.enemy || fumble }, enemyAttackCause);
@@ -2241,6 +2261,7 @@ export async function sendAction(text) {
       r.scene_complete = r.scene_complete || r2.scene_complete;
     }
 
+    await revealGate;
     state.lastAction = { text: normalizedText, fingerprint: fp, hadCheck: !!(r.check && r.check.difficulty) };
 
     // LLMのscene_complete申告をシステム側で検証(条件未達なら却下)。
