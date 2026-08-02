@@ -6,9 +6,9 @@ const DRAFT_KEY="tas_campaign_draft_v1";const $=id=>document.getElementById(id);
 const fallbackScenes=[{id:1,name:"坑道の入口前",brief:"古いレールと木札がある。奥から金属音が聞こえる。",goal:"札とレールを確認し、奥へ進む",discoveries:["作業札","トロッコ軌道"]},{id:2,name:"分かれ道",brief:"封鎖の木柵と左右の坑道。奥に灯りが揺れる。",goal:"第三坑道へ入る手段を見つける",discoveries:["封鎖の木柵","油の匂い"]},{id:3,name:"坑道の最奥",brief:"ランタンを持つ人影がこちらを向く。",goal:"灯りの主と決着する",discoveries:["灯りの主の正体","動力と坑道維持"]},{id:4,name:"村への帰還",brief:"村の広場。マイラの家に灯りがともる。",goal:"マイラの家へ入る",discoveries:[]},{id:5,name:"マイラの部屋",brief:"マイラが報告を待っている。",goal:"見聞きしたことを報告する",discoveries:[]}];
 let freshCampaign=false;let customChapterScenes={ch1:[],ch2:[]};let chapterNames={ch1:"",ch2:""};let chapterOrder=["ch1"];let exportFileViews=[];let exportFileIndex=0;
 /* 左ツリーで選んだ対象ごとのタブ。renderTabs / renderRightPanel / renderTab がこの定義を共有する。 */
-const CAMPAIGN_TABS=[["world","設定"],["concepts","重要語・概念"],["cast","キャラクター"],["monsters","モンスター"],["items","アイテム"],["rules","共通ルール"]];
+const CAMPAIGN_TABS=[["world","設定"],["concepts","GM設定"],["cast","キャラクター"],["monsters","モンスター"],["items","アイテム"],["rules","共通ルール"]];
 const CHAPTER_TABS=[["chapterOverview","構成・進行"]];
-const SCENE_TABS=[["structure","シーン設定"],["state","調査対象"],["expression","表現・会話"],["playtest","テキストプレイ"],["draft","生成レビュー"]];
+const SCENE_TABS=[["structure","シーン設定"],["state","シーン要素"],["expression","表現・会話"],["playtest","テキストプレイ"],["draft","生成レビュー"]];
 const CAMPAIGN_TAB_IDS=CAMPAIGN_TABS.map(([id])=>id);
 const CHAPTER_TAB_IDS=CHAPTER_TABS.map(([id])=>id);
 let chapterData=()=>{if(freshCampaign)return {title:activeChapter==="ch2"?"新しい章":"新しい章",scenes:Array.isArray(customChapterScenes[activeChapter])?customChapterScenes[activeChapter]:[]};try{const file=activeChapter==="ch2"?"chapter_02.json":"chapter_01.json";const raw=context?.dataFiles?.[file]||context?.dataFiles?.["chapter_01.json"];if(raw)return JSON.parse(raw)}catch(e){}return {title:activeChapter==="ch2"?"心石の在処":"廃坑の灯",scenes:activeChapter==="ch2"?fallbackScenes.slice(0,2):fallbackScenes}};

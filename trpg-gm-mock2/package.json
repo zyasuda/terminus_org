@@ -11,7 +11,8 @@
     "smoke:battle": "node src/battle/smoke.mjs",
     "build": "vite build",
     "preview": "vite preview",
-    "test:inventory": "node src/inventory.test.mjs"
+    "test:inventory": "node src/inventory.test.mjs",
+    "test:scenario": "node src/scenario.test.mjs"
   },
   "dependencies": {
     "@litert-lm/core": "^0.14.0",

@@ -113,13 +113,15 @@ function runStructureCheck() {
   ok(files.includes(PIPELINE_FILE), `${PIPELINE_FILE} がある`);
   /* 出力の段はパイプラインより先に定義されていなければならない。
      パイプラインより後に置けるのは、段を定義しない画面専用のファイルだけ。 */
-  const AFTER_PIPELINE_ALLOWED=["44-chapter-overview.js","45-interlude.js","46-monster-registry.js"];
+  const AFTER_PIPELINE_ALLOWED=["44-chapter-overview.js","45-interlude.js","46-monster-registry.js","47-story-tree-navigation.js"];
   const after=files.slice(files.indexOf(PIPELINE_FILE)+1);
   ok(after.every(f=>AFTER_PIPELINE_ALLOWED.includes(f)),
     `${PIPELINE_FILE} より後にあるのは画面専用ファイルだけ`, `想定外: ${after.filter(f=>!AFTER_PIPELINE_ALLOWED.includes(f)).join(", ")}`);
   ok(files.includes("44-chapter-overview.js") && files.includes("45-interlude.js"), "チャプター画面と幕間演出のスクリプトがある");
   const sceneFile = fs.readFileSync(path.join(jsDir, "01e-render-scenes.js"), "utf8");
   ok(!sceneFile.includes("data-global="), "左ツリーに data-global が残っていない");
+  const storyTreeFile = fs.readFileSync(path.join(jsDir, "47-story-tree-navigation.js"), "utf8");
+  ok(!storyTreeFile.includes("data-global="), "物語ツリーが共通設定リンクを再挿入しない");
   const stateFile = fs.readFileSync(path.join(jsDir, "01a-state.js"), "utf8");
   for (const name of ["CAMPAIGN_TABS", "CHAPTER_TABS", "SCENE_TABS"]) ok(stateFile.includes(`const ${name}`), `${name} が状態ファイルに定義されている`);
   const shellFile = fs.readFileSync(path.join(jsDir, "01h-render-shell.js"), "utf8");

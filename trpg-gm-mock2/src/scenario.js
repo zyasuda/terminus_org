@@ -65,6 +65,35 @@ function validate(campaign, chapter) {
   if (errs.length) throw new Error("シナリオデータの検証エラー:\n・" + errs.join("\n・"));
 }
 
+// campaign.entities はTASの共通台帳。個別シーンのsecretへ別名を足して、
+// 既存の秘密照合・LLM後処理を同じ経路で効かせる。秘密側で書いた別名は残す。
+export function applyCampaignEntityAliases(chapter, entities) {
+  if (!Array.isArray(entities) || entities.length === 0) return chapter;
+
+  const aliasesByName = new Map();
+  entities.forEach(entity => {
+    const name = String(entity?.ja || "").trim();
+    if (!name) return;
+    const aliases = (Array.isArray(entity.aliases) ? entity.aliases : [])
+      .map(alias => String(alias).trim())
+      .filter(Boolean);
+    if (aliases.length) aliasesByName.set(name, [...new Set([...(aliasesByName.get(name) || []), ...aliases])]);
+  });
+  if (aliasesByName.size === 0) return chapter;
+
+  return {
+    ...chapter,
+    scenes: (chapter.scenes || []).map(scene => ({
+      ...scene,
+      secrets: (scene.secrets || []).map(secret => {
+        const ledgerAliases = aliasesByName.get(secret.entity) || [];
+        if (ledgerAliases.length === 0) return secret;
+        return { ...secret, aliases: [...new Set([...(secret.aliases || []), ...ledgerAliases])] };
+      })
+    }))
+  };
+}
+
 export async function loadScenarioData() {
   const catalog = await fetchJson("/data/campaigns.json");
   if (!Array.isArray(catalog.campaigns) || catalog.campaigns.length === 0) {
@@ -84,7 +113,8 @@ export async function loadScenarioData() {
     fetchJson(`/data/${campaignEntry.campaign}`),
     fetchJson(`/data/${chapterEntry.file}`)
   ]);
-  validate(campaign, chapter);
+  const resolvedChapter = applyCampaignEntityAliases(chapter, campaign.entities);
+  validate(campaign, resolvedChapter);
   CAMPAIGN = campaign;
   CONTENT_SELECTION = {
     catalog,
@@ -107,14 +137,14 @@ export async function loadScenarioData() {
   });
 
   SCENARIO = {
-    title: chapter.title,
-    quest: chapter.quest,
-    intro: chapter.intro || null, // null/文字列(旧形式)/オブジェクト(新形式)のいずれか
-    ending: chapter.ending || null, // 章末ノード。null運用(2026-07-22)
-    reference: chapter.reference,
-    scenes: chapter.scenes,
-    flagRules: chapter.flagRules || {}, // 章末のworldFlags導出ルール(BORG Inbox flags仕様調整依頼 2026-07-22)
+    title: resolvedChapter.title,
+    quest: resolvedChapter.quest,
+    intro: resolvedChapter.intro || null, // null/文字列(旧形式)/オブジェクト(新形式)のいずれか
+    ending: resolvedChapter.ending || null, // 章末ノード。null運用(2026-07-22)
+    reference: resolvedChapter.reference,
+    scenes: resolvedChapter.scenes,
+    flagRules: resolvedChapter.flagRules || {}, // 章末のworldFlags導出ルール(BORG Inbox flags仕様調整依頼 2026-07-22)
     /* 章開始時の所持品 { 所有者ID: [品名, …] }。無ければ campaign.initialInventory を使う */
-    startingInventory: chapter.startingInventory || null
+    startingInventory: resolvedChapter.startingInventory || null
   };
 }
