@@ -1,12 +1,19 @@
 import { held, has, byOwner, PLAYER } from "./inventory.js";
-let SCENARIO, CAST, state, chron, revealed;
+let SCENARIO, CAST, CAMPAIGN, state, chron, revealed;
 
 export function bindChronicle(context) {
   SCENARIO = context.SCENARIO;
   CAST = context.CAST;
+  CAMPAIGN = context.CAMPAIGN;
   state = context.state;
   chron = context.chron;
   revealed = context.revealed;
+}
+
+function baseItems() {
+  const starting = SCENARIO.startingInventory;
+  if (starting && typeof starting === "object") return [...new Set(Object.values(starting).flat())];
+  return Array.isArray(CAMPAIGN?.initialInventory) ? CAMPAIGN.initialInventory : [];
 }
 
 /* ---------------- Chronicle Lite(D-015/D-016): 構造化ログの.md書き出し。LLM不使用 ----------------
@@ -43,8 +50,8 @@ function deriveDiscoveries() {
   SCENARIO.scenes.forEach(s => s.secrets.forEach(sec => {
     if (revealed.has(sec.id)) d.push(`**${sec.entity || "?"}** — ${sec.text}`);
   }));
-  const baseItems = ["ランタン", "ロープ", "ナイフ"];
-  held(state.inventory).filter(i => !baseItems.includes(i)).forEach(i => d.push(`**${i}** — 冒険で手に入れた品`));
+  const startingItems = baseItems();
+  held(state.inventory).filter(i => !startingItems.includes(i)).forEach(i => d.push(`**${i}** — 冒険で手に入れた品`));
   return d;
 }
 
@@ -61,8 +68,8 @@ function deriveStoryReference() {
   if (state.sceneIndex >= 2 && !state.defeated.includes("灯の番人")) cast.push("灯の番人(対峙した存在)");
   if (state.sceneIndex >= SCENARIO.scenes.length - 1) cast.push("マイラ・ヴェイン(依頼人)");
   // 重要アイテム
-  const baseItems = ["ランタン", "ロープ", "ナイフ"];
-  const keyItems = ["ランタン", ...held(state.inventory).filter(i => !baseItems.includes(i))];
+  const startingItems = baseItems();
+  const keyItems = ["ランタン", ...held(state.inventory).filter(i => !startingItems.includes(i))];
   // セリフ: 同行者の実際の言葉(chronから。最大4つ)。
   // 単純な先頭+末尾3件だと、間にしか喋らなかったキャラが picks から丸ごと消える
   // (2026-07-04プレイで実際に発生:ガレス3件・リディア5件のうちガレスが0件に)。

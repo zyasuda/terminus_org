@@ -43,7 +43,7 @@ function takeStagnationCue() { return buildStagnationCue(state); }
 function takeInjuryCue() { return buildInjuryCue(state); }
 
 export function exportChronicle() {
-  bindChronicle({ SCENARIO, CAST, state, chron, revealed });
+  bindChronicle({ SCENARIO, CAST, CAMPAIGN, state, chron, revealed });
   exportChronicleFile();
 }
 
