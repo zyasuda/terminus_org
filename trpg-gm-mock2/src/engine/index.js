@@ -911,13 +911,21 @@ function maybeEngage(r) {
   }
 }
 
+// 旧risky正規表現の活用形をそのまま列挙する。敵の条件文に含まれる語だけを使う。
+const RISKY_WORDS = ["奥", "暗がり", "穴", "殻", "近づ", "進む", "進も", "進み", "踏み込", "入る", "入ろ", "入っ", "抜け", "くぐ", "拾う", "拾お", "拾い", "触る", "触ろ", "触れ", "触っ", "取る", "取ろ", "取っ"];
+
+function enemyRiskyWords(enemy) {
+  const trigger = String(enemy?.ambushTrigger || "");
+  const matched = RISKY_WORDS.filter(word => trigger.includes(word));
+  return matched.length ? matched : RISKY_WORDS;
+}
+
 function maybeAmbushCheck(playerText) {
   const sc = SCENARIO.scenes[state.sceneIndex];
   const enemy = sc.enemy;
   if (!enemy || !enemy.ambush || state.enemy || state.defeated.includes(enemy.name) || (state.fled || []).includes(enemy.name)) return null;
   if ((state.ambushResolved || []).includes(enemy.name)) return null;
-  // 活用形も拾う(「進もう」「入ろう」等の意向形が終止形だけの辞書をすり抜けていた。2026-07-13クロニクル)
-  const risky = /(奥|暗がり|穴|殻|近づ|進[むもみ]|踏み込|入[るろっ]|抜け|くぐ|拾[うおい]|触[るろれっ]|取[るろっ])/.test(playerText);
+  const risky = enemyRiskyWords(enemy).some(word => playerText.includes(word));
   const cautious = /(慎重|気配|警戒|聞く|見る|観察|調べ|ランタン|照ら|確認)/.test(playerText);
   if (!risky || cautious) return null;
   // 未識別の敵は判定名でも本名を出さない
