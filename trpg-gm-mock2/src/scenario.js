@@ -130,6 +130,7 @@ export async function loadScenarioData() {
   campaign.companions.forEach(c => {
     CAST[c.id] = { name: c.name, persona: c.persona, gender: c.gender || "none",
       firstPerson: c.firstPerson || null, addressTerm: c.addressTerm || null,
+      speechFrequency: c.speechFrequency || "standard",
       retortDrive: c.retortDrive || 3,
       quirks: c.quirks || [], battleMutters: c.battleMutters || [],
       agility: c.agility, battleEnd: c.battleEnd };

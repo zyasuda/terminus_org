@@ -217,6 +217,13 @@ function pushDiceLog(t, roll, diff, ok, crit, fumble, reason) {
 
 export function restoreGame(saved) {
   state = saved.state;
+  // 旧セーブの単一値は全同行者へ複製し、復元直後の従来の抑制を維持する。
+  if (!state.lastCompanionTurnByWho) {
+    state.lastCompanionTurnByWho = Object.fromEntries(
+      Object.keys(CAST).map(who => [who, state.lastCompanionTurn ?? -Infinity])
+    );
+  }
+  delete state.lastCompanionTurn;
   /* 旧セーブは所持品が items(文字列配列)だった。所有者の情報は無いのでプレイヤーへ寄せる。
      読み替えたあと items は消す。両方残すと以後どちらが正か分からなくなる */
   state.inventory = inv.normalizeInventory(state);
@@ -782,8 +789,14 @@ function resolveCompanion(r) {
   console.warn("companion.who を解決できないため台詞を破棄:", r.companion.who, say);
 }
 
+const FREQUENCY_GAP = { none: Infinity, low: 6, standard: 3, high: 1 };
 function shouldShowCompanion(companion, addressed) {
-  return companion && (!companion.who || addressed || state.turn - state.lastCompanionTurn >= 3);
+  if (!companion) return false;
+  if (!companion.who || addressed) return true;
+  const gap = FREQUENCY_GAP[CAST[companion.who]?.speechFrequency || "standard"] ?? 3;
+  if (gap === Infinity) return false;
+  const last = state.lastCompanionTurnByWho?.[companion.who] ?? -Infinity;
+  return state.turn - last >= gap;
 }
 
 function maybeCompanion(r, addressed, companion = resolveCompanion(r)) {
@@ -794,7 +807,7 @@ function maybeCompanion(r, addressed, companion = resolveCompanion(r)) {
     return true;
   }
   addCompanion(say, who);
-  state.lastCompanionTurn = state.turn;
+  (state.lastCompanionTurnByWho ||= {})[who] = state.turn;
   if (r.companion.aside && !addressed) registerBoke(who, say);
   return true;
 }
@@ -1760,6 +1773,11 @@ function systemPrompt(extra) {
   // B8: 文体・語彙・世界観はcampaign.jsonから組み立てる(コード直書き禁止の契約、DATA_EXCHANGE.md 6.2)。
   // 応答フォーマット・判定ルール・三層の開示制御はエンジンの動作契約なのでコードに残す
   const st = CAMPAIGN.style;
+  const spreadNote = {
+    story: "プレイヤーの発言が本筋から逸れても、物語の目的・手がかりへ自然に引き戻せ。雑談は短く切り上げよ。",
+    standard: "",
+    free: "プレイヤーとの雑談や脱線を歓迎してよい。無理に本筋へ戻そうとしなくてよい。"
+  }[st.conversationSpread || "standard"] || "";
   const styleBlock = [
     `あなたはソロTRPGのゲームマスター。${st.narration}`,
     st.readingLevel,
@@ -1767,6 +1785,7 @@ function systemPrompt(extra) {
     st.badExample ? `悪い例:「${st.badExample}」` : "",
     st.terms || "", // TASの「用語・禁止事項」入力(自由記述。forbiddenWordsとは別枠)
     ...(st.extra || []),
+    spreadNote,
     st.world + ((st.forbiddenWords || []).length ? `使ってはならない語の例: ${st.forbiddenWords.join("、")}。` : "")
   ].filter(Boolean).join("\n");
   // B9: 同行者の人格・掛け合い条件。一人称・語尾・呼称はvoiceRule()で自動生成する

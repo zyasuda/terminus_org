@@ -9,7 +9,7 @@ export function initialState() {
               旧セーブ（items が文字列配列）は normalizeInventory() が読み替える */
            inventory: normalizeInventory({ items: ["ランタン", "ロープ", "ナイフ"] }),
            sceneIndex: 0, turn: 0,
-           enemy: null, defeated: [], lastCompanionTurn: -9,
+           enemy: null, defeated: [], lastCompanionTurnByWho: {},
            banterCharge: {},
            pendingRetort: null,
            tokens: { in: 0, out: 0, calls: 0 },
