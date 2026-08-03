@@ -75,5 +75,5 @@ function outputFreshCampaign(payload){
   if(!freshCampaign)return payload;
   const chapterInfo=CHAPTERS[activeChapter]||{name:currentFreshChapterLabel(),file:`CHAPTER_${String(chapterOrder.indexOf(activeChapter)+1).padStart(2,"0")}`};
   const entities=[...monsters.map(m=>m.name),...items.map(i=>i.name)].filter(Boolean).map(ja=>({ja,note:"TAS台帳から登録"}));
-  return {...payload,campaign:{meta:{title:campaignName},style:{world:campaignWorld,theme:campaignTheme,terms:campaignTerms},entities},chapter:{...payload.chapter,title:currentFreshChapterLabel(),scenes:payload.chapter?.scenes||[]},chapterFile:`${chapterInfo.file.toLowerCase()}.json`};
+  return {...payload,campaign:{meta:{title:campaignName},style:{...(payload.campaign?.style||{}),world:campaignWorld,theme:campaignTheme,terms:campaignTerms},entities},chapter:{...payload.chapter,title:currentFreshChapterLabel(),scenes:payload.chapter?.scenes||[]},chapterFile:`${chapterInfo.file.toLowerCase()}.json`};
 };

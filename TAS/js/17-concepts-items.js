@@ -2,7 +2,7 @@
 /* 重要語・概念と物理アイテムを分離し、既存campaign/chapterデータをTASの入力へ移行する。 */
 let concepts=[];
 let initialInventoryIds=[];
-let campaignStyle={conversationSpread:"standard"};
+let campaignStyle={conversationSpread:"standard",narration:"",readingLevel:"",goodExample:"",badExample:"",extra:"",forbiddenWords:"",rollReactionCritical:"",rollReactionFumble:"",emptyHanded:"",unknownTarget:"",companionsHint:""};
 const CONCEPT_SCOPES=[['campaign','キャンペーン全体'],['chapter','チャプター内'],['scene','シーン内']];
 const CONCEPT_ROLES=[['main','メインストーリー'],['support','補助設定'],['ambient','雰囲気・背景'],['unrelated','物語とは無関係']];
 const CONCEPT_USAGES=[['dialogue_only','会話・発話のみ'],['dialogue_condition','会話・条件に使用'],['broad','会話・条件・行動に使用']];
@@ -48,20 +48,64 @@ function conceptRoleLabel(id){return CONCEPT_ROLES.find(x=>x[0]===id)?.[1]||id}
 function conceptUsageLabel(id){return CONCEPT_USAGES.find(x=>x[0]===id)?.[1]||id}
 function itemScopeLabel(id){return ITEM_SCOPES.find(x=>x[0]===id)?.[1]||id}
 function itemAcquisitionLabel(id){return ITEM_ACQUISITIONS.find(x=>x[0]===id)?.[1]||id}
+function normalizeCampaignStyle(raw){const s=raw&&typeof raw==="object"?raw:{};const str=v=>typeof v==="string"?v:"";return {conversationSpread:["story","standard","free"].includes(s.conversationSpread)?s.conversationSpread:"standard",narration:str(s.narration),readingLevel:str(s.readingLevel),goodExample:str(s.goodExample),badExample:str(s.badExample),extra:str(s.extra),forbiddenWords:str(s.forbiddenWords),rollReactionCritical:str(s.rollReactionCritical),rollReactionFumble:str(s.rollReactionFumble),emptyHanded:str(s.emptyHanded),unknownTarget:str(s.unknownTarget),companionsHint:str(s.companionsHint)}}
 function renderConcepts(){
   const list=ensureConcepts();
   const index=sectionIndex('重要語・概念一覧',list.map((x,i)=>({id:String(i),name:x.name,meta:`${conceptScopeLabel(x.scope)}・${conceptRoleLabel(x.role)}`})),'重要語・概念はまだありません。');
   const cards=list.map((x,i)=>`<div class="card concept-editor" data-concept-index="${i}"><div class="card-head"><h3>${escapeHtml(x.name||`重要語${i+1}`)}</h3><button class="sub delete-btn" data-remove-concept="${i}">削除</button></div><div class="semantic-grid"><div class="field"><label>正式名</label><input class="concept-name" data-concept-index="${i}" value="${escapeHtml(x.name)}" placeholder="心石"></div><div class="field"><label>別名（カンマ区切り）</label><input class="concept-aliases" data-concept-index="${i}" value="${escapeHtml(x.aliases.join(', '))}" placeholder="青い石"></div><div class="field"><label>使用範囲</label><select class="concept-scope" data-concept-index="${i}">${CONCEPT_SCOPES.map(([id,label])=>`<option value="${id}" ${x.scope===id?'selected':''}>${label}</option>`).join('')}</select></div><div class="field"><label>物語上の関係</label><select class="concept-role" data-concept-index="${i}">${CONCEPT_ROLES.map(([id,label])=>`<option value="${id}" ${x.role===id?'selected':''}>${label}</option>`).join('')}</select></div><div class="field"><label>使用方法</label><select class="concept-usage" data-concept-index="${i}">${CONCEPT_USAGES.map(([id,label])=>`<option value="${id}" ${x.usage===id?'selected':''}>${label}</option>`).join('')}</select></div><div class="field"><label>ストーリーキー</label><label class="check-row"><input type="checkbox" class="concept-story-key" data-concept-index="${i}" ${x.storyKey?'checked':''}>会話・条件のキーとして扱う</label></div><div class="field span-2"><label>見た目の説明</label><textarea class="concept-surface" data-concept-index="${i}" placeholder="プレイヤーが見聞きできる情報">${escapeHtml(x.surface)}</textarea></div><div class="field span-2"><label>確定事実</label><textarea class="concept-truth" data-concept-index="${i}" placeholder="開示後に扱う情報">${escapeHtml(x.truth)}</textarea></div></div></div>`).join('');
-  return `<h2>GM設定</h2><div class="field"><label>会話の広がり方</label><select id="conversationSpreadInput"><option value="story" ${campaignStyle.conversationSpread==="story"?"selected":""}>物語重視</option><option value="standard" ${campaignStyle.conversationSpread==="standard"?"selected":""}>標準</option><option value="free" ${campaignStyle.conversationSpread==="free"?"selected":""}>自由会話重視</option></select><p class="hint">この内容は、ゲーム中のAIプロンプトへ毎回組み込まれます。物語重視は本筋への誘導を強め、自由会話重視は雑談や脱線を許容します。</p></div><h2>重要語・物語概念</h2><p class="hint">キャンペーン全体の会話語、伝承、固有概念、メインストーリーのキーを登録します。ここに登録しても物理アイテムの所持状態は変わりません。</p>${index}${cards||'<div class="empty-card">重要語・概念はまだありません。</div>'}<div class="bottom"><button class="sub" id="btnAddConcept">＋ 重要語を追加</button></div>`;
+  const styleInput=(label,id,hint,type="input")=>{const key=id.replace("Input","").replace("styleExtra","extra");const value=escapeHtml(campaignStyle[key]);const control=type==="textarea"?`<textarea id="${id}">${value}</textarea>`:`<input id="${id}" value="${value}">`;return `<div class="field"><label>${label}</label>${control}<p class="hint">${hint}</p></div>`};
+  const styleFields=`
+    ${styleInput("地の文の作法","narrationInput","GMが情景を語る時の文体を指定します。文の長さや語尾もここで決めます。","textarea")}
+    ${styleInput("言葉のやさしさ","readingLevelInput","読み手に合わせた語彙の水準を指定します。小さな子供が遊ぶ場合は、ここで難しい言葉を禁止します。","textarea")}
+    ${styleInput("良い例","goodExampleInput","狙っている地の文の実例を1つ書きます。指示文より例文の方が強く効きます。")}
+    ${styleInput("悪い例","badExampleInput","避けたい地の文の実例を1つ書きます。")}`;
+  const moreStyleFields=`
+    ${styleInput("追加の語り指示","styleExtraInput","1行に1つ書きます。上の項目で足りない指示を足す場所です。","textarea")}
+    ${styleInput("使ってはならない語","forbiddenWordsInput","世界観に合わない語を、改行や読点で区切って並べます。（例：懐中電灯、電池）","textarea")}
+    ${styleInput("同行者の選び分け","companionsHintInput","どの場面でどの同行者に喋らせるかの目安です。（例：戦闘寄り＝ガレス、調査＝リディア）")}
+    ${styleInput("クリティカル時のGMの態度","rollReactionCriticalInput","出目20が出た時、GMがどう反応するかを例文か方針で書きます。空欄なら淡々と結果だけを伝えます。")}
+    ${styleInput("ファンブル時のGMの態度","rollReactionFumbleInput","出目1が出た時、GMがどう反応するかを例文か方針で書きます。茶化す・淡々と処理する・同情する、いずれもキャンペーンの空気で決まります。")}
+    ${styleInput("調べても分からなかった時の描写","emptyHandedInput","1行に1つ書きます。複数書くと、同じ台詞が繰り返されるのを防げます。（例：灯りが届かず、それ以上は見えない）","textarea")}
+    ${styleInput("指したものが分からない時の聞き返し","unknownTargetInput","プレイヤーの言葉をGMが認識できなかった時の一言です。候補はゲーム側が自動で添えます。（例：はて、それは何のことだ?）")}`;
+  return `<h2>GM設定</h2><div class="field"><label>会話の広がり方</label><select id="conversationSpreadInput"><option value="story" ${campaignStyle.conversationSpread==="story"?"selected":""}>物語重視</option><option value="standard" ${campaignStyle.conversationSpread==="standard"?"selected":""}>標準</option><option value="free" ${campaignStyle.conversationSpread==="free"?"selected":""}>自由会話重視</option></select><p class="hint">この内容は、ゲーム中のAIプロンプトへ毎回組み込まれます。物語重視は本筋への誘導を強め、自由会話重視は雑談や脱線を許容します。</p></div>${styleFields}<details><summary>追加のGM設定</summary>${moreStyleFields}</details><h2>重要語・物語概念</h2><p class="hint">キャンペーン全体の会話語、伝承、固有概念、メインストーリーのキーを登録します。ここに登録しても物理アイテムの所持状態は変わりません。</p>${index}${cards||'<div class="empty-card">重要語・概念はまだありません。</div>'}<div class="bottom"><button class="sub" id="btnAddConcept">＋ 重要語を追加</button></div>`;
 }
+var baseRenderConceptsForKeywords=renderConcepts;
+renderConcepts=function(){
+  const holder=document.createElement('div');holder.innerHTML=baseRenderConceptsForKeywords();
+  const heading=Array.from(holder.querySelectorAll('h2')).find(node=>node.textContent.trim()==='重要語・物語概念');
+  if(!heading)return holder.innerHTML;
+  heading.textContent='キーワード・伏線・秘密';
+  holder.querySelector('.section-index h3')?.replaceChildren('キーワード・伏線・秘密一覧');
+  holder.querySelector('.empty-card')?.replaceChildren('キーワード・伏線・秘密はまだありません。');
+  holder.querySelector('#btnAddConcept').textContent='＋ キーワードを追加';
+  const section=document.createElement('section');section.className='card gm-keyword-section';
+  for(let node=heading;node;){const next=node.nextSibling;section.append(node);node=next}
+  holder.append(section);return holder.innerHTML;
+};
 function bindConcepts(){
   const conversationSpread=$("conversationSpreadInput");if(conversationSpread)conversationSpread.onchange=e=>{campaignStyle={...campaignStyle,conversationSpread:e.target.value};saveWorkspaceDraft(true);setStatus("会話の広がり方を更新しました")};
+  [["narrationInput","narration"],
+   ["readingLevelInput","readingLevel"],
+   ["goodExampleInput","goodExample"],
+   ["badExampleInput","badExample"],
+   ["styleExtraInput","extra"],
+   ["forbiddenWordsInput","forbiddenWords"],
+   ["companionsHintInput","companionsHint"],
+   ["rollReactionCriticalInput","rollReactionCritical"],
+   ["rollReactionFumbleInput","rollReactionFumble"],
+   ["emptyHandedInput","emptyHanded"],
+   ["unknownTargetInput","unknownTarget"]].forEach(([id,key])=>{const input=$(id);if(input)input.oninput=e=>{campaignStyle={...campaignStyle,[key]:e.target.value};saveWorkspaceDraft(true);setStatus("GM設定を更新しました")}});
   const sync=()=>{concepts=Array.from(document.querySelectorAll('.concept-editor')).map((card,i)=>{const get=s=>card.querySelector(s)?.value.trim()||'';return {...concepts[i],id:concepts[i]?.id||conceptId(get('.concept-name'),i),name:get('.concept-name'),aliases:parseList(get('.concept-aliases')),scope:get('.concept-scope')||'campaign',role:get('.concept-role')||'support',usage:get('.concept-usage')||'dialogue_condition',storyKey:Boolean(card.querySelector('.concept-story-key')?.checked),surface:get('.concept-surface'),truth:get('.concept-truth')}});saveWorkspaceDraft(true)};
   document.querySelectorAll('.concept-name,.concept-aliases,.concept-scope,.concept-role,.concept-usage,.concept-story-key,.concept-surface,.concept-truth').forEach(el=>{el.oninput=sync;el.onchange=sync});
   document.querySelectorAll('[data-remove-concept]').forEach(btn=>btn.onclick=()=>{const i=Number(btn.dataset.removeConcept);concepts=concepts.filter((_,j)=>j!==i);saveWorkspaceDraft(true);renderTab()});
   const add=$('btnAddConcept');if(add)add.onclick=()=>{concepts=[...ensureConcepts(),{id:conceptId('新しい重要語',concepts.length),name:'新しい重要語',aliases:[],scope:'campaign',role:'support',usage:'dialogue_condition',storyKey:false,surface:'',truth:''}];saveWorkspaceDraft(true);renderTab()};
   document.querySelectorAll('[data-section-focus]').forEach(button=>button.onclick=()=>{const i=Number(button.dataset.sectionFocus);document.querySelector(`.concept-editor[data-concept-index="${i}"]`)?.scrollIntoView({behavior:'smooth',block:'center'})});
 }
+var baseBindConceptsForKeywords=bindConcepts;
+bindConcepts=function(){
+  baseBindConceptsForKeywords();
+  const add=$('btnAddConcept');if(add)add.onclick=()=>{concepts=[...ensureConcepts(),{id:conceptId('新しいキーワード',concepts.length),name:'新しいキーワード',aliases:[],scope:'campaign',role:'support',usage:'dialogue_condition',storyKey:false,surface:'',truth:''}];saveWorkspaceDraft(true);renderTab()};
+};
 function renderSemanticItemCard(x,i){const caps=Array.isArray(x.capabilities)&&x.capabilities.length?x.capabilities:['inspect'];return `<div class="card item-editor" data-item-index="${i}"><div class="card-head"><h3 data-item-title="${i}">${escapeHtml(x.name||`アイテム${i+1}`)}</h3><button class="sub delete-btn" data-remove-item="${i}">削除</button></div><div class="cast-media"><div class="cast-thumb">${x.image?`<img src="${x.image}">`:'画像なし'}</div><div class="field cast-file"><label>画像</label><input type="file" accept="image/*" class="item-image" data-item-index="${i}"></div></div><div class="semantic-grid"><div class="field span-2"><label>正式名</label><input class="item-name" data-item-index="${i}" value="${escapeHtml(x.name||'')}" placeholder="心石の欠片"></div><div class="field"><label>親となる概念</label><select class="item-parent-concept" data-item-index="${i}"><option value="">なし</option>${conceptLabels().map(o=>`<option value="${o.value}" ${x.parentConceptId===o.value?'selected':''}>${escapeHtml(o.label)}</option>`).join('')}</select></div><div class="field"><label>使用範囲</label><select class="item-scope" data-item-index="${i}">${ITEM_SCOPES.map(([id,label])=>`<option value="${id}" ${x.scope===id?'selected':''}>${label}</option>`).join('')}</select></div><div class="field"><label>入手方法</label><select class="item-acquisition" data-item-index="${i}">${ITEM_ACQUISITIONS.map(([id,label])=>`<option value="${id}" ${x.acquisition===id?'selected':''}>${label}</option>`).join('')}</select></div><div class="field"><label>キャンペーン中の扱い</label><label class="check-row"><input type="checkbox" class="item-persistent" data-item-index="${i}" ${x.persistent?'checked':''}>シーンをまたいで使う</label></div><div class="field span-2"><label>可能な操作</label><div class="semantic-checks">${ITEM_CAPABILITIES.map(([id,label])=>`<label class="check-row"><input type="checkbox" class="item-capability" data-item-index="${i}" value="${id}" ${caps.includes(id)?'checked':''}>${label}</label>`).join('')}</div></div><div class="field span-2"><label>別名（カンマ区切り）</label><input class="item-aliases" data-item-index="${i}" value="${escapeHtml((x.aliases||[]).join(', '))}" placeholder="心石、青い石"></div><div class="field span-2"><label>説明・メモ</label><textarea class="item-notes" data-item-index="${i}" placeholder="第三坑道の錠に合う。">${escapeHtml(x.notes||'')}</textarea></div><div class="field"><label>入手条件キー（任意）</label><input class="item-requires" data-item-index="${i}" value="${escapeHtml(x.requires||'')}" placeholder="s3b"></div></div></div>`}
 var baseRenderItemsForSemantic=renderItems;
 renderItems=function(){ensureItems();const list=items;const index=sectionIndex('アイテム一覧',list.map((x,i)=>({id:String(i),name:x.name||`アイテム${i+1}`,meta:`${itemScopeLabel(x.scope||'scene')}・${itemAcquisitionLabel(x.acquisition||'none')}`})),'アイテムはまだありません。');return `<h2>アイテム</h2><p class="hint">物理的に存在し、入手・所持・使用・譲渡・紛失できるものを登録します。会話上の概念は「重要語・物語概念」で管理します。</p>${index}${list.map(renderSemanticItemCard).join('')||'<div class="empty-card">アイテムはまだありません。</div>'}<div class="bottom"><button class="sub" id="btnAddItem">＋ アイテムを追加</button></div>`};
@@ -76,10 +120,10 @@ bindItems=function(){
 var baseWorkspaceDraftForSemantics=workspaceDraft;
 workspaceDraft=function(){ensureConcepts();ensureItems();return {...baseWorkspaceDraftForSemantics(),concepts,initialInventory:items.filter(x=>x.acquisition==='starting_inventory').map(x=>x.id),campaignStyle}};
 var baseApplyWorkspaceDraftForSemantics=applyWorkspaceDraft;
-applyWorkspaceDraft=function(data){baseApplyWorkspaceDraftForSemantics(data);if(Array.isArray(data.concepts))concepts=data.concepts.map(normalizeConcept);if(Array.isArray(data.initialInventory))initialInventoryIds=data.initialInventory.map(String);campaignStyle={conversationSpread:["story","standard","free"].includes(data.campaignStyle?.conversationSpread)?data.campaignStyle.conversationSpread:"standard"};};
-try{const rawSemanticDraft=localStorage.getItem(DRAFT_KEY);if(rawSemanticDraft){const parsed=JSON.parse(rawSemanticDraft);const data=parsed.data||parsed;if(Array.isArray(data.concepts))concepts=data.concepts.map(normalizeConcept);if(Array.isArray(data.initialInventory))initialInventoryIds=data.initialInventory.map(String);campaignStyle={conversationSpread:["story","standard","free"].includes(data.campaignStyle?.conversationSpread)?data.campaignStyle.conversationSpread:"standard"}}}catch(e){}
+applyWorkspaceDraft=function(data){baseApplyWorkspaceDraftForSemantics(data);if(Array.isArray(data.concepts))concepts=data.concepts.map(normalizeConcept);if(Array.isArray(data.initialInventory))initialInventoryIds=data.initialInventory.map(String);campaignStyle=normalizeCampaignStyle(data.campaignStyle);};
+try{const rawSemanticDraft=localStorage.getItem(DRAFT_KEY);if(rawSemanticDraft){const parsed=JSON.parse(rawSemanticDraft);const data=parsed.data||parsed;if(Array.isArray(data.concepts))concepts=data.concepts.map(normalizeConcept);if(Array.isArray(data.initialInventory))initialInventoryIds=data.initialInventory.map(String);campaignStyle=normalizeCampaignStyle(data.campaignStyle)}}catch(e){}
 var baseCreateNewCampaignForSemantics=createNewCampaign;
-createNewCampaign=function(){concepts=[];initialInventoryIds=[];campaignStyle={conversationSpread:"standard"};baseCreateNewCampaignForSemantics()};
+createNewCampaign=function(){concepts=[];initialInventoryIds=[];campaignStyle=normalizeCampaignStyle({});baseCreateNewCampaignForSemantics()};
 var baseRenderScenesForConcepts=renderScenes;
 renderScenes=function(){if(activeTab==='entities')activeTab='world';baseRenderScenesForConcepts()};
 var baseRenderTabForConcepts=renderTab;

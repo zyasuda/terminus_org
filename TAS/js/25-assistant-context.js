@@ -4,7 +4,7 @@ function assistantTargetContext(){
   const instruction=document.querySelector('#assistantInstruction')?.value||'';
   if(activeTab==='world')return {label:'世界設定',data:{campaignName,campaignWorld,campaignTerms}};
   if(activeTab==='cast'){
-    const all=[{id:'gm',name:castName('gm','GM'),profile:castProfile('gm','')},{id:'gareth',name:castName('gareth','ガレス'),profile:castProfile('gareth','')},...Array.from({length:extraCompanions},(_,i)=>{const id=`member_${i+2}`;return {id,name:castName(id,`メンバー${i+2}`),profile:castProfile(id,'')}}),...npcList().map(x=>({id:x.id,name:castName(x.id,x.name),profile:castProfile(x.id,'')}))];
+    const all=[{id:'gm',name:castName('gm',DEFAULT_GM_NAME),profile:castProfile('gm','')},{id:'gareth',name:castName('gareth','ガレス'),profile:castProfile('gareth','')},...Array.from({length:extraCompanions},(_,i)=>{const id=`member_${i+2}`;return {id,name:castName(id,`メンバー${i+2}`),profile:castProfile(id,'')}}),...npcList().map(x=>({id:x.id,name:castName(x.id,x.name),profile:castProfile(x.id,'')}))];
     const focus=all.find(x=>x.name&&instruction.includes(x.name));return {label:focus?`キャラクター「${focus.name}」`:'キャラクター一覧',data:focus||all};
   }
   if(activeTab==='monsters'){

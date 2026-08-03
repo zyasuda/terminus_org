@@ -25,6 +25,12 @@
       ],
       "world": "ミステリ / ロー・ファンタジー。静かで神秘的、少し切ない。",
       "terms": "現代語彙を避ける。\n禁止語：懐中電灯、電灯、モーター、エンジン、電池、メートル\n言い換えが必要な場合は、世界観に合う平易な表現を使う。",
+      "rollReaction": {
+        "critical": "",
+        "fumble": ""
+      },
+      "emptyHanded": [],
+      "unknownTarget": "",
       "conversationSpread": "standard"
     },
     "flags": {
@@ -477,6 +483,16 @@
         "speechRules": "",
         "speechFrequency": "standard"
       }
+    },
+    "gm": {
+      "gender": "male",
+      "firstPerson": "私",
+      "addressTerm": "君",
+      "speechRules": "",
+      "id": "gm",
+      "name": "ダイス先輩",
+      "persona": "ゲームマスター。確定した結果を説明し、プレイヤーを案内する。",
+      "sprite": "gm_mascot.png"
     }
   },
   "chapter": {

@@ -12,6 +12,7 @@ function runtimeChapterId(key){if(!tasChapterIds[key]){const n=Math.max(1,chapte
 function runtimeImageName(value){const raw=String(value||"");if(!raw||raw.startsWith("data:"))return "";return raw.replace(/^.*[\\/]/,"")}
 function runtimeAssetId(file){return stableId(String(file).replace(/\\.[^.]+$/,""),"asset")}
 
+function splitCampaignStyle(value){return String(value||"").split(/[\n、,]/).map(x=>x.trim()).filter(Boolean)}
 /* 出力の段: 安定ID・style・素材台帳(assets)を付ける。段の並びは js/43-output-pipeline.js */
 function outputStableIds(payload){
   
@@ -21,8 +22,15 @@ function outputStableIds(payload){
   const baseStyle=baseCampaign.style||{};
   const companions=Array.isArray(baseCampaign.companions)&&baseCampaign.companions.length?baseCampaign.companions:[{id:"gareth",name:"ガレス",persona:"寡黙で実用的な戦士。短く話す。"}];
   const style={...baseStyle,
-    narration:baseStyle.narration||"である調。地の文は短く、確定事実を優先する。",
-    readingLevel:baseStyle.readingLevel||"平易な日本語を使う。",
+    narration:campaignStyle?.narration||baseStyle.narration||"である調。地の文は短く、確定事実を優先する。",
+    readingLevel:campaignStyle?.readingLevel||baseStyle.readingLevel||"平易な日本語を使う。",
+    goodExample:campaignStyle?.goodExample||baseStyle.goodExample||"",
+    badExample:campaignStyle?.badExample||baseStyle.badExample||"",
+    extra:splitCampaignStyle(campaignStyle?.extra).length?splitCampaignStyle(campaignStyle.extra):(baseStyle.extra||[]),
+    forbiddenWords:splitCampaignStyle(campaignStyle?.forbiddenWords).length?splitCampaignStyle(campaignStyle.forbiddenWords):(baseStyle.forbiddenWords||[]),
+    rollReaction:{critical:campaignStyle?.rollReactionCritical||"",fumble:campaignStyle?.rollReactionFumble||""},
+    emptyHanded:splitCampaignStyle(campaignStyle?.emptyHanded),
+    unknownTarget:campaignStyle?.unknownTarget||"",
     world:campaignWorld,
     theme:campaignTheme,
     terms:campaignTerms,
@@ -64,6 +72,7 @@ function outputStableIds(payload){
   const campaign={...baseCampaign,
     meta:{...(baseCampaign.meta||{}),id:tasCampaignId,title:campaignName,version:(baseCampaign.meta||{}).version||"0.2"},
     style,
+    companionsHint:campaignStyle?.companionsHint||baseCampaign.companionsHint||"",
     companions:companions.map(c=>{const image=runtimeImageName(castImages[c.id]);return image?{...c,sprite:image}:{...c}}),
     image:runtimeImageName(campaignImage)||baseCampaign.image||null
   };

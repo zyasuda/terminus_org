@@ -9,8 +9,20 @@ exportPayload=function(){const payload=baseExportPayloadForCastAttributes();cons
    gender/firstPerson/addressTermを潰さない。IDは実際のcompanionsから取り、
    旧ID('gareth'等)のハードコードには companions が空の時だけ頼る */
 function definedCastAttribute(id){const a=castAttribute(id)||{};return Object.fromEntries(Object.entries(a).filter(([,v])=>v!==""&&v!=null&&v!=="unspecified"))}
+/* personaは castProfile() ではなく castProfiles[] を直接読む。castProfile()が使う defaultCastProfile()
+   は 'gm'/'gareth' の既定文をID単位でハードコードしており、渡した fallback を無視する。
+   並び順で 'gareth' に対応づけた同行者(=companions[0])のpersonaが、
+   ガレスの既定文「普通の戦士・用心棒。…」で上書きされる。2026-08-03にリディアで実際に起きた */
 /* 出力の段: campaign.castAttributes を作る。段の並びは js/43-output-pipeline.js */
-function outputCastAttributes(payload){const companions=payload.campaign?.companions||[];const companionIds=companions.map(c=>c&&c.id).filter(Boolean);const legacyIds=['gareth',...Array.from({length:extraCompanions},(_,i)=>`member_${i+2}`)];const ids=[...new Set(['gm',...(companionIds.length?companionIds:legacyIds),...npcList().map(x=>x.id)])];const attributes=Object.fromEntries(ids.map(id=>[id,castAttribute(id)]));const speechFrequencyFor=entry=>{const configuredId=legacyIds.find(id=>id===entry.id||castName(id,id==='gareth'?'ガレス':id)===entry.name)||entry.id;return castAttribute(configuredId).speechFrequency};if(payload.campaign){payload.campaign={...payload.campaign,companions:companions.map(entry=>({...entry,...definedCastAttribute(entry.id),speechFrequency:speechFrequencyFor(entry)})),castAttributes:attributes}}return payload};
+function outputCastAttributes(payload){const companions=payload.campaign?.companions||[];const legacyCompanionId=index=>index===0?"gareth":`member_${index+1}`;const configuredCompanions=companions.map((entry,index)=>{const id=legacyCompanionId(index),sprite=runtimeImageName(castImages[id]);return {...entry,name:castName(id,entry.name),persona:castProfiles[id]||entry.persona||entry.profile||"",...definedCastAttribute(id),speechFrequency:castAttribute(id).speechFrequency,...(sprite?{sprite}:{})}});const gmAttrs=castAttribute("gm"),gmSprite=runtimeImageName(castImages.gm)||payload.campaign?.gm?.sprite||payload.campaign?.gmSprite||"";/* GMも同行者と同じく「画面が空ならディスクの既存値を残す」。画面側の castAttributes.gm は
+   下書きを取り込まないと空なので、gmAttrs をそのまま入れると campaign.json の 私／君 を空で潰す。
+   speechFrequency は同行者専用なので gm には入れない（出力契約） */
+const gmDiskBase={...(payload.campaign?.castAttributes?.gm||{}),...(payload.campaign?.gm||{})};
+const gm={gender:"unspecified",firstPerson:"",addressTerm:"",speechRules:"",...gmDiskBase,
+  id:"gm",name:castNames.gm||gmDiskBase.name||DEFAULT_GM_NAME,
+  persona:castProfiles.gm||gmDiskBase.persona||defaultCastProfile("gm",""),
+  ...definedCastAttribute("gm"),...(gmSprite?{sprite:gmSprite}:{})};
+delete gm.speechFrequency;const attributes={gm:gmAttrs,...Object.fromEntries(configuredCompanions.map((entry,index)=>[entry.id,castAttribute(legacyCompanionId(index))])),...Object.fromEntries(npcList().map(entry=>[entry.id,castAttribute(entry.id)]))};if(payload.campaign){payload.campaign={...payload.campaign,companions:configuredCompanions,gm,...(gmSprite&&!payload.campaign.gmSprite?{gmSprite}:{}),castAttributes:attributes}}return payload};
 var baseAssistantTargetContextForCastAttributes=assistantTargetContext;
 assistantTargetContext=function(){const result=baseAssistantTargetContextForCastAttributes();if(activeTab==='cast'){const decorate=entry=>({...entry,...castAttribute(entry.id)});result.data=Array.isArray(result.data)?result.data.map(decorate):decorate(result.data)}return result};
 var baseCreateNewCampaignForCastAttributes=createNewCampaign;

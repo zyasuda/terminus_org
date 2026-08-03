@@ -15,7 +15,7 @@ function focusSection(selector,status){
   setStatus(status||"詳細入力欄を表示しました");
 }
 function castSectionRows(){
-  const rows=[{id:"gm",name:castName("gm","GM"),meta:"GM・固定"},{id:"gareth",name:castName("gareth","ガレス"),meta:"メンバー・固定"}];
+  const rows=[{id:"gm",name:castName("gm",DEFAULT_GM_NAME),meta:"GM・固定"},{id:"gareth",name:castName("gareth","ガレス"),meta:"メンバー・固定"}];
   for(let i=0;i<extraCompanions;i++){const id=`member_${i+2}`;rows.push({id,name:castName(id,`メンバー${i+2}`),meta:"メンバー"})}
   npcList().forEach(x=>rows.push({id:x.id,name:castName(x.id,x.name),meta:"NPC"}));
   return rows;
