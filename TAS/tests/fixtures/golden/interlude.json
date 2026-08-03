@@ -851,16 +851,6 @@
               "agility": 8,
               "ambushDc": 12,
               "ambush": true,
-              "weakness": {
-                "triggers": [
-                  "ランタン",
-                  "光",
-                  "照ら"
-                ],
-                "effect": "flee",
-                "text": "光を浴びた錆喰いは身を縮め、坑道の奥へ退いていった",
-                "hint": "こいつ、光を嫌がってる——ランタンで照らせ!"
-              },
               "sprite": "s2_rust_eater.png"
             }
           },
@@ -884,7 +874,7 @@
             "notes": "",
             "enemy": {
               "name": "坑道蝙蝠",
-              "unknownName": "羽ばたく影",
+              "unknownName": "不気味な影",
               "surface": "天井の隙間から降りてくる、掌ほどの蝙蝠の群れだ。",
               "trait": "天井の隙間から降りてくる、掌ほどの蝙蝠の群れだ。物音に反応する。",
               "ambushTrigger": "プレイヤーが頭上の気配を確かめないまま、崩れた坑道の隙間へ近づいた時のみ",
@@ -896,16 +886,6 @@
               "agility": 8,
               "ambushDc": 12,
               "ambush": true,
-              "weakness": {
-                "triggers": [
-                  "大きな音",
-                  "物音",
-                  "叫ぶ"
-                ],
-                "effect": "flee",
-                "text": "大きな物音に驚いた坑道蝙蝠は、坑道の奥へ飛び去っていった",
-                "hint": "こいつら、物音に反応してる——大きな音を立てれば追い払えるかもしれない!"
-              },
               "sprite": "s2_mine_bat.png"
             }
           }
