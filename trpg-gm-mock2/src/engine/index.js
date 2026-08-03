@@ -359,7 +359,7 @@ const VERB_CANON = {
   "見る": "よく見る", "みる": "よく見る", "観察する": "よく見る", "眺める": "よく見る",
   "進もう": "進む", "すすむ": "進む", "向かう": "進む",
   "もどる": "戻る", "戻ろう": "戻る",
-  "話す": "話しかける", "はなしかける": "話しかける", "尋ねる": "話しかける", "聞く": "話しかける",
+  "話す": "話しかける", "はなしかける": "話しかける", "尋ねる": "話しかける", "聞く": "話しかける", "声をかける": "話しかける", "呼びかける": "話しかける",
   "攻撃": "攻撃する", "殴る": "攻撃する", "斬る": "攻撃する"
 };
 function canonVerb(v) { return VERB_CANON[v] || v; }
@@ -620,11 +620,15 @@ function renderDebug() {
     // 名詞チップは現在のシーンの分だけ(チップ列が横に伸び続けるのを防ぐ。過去の手がかりは左パネルで参照)。
     // 開示済みに加え、一度でも判定を振った対象(examined)も出す(失敗後の再挑戦を2タップに)
     const known = open || (state.examined || []).includes(s.entity);
-    if (known && s.entity && sc === curScene && !revealedEntities.includes(s.entity)) revealedEntities.push(s.entity);
+    const chipLabel = (s.aliases && s.aliases[0]) || s.entity;
+    if (known && chipLabel && sc === curScene && !revealedEntities.includes(chipLabel)) revealedEntities.push(chipLabel);
     if (open) clues.push(s.playerText || s.text);
   }));
   // 交戦中の敵は名詞チップの先頭に出す(未識別は「不気味な影」、正体判明で「錆喰い」に切り替わる)
   if (state.enemy) revealedEntities.unshift(enemyName(state.enemy));
+  (state.unknownTarget?.candidates || []).forEach(name => {
+    if (name && !revealedEntities.includes(name)) revealedEntities.push(name);
+  });
   setStore({
     directionText: curScene.report ? reportDirection() : curScene.direction,
     hp: state.hp, maxHp: state.maxHp, items: inv.held(state.inventory),
@@ -1255,13 +1259,21 @@ function extractActor(text) {
 }
 
 // テキストとsecretのentity/aliasesの照合(開示済み/未開示を指定)。複数ヒットは曖昧なのでnull
-function matchSecretByText(sc, text, wantRevealed) {
-  const pool = sc.secrets.filter(s => revealed.has(s.id) === wantRevealed);
-  const hits = pool.filter(s => {
+function uniqueBestSecretTextMatch(candidates, text) {
+  let bestLength = 0;
+  let hits = [];
+  candidates.forEach(s => {
     const terms = [...s.entity.split(/[・()()]/).filter(t => t.length >= 2), ...(s.aliases || [])].filter(Boolean);
-    return terms.some(t => text.includes(t));
+    const length = Math.max(0, ...terms.filter(t => text.includes(t)).map(t => t.length));
+    if (length > bestLength) { bestLength = length; hits = [s]; }
+    else if (length && length === bestLength) hits.push(s);
   });
   return hits.length === 1 ? hits[0] : null;
+}
+
+function matchSecretByText(sc, text, wantRevealed) {
+  const pool = sc.secrets.filter(s => revealed.has(s.id) === wantRevealed);
+  return uniqueBestSecretTextMatch(pool, text);
 }
 
 // 作者がsecret.triggerへ書いた発火条件との照合。カンマ・読点で区切って語彙として扱うので、
@@ -1442,22 +1454,46 @@ async function tryScripted(text) {
    辞書(tryScripted)に漏れた宣言の意図と対象をLLMに「穴埋め」で読み取らせる。
    LLMは分類するだけで、結果の解決(判定・開示・遷移・取得)は常にシステム側。
    分類を誤っても最悪「別のレーンで穏当に処理される」だけで、状態は壊れない */
+function confirmedTalkIntent(text) {
+  const { actorId, rest } = extractActor(text);
+  const restVerb = canonVerb(rest.replace(/[。!?！？\s]+$/g, ""));
+  if (actorId !== "player" && restVerb === "話しかける") {
+    addNote("🧭 分類: talk(確定)");
+    return { intent: "talk", target: null, named: null, actorId, actorName: CAST[actorId].name,
+      extraSystem: "\n# 確定した会話宣言\n場面に変化はない。narration は場の空気を保つ一文だけにせよ。世界の現象を新たに描写するな。" };
+  }
+  return null;
+}
+
 async function classifyIntent(text) {
   // 主語がチップ(立ち絵タップ)由来で確定している場合、LLMに推測させず、残り文字列(rest)だけを
   // 分類に使う(プロンプトが短くなり、主語の混入で目的語判定がぶれるのも防ぐ)
   const { actorId, rest } = extractActor(text);
   const chipActor = actorId !== "player";
   const sc = SCENARIO.scenes[state.sceneIndex];
-  const targets = [
-    ...sc.secrets.map(s => s.entity),
-    ...availableLoot(sc),
-    ...Object.values(CAST).map(c => c.name),
-    ...(state.enemy ? [enemyName(state.enemy)] : []),
-    ...(sc.report && sc.npc ? [sc.npc.name] : [])
-  ].filter(Boolean);
+  const targetAlias = new Map();
+  const addTarget = (label, canonical) => {
+    if (label && !targetAlias.has(label)) targetAlias.set(label, canonical);
+  };
+  sc.secrets.forEach(s => {
+    addTarget(s.entity, s.entity);
+    (s.aliases || []).forEach(alias => addTarget(alias, s.entity));
+  });
+  availableLoot(sc).forEach(name => addTarget(name, name));
+  Object.values(CAST).forEach(c => addTarget(c.name, c.name));
+  if (state.enemy) addTarget(enemyName(state.enemy), enemyName(state.enemy));
+  if (sc.report && sc.npc) addTarget(sc.npc.name, sc.npc.name);
+  const allTargets = [...targetAlias.keys()];
+  const targets = allTargets.slice(0, 40);
+  if (allTargets.length > targets.length) addNote(`🧭 対象候補を${targets.length}件に制限(${allTargets.length - targets.length}件を省略)`);
+  const recentTargets = (state.sceneLog || []).filter(entry => entry.turn === state.turn - 1).flatMap(entry => {
+    const scene = SCENARIO.scenes[entry.scene];
+    return scene ? scene.secrets.filter(s => revealed.has(s.id) && entry.text.includes(s.entity)).map(s => s.entity) : [];
+  }).slice(-2);
   const system = `プレイヤーの宣言を分類する。応答は次のJSONのみ(前置き禁止):
-{"intent":"investigate|move|back|talk|talk_gm|take|other","target":"候補から最も近いもの、なければnull"${chipActor ? "" : `,"actor":"player|${Object.keys(CAST).join("|")}"`}}
+{"intent":"investigate|move|back|talk|talk_gm|take|other","target":"候補から最も近いもの、なければnull","named":"宣言が指している具体物の名前。候補になくてもそのまま書く。漠然とした宣言ならnull"${chipActor ? "" : `,"actor":"player|${Object.keys(CAST).join("|")}"`}}
 対象の候補: ${targets.join("、") || "(なし)"}
+${recentTargets.length ? `直前に話題になった対象: ${recentTargets.join("、")}\n「それ」「あれ」「さっきの」はこの中から選ぶ。` : ""}
 基準:
 - investigate: 何かを調べる・見る・聞く・嗅ぐ・観察する
 - move: 先へ・奥へ進む(場所を移る)
@@ -1476,12 +1512,13 @@ targetの規則(厳守):
     const parsed = JSON.parse(m ? m[0] : raw);
     const intent = ["investigate", "move", "back", "talk", "talk_gm", "take", "other"].includes(parsed.intent)
       ? parsed.intent : "other";
-    const target = targets.includes(parsed.target) ? parsed.target : null;
+    const target = targets.includes(parsed.target) ? targetAlias.get(parsed.target) : null;
+    const named = typeof parsed.named === "string" && parsed.named.trim() ? parsed.named.trim() : null;
     // 主語はチップ由来の確定情報を優先。無ければLLMの読み取りをnormalizeWhoで解決
     const resolvedActorId = chipActor ? actorId : normalizeWho(parsed.actor, "player");
     const actorName = CAST[resolvedActorId] ? CAST[resolvedActorId].name : "あなた";
     addNote(`🧭 分類: ${intent}${target ? " → " + target : ""}`);
-    return { intent, target, actorId: resolvedActorId, actorName };
+    return { intent, target, named, actorId: resolvedActorId, actorName };
   } catch (e) {
     return null; // 分類器が落ちたら従来のLLMルートに委ねる(安全側)
   }
@@ -1686,6 +1723,26 @@ function availableLoot(sc) {
     .map(i => i.name);
 }
 
+function askBackCandidates(sc) {
+  const candidates = [];
+  const add = name => { if (name && !candidates.includes(name)) candidates.push(name); };
+  sc.secrets.filter(s => revealed.has(s.id)).forEach(s => add((s.aliases && s.aliases[0]) || s.entity));
+  availableLoot(sc).forEach(add);
+  Object.values(CAST).forEach(c => add(c.name));
+  if (state.enemy) add(enemyName(state.enemy));
+  return candidates;
+}
+
+function askBackUnknownTarget(named, sc, repeated) {
+  const candidates = askBackCandidates(sc);
+  const shown = candidates.slice(0, repeated ? 6 : 3);
+  state.unknownTarget = { lastTurnAskedBack: true, candidates: shown };
+  const choices = shown.length ? ` 候補: ${shown.join("、")}。` : "";
+  addGm(repeated
+    ? `「${named}」が何を指すのか分からない。この中から選んでくれ。${choices}`
+    : `「${named}」が何を指すのか、もう少し教えてくれ。${choices}`, "Neutral");
+}
+
 /* シーン遷移のシステム側ガード。scene.completeRequires(機械可読の条件)を満たさない限り、
    LLMのscene_complete申告を却下する。goal文の解釈をLLM任せにしない(クロニクル2026-07-12で
    条件未達のままシーン遷移し、未開示秘密が回収不能になった破綻への対策) */
@@ -1715,15 +1772,9 @@ function resolveSecretTarget(sc, targetEntity, reason, playerText) {
     if (exact.length === 1) return exact[0];
   }
   const hay = [targetEntity, reason, playerText].filter(Boolean).join(" ");
-  const hits = candidates.filter(s => {
-    // entityの自動分割語はノイズ防止で2文字以上のみ。著者が明示したaliasesは「光」「石」等の1文字も有効
-    const terms = [
-      ...s.entity.split(/[・()()]/).filter(t => t.length >= 2),
-      ...(s.aliases || [])
-    ].filter(Boolean);
-    return terms.some(t => hay.includes(t));
-  });
-  return hits.length === 1 ? hits[0] : null;
+  // entityの自動分割語はノイズ防止で2文字以上のみ。著者が明示したaliasesは「光」「石」等の1文字も有効。
+  // 長い別名を優先し、例えば「光源」を「光」との衝突で曖昧にしない。
+  return uniqueBestSecretTextMatch(candidates, hay);
 }
 function unlockSecret(secret) {
   revealed.add(secret.id);
@@ -1733,7 +1784,7 @@ function unlockSecret(secret) {
 
 // 各シーンで確定した出来事を記録する(プロンプトの「これまでの経緯」の材料。履歴24件切れ対策の長期記憶)
 function logSceneEvent(text) {
-  (state.sceneLog ||= []).push({ scene: state.sceneIndex, text }); // ||= は旧セーブデータ(sceneLogなし)の互換
+  (state.sceneLog ||= []).push({ scene: state.sceneIndex, turn: state.turn, text }); // ||= は旧セーブデータ(sceneLogなし)の互換
 }
 
 /* ---------------- プロンプト構築 ---------------- */
@@ -1751,8 +1802,12 @@ function systemPrompt(extra) {
     : "";
   // 未開示の秘密に紐づく品は正名を注入しない(ネタバレ防止。開示された瞬間からLLMに見える)
   const lootNames = availableLoot(sc);
+  const hasUnavailableLoot = (sc.loot || []).some(item => typeof item !== "string" && item.requires && !revealed.has(item.requires));
   const lootBlock = lootNames.length
     ? `\n# このシーンで入手しうる品(正名)\n${lootNames.join("、")} — プレイヤーが物語上、自然に手に入れる流れになった時だけ、add_items にこの正名をそのまま入れて提案せよ。ここに無い品は入手させない。`
+    : "";
+  const unavailableLootBlock = hasUnavailableLoot
+    ? "\nこのシーンには、まだ手に入らない品がある。プレイヤーへ「拾え」「取れ」「手に入れろ」と促してはならない。"
     : "";
   const direction = sc.report ? reportDirection() : sc.direction;
   // 未識別の敵は、LLMにも本名と正体につながる特徴(trait)を渡さない(名前も③層扱い)。BORG/TRPG/MockDocs/RULE_INVENTORY.md B5
@@ -1869,7 +1924,7 @@ ${direction}
 # プレイヤー状態(システム管理。あなたは変更できない。反応的参照のみ)
 HP: ${state.hp}/${state.maxHp} — 数値を語りに出すな。残量の感覚(余裕・消耗・瀕死)をトーンに反映するのはよい
 所持品: ${inventoryForPrompt()} — プレイヤーが使用・確認を宣言した時の整合確認にのみ使う。あなたから所持品を話題にしてはならない。語り上やむを得ず触れる場合(光源など)は、このリストの正式名称を一字一句そのまま使え。言い換え・類似品への置換(例:ランタン→懐中電灯)は禁止
-${enemyBlock}${depthBlock}${lootBlock}
+${enemyBlock}${depthBlock}${lootBlock}${unavailableLootBlock}
 
 # 開示済みの情報(これ以外の真相をあなたは知らない。捏造禁止)
 ${revealedTexts.length ? revealedTexts.join("\n") : "(まだなし)"}
@@ -1936,6 +1991,8 @@ export async function sendAction(text) {
   state.turn++;
   addPlayer(text);
   recordVerb(text); // 述語を頻度辞書へ記録(動詞チップの学習)
+  const previousAskedBack = !!state.unknownTarget?.lastTurnAskedBack;
+  state.unknownTarget = { lastTurnAskedBack: false, candidates: [] };
 
   // 導入受諾後は、参加者ごとの応答が揃うまでシーンへ進めない。
   if (state.pendingCompanionConsents) {
@@ -2112,13 +2169,18 @@ export async function sendAction(text) {
     // 辞書に漏れた宣言はLLM分類器(穴埋め・列挙型)で意図と対象を読み取り、解決はシステムが行う
     // (BORG/TRPG/MockDocs/RULE_INVENTORY.md 意図分類表)。分類器が落ちたら従来のLLMルートへそのまま流す
     let gmDirectCue = "";
-    const cls = await classifyIntent(text);
+    const cls = confirmedTalkIntent(text) || await classifyIntent(text);
     if (cls) {
       const sc = SCENARIO.scenes[state.sceneIndex];
       const done = (hadCheck) => {
         state.lastAction = { text: normalizedText, fingerprint: fp, hadCheck };
         renderDebug();
       };
+      // 聞き返しは take だけに使う。全intentへ広げると、行き先を名指しした移動(「左の坑道へ進む」)や
+      // 報告シーンの会話(そこでは会話が本体)が聞き返しに乗っ取られて前へ進めなくなる。
+      // 対象のないinvestigate(「金属音を聞く」「足元をよく見る」)は、情景の小物として
+      // LLMが描写してよい領分なので従来どおり描写レーンへ流す(プロンプトの「情景の小物は自由に肉付けしてよい」)
+      if (cls.extraSystem) gmDirectCue += cls.extraSystem;
       if (cls.intent === "investigate" && cls.target) {
         let hit = sc.secrets.find(s => s.entity === cls.target);
         // 分類器の対象幻覚ガード: 宣言が手持ちの道具に言及し、対象名/別名には触れていない場合は
@@ -2144,6 +2206,12 @@ export async function sendAction(text) {
         done(false);
         return;
       } else if (cls.intent === "take") {
+        const unrevealedSecret = sc.secrets.find(s => s.entity === cls.target && !revealed.has(s.id));
+        if (unrevealedSecret) {
+          addGm("まだそれが何なのか分かっていない。まず確かめるべきだ。", "Neutral");
+          done(false);
+          return;
+        }
         const allowed = availableLoot(sc);
         let item = allowed.find(i => text.includes(i) || (cls.target && (i === cls.target || i.includes(cls.target))));
         // 分類器の対象幻覚ガード(investigateと同様): 対象名が文中に一切現れず、既存の所持品への
@@ -2162,6 +2230,10 @@ export async function sendAction(text) {
         }
         // 手持ちの道具への言及(「ランタンをつける」等)は取得ではなく使用。LLM描写レーンに流す
         if (!inv.held(state.inventory).some(i => text.includes(i))) {
+          // 拾おうとした物を認識できていないなら、嘘をつかずに聞き返す。
+          // 「持ち出す価値のあるものではない」は、requires未達で門番されている品にも出てしまい事実と異なる
+          // (2026-08-03のログT21: NPCが「拾ってくれ」と言った品をこの文で拒否した)
+          if (cls.named) { askBackUnknownTarget(cls.named, sc, previousAskedBack); done(false); return; }
           addGm("持ち出す価値のあるものではないようだ。", "Neutral");
           done(false);
           return;
