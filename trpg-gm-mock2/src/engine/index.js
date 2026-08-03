@@ -1286,7 +1286,8 @@ async function scriptedExamine(secret, actorName = "あなた") {
     state.noProgressTurns = 0;
     revealFlavor(secret); // 開示の余韻(同行者の一言)を非同期で追加。失敗しても進行に影響なし
   } else {
-    addGm(`${secret.surface ? secret.surface + "。" : ""}それ以上のことは、まだ分からない。`, "Neutral");
+    const surfaceText = secret.surface ? secret.surface.replace(/。+$/, "") + "。" : "";
+    addGm(`${surfaceText}それ以上のことは、まだ分からない。`, "Neutral");
   }
 }
 

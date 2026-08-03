@@ -150,6 +150,8 @@ export function exportChronicleFile() {
   const companionsSeen = [...new Set(chron.filter(e => e.kind === "companion").map(e => CAST[e.who] && CAST[e.who].name).filter(Boolean))];
   const partyLine = ["冒険者", ...companionsSeen].join("・") + "(AI同行者) + AI GM";
   const rf = SCENARIO.reference || {};
+  const introText = typeof SCENARIO.intro === "string" ? SCENARIO.intro
+    : (SCENARIO.intro && SCENARIO.intro.brief) || "";
 
   const md = `---
 campaign: ${SCENARIO.title}
@@ -168,7 +170,7 @@ playtime: ${playtimeLabel}
 
 ## 今日のあらすじ
 
-${SCENARIO.intro}
+${introText}
 
 ${synopsis}
 
