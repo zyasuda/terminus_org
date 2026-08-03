@@ -920,12 +920,21 @@ function dialogueNodeReply(node, playerText) {
     const raw = ((data && data.content) || []).map(b => b.text || "").join("");
     const m = raw.match(/\{[\s\S]*\}/);
     const say = sanitizeSay(String(JSON.parse(m ? m[0] : raw).say || "").slice(0, 120));
-    if (!say || say === state.lastNpcLine) return;
+    if (!say || say === state.lastNpcLine) { dialogueNodeFallback(node, accept); return; }
     state.lastNpcLine = say;
     // 話者を必ず渡す。導入ノードはシーン配列の外なので、渡さないとaddNpcが
     // SCENARIO.scenes[sceneIndex].npc を見て何も出さずに終わる(addNpcのコメント参照)
     addNpc(say, npc);
-  }).catch(() => {}).finally(() => setThinking("npc", false));
+  }).catch(() => dialogueNodeFallback(node, accept))
+    .finally(() => setThinking("npc", false));
+}
+/* 導入・終端ノードでLLMが応答しなかった時の受け皿。ここを黙って落とすと、この手番の出力が
+   ゼロになり「考え中」が消えるだけで壊れて見える(修正前の定型文より悪い)。
+   無料枠のレート制限(429)は server.cjs が最大65秒待ってリトライするため、実際に起こりうる。
+   次の一手が分かる形で返すこと——プレイヤーを手詰まりにしない */
+function dialogueNodeFallback(node, accept) {
+  const hint = (accept || []).length ? `「${accept[0]}」のように答えてくれ。` : "";
+  addGm(node.blockedText || `どう答えるか、はっきりしない。${hint}`, "Neutral");
 }
 
 function banterAllowed() { return !SCENARIO.scenes[state.sceneIndex].noBanter; }
