@@ -25,6 +25,7 @@
       ],
       "world": "ミステリ / ロー・ファンタジー。静かで神秘的、少し切ない。",
       "terms": "現代語彙を避ける。\n禁止語：懐中電灯、電灯、モーター、エンジン、電池、メートル\n言い換えが必要な場合は、世界観に合う平易な表現を使う。",
+      "conversationSpread": "standard",
       "gameOverText": "君は坑道の暗がりで力尽きた。"
     },
     "flags": {
@@ -71,7 +72,8 @@
         "sprite": "portrait_lydia_alt.png",
         "gender": "female",
         "firstPerson": "あたし",
-        "addressTerm": "あなた"
+        "addressTerm": "あなた",
+        "speechFrequency": "standard"
       },
       {
         "id": "member_2",
@@ -87,7 +89,8 @@
         "sprite": "portrait_gareth_alt.png",
         "gender": "male",
         "firstPerson": "俺",
-        "addressTerm": "お前"
+        "addressTerm": "お前",
+        "speechFrequency": "standard"
       }
     ],
     "companionsHint": "場面に合う方を選べ(戦闘寄り=ガレス、調査・遺工・慎重論=リディア)",
@@ -450,22 +453,30 @@
       "gm": {
         "gender": "unspecified",
         "firstPerson": "",
-        "addressTerm": ""
+        "addressTerm": "",
+        "speechRules": "",
+        "speechFrequency": "standard"
       },
       "member_1": {
         "gender": "unspecified",
         "firstPerson": "",
-        "addressTerm": ""
+        "addressTerm": "",
+        "speechRules": "",
+        "speechFrequency": "standard"
       },
       "member_2": {
         "gender": "unspecified",
         "firstPerson": "",
-        "addressTerm": ""
+        "addressTerm": "",
+        "speechRules": "",
+        "speechFrequency": "standard"
       },
       "npc_1": {
         "gender": "unspecified",
         "firstPerson": "",
-        "addressTerm": ""
+        "addressTerm": "",
+        "speechRules": "",
+        "speechFrequency": "standard"
       }
     }
   },

@@ -9,7 +9,8 @@
       "world": "",
       "terms": "",
       "narration": "である調。地の文は短く、確定事実を優先する。",
-      "readingLevel": "平易な日本語を使う。"
+      "readingLevel": "平易な日本語を使う。",
+      "conversationSpread": "standard"
     },
     "entities": [
       {
@@ -206,7 +207,8 @@
       {
         "id": "gareth",
         "name": "ガレス",
-        "persona": "寡黙で実用的な戦士。短く話す。"
+        "persona": "寡黙で実用的な戦士。短く話す。",
+        "speechFrequency": "standard"
       }
     ],
     "image": null,
@@ -239,17 +241,23 @@
       "gm": {
         "gender": "unspecified",
         "firstPerson": "",
-        "addressTerm": ""
+        "addressTerm": "",
+        "speechRules": "",
+        "speechFrequency": "standard"
       },
       "gareth": {
         "gender": "unspecified",
         "firstPerson": "",
-        "addressTerm": ""
+        "addressTerm": "",
+        "speechRules": "",
+        "speechFrequency": "standard"
       },
       "npc_1": {
         "gender": "unspecified",
         "firstPerson": "",
-        "addressTerm": ""
+        "addressTerm": "",
+        "speechRules": "",
+        "speechFrequency": "standard"
       }
     },
     "flags": {
