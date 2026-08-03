@@ -891,6 +891,43 @@ function npcAgentReply(playerText, revealGate) {
   }).catch(() => {}).finally(() => setThinking("npc", false));
 }
 
+/* 導入・終端ノードで、照合語に外れた宣言へ依頼人が答える。npcAgentReplyと同じ
+   「専用の小さな呼び出し」パターンだが、シーン配列の外なのでシーンロジック(tryScripted・
+   意図分類器・調査判定)は一切通さない。通すと隣のシーンの秘密を誤って開示しうる。
+   2026-08-03のログT1-T3で「マイラに話しかける」「見取り図をよく見る」が3連続で死んでいた */
+function dialogueNodeReply(node, playerText) {
+  const npc = node && node.npc;
+  if (!npc || !npc.name) return;
+  const recent = chron.slice(-10)
+    .filter(e => ["player", "gm", "npc"].includes(e.kind))
+    .map(e => e.kind === "player" ? `プレイヤー: ${e.text}`
+      : e.kind === "gm" ? `GM: ${e.text}`
+      : `${npc.name}(あなた): ${e.text}`)
+    .join("\n");
+  const accept = (node.exits || []).flatMap(e => e.match || []).filter(Boolean).slice(0, 6);
+  setThinking("npc", true);
+  callGmApi({
+    system: `ソロTRPGの登場人物「${npc.name}」として一言だけ返す。${node.direction || ""}\n` +
+      `場面: ${node.brief || ""}\n` +
+      `日本語の口語。40字以内で言い切る。直前の自分の発言と同じ文・同じ問いを繰り返すな。\n` +
+      `【厳守】まだ話は決まっていない。プレイヤーが引き受けた・断ったことにしてはならない。` +
+      `新しい人物・場所・入手品・確定事実を作ってはならない。上の場面説明にある範囲だけで答えよ。` +
+      (accept.length ? `\nプレイヤーが迷っているなら、${accept.join("・")}のいずれかを口にするよう促してよい。` : "") +
+      `\n応答はJSONのみ: {"say":"一言"}`,
+    messages: [{ role: "user", content: `直近のやり取り:\n${recent}\n\nプレイヤーの最新の発言・行動:「${playerText}」\n${npc.name}が返す一言だけをJSONで。` }],
+    maxTokens: 80
+  }).then(data => {
+    const raw = ((data && data.content) || []).map(b => b.text || "").join("");
+    const m = raw.match(/\{[\s\S]*\}/);
+    const say = sanitizeSay(String(JSON.parse(m ? m[0] : raw).say || "").slice(0, 120));
+    if (!say || say === state.lastNpcLine) return;
+    state.lastNpcLine = say;
+    // 話者を必ず渡す。導入ノードはシーン配列の外なので、渡さないとaddNpcが
+    // SCENARIO.scenes[sceneIndex].npc を見て何も出さずに終わる(addNpcのコメント参照)
+    addNpc(say, npc);
+  }).catch(() => {}).finally(() => setThinking("npc", false));
+}
+
 function banterAllowed() { return !SCENARIO.scenes[state.sceneIndex].noBanter; }
 
 function registerBoke(to, bokeLine) {
@@ -1382,12 +1419,35 @@ function requiresMet(requires) {
   if (requires.itemsAll && !requires.itemsAll.every(n => inv.has(state.inventory, n))) return false;
   return true;
 }
-// 宣言文とexits[].matchの部分一致で出口を選ぶ。配列の先頭から順に評価し、最初に一致したものを採用
-function resolveExit(sc, text) {
-  const exit = (sc.exits || []).find(e => (e.match || []).some(m => text.includes(m))) || null;
-  // TASの出力は到達時説明を exit.text として出すため、mock2の契約(arrivalText)へ正規化する
+// TASの出力は到達時説明を exit.text として出すため、mock2の契約(arrivalText)へ正規化する。
+// 照合を経由しない選び方(viableExits由来)でも通す必要があるので関数に切り出してある
+function normalizeExit(exit) {
   if (exit && !exit.arrivalText && exit.text) exit.arrivalText = exit.text;
   return exit;
+}
+// 宣言文とexits[].matchの部分一致で出口を選ぶ。配列の先頭から順に評価し、最初に一致したものを採用
+function resolveExit(sc, text) {
+  return normalizeExit((sc.exits || []).find(e => (e.match || []).some(m => text.includes(m))) || null);
+}
+/* requiresを満たし、かつ行き先を持つ出口。「照合語に外れたが本当は通れる」場面を見分けるために使う。
+   2026-08-03のログで、必要な秘密2つを開示済みなのに「奥へ進む」が照合語(右/さく/木柵…)に
+   一致せず9ターン進行不能になった。移動の意図は既に確定しているので、行き場が1つなら通す */
+function viableExits(node) {
+  return (node.exits || []).filter(e => requiresMet(e.requires) && e.to !== null && e.to !== undefined);
+}
+// 通れる出口の呼び方(作者が書いたmatchの先頭語)。聞き返しの候補に使う。そのまま打てば必ず通る
+function exitChoiceLabels(node) {
+  return viableExits(node).map(e => (e.match || [])[0]).filter(Boolean);
+}
+/* 「先へ進めない」時の文言。通れる出口があるのに blockedText を出すと嘘になる
+   (ログT28: LLMが「道が開いている」と言った直後に「ふさいでいる」と否定していた)。
+   出口が複数あって決まらない場合は、作者の語で聞き返す */
+function moveBlockedNote(node) {
+  const labels = exitChoiceLabels(node);
+  if (!labels.length) return node.blockedText || "これより先へは、まだ進めない。何かを見落としている気がする。";
+  return labels.length > 1
+    ? `どちらへ向かう? ${labels.join(" か ")} だ。`
+    : `どちらへ向かうか、宣言してくれ。${labels[0]}へ行けそうだ。`;
 }
 // TASの移動先表記("scene:1"、数値、文字列id)をシーン配列のindexに解決する
 function resolveExitTargetIndex(to) {
@@ -1399,10 +1459,14 @@ function scriptedMoveForward(text) {
   const sc = SCENARIO.scenes[state.sceneIndex];
   if (state.enemy) { addGm(`${enemyName(state.enemy)}が行く手をふさいでいる。`, "Fear"); return; }
   if (Array.isArray(sc.exits) && sc.exits.length) {
-    const exit = resolveExit(sc, text || "");
+    let exit = resolveExit(sc, text || "");
+    /* 照合語に外れた時。requiresを満たす出口が1つだけなら、言い方が作者の想定と違っても通す。
+       複数あるなら聞き返す。1つも無いなら本当にふさがっているので blockedText でよい。
+       requiresの門番は緩めない——未解決の手がかりを残して進むと開示不能な秘密が出る(2026-07-12) */
     if (!exit) {
-      addGm(sc.blockedText || "どちらへ向かうか、はっきりしない。別の言い方を試してくれ。", "Neutral");
-      return;
+      const viable = viableExits(sc);
+      if (viable.length !== 1) { addGm(moveBlockedNote(sc), "Neutral"); return; }
+      exit = normalizeExit(viable[0]);
     }
     if (!requiresMet(exit.requires)) {
       addGm(exit.blockedText || sc.blockedText || "まだ進めない。", "Neutral");
@@ -2054,7 +2118,10 @@ export async function sendAction(text) {
     const intro = SCENARIO.intro;
     const exit = resolveExit(intro, text);
     if (!exit) {
-      addGm(intro.blockedText || "どう答えるか、はっきりしない。別の言い方を試してくれ。", "Neutral");
+      /* 照合語に外れた宣言は、依頼人との会話として扱う(死んだターンにしない)。
+         受諾を確定させるのは照合語の一致だけなので、ここで話が進んでしまうことはない */
+      if (intro.npc && intro.npc.name) dialogueNodeReply(intro, text);
+      else addGm(intro.blockedText || "どう答えるか、はっきりしない。別の言い方を試してくれ。", "Neutral");
     } else if (!requiresMet(exit.requires)) {
       addGm(exit.blockedText || "まだ準備ができていない。", "Neutral");
     } else {
@@ -2074,7 +2141,8 @@ export async function sendAction(text) {
     const ending = SCENARIO.ending;
     const exit = resolveExit(ending, text);
     if (!exit) {
-      addGm(ending.blockedText || "どう締めくくるか、はっきりしない。別の言い方を試してくれ。", "Neutral");
+      if (ending.npc && ending.npc.name) dialogueNodeReply(ending, text);
+      else addGm(ending.blockedText || "どう締めくくるか、はっきりしない。別の言い方を試してくれ。", "Neutral");
     } else if (!requiresMet(exit.requires)) {
       addGm(exit.blockedText || ending.blockedText || "まだ進めない。", "Neutral");
     } else {
@@ -2405,7 +2473,8 @@ export async function sendAction(text) {
     if (r.scene_complete && !sceneCompleteAllowed(SCENARIO.scenes[state.sceneIndex])) {
       r.scene_complete = false;
       state.blockedMove = true; // 次の手番のプロンプトで「先へ進んだ描写をするな」を注入
-      addGm(SCENARIO.scenes[state.sceneIndex].blockedText || "これより先へは、まだ進めない。何かを見落としている気がする。");
+      // 通れる出口があるなら「進めない」は嘘になる。moveBlockedNoteが状態に合わせて出し分ける
+      addGm(moveBlockedNote(SCENARIO.scenes[state.sceneIndex]));
     }
 
     if (inv.held(state.inventory).length > itemsBefore) progressed = true;
