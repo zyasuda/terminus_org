@@ -25,7 +25,8 @@ function outputStableIds(payload){
     readingLevel:baseStyle.readingLevel||"平易な日本語を使う。",
     world:campaignWorld,
     theme:campaignTheme,
-    terms:campaignTerms
+    terms:campaignTerms,
+    conversationSpread:["story","standard","free"].includes(campaignStyle?.conversationSpread)?campaignStyle.conversationSpread:"standard"
   };
   const chapter=payload.chapter||{};
   const firstScene=(chapter.scenes||[])[0]||{};
