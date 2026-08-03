@@ -8,10 +8,11 @@ import {
   STAGNATION_SOFT,
   stateFingerprint as buildStateFingerprint,
   takeInjuryCue as buildInjuryCue,
-  takeStagnationCue as buildStagnationCue
+  takeStagnationCue as buildStagnationCue,
+  takeRollReactionCue as buildRollReactionCue
 } from "../state.js";
 import { callGmApi } from "../llm.js";
-import { CAST, BANTER, SCENARIO, CAMPAIGN, CONTENT_SELECTION, loadScenarioData } from "../scenario.js";
+import { CAST, GM, BANTER, SCENARIO, CAMPAIGN, CONTENT_SELECTION, loadScenarioData } from "../scenario.js";
 import { pushChat, clearChat, setStore, getSnapshot } from "./store.js";
 
 // campaign.json の cast[](NPC台帳)から、このシーンのNPCの一般情報(public)を引く。
@@ -41,6 +42,7 @@ function stateFingerprint() {
 }
 function takeStagnationCue() { return buildStagnationCue(state); }
 function takeInjuryCue() { return buildInjuryCue(state); }
+function takeRollReactionCue() { return buildRollReactionCue(state, CAMPAIGN.style || {}); }
 
 export function exportChronicle() {
   bindChronicle({ SCENARIO, CAST, CAMPAIGN, state, chron, revealed });
@@ -166,7 +168,7 @@ export function dismissPopup() {
         showDialogueNode(SCENARIO.intro);
       } else {
         showSceneOverlay(); // テキストのフェードイン開始。フェードイン完了時に下パネルが開く(showSceneOverlay内)
-        setTimeout(() => addGm("今回のGMを担当するダイス先輩です。よろしくぅ", "Happy"), 1000);
+        setTimeout(() => addGm(gmGreeting(), "Happy"), 1000);
       }
     }, 1200);
   }
@@ -272,7 +274,7 @@ export async function boot() {
   setStore({
     gmMode,
     partySlots,
-    gmSprite: CAMPAIGN.gmSprite || "gm_mascot.png",
+    gmSprite: GM.sprite || CAMPAIGN.gmSprite || "gm_mascot.png",
     contentCatalog: CONTENT_SELECTION.catalog.campaigns,
     selectedCampaignId: CONTENT_SELECTION.campaignId,
     selectedChapterId: CONTENT_SELECTION.chapterId,
@@ -316,7 +318,7 @@ export function resetGame() {
   // 下パネルのチャットは会話専用にする(UI_REDESIGN.md / EVENT_MAP.mdの「シナリオ開始=依頼ポップアップ」)。
   // curtain: 依頼ポップアップの間は背景(シーン・パネル・キャラ)を幕で隠し、「はじめる」で開ける。
   // パネルは全部閉じた状態から開幕シーケンス(dismissPopup参照)が始まる。
-  // GMペット(ダイス先輩)の自己紹介もシーケンス内(シーン説明のフェードイン後)で行う
+  // GMペット(既定名はダイス先輩)の自己紹介もシーケンス内(シーン説明のフェードイン後)で行う
   //
   // opening/introはnull運用(TAS_導入終端ノード出力仕様_null運用_2026-07-22):
   // null=未作成(ポップアップを出さない)、文字列=旧形式、オブジェクト(exits[]あり)=新形式。
@@ -559,6 +561,10 @@ async function addDice(roll, diff, ok, crit, fumble, reason) {
     await sleep(900); // 出目の確定(760ms)を見せてから次へ
   }
   if (crit || fumble) screenFx(crit ? "crit" : "fumble");
+  /* 判定リアクション(campaign.style.rollReaction)の材料。全てのダイスはここを通るので、
+     出目の判定を新しく書かずに1箇所で拾える。この手番でLLMを呼ばずに終わった場合は
+     消費されないまま残るが、次の手番の頭で捨てるので1手番遅れて出ることはない */
+  if (crit || fumble) state.pendingRollOutcome = crit ? "critical" : "fumble";
   pushPopup({ kind: "dice", title: "判定", body: `🎲 ${reason} — d20 → ${roll} / DC ${diff} … ${label}` });
 }
 // secretを開示する。text=LLM注入用(GM向け注記込み)、playerText=プレイヤー表示用(あれば優先)
@@ -719,7 +725,7 @@ function applyUpdatesLogged(u, opts, cause) {
   if (state.hp < before) {
     state.pendingInjuryConcern = true;
     const dmg = before - state.hp;
-    // ダメージは見逃されやすいので、画面シェイク+赤フラッシュ→ポップアップで明示+ダイス先輩が残りHPを知らせる
+    // ダメージは見逃されやすいので、画面シェイク+赤フラッシュ→ポップアップで明示+GMが残りHPを知らせる
     screenFx("damage");
     pushPopup({
       kind: "damage",
@@ -756,6 +762,26 @@ function firstPersonRule(c) {
 // 呼称・二人称: プレイヤーを呼ぶ時の語をaddressTermで固定する(未指定なら制約なし、名前呼びも可のまま)
 function addressTermRule(c) {
   return c.addressTerm ? ` プレイヤーを二人称で呼ぶ時は「${c.addressTerm}」で統一せよ(名前で呼ぶ場面ではそちらでもよい)。` : "";
+}
+/* GMの発話ルール。同行者の voiceRule() をそのまま再利用すると、GMには効かせたくない
+   「地の文でも一人称を使う」という読み方になる。GMは語り手も兼ねるので、
+   一人称・呼称はプレイヤーへ直接語りかける時だけに限定する一文を必ず添える。
+   speechRules(作者の自由記述)もここで足す */
+function gmVoiceRule() {
+  const voice = voiceRule(GM);
+  if (!voice && !GM.speechRules) return "";
+  const scope = (GM.firstPerson || GM.addressTerm)
+    ? " これらはプレイヤーへ直接語りかける時だけ使う。情景を語る地の文では使わない。"
+    : "";
+  return voice + scope + (GM.speechRules ? ` ${GM.speechRules}` : "");
+}
+/* 起動時の自己紹介。「よろしくぅ」は既定GM(ダイス先輩)固有の口調なので、
+   作者が別のGMを設定した時にそのまま流用すると人格と口調が食い違う。
+   既定名のままの時だけ従来文を使い、変えられていたら口調を持たない文にする */
+function gmGreeting() {
+  return GM.isDefaultName
+    ? "今回のGMを担当するダイス先輩です。よろしくぅ"
+    : `今回のGMを担当する${GM.name}だ。よろしく`;
 }
 // キャラの発話ルール一式(一人称・語尾・呼称)をまとめて生成する
 function voiceRule(c) {
@@ -1297,6 +1323,17 @@ function markExamined(entity) {
   if (!(state.examined ||= []).includes(entity)) { state.examined.push(entity); }
 }
 
+/* 調べたが分からなかった時の一文。作者がcampaign.style.emptyHandedへ複数書けば順に回す。
+   実プレイログ(2026-08-03)で同じ固定文が7回続いたため、作者が世界観に合う手ざわりを
+   与えられるようにした。ここをLLMに任せない理由は :480 のコメントにある通り
+   (過去にLLMが同文を10連続生成した事故があり、意図的に決定論にしてある)。
+   乱数ではなくターン数で回す——同じ状態から同じ結果が出る性質を保つため */
+function emptyHandedNote() {
+  const notes = (CAMPAIGN.style.emptyHanded || []).filter(Boolean);
+  if (!notes.length) return "それ以上のことは、まだ分からない。";
+  return notes[state.turn % notes.length];
+}
+
 async function scriptedExamine(secret, actorName = "あなた") {
   markExamined(secret.entity);
   const diff = secret.dc || 12;
@@ -1312,7 +1349,7 @@ async function scriptedExamine(secret, actorName = "あなた") {
     revealFlavor(secret); // 開示の余韻(同行者の一言)を非同期で追加。失敗しても進行に影響なし
   } else {
     const surfaceText = secret.surface ? secret.surface.replace(/。+$/, "") + "。" : "";
-    addGm(`${surfaceText}それ以上のことは、まだ分からない。`, "Neutral");
+    addGm(`${surfaceText}${emptyHandedNote()}`, "Neutral");
   }
 }
 
@@ -1499,7 +1536,7 @@ ${recentTargets.length ? `直前に話題になった対象: ${recentTargets.joi
 - move: 先へ・奥へ進む(場所を移る)
 - back: 来た道を戻る
 - talk: 登場人物への発言・質問・報告(「坑道は崩れそうだ」のような平叙文の報告も含む)
-- talk_gm: GM(ダイス先輩)やゲームの仕組みそのものへの質問・要望
+- talk_gm: GM(${GM.name})やゲームの仕組みそのものへの質問・要望
 - take: その場にある物を拾う・手に取る(既に持っている道具を使う・操作するのはother)
 - other: どれにも当てはまらない
 targetの規則(厳守):
@@ -1738,9 +1775,12 @@ function askBackUnknownTarget(named, sc, repeated) {
   const shown = candidates.slice(0, repeated ? 6 : 3);
   state.unknownTarget = { lastTurnAskedBack: true, candidates: shown };
   const choices = shown.length ? ` 候補: ${shown.join("、")}。` : "";
+  /* 前置きの一言だけを作者が差し替えられる(campaign.style.unknownTarget)。
+     候補一覧はエンジンが決定論で添える——ここをLLMや作者に任せると存在しない物を並べうる */
+  const opener = CAMPAIGN.style.unknownTarget || `「${named}」が何を指すのか、もう少し教えてくれ。`;
   addGm(repeated
-    ? `「${named}」が何を指すのか分からない。この中から選んでくれ。${choices}`
-    : `「${named}」が何を指すのか、もう少し教えてくれ。${choices}`, "Neutral");
+    ? `${opener}この中から選んでくれ。${choices}`
+    : `${opener}${choices}`, "Neutral");
 }
 
 /* シーン遷移のシステム側ガード。scene.completeRequires(機械可読の条件)を満たさない限り、
@@ -1833,8 +1873,12 @@ function systemPrompt(extra) {
     standard: "",
     free: "プレイヤーとの雑談や脱線を歓迎してよい。無理に本筋へ戻そうとしなくてよい。"
   }[st.conversationSpread || "standard"] || "";
+  /* GMの人格(誰であるか)と、地の文の作法(どう書くか)は役割が別なので行を分ける。
+     どちらもキャンペーン単位で固定なので、プロンプト前半(KVキャッシュの対象)に置いてよい */
   const styleBlock = [
-    `あなたはソロTRPGのゲームマスター。${st.narration}`,
+    `あなたはソロTRPGのゲームマスター。名は${GM.name}。${GM.persona}`,
+    gmVoiceRule(),
+    st.narration,
     st.readingLevel,
     st.goodExample ? `良い例:「${st.goodExample}」` : "",
     st.badExample ? `悪い例:「${st.badExample}」` : "",
@@ -2239,8 +2283,8 @@ export async function sendAction(text) {
           return;
         }
       } else if (cls.intent === "talk_gm") {
-        // GM(ダイス先輩)への直接の話しかけ。人格で応えるが、状態は一切変更しない(state_updatesは下の共通ガードが遮断)
-        gmDirectCue = "\n# GMへの直接の発言\nプレイヤーは物語の登場人物ではなく、GM(ダイス先輩)のあなたに話しかけている。ダイス先輩として気さくに短く応えよ。ルールや状態の変更を求められたら meta_request を使い、実行はしない。物語の未開示情報は明かさない。";
+        // GM(既定名はダイス先輩)への直接の話しかけ。人格で応えるが、状態は一切変更しない(state_updatesは下の共通ガードが遮断)
+        gmDirectCue = `\n# GMへの直接の発言\nプレイヤーは物語の登場人物ではなく、GM(${GM.name})のあなたに話しかけている。${GM.name}自身として短く応えよ(${GM.persona})。${gmVoiceRule()}ルールや状態の変更を求められたら meta_request を使い、実行はしない。物語の未開示情報は明かさない。`;
       }
       // talk / other / 対象不明のinvestigate → 従来のLLMレーン(語りと会話の領分)
     }
@@ -2258,7 +2302,7 @@ export async function sendAction(text) {
     const addressedWho = Object.keys(CAST).find(id => text.includes(CAST[id].name)) || null;
     setThinking("gm", true);
     if (addressedWho) setThinking(addressedWho, true);
-    let r = await callGm(`プレイヤーの宣言: ${text}`, banterCue + stagnationCue + injuryCue + gmDirectCue);
+    let r = await callGm(`プレイヤーの宣言: ${text}`, banterCue + stagnationCue + injuryCue + gmDirectCue + takeRollReactionCue());
     setThinking("gm", false);
     state.pendingFailedCheck = null; state.blockedMove = false;
     if (r.narration) addGmNarration(trimNarration(r.narration), r.emotion);

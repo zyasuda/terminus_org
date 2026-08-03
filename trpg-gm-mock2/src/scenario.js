@@ -16,6 +16,7 @@
 export let CAMPAIGN = null; // campaign.json全体(styleやcompanionsHintをsystemPromptが参照)
 export let SCENARIO = null;
 export let CAST = null;
+export let GM = null; // GM自身の人格。campaign.gmが無い既存キャンペーンでは下のGM_DEFAULTで動く
 export let BANTER = null;
 export let CONTENT_SELECTION = null; // {campaignId, chapterId, campaign, chapter}
 
@@ -28,6 +29,13 @@ async function fetchJson(path) {
     throw new Error(`${path} がJSONとして読めない: ${e.message}`);
   }
 }
+
+/* GMの既定値。campaign.gm を持たない既存キャンペーンはこれで従来どおり動く。
+   nameは画面とプロンプトの両方に出る名前で、TAS側のDEFAULT_GM_NAMEと一致させてある */
+const GM_DEFAULT = {
+  name: "ダイス先輩",
+  persona: "結果を簡潔に説明し、プレイヤーの選択を尊重して案内する。"
+};
 
 // 手作業変換のJSONを想定した最小バリデーション(TASのBuild Pipelineができたら本検証はそちらへ移す)
 function validate(campaign, chapter) {
@@ -122,6 +130,25 @@ export async function loadScenarioData() {
     chapterEntry,
     campaignId: campaignEntry.id,
     chapterId: chapterEntry.id
+  };
+
+  /* GM自身の人格。TASは未入力の項目を空文字列で出すので、スプレッドだけでは既定値が空で潰れる。
+     項目ごとに || で埋める。campaign.gm を持たない既存キャンペーンは全項目が既定値になる
+     (validate()にgmの必須チェックを足してはならない。goal必須で起動不能にした事故がある) */
+  const gmRaw = (campaign.gm && typeof campaign.gm === "object") ? campaign.gm : {};
+  GM = {
+    id: "gm",
+    name: gmRaw.name || GM_DEFAULT.name,
+    persona: gmRaw.persona || GM_DEFAULT.persona,
+    gender: gmRaw.gender || "",
+    firstPerson: gmRaw.firstPerson || "",
+    addressTerm: gmRaw.addressTerm || "",
+    speechRules: gmRaw.speechRules || "",
+    sprite: gmRaw.sprite || "",
+    /* 作者が名前を変えていないか。既定GM固有の口調(「よろしくぅ」)を使ってよいかの判断に使う。
+       TASは未変更でも gm.name="ダイス先輩" を必ず出力するので、キーの有無では判定できない。
+       既定名と一致するかで見る(名前の文字列比較を呼び出し側へ散らさない) */
+    isDefaultName: !gmRaw.name || gmRaw.name === GM_DEFAULT.name
   };
 
   // companions → CAST(id引きの人格・掛け合い設定)と BANTER(ペア単位のツッコミ定義)へ展開

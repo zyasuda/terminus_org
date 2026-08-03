@@ -18,6 +18,7 @@ export function initialState() {
            pendingInjuryConcern: false,
            pendingFailedCheck: null,
            unknownTarget: { lastTurnAskedBack: false, candidates: [] }, // 直前の聞き返しと、入力チップへ出す安全な候補
+           pendingRollOutcome: null, // "critical"|"fumble"。判定リアクション(style.rollReaction)を1手番だけ効かせる
            ambushResolved: [],
            spotted: null, // 奇襲察知に成功して「発見済み・未交戦」の敵名。次の宣言で仕掛ける/追い払う/やり過ごすを選ぶ
            fled: [], // 退散・逃走で戦闘を終えた敵名。再出現させない(「潜む敵」プロンプトからも除外)
@@ -42,6 +43,20 @@ export function takeStagnationCue(state) {
     return `\n# 停滞への対応(軽・任意)\nプレイヤーは目立った前進のないまま${n}手番が過ぎている。プレイヤーが迷っている可能性がある。同行者の一言(companion)で、状況を短く整理するか、依頼の目的をさりげなく思い出させよ。`;
   }
   return "";
+}
+
+/* 判定リアクション。作者がcampaign.style.rollReactionへ書いた「クリティカル/ファンブルに
+   GMがどう反応するか」を、その手番だけプロンプト末尾へ足す。未設定なら何も足さない(現行の挙動)。
+   takeStagnationCue/takeInjuryCueと同じ「一度だけ効かせて落とす」作法に揃えてある。
+   プロンプト前半(styleBlock)へ入れてはならない——手番ごとに変わるのでKVキャッシュを壊す */
+export function takeRollReactionCue(state, style) {
+  const outcome = state.pendingRollOutcome;
+  if (!outcome) return "";
+  state.pendingRollOutcome = null;
+  const note = ((style || {}).rollReaction || {})[outcome] || "";
+  if (!note) return "";
+  const label = outcome === "critical" ? "出目20(クリティカル)" : "出目1(ファンブル)";
+  return `\n# 判定への反応(この手番のみ)\n直前の判定は${label}である。次の方針でGMとして反応せよ(判定の成否そのものはシステムが伝えるので、結果の数値を繰り返す必要はない)。\n${note}`;
 }
 
 export function takeInjuryCue(state) {
