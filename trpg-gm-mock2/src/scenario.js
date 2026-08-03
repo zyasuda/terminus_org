@@ -50,7 +50,7 @@ function validate(campaign, chapter) {
     const ids = new Set();
     chapter.scenes.forEach((sc, i) => {
       const label = `scene ${sc.id ?? i + 1}`;
-      if (!sc.brief || !sc.goal) errs.push(`${label}: brief/goal が必要`);
+      if (!sc.brief) errs.push(`${label}: brief が必要`);
       if (!Array.isArray(sc.secrets)) errs.push(`${label}: secrets は配列(空でも可)が必要`);
       (sc.secrets || []).forEach(s => {
         if (!s.id || !s.entity || !s.text) errs.push(`${label}: secret に id/entity/text が必要`);

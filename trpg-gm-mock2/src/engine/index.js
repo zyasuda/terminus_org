@@ -1841,7 +1841,7 @@ ${npcBlock}
 ${digestBlock}
 # 現在のシーン(${state.sceneIndex + 1}/${SCENARIO.scenes.length})
 ${sc.brief}
-シーンの目標:${sc.goal}
+${sc.goal ? `シーンの目標:${sc.goal}` : ""}
 
 # 演出指示(ト書き)
 ${direction}
