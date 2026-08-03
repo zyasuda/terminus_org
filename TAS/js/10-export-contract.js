@@ -1,6 +1,6 @@
 
 /* エクスポート契約v0.2: 表示名と分離した安定ID、構造化style、catalog情報を付与する。 */
-function stableId(value,fallback){const raw=String(value||"").normalize("NFKC").toLowerCase().trim().replace(/[^a-z0-9_-]+/g,"-").replace(/^-+|-+$/g,"");return raw||fallback}
+function stableId(value,fallback){const raw=String(value||"").normalize("NFKC").toLowerCase().trim().replace(/[^a-z0-9_-]+/g,"-").replace(/^-+|-+$/g,"");return raw||`${fallback}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2,8)}`}
 var tasCampaignId="lanternhill";
 var tasChapterIds={ch1:"chapter_01",ch2:"chapter_02"};
 var baseWorkspaceDraftForStable=workspaceDraft;
@@ -66,8 +66,8 @@ function outputStableIds(payload){
     companions:companions.map(c=>{const image=runtimeImageName(castImages[c.id]);return image?{...c,sprite:image}:{...c}}),
     image:runtimeImageName(campaignImage)||baseCampaign.image||null
   };
-  const assets={};
-  const addAsset=(file,kind,usedBy)=>{if(!file)return;const id=runtimeAssetId(file);if(assets[id]){if(!assets[id].usedBy.includes(usedBy))assets[id].usedBy.push(usedBy);return}assets[id]={file,kind,status:"candidate",usedBy:[usedBy]}};
+  const assets={},assetIds={};
+  const addAsset=(file,kind,usedBy)=>{if(!file)return;const id=assetIds[file]||(assetIds[file]=runtimeAssetId(file));if(assets[id]){if(!assets[id].usedBy.includes(usedBy))assets[id].usedBy.push(usedBy);return}assets[id]={file,kind,status:"candidate",usedBy:[usedBy]}};
   addAsset(runtimeImageName(campaignImage),"campaign",`campaign.image`);
   campaign.companions.forEach(c=>addAsset(c.sprite,"portrait",`campaign.companions.${c.id}.sprite`));
   addAsset(normalizedChapter.intro?.img,"background",`${chapterId}.intro.img`);
