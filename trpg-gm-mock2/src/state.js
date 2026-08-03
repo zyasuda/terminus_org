@@ -19,6 +19,7 @@ export function initialState() {
            pendingFailedCheck: null,
            unknownTarget: { lastTurnAskedBack: false, candidates: [] }, // 直前の聞き返しと、入力チップへ出す安全な候補
            pendingRollOutcome: null, // "critical"|"fumble"。判定リアクション(style.rollReaction)を1手番だけ効かせる
+           pendingLootReveal: [], // 秘密の開示で新たに入手可能になった品名。takeLootRevealCueで1回だけ念押しする
            ambushResolved: [],
            spotted: null, // 奇襲察知に成功して「発見済み・未交戦」の敵名。次の宣言で仕掛ける/追い払う/やり過ごすを選ぶ
            fled: [], // 退散・逃走で戦闘を終えた敵名。再出現させない(「潜む敵」プロンプトからも除外)
@@ -57,6 +58,18 @@ export function takeRollReactionCue(state, style) {
   if (!note) return "";
   const label = outcome === "critical" ? "出目20(クリティカル)" : "出目1(ファンブル)";
   return `\n# 判定への反応(この手番のみ)\n直前の判定は${label}である。次の方針でGMとして反応せよ(判定の成否そのものはシステムが伝えるので、結果の数値を繰り返す必要はない)。\n${note}`;
+}
+
+/* 秘密の開示で新たに入手可能になった品を、companion/npcの一言で確実に念押しする。
+   従来はシナリオのdirection欄の自由記述("〜を手に取ったと伝える")に頼っていたが、
+   LLMが従うとは限らない(2026-08-03の実プレイで発火せず、プレイヤーがエンディングで
+   「渡す物がない」を3回連続で拒否された)。ここは一度だけ強く促す。
+   pendingLootReveal自体はunlockSecret()が積み、実際にtakeできた時点でsendAction側が消費する */
+export function takeLootRevealCue(state) {
+  const items = state.pendingLootReveal;
+  if (!items || !items.length) return "";
+  state.pendingLootReveal = [];
+  return `\n# 新たに入手できる品(この手番のみ・強く)\n${items.join("、")}が入手可能になった。companion(または場面にnpcがいればnpc)の一言で、これを拾うようプレイヤーへ明確に促せ(例:「それを拾っておいた方がいい」)。narrationで地の文として触れるだけでは不十分。この手番はcompanion/npcの発言を省略してはならない。`;
 }
 
 export function takeInjuryCue(state) {

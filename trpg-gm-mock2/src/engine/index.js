@@ -9,7 +9,8 @@ import {
   stateFingerprint as buildStateFingerprint,
   takeInjuryCue as buildInjuryCue,
   takeStagnationCue as buildStagnationCue,
-  takeRollReactionCue as buildRollReactionCue
+  takeRollReactionCue as buildRollReactionCue,
+  takeLootRevealCue as buildLootRevealCue
 } from "../state.js";
 import { callGmApi } from "../llm.js";
 import { CAST, GM, BANTER, SCENARIO, CAMPAIGN, CONTENT_SELECTION, loadScenarioData } from "../scenario.js";
@@ -43,6 +44,7 @@ function stateFingerprint() {
 function takeStagnationCue() { return buildStagnationCue(state); }
 function takeInjuryCue() { return buildInjuryCue(state); }
 function takeRollReactionCue() { return buildRollReactionCue(state, CAMPAIGN.style || {}); }
+function takeLootRevealCue() { return buildLootRevealCue(state); }
 
 export function exportChronicle() {
   bindChronicle({ SCENARIO, CAST, CAMPAIGN, state, chron, revealed });
@@ -1890,9 +1892,18 @@ function resolveSecretTarget(sc, targetEntity, reason, playerText) {
   return uniqueBestSecretTextMatch(candidates, hay);
 }
 function unlockSecret(secret) {
+  const sc = SCENARIO.scenes[state.sceneIndex];
+  const before = new Set(availableLoot(sc));
   revealed.add(secret.id);
   addReveal(secret);
   logSceneEvent(`「${secret.entity}」の真相を解明した`);
+  /* この秘密の開示でrequiresを満たし、新たに入手可能になった品を控える。
+     従来はシナリオ側のdirection欄への自由記述("〜を手に取ったと伝える")に促しを頼っていたが、
+     LLMが従うかどうかは保証されない(2026-08-03のログで実際に発火せず、プレイヤーが
+     エンディングで「まだ渡していないものがある」を3回連続で拒否された)。
+     ここで確実に控え、takeLootRevealCue()で1回だけ強く念押しする */
+  const newlyAvailable = availableLoot(sc).filter(n => !before.has(n));
+  if (newlyAvailable.length) state.pendingLootReveal = [...(state.pendingLootReveal || []), ...newlyAvailable];
 }
 
 // 各シーンで確定した出来事を記録する(プロンプトの「これまでの経緯」の材料。履歴24件切れ対策の長期記憶)
@@ -2353,8 +2364,11 @@ export async function sendAction(text) {
         if (!inv.held(state.inventory).some(i => text.includes(i))) {
           // 拾おうとした物を認識できていないなら、嘘をつかずに聞き返す。
           // 「持ち出す価値のあるものではない」は、requires未達で門番されている品にも出てしまい事実と異なる
-          // (2026-08-03のログT21: NPCが「拾ってくれ」と言った品をこの文で拒否した)
-          if (cls.named) { askBackUnknownTarget(cls.named, sc, previousAskedBack); done(false); return; }
+          // (2026-08-03のログT21: NPCが「拾ってくれ」と言った品をこの文で拒否した)。
+          // ただしcls.targetが既に解決している(=対象は分かっている。ただ取得可能な品ではない)なら
+          // 聞き返してはならない——それは「分からない」の嘘になる(2026-08-03の別ログT27で実際に出た。
+          // 「古い木を剥がす」→分類器は「封鎖の木柵」と正しく解決していたのに「古い木が何か分からない」と聞き返した)
+          if (!cls.target && cls.named) { askBackUnknownTarget(cls.named, sc, previousAskedBack); done(false); return; }
           addGm("持ち出す価値のあるものではないようだ。", "Neutral");
           done(false);
           return;
@@ -2379,7 +2393,11 @@ export async function sendAction(text) {
     const addressedWho = Object.keys(CAST).find(id => text.includes(CAST[id].name)) || null;
     setThinking("gm", true);
     if (addressedWho) setThinking(addressedWho, true);
-    let r = await callGm(`プレイヤーの宣言: ${text}`, banterCue + stagnationCue + injuryCue + gmDirectCue + takeRollReactionCue());
+    /* この場でtakeLootRevealCue()を呼ぶ(cls分岐より前で計算・消費すると、決定論の経路が
+       LLMを呼ばずにreturnした時に控えが黒く消える。2026-08-03の実測: 「胸の光るもの」開示の直後、
+       「奥へ進む」が決定論の移動経路で解決されて念押しが一度も出なかった。ここまで来て初めて
+       消費すれば、LLMを呼ぶ手番が来るまで控えが持続し、必ずどこかの手番で届く) */
+    let r = await callGm(`プレイヤーの宣言: ${text}`, banterCue + stagnationCue + injuryCue + takeLootRevealCue() + gmDirectCue + takeRollReactionCue());
     setThinking("gm", false);
     state.pendingFailedCheck = null; state.blockedMove = false;
     if (r.narration) addGmNarration(trimNarration(r.narration), r.emotion);
