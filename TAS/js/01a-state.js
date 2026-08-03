@@ -8,7 +8,7 @@ let freshCampaign=false;let customChapterScenes={ch1:[],ch2:[]};let chapterNames
 /* 左ツリーで選んだ対象ごとのタブ。renderTabs / renderRightPanel / renderTab がこの定義を共有する。 */
 const CAMPAIGN_TABS=[["world","設定"],["concepts","GM設定"],["cast","キャラクター"],["monsters","モンスター"],["items","アイテム"],["rules","共通ルール"]];
 const CHAPTER_TABS=[["chapterOverview","構成・進行"]];
-const SCENE_TABS=[["structure","シーン設定"],["state","シーン要素"],["expression","表現・会話"],["playtest","テキストプレイ"],["draft","生成レビュー"]];
+const SCENE_TABS=[["structure","シーン設定"],["state","調査対象"],["expression","表現・会話"],["playtest","テキストプレイ"],["draft","生成レビュー"]];
 const CAMPAIGN_TAB_IDS=CAMPAIGN_TABS.map(([id])=>id);
 const CHAPTER_TAB_IDS=CHAPTER_TABS.map(([id])=>id);
 let chapterData=()=>{if(freshCampaign)return {title:activeChapter==="ch2"?"新しい章":"新しい章",scenes:Array.isArray(customChapterScenes[activeChapter])?customChapterScenes[activeChapter]:[]};try{const file=activeChapter==="ch2"?"chapter_02.json":"chapter_01.json";const raw=context?.dataFiles?.[file]||context?.dataFiles?.["chapter_01.json"];if(raw)return JSON.parse(raw)}catch(e){}return {title:activeChapter==="ch2"?"心石の在処":"廃坑の灯",scenes:activeChapter==="ch2"?fallbackScenes.slice(0,2):fallbackScenes}};
