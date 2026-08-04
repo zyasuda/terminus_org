@@ -1284,6 +1284,18 @@ async function tryCombatTurn(text) {
 }
 
 // 戦闘終了時にガレスかリディアが一言(campaign.jsonのcompanions[].battleEndから。データ駆動)
+/* シーン到着時、同行者の1人が短い一言を返す(companionBattleEndLineと同じ「候補から
+   ランダムに1人」設計)。GMの到着セリフと違い、シナリオ内容に紐づく必要は無い——
+   誰にでも当てはまる中立の一言で十分(2026-08-04、ユーザー案「さて、どうする?」等)。
+   quirks/battleMutters/battleEndと同じ理由でLLMを介さない固定文にする */
+const SCENE_ARRIVAL_LINES = ["何か気になることは?", "まず何からいく?", "気をつけていこう。"];
+function companionSceneArrivalLine() {
+  const ids = Object.keys(CAST);
+  if (!ids.length) return;
+  const who = ids[Math.floor(Math.random() * ids.length)];
+  addCompanion(SCENE_ARRIVAL_LINES[Math.floor(Math.random() * SCENE_ARRIVAL_LINES.length)], who);
+}
+
 function companionBattleEndLine(outcome) {
   const candidates = Object.entries(CAST)
     .map(([id, c]) => ({ id, lines: (c.battleEnd || {})[outcome] || [] }))
@@ -1717,6 +1729,8 @@ function advanceScene(targetIndex) {
     // シーン説明のフェードイン(1s)が終わったところでGMが新しいシーンの一言を語る
     const sceneNo = state.sceneIndex + 1;
     setTimeout(() => addGm(`第${sceneNo}話「${newScene.name || ""}」だ。さて、どうする?`, "Happy"), 1000);
+    // GMの一言と同時に出て読む順に迷わないよう、CONSENT_GAP_MSぶん遅らせて重ならないようにする
+    setTimeout(() => companionSceneArrivalLine(), 1000 + CONSENT_GAP_MS);
     history.push({ role: "user", content: "【システム】シーンが切り替わった。" });
     history.push({ role: "assistant", content: JSON.stringify({ narration: newBrief, companion: null, npc: null, check: null, state_updates: null, engage_enemy: false, flee_enemy: false, scene_complete: false, meta_request: null }) });
   } else {
