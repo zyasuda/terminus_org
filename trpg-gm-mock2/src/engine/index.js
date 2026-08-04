@@ -1289,6 +1289,21 @@ async function tryCombatTurn(text) {
    誰にでも当てはまる中立の一言で十分(2026-08-04、ユーザー案「さて、どうする?」等)。
    quirks/battleMutters/battleEndと同じ理由でLLMを介さない固定文にする */
 const SCENE_ARRIVAL_LINES = ["何か気になることは?", "まず何からいく?", "気をつけていこう。"];
+
+/* GM自身の到着セリフのバリエーション(2026-08-04)。話数とシーン名は章の進行状況を
+   伝える情報なので必ず含めるが、それ以外の言い回しは複数用意してランダムに選ぶ。
+   同行者のSCENE_ARRIVAL_LINESと違い、n/nameを埋め込む関数の配列にする(文構造ごと
+   変えられるようにするため。「話数+シーン名」を先頭に固定した接尾辞だけの変化に
+   限定しない) */
+const GM_SCENE_ARRIVAL_LINES = [
+  (n, name) => `第${n}話「${name}」だ。さて、どうする?`,
+  (n, name) => `第${n}話「${name}」だ。何から確かめる?`,
+  (n, name) => `あなたたちは、第${n}話「${name}」に到着した。`,
+  (n, name) => `第${n}話「${name}」だ。気を引き締めていこう。`
+];
+function gmSceneArrivalLine(sceneNo, name) {
+  return GM_SCENE_ARRIVAL_LINES[Math.floor(Math.random() * GM_SCENE_ARRIVAL_LINES.length)](sceneNo, name);
+}
 function companionSceneArrivalLine() {
   const ids = Object.keys(CAST);
   if (!ids.length) return;
@@ -1728,7 +1743,7 @@ function advanceScene(targetIndex) {
     // GMペットの吹き出し・語り履歴が前のシーンへの回答のまま残らないよう、
     // シーン説明のフェードイン(1s)が終わったところでGMが新しいシーンの一言を語る
     const sceneNo = state.sceneIndex + 1;
-    setTimeout(() => addGm(`第${sceneNo}話「${newScene.name || ""}」だ。さて、どうする?`, "Happy"), 1000);
+    setTimeout(() => addGm(gmSceneArrivalLine(sceneNo, newScene.name || ""), "Happy"), 1000);
     // GMの一言と同時に出て読む順に迷わないよう、CONSENT_GAP_MSぶん遅らせて重ならないようにする
     setTimeout(() => companionSceneArrivalLine(), 1000 + CONSENT_GAP_MS);
     history.push({ role: "user", content: "【システム】シーンが切り替わった。" });
