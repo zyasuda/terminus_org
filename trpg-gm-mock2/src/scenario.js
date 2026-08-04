@@ -37,6 +37,22 @@ const GM_DEFAULT = {
   persona: "結果を簡潔に説明し、プレイヤーの選択を尊重して案内する。"
 };
 
+/* 同行者の演出フィールドの既定値。TASに専用の入力欄がまだ無く(2026-08-04時点)、
+   キャラクター固有の口調ではなく、誰にでも当てはまる中立の一言にしてある。
+   quirksはscriptedモード専用(LLM呼び出しをゼロに保つ契約があるため、実行時に
+   生成せず固定文をここに置く)。3つとも同じ理由でLLMを介さない静的な文言 */
+const DEFAULT_COMPANION_QUIRKS = [
+  { mutter: "ふむ、そうか。" },
+  { mutter: "さて、どうする?" },
+  { mutter: "気をつけていこう。" }
+];
+const DEFAULT_BATTLE_MUTTERS = ["油断するなよ。", "まだ終わっていない。", "ここが踏ん張りどころだ。"];
+const DEFAULT_BATTLE_END = {
+  win: ["ふぅ、なんとかなったな。"],
+  fled: ["ここは退くのが得策だ。"],
+  repelled: ["追い払えたか。"]
+};
+
 // 手作業変換のJSONを想定した最小バリデーション(TASのBuild Pipelineができたら本検証はそちらへ移す)
 function validate(campaign, chapter) {
   const errs = [];
@@ -159,8 +175,15 @@ export async function loadScenarioData() {
       firstPerson: c.firstPerson || null, addressTerm: c.addressTerm || null,
       speechFrequency: c.speechFrequency || "standard",
       retortDrive: c.retortDrive || 3,
-      quirks: c.quirks || [], battleMutters: c.battleMutters || [],
-      agility: c.agility, battleEnd: c.battleEnd };
+      /* quirks/battleMutters/battleEndはTASにまだ専用の入力欄が無く、常に無言に
+         フォールバックしていた(2026-08-04、progression検査15で発見)。agility・
+         retortDriveと同じく、数値ではなく文言の既定値で埋める。「in」でキーの有無を
+         見るのは、作者が明示的に[]/{}を書いた「意図的な沈黙」と、単に未記入で
+         あることを区別するため(空配列を書く手間を作者に強制しない設計と対) */
+      quirks: "quirks" in c ? c.quirks : DEFAULT_COMPANION_QUIRKS,
+      battleMutters: "battleMutters" in c ? c.battleMutters : DEFAULT_BATTLE_MUTTERS,
+      agility: c.agility,
+      battleEnd: "battleEnd" in c ? c.battleEnd : DEFAULT_BATTLE_END };
     (c.banter || []).forEach(b => BANTER.push({ from: c.id, ...b }));
   });
 

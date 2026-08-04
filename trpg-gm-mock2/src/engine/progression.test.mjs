@@ -368,6 +368,12 @@ for (const ref of itemRefs) {
 ok(itemRefs.length > 0, "品物を要求する出口が1件以上ある（検査が空振りしていない）",
   "この章には品物条件が無い。検査8は実質何も見ていない");
 
+/* 検査15(同行者のquirks/battleMutters/battleEnd未入力チェック)は2026-08-04に
+   一時追加したが、即日で src/scenario.js 側に既定値(DEFAULT_COMPANION_QUIRKS等)を
+   実装したため撤去した。今はagility/retortDriveと同じく「キーが無くても文言の
+   既定値で埋まる」設計になっており、campaign.json側の欠落はもう欠陥ではない。
+   詳細はBORGの引き継ぎノート、または scenario.js の DEFAULT_* 定数を参照 */
+
 // ───────────────────────────────────────────────
 console.log(results.join("\n"));
 const total = results.filter(r => r.startsWith("  ")).length;
