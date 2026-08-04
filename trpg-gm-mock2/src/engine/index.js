@@ -1340,12 +1340,15 @@ function extractActor(text) {
   return { actorId: "player", actorName: "あなた", rest: text };
 }
 
-// テキストとsecretのentity/aliasesの照合(開示済み/未開示を指定)。複数ヒットは曖昧なのでnull
-export function uniqueBestSecretTextMatch(candidates, text) {
+/* テキストとsecretのentity/aliasesの照合(開示済み/未開示を指定)。複数ヒットは曖昧なのでnull。
+   minTermLength: これより短い語での一致を無視する。作者が明示したaliasesは「光」「石」等の
+   1文字も有効にしているが、1文字は当たりやすく、作者が書いたtriggerの一文に勝ってしまう */
+export function uniqueBestSecretTextMatch(candidates, text, minTermLength = 1) {
   let bestLength = 0;
   let hits = [];
   candidates.forEach(s => {
-    const terms = [...s.entity.split(/[・()()]/).filter(t => t.length >= 2), ...(s.aliases || [])].filter(Boolean);
+    const terms = [...s.entity.split(/[・()()]/).filter(t => t.length >= 2), ...(s.aliases || [])]
+      .filter(t => t && t.length >= minTermLength);
     const length = Math.max(0, ...terms.filter(t => text.includes(t)).map(t => t.length));
     if (length > bestLength) { bestLength = length; hits = [s]; }
     else if (length && length === bestLength) hits.push(s);
@@ -1353,23 +1356,38 @@ export function uniqueBestSecretTextMatch(candidates, text) {
   return hits.length === 1 ? hits[0] : null;
 }
 
-function matchSecretByText(sc, text, wantRevealed) {
+function matchSecretByText(sc, text, wantRevealed, minTermLength) {
   const pool = sc.secrets.filter(s => revealed.has(s.id) === wantRevealed);
-  return uniqueBestSecretTextMatch(pool, text);
+  return uniqueBestSecretTextMatch(pool, text, minTermLength);
 }
 
 // 作者がsecret.triggerへ書いた発火条件との照合。カンマ・読点で区切って語彙として扱うので、
 // 「調べる,見る,手に取る」のような列挙にも「その場に立ち止まり、空気を深く吸い込む。」のような
 // 一文にも効く。複数の秘密が該当したら曖昧なので決めない(matchSecretByTextと同じ方針)
-function matchSecretByTrigger(sc, text) {
+export function matchSecretByTrigger(sc, text, ctx) {
+  const rev = ctx ? ctx.revealed : revealed;
   const hits = (sc.secrets || []).filter(s => {
-    if (revealed.has(s.id) || !s.trigger) return false;
+    if (rev.has(s.id) || !s.trigger) return false;
     return String(s.trigger).split(/[,、]/)
       .map(t => t.trim().replace(/[。.]$/, ""))
       .filter(t => t.length >= 2)
       .some(t => text.includes(t));
   });
   return hits.length === 1 ? hits[0] : null;
+}
+
+/* 調べる宣言に対して、どの秘密を対象にするかを1箇所で決める。
+   対象の特定はentity/aliasesを優先する（triggerには「調べる」のような汎用語が書かれることが
+   あり、それを優先すると別の対象を調べた時に取り違える）。ただし1文字の別名一致は例外で、
+   作者が明示したtriggerに劣後させる。
+   2026-08-04の実プレイで、s3aの開示方法「光の源に意識を集中させる」がs3bの1文字の別名「光」に
+   負け、灯りの主の正体が永久に開かず章を完了できなかった。 */
+export function pickExamineSecret(sc, triggerText, entityText, ctx) {
+  const triggerHit = matchSecretByTrigger(sc, triggerText, ctx);
+  const rev = ctx ? ctx.revealed : revealed;
+  const pool = (sc.secrets || []).filter(s => !rev.has(s.id));
+  const textHit = uniqueBestSecretTextMatch(pool, entityText, triggerHit ? 2 : 1);
+  return { secret: textHit || triggerHit, triggerHit, textHit };
 }
 
 // 調査のscripted処理: 判定→成功で開示(既存の開示機構=ポップアップ・背景切替・チップがそのまま動く)
@@ -1390,22 +1408,43 @@ function emptyHandedNote() {
   return notes[state.turn % notes.length];
 }
 
+/* 調査の難易度。失敗を重ねるほど下がる。
+   進行に必須な秘密がダイス運のゲートの奥にあると、同じ宣言を成功するまで連打するだけの
+   体験になる(設計メモ3節が「初期モックの失敗」として名指しした構造)。失敗を無駄にせず、
+   粘った分だけ確実に近づける形にする。実測(2026-08-04の実プレイ4周)では開示に最大3回
+   かかり、1周は3連続失敗で1シーンも進めなかった。
+   ponytail: 下限DC2は残す。自然な1のファンブルだけが失敗する状態で止め、完全な自動成功に
+   はしない(振る意味を残すため)。「必ず開く」を保証したくなったら下限を1にすればよい */
+export function examineDifficulty(secret, failures = 0) {
+  const base = secret.dc || 12;
+  return Math.max(2, base - 2 * Math.max(0, failures));
+}
+
 async function scriptedExamine(secret, actorName = "あなた") {
   markExamined(secret.entity);
-  const diff = secret.dc || 12;
+  state.examineFails = state.examineFails || {};
+  const failures = state.examineFails[secret.id] || 0;
+  const diff = examineDifficulty(secret, failures);
   const reason = (actorName === "あなた" ? "" : `${actorName}: `) + `${secret.entity}を調べる`;
   const roll = await requestPlayerRoll(reason, diff, actorName);
   const crit = roll === 20, fumble = roll === 1;
   const ok = crit || (!fumble && roll >= diff);
   await addDice(roll, diff, ok, crit, fumble, reason);
   if (ok) {
+    delete state.examineFails[secret.id];
     unlockSecret(secret);
     addGm(secret.playerText || secret.text, "Happy");
     state.noProgressTurns = 0;
     revealFlavor(secret); // 開示の余韻(同行者の一言)を非同期で追加。失敗しても進行に影響なし
   } else {
+    state.examineFails[secret.id] = failures + 1;
     const surfaceText = secret.surface ? secret.surface.replace(/。+$/, "") + "。" : "";
-    addGm(`${surfaceText}${emptyHandedNote()}`, "Neutral");
+    /* 失敗が「何も起きなかった」で終わると、繰り返しに意味が無くなる。
+       次はやりやすくなったことを必ず伝える(難易度が下がったという事実の言語化) */
+    const next = examineDifficulty(secret, failures + 1);
+    const closingIn = next < diff ? "だが、さきほどより見当がついてきた。もう一度確かめれば掴めそうだ。" : "";
+    addGm(`${surfaceText}${emptyHandedNote()}${closingIn}`, "Neutral");
+    addNote(`🔎 ${secret.entity}: ${failures + 1}回目の失敗 — 次回の難易度 ${diff} → ${next}`);
   }
 }
 
@@ -1547,9 +1586,8 @@ async function tryScripted(text) {
   const triggerHit = matchSecretByTrigger(sc, text);
   if (EXAMINE_RE.test(text) || triggerHit) {
     const { actorName, rest } = extractActor(text);
-    // 対象の特定はentity/aliasを優先する。triggerには「調べる」のような汎用語が
-    // 書かれることがあり、それを優先すると別の対象を調べた時に取り違える
-    const secret = matchSecretByText(sc, rest, false) || triggerHit;
+    // 対象の決定はpickExamineSecretに集約する(優先順位の根拠はあちらのコメント)
+    const { secret } = pickExamineSecret(sc, text, rest);
     if (secret) { await scriptedExamine(secret, actorName); return true; }
     const known = matchSecretByText(sc, rest, true);
     if (known) { addGm("改めて確かめる。" + (known.playerText || known.text), "Neutral"); return true; }
@@ -1896,17 +1934,26 @@ function sceneCompleteAllowed(sc) {
    一致1: LLMがcheck.targetEntityに正名をそのまま返した場合(推奨経路。depthBlockで指示)
    一致2: 宣言文・判定名・targetEntityに、entityの部分語かaliases(章データの別名辞書)が含まれるか
    0件・複数件なら開示しない——誤った秘密を漏らすより「開示なし」の方が三層モデルとして安全 */
-function resolveSecretTarget(sc, targetEntity, reason, playerText) {
-  const candidates = sc.secrets.filter(s => !revealed.has(s.id));
+export function resolveSecretTarget(sc, targetEntity, reason, playerText, ctx) {
+  const rev = ctx ? ctx.revealed : revealed;
+  const candidates = (sc.secrets || []).filter(s => !rev.has(s.id));
   if (!candidates.length) return null;
   if (targetEntity) {
     const exact = candidates.filter(s => s.entity === String(targetEntity).trim());
     if (exact.length === 1) return exact[0];
   }
   const hay = [targetEntity, reason, playerText].filter(Boolean).join(" ");
+  /* 作者がplayerTextに書かれた開示方法(trigger)を明示している場合は、それを尊重する。
+     LLMのreasonやtargetEntityが別の対象を指していても、プレイヤーが打った言葉が
+     作者の開示方法そのものなら、狙いはそちらである。
+     2026-08-04の実プレイで、プレイヤーが「光の源に意識を集中させる」(s3aのtrigger)と打ったのに
+     LLMのreasonが「胸の光るものを調べる」だったため、s3bが開示されs3aが永久に開かなかった */
+  const authored = playerText ? matchSecretByTrigger(sc, playerText, { revealed: rev }) : null;
   // entityの自動分割語はノイズ防止で2文字以上のみ。著者が明示したaliasesは「光」「石」等の1文字も有効。
   // 長い別名を優先し、例えば「光源」を「光」との衝突で曖昧にしない。
-  return uniqueBestSecretTextMatch(candidates, hay);
+  // ただし1文字の別名一致は、上の作者指定に劣後させる。
+  const byText = uniqueBestSecretTextMatch(candidates, hay, authored ? 2 : 1);
+  return byText || authored;
 }
 function unlockSecret(secret) {
   const sc = SCENARIO.scenes[state.sceneIndex];

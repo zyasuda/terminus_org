@@ -10,7 +10,8 @@
  */
 import fs from "node:fs";
 import { resolveExit, requiresMet, exitTargetIndexIn, uniqueBestSecretTextMatch,
-  encounterRequiredElementsMet, resolveEncounterFoe } from "./index.js";
+  encounterRequiredElementsMet, resolveEncounterFoe, pickExamineSecret, resolveSecretTarget,
+  examineDifficulty } from "./index.js";
 
 /* CHAPTER=別の章.json で対象を差し替えられる。故意に壊したデータを通して
    「このハーネスが本当に落ちるか」を確かめるためにも使う */
@@ -224,6 +225,59 @@ for (const { label, node } of exitNodes) {
         `作者は出口${e.id}の語として書いたが、${hit ? `出口${hit.id}に先に取られる` : "どの出口にも一致しない"}。` +
         `この語では出口${e.id}へ行けない`);
     }
+  }
+}
+
+// ───────────────────────────────────────────────
+section("12. 作者が書いた開示方法(trigger)で、その秘密自身が開く");
+// ───────────────────────────────────────────────
+/* 2026-08-04の実プレイで見つけた欠陥の再発防止。プレイヤーが作者の書いた開示方法を
+   そのまま打っても、別の秘密の1文字の別名に負けて狙った秘密が開かず、章が完了できなかった。
+   実物の決定関数(pickExamineSecret と resolveSecretTarget)へ trigger の文をそのまま通す */
+for (const s of scenes) {
+  const unrevealed = { revealed: new Set() }; // まだ何も開示していない状態
+  for (const sec of s.secrets || []) {
+    for (const t of String(sec.trigger || "").split(/[,、]/).map(x => x.trim().replace(/[。.]$/, ""))) {
+      if (t.length < 2) continue;
+      const picked = pickExamineSecret(s, t, t, unrevealed).secret;
+      ok(picked === sec, `シーン${s.id} 「${t}」→ ${picked ? picked.id : "対象なし"}（作者は${sec.id}のために書いた）`,
+        picked ? `別の秘密 ${picked.id}(${picked.entity}) に取られる。この開示方法では${sec.id}が開かない`
+          : `どの秘密にも決まらない`);
+
+      /* LLM経由の経路も同じ結論になるか。reasonが別の対象を指していても、
+         プレイヤーが打った言葉が作者の開示方法なら、そちらを尊重すべき */
+      const viaLlm = resolveSecretTarget(s, null, "", t, unrevealed);
+      ok(viaLlm === sec, `シーン${s.id} 「${t}」→ LLM経由でも ${viaLlm ? viaLlm.id : "対象なし"}`,
+        `LLM経由の解決では ${viaLlm ? viaLlm.id : "決まらない"}。scriptedと食い違う`);
+    }
+  }
+}
+
+// ───────────────────────────────────────────────
+section("13. 粘れば必ず開示に近づく（失敗が無駄にならない）");
+// ───────────────────────────────────────────────
+/* 進行必須の秘密がダイス運のゲートの奥にある問題への対処(examineDifficulty)。
+   実測では s3a の開示に3回かかり、別の周では3連続失敗で1シーンも進めなかった。
+   失敗するたび難易度が下がり、有限回で「自然な1以外は成功する」水準に到達することを保証する */
+for (const s of scenes) {
+  for (const sec of s.secrets || []) {
+    const base = examineDifficulty(sec, 0);
+    ok(base === (sec.dc || 12), `シーン${s.id} ${sec.id}: 初回は作者の難易度どおり(${base})`,
+      `作者は ${sec.dc} を書いたのに初回が ${base} になっている`);
+
+    /* 失敗を重ねるほど下がり、途中で上がらない */
+    let prev = base;
+    let reachedFloor = 0;
+    for (let f = 1; f <= 10; f++) {
+      const d = examineDifficulty(sec, f);
+      ok(d <= prev, `シーン${s.id} ${sec.id}: ${f}回失敗後の難易度が上がらない(${prev}→${d})`);
+      if (d === prev && !reachedFloor) reachedFloor = f;
+      prev = d;
+    }
+    ok(prev <= 2, `シーン${s.id} ${sec.id}: 粘れば自然な1以外は成功する水準まで下がる(最終${prev})`,
+      `10回失敗しても難易度 ${prev} のままでは、運が悪いと永久に開かない`);
+    ok(examineDifficulty(sec, 99) >= 2, `シーン${s.id} ${sec.id}: 下限を下回らない（振る意味を残す）`,
+      `難易度が ${examineDifficulty(sec, 99)} まで下がると自動成功になり、判定の意味が消える`);
   }
 }
 
