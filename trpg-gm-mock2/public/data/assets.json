@@ -30,7 +30,9 @@
       "file": "locked_iron_gate.jpg",
       "kind": "campaign",
       "status": "approved",
-      "usedBy": [],
+      "usedBy": [
+        "campaign.image"
+      ],
       "notes": "依頼(intro)ポップアップの挿絵に採用(2026-07-13)"
     },
     "mining_automaton": {
@@ -104,7 +106,9 @@
       "kind": "background",
       "status": "approved",
       "target": "1920x1080",
-      "usedBy": [],
+      "usedBy": [
+        "chapter_01.scenes.2.img"
+      ],
       "source": "imagegen",
       "promptVersion": 1,
       "notes": "2026-07-12生成。16:9にクロップして配置。"
@@ -114,9 +118,7 @@
       "kind": "background",
       "status": "approved",
       "target": "1920x1080",
-      "usedBy": [
-        "chapter_01.scenes.2.img"
-      ],
+      "usedBy": [],
       "source": "imagegen",
       "promptVersion": 1,
       "notes": "2026-07-12生成。封鎖の木柵に合わせた。16:9にクロップして配置。2026-07-31にシーン2の柵ルートで再利用するためimages/へ戻した。"
@@ -187,7 +189,8 @@
       "status": "approved",
       "target": "1920x1080",
       "usedBy": [
-        "chapter_01.ending.img"
+        "chapter_01.ending.img",
+        "chapter_01.intro.img"
       ],
       "source": "imagegen",
       "promptVersion": 1,
@@ -247,7 +250,8 @@
       "kind": "sprite",
       "status": "candidate",
       "usedBy": [
-        "chapter_01.ending.npcSprite"
+        "chapter_01.ending.npcSprite",
+        "chapter_01.intro.npcSprite"
       ]
     },
     "s1_sky_parallax": {
