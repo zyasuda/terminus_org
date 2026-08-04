@@ -18,13 +18,25 @@ description: Run the progression harness before claiming scenario data is correc
 
 進行のゲートは「秘密」と「品物」の2系統だけである。world_flagsと戦闘結果は進行を止めない。
 
+## 2種類のハーネス
+
+| | `progression` | `playthrough` |
+|---|---|---|
+| 見るもの | データの整合と到達可能性 | 実物の`sendAction`が本当に章を終わらせるか |
+| 動かし方 | 純関数をimportして評価 | 1手番ずつ実際に回す（LLMゼロのscriptedモード） |
+| 元データを直接見れる | できる（`CHAPTER=`） | できない（mock2の複製経由のみ） |
+| 捕まえられないもの | エンジン側の欠陥 | LLM経路（hybrid/llm）の挙動 |
+
+**両方要る。** 2026-08-04、scriptedモードに品物の取得レーンが無く、品物を要求する出口がある章は完了不能だった。`progression`は213件すべて緑のまま気づかなかった。逆に「出口の移動先が実在しない」は`progression`しか見ていない。
+
 ## Workflow
 
-1. ハーネスを走らせる。
+1. ハーネスを走らせる。`npm test`に両方入っている。
 
 ```bash
 cd /Users/yasuda_k/Desktop/Terminus/trpg-gm-mock2
 npm run test:progression
+npm run test:playthrough
 ```
 
 2. **元データにも必ず向ける。** 既定はmock2の複製を読むが、複製は古いことがある。作者が編集しているのは`TAS/data`側である。
@@ -61,6 +73,27 @@ cd /Users/yasuda_k/Desktop/Terminus/TAS && npm test
 | 11 | 遭遇の敵が解決できない／必要な調査対象がtypo（永久に発火しない） |
 | 12 | 作者が書いた開示方法(trigger)が、別の秘密の短い別名に負けて別の対象が開く |
 | 13 | 進行必須の秘密が、粘っても開かない（難易度が下がらない／下限で自動成功にならない） |
+| 14 | 複数条件の出口に、専用の進めない理由が用意されていない |
+
+### playthrough が捕まえるもの
+
+台本は書かない。章データから「そのシーンの秘密を全部開き、置かれた品を全部拾い、出口へ進む」を機械的に導き、実物の`sendAction`を回す。台本を書くとデータが変わったとき台本が腐る。
+
+| 捕まえる不具合 |
+|---|
+| データは正しいのに、エンジンがそのデータで進めない |
+| 作者の`trigger`でも`〜を調べる`でも秘密が開かない（8回×全候補を試して落ちる） |
+| 開示条件は満たしているのに品物が入手できない |
+| 出口の条件を満たしたのにシーンが変わらない（拒否文言つきで報告） |
+| 章が最後まで終わらない／どこで詰まったか |
+| scriptedモードなのにLLMを呼んでいる（`/api/gm`のスタブが例外を投げる） |
+
+出目は種付き乱数で固定する。`SEED=`で変えられる。**落ちたときは種を変えて再実行し、運の問題かデータの問題かを切り分ける**（現状は種1・42・777・99999で通る）。
+
+```bash
+SEED=42 npm run test:playthrough
+CAMPAIGN=lanternhill CHAPTER_ID=chapter_01 npm run test:playthrough
+```
 
 ## ハーネスが届かない層: 実プレイでしか見つからない不具合
 
@@ -87,7 +120,8 @@ cd /Users/yasuda_k/Desktop/Terminus/TAS && npm test
 - **緑を目的にしない。** 落ちたら、まず「テストが正しいか」ではなく「データが正しいか」を疑う。過去に実際の欠陥（心石の欠片が永久に出現せず章をクリア不能）をこの検査が見つけた
 - **複製が緑でも安心しない。** 2026-08-04、mock2の複製は緑なのに元データは章クリア不能だった
 - 検査を追加したら、**故意に壊したデータを通して本当に落ちることを確認する**。落ちないテストは無意味である
-- ロジックを複製しない。`resolveExit`・`requiresMet`・`uniqueBestSecretTextMatch`・`resolveEncounterFoe`・`pickExamineSecret`・`examineDifficulty`など、mock2の実物の関数をimportして使う
+- ロジックを複製しない。進行の核は`src/engine/progression.js`に純関数として切り出してある（`resolveExit`・`requiresMet`・`uniqueBestSecretTextMatch`・`resolveEncounterFoe`・`pickExamineSecret`・`examineDifficulty`）。これらは`ctx`（`{revealed, inventory}`）だけに依存し、モジュール内の共有可変状態を見ない
+- **`playthrough`に台本を書き足したくなったら止まる。** データから導けない台本は、データが変わった瞬間に嘘になる
 - **進行必須の情報をダイス運のゲートの奥に置かない。** 設計メモ3節が「初期モックの失敗」と名指しした構造。失敗を許容するなら、`examineDifficulty`のように失敗を無駄にしない設計（粘れば必ず近づく）とセットにする
 
 ## 関連

@@ -1314,6 +1314,7 @@ const EXAMINE_RE = /調べ|よく見|見る|見て|読|観察|探|嗅|眺め|確
 const MOVE_RE = /進む|進も|向かう|向かお|入る|入ろ|行く|行こ|降り|登る|渡る/;
 const BACK_RE = /戻る|戻ろ|引き返|退く/;
 const TALK_RE = /話|聞く|聞いて|尋ね|訊|呼びかけ|声をかけ/;
+const TAKE_RE = /拾|取る|取っ|手に入れ|回収|持ち帰|持って(いく|行く)/;
 const SCRIPTED_ATTACK_RE = /攻撃|斬|切りかか|殴|撃つ|叩く|突く|蹴/;
 
 // 主語(誰が)の確定情報抽出(2026-07-21: 動詞+オブジェクトの分類改善、BORG/TRPG/MockDocs/RULE_INVENTORY.md 意図分類表)。
@@ -1384,6 +1385,8 @@ async function scriptedExamine(secret, actorName = "あなた") {
 // 開示直後に同行者が短く反応する(彩り)。callGmApiを直接使い、会話履歴を汚さない・待たない。
 // 数秒遅れて一言が届く形になるが、テンポは止めない(2026-07-17(8): 決定論化で語りが定型文だけになった対策)
 function revealFlavor(secret) {
+  // scriptedモードは「LLM呼び出し完全ゼロ」が契約(:1295の説明)。彩りのためにそれを破らない
+  if (gmMode === "scripted") return;
   const names = Object.entries(CAST)
     .map(([id, c]) => `${id}=${c.name}(${c.persona}${voiceRule(c)})`).join(" / ");
   const whoIds = Object.keys(CAST).join(" または ");
@@ -1497,6 +1500,25 @@ async function tryScripted(text) {
     if (known) { addGm("改めて確かめる。" + (known.playerText || known.text), "Neutral"); return true; }
     if (gmMode === "scripted") { addGm("特に変わったものは見つからない。", "Neutral"); return true; }
     return false; // hybrid: secretのない対象の描写はLLMの領分
+  }
+  /* 品物の取得。scriptedモードは「LLM呼び出し完全ゼロで遊べる」ことが売りだが、
+     取得のレーンが無いため、品物を要求する出口がある章はここで詰んでいた(アウトロの
+     「心石の欠片を渡す」が典型)。判定は要らない——availableLootが開示状況で既に
+     門番しているので、名前が文中にあれば渡してよい。曖昧な言い回しはhybridでは
+     従来どおりLLM分類器へ流す(対象の幻覚ガードがあちらにある) */
+  if (TAKE_RE.test(text)) {
+    const item = availableLoot(sc).find(n => text.includes(n));
+    if (item) {
+      if (inv.give(state.inventory, item)) {
+        logSceneEvent(`「${item}」を手に入れた`);
+        addGm(`${item}を手に入れた。`, "Happy");
+      } else {
+        addGm(`${item}はもう持っている。`, "Neutral");
+      }
+      return true;
+    }
+    if (gmMode === "scripted") { addGm("持ち出せるものは見当たらない。", "Neutral"); return true; }
+    return false;
   }
   if (BACK_RE.test(text) && !MOVE_RE.test(text)) {
     // 行き止まりの部屋のように、作者が「戻る」出口を用意している場合はそちらを使う。

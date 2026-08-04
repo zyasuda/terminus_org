@@ -14,7 +14,8 @@
     "test:inventory": "node src/inventory.test.mjs",
     "test:scenario": "node src/scenario.test.mjs",
     "test:progression": "node src/engine/progression.test.mjs",
-    "test": "npm run test:progression && npm run test:scenario && npm run test:inventory && npm run test:battle"
+    "test:playthrough": "node src/engine/playthrough.test.mjs",
+    "test": "npm run test:progression && npm run test:playthrough && npm run test:scenario && npm run test:inventory && npm run test:battle"
   },
   "dependencies": {
     "@litert-lm/core": "^0.14.0",
