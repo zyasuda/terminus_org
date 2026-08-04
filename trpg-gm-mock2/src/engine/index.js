@@ -1086,12 +1086,21 @@ async function resolveAmbushIfNeeded(playerText) {
 // resolveAmbushIfNeededにフォールバックする(既存データへの後方互換)。
 // timingフィールド(scene_enter/turn_start/movement/player_action/after_check)は、
 // このゲームがターン/移動フェーズを独立に持たないため、現状は区別せず毎回の宣言時に評価する。
-function encounterRequiredElementsMet(enc, sc) {
+export function encounterRequiredElementsMet(enc, sc, ctx) {
   const need = enc.requiredElements || [];
   if (!need.length) return true;
-  const revealedLabels = sc.secrets.filter(s => revealed.has(s.id)).flatMap(s => [s.entity, ...(s.aliases || [])]);
+  const rev = ctx ? ctx.revealed : revealed;
+  const revealedLabels = sc.secrets.filter(s => rev.has(s.id)).flatMap(s => [s.entity, ...(s.aliases || [])]);
   const hit = label => revealedLabels.includes(label);
   return enc.requiredOperator === "any" ? need.some(hit) : need.every(hit);
+}
+// resolveEncounterIfNeededの「敵の能力の解決」だけを取り出した純粋関数。
+// enc.enemy優先、無ければsc.enemyへフォールバックし、名前の不一致は「解決できない」として返す
+export function resolveEncounterFoe(enc, sc) {
+  const foe = enc.enemy && enc.enemy.name ? enc.enemy : sc.enemy;
+  if (!foe) return null;
+  if (enc.monsterName && enc.monsterName !== foe.name) return null;
+  return foe;
 }
 
 async function resolveEncounterIfNeeded(playerText, sc) {
@@ -1099,9 +1108,8 @@ async function resolveEncounterIfNeeded(playerText, sc) {
     /* 敵の能力は encounters[].enemy に直接書かれていればそれを使い、無ければ scenes[].enemy を使う。
        1つのシーンに複数の敵を出す分岐（シーン2の柵=錆喰い／崩落=坑道蝙蝠）に必要。
        scenes[].enemy は1体しか置けないため、それだけでは片方の遭遇が発生しなかった */
-    const foe = enc.enemy && enc.enemy.name ? enc.enemy : sc.enemy;
-    if (!foe) continue; // 敵の能力がどこにも無い遭遇は扱えない
-    if (enc.monsterName && enc.monsterName !== foe.name) continue;
+    const foe = resolveEncounterFoe(enc, sc);
+    if (!foe) continue; // 敵の能力がどこにも無い、または名前が食い違って解決できない遭遇
     if (state.defeated.includes(foe.name) || (state.fled || []).includes(foe.name)) continue;
     if ((enc.blockedBy || []).some(n => state.defeated.includes(n) || (state.fled || []).includes(n))) continue;
     const count = (state.encounterCounts || {})[enc.id] || 0;
@@ -1333,7 +1341,7 @@ function extractActor(text) {
 }
 
 // テキストとsecretのentity/aliasesの照合(開示済み/未開示を指定)。複数ヒットは曖昧なのでnull
-function uniqueBestSecretTextMatch(candidates, text) {
+export function uniqueBestSecretTextMatch(candidates, text) {
   let bestLength = 0;
   let hits = [];
   candidates.forEach(s => {
@@ -1422,12 +1430,17 @@ function revealFlavor(secret) {
 }
 
 // requires: completeRequiresと同じ語彙(secretsAny/secretsAll)をexits単位でも使う
-function requiresMet(requires) {
+/* ctxを渡すと、実行中の状態ではなく指定した開示済み集合・所持品で判定する。
+   進行の到達可能性を検証するハーネス(intent.test.mjs)が、ロジックを複製せずに
+   この関数そのものを使えるようにするため。省略時の挙動は従来どおり */
+export function requiresMet(requires, ctx) {
   if (!requires) return true;
-  if (requires.secretsAny && !requires.secretsAny.some(id => revealed.has(id))) return false;
-  if (requires.secretsAll && !requires.secretsAll.every(id => revealed.has(id))) return false;
-  if (requires.itemsAny && !requires.itemsAny.some(n => inv.has(state.inventory, n))) return false;
-  if (requires.itemsAll && !requires.itemsAll.every(n => inv.has(state.inventory, n))) return false;
+  const rev = ctx ? ctx.revealed : revealed;
+  const bag = ctx ? ctx.inventory : state.inventory;
+  if (requires.secretsAny && !requires.secretsAny.some(id => rev.has(id))) return false;
+  if (requires.secretsAll && !requires.secretsAll.every(id => rev.has(id))) return false;
+  if (requires.itemsAny && !requires.itemsAny.some(n => inv.has(bag, n))) return false;
+  if (requires.itemsAll && !requires.itemsAll.every(n => inv.has(bag, n))) return false;
   return true;
 }
 // TASの出力は到達時説明を exit.text として出すため、mock2の契約(arrivalText)へ正規化する。
@@ -1437,7 +1450,7 @@ function normalizeExit(exit) {
   return exit;
 }
 // 宣言文とexits[].matchの部分一致で出口を選ぶ。配列の先頭から順に評価し、最初に一致したものを採用
-function resolveExit(sc, text) {
+export function resolveExit(sc, text) {
   return normalizeExit((sc.exits || []).find(e => (e.match || []).some(m => text.includes(m))) || null);
 }
 /* requiresを満たし、かつ行き先を持つ出口。「照合語に外れたが本当は通れる」場面を見分けるために使う。
@@ -1460,10 +1473,14 @@ function moveBlockedNote(node) {
     ? `どちらへ向かう? ${labels.join(" か ")} だ。`
     : `どちらへ向かうか、宣言してくれ。${labels[0]}へ行けそうだ。`;
 }
-// TASの移動先表記("scene:1"、数値、文字列id)をシーン配列のindexに解決する
-function resolveExitTargetIndex(to) {
+// TASの移動先表記("scene:1"、数値、文字列id)をシーン配列のindexに解決する。
+// シーン配列を引数で受ける形にして、読み込み済みのSCENARIOに依存せず検証できるようにする
+export function exitTargetIndexIn(scenes, to) {
   const key = String(to).replace(/^scene:/, "");
-  return SCENARIO.scenes.findIndex(s => String(s.id) === key);
+  return scenes.findIndex(s => String(s.id) === key);
+}
+export function resolveExitTargetIndex(to) {
+  return exitTargetIndexIn(SCENARIO.scenes, to);
 }
 
 function scriptedMoveForward(text) {

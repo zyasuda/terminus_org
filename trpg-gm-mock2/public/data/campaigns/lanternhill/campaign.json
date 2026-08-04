@@ -1,6 +1,6 @@
 {
   "meta": {
-    "id": "campaign",
+    "id": "lanternhill",
     "title": "ランタンヒル年代記",
     "version": "0.2"
   },
@@ -22,8 +22,15 @@
       "電池",
       "メートル"
     ],
-    "world": "ミステリー / ロー・ファンタジー。静かで神秘的、少し切ない。",
-    "terms": "現代語彙を避ける。正名はエンティティ台帳に合わせる。"
+    "world": "ミステリ / ロー・ファンタジー。静かで神秘的、少し切ない。",
+    "terms": "現代語彙を避ける。\n禁止語：懐中電灯、電灯、モーター、エンジン、電池、メートル\n言い換えが必要な場合は、世界観に合う平易な表現を使う。",
+    "rollReaction": {
+      "critical": "",
+      "fumble": ""
+    },
+    "emptyHanded": [],
+    "unknownTarget": "",
+    "conversationSpread": "standard"
   },
   "flags": {
     "guardian_fate": [
@@ -69,7 +76,8 @@
       "sprite": "portrait_lydia_alt.png",
       "gender": "female",
       "firstPerson": "あたし",
-      "addressTerm": "あなた"
+      "addressTerm": "あなた",
+      "speechFrequency": "standard"
     },
     {
       "id": "member_2",
@@ -85,7 +93,8 @@
       "sprite": "portrait_gareth_alt.png",
       "gender": "male",
       "firstPerson": "俺",
-      "addressTerm": "お前"
+      "addressTerm": "お前",
+      "speechFrequency": "standard"
     }
   ],
   "companionsHint": "場面に合う方を選べ(戦闘寄り=ガレス、調査・遺工・慎重論=リディア)",
@@ -96,6 +105,8 @@
       "aliases": [],
       "kind": "character",
       "importance": "support",
+      "surface": "",
+      "truth": "",
       "visual": "",
       "affordances": [
         "talk",
@@ -108,6 +119,8 @@
       "aliases": [],
       "kind": "character",
       "importance": "support",
+      "surface": "",
+      "truth": "",
       "visual": "",
       "affordances": [
         "talk",
@@ -116,10 +129,12 @@
     },
     {
       "id": "npc_1",
-      "ja": "マイラ",
+      "ja": "NPC1",
       "aliases": [],
       "kind": "npc",
       "importance": "support",
+      "surface": "",
+      "truth": "",
       "visual": "",
       "affordances": [
         "talk",
@@ -132,10 +147,9 @@
       "aliases": [
         "ランプ",
         "灯り",
-        "らんぷ",
-        "火",
+        "ていとう",
         "らんたん",
-        "手元",
+        "手元灯",
         "照明"
       ],
       "kind": "item",
@@ -215,20 +229,7 @@
         "あおいし",
         "ひかるいし",
         "いし",
-        "心臓の石",
-        "心の石",
-        "胸の石",
-        "ど",
-        "どう",
-        "りょ",
-        "どうりょく",
-        "動力",
-        "動力源",
-        "力",
-        "力のみなもと",
-        "力の源",
-        "輝く石",
-        "心いし"
+        "心臓の石"
       ],
       "kind": "item",
       "parentConceptId": "concept_heartstone",
@@ -240,7 +241,7 @@
         "take",
         "give"
       ],
-      "requires": "ch1_s3_item_2",
+      "requires": "s3b",
       "surface": "青く光る小さな石の破片である。手に取るとかすかに温かい。強い力を秘めている。",
       "visual": ""
     },
@@ -250,6 +251,8 @@
       "aliases": [],
       "kind": "enemy",
       "importance": "support",
+      "surface": "",
+      "truth": "/images/s2_rust_eater.png",
       "visual": "/images/s2_rust_eater.png",
       "affordances": [
         "inspect",
@@ -262,7 +265,25 @@
       "aliases": [],
       "kind": "enemy",
       "importance": "support",
+      "surface": "",
+      "truth": "/images/s3_guardian.png",
       "visual": "/images/s3_guardian.png",
+      "affordances": [
+        "inspect",
+        "fight"
+      ]
+    },
+    {
+      "id": "monster_3",
+      "ja": "坑道蝙蝠",
+      "aliases": [
+        "羽ばたく影"
+      ],
+      "kind": "enemy",
+      "importance": "support",
+      "surface": "",
+      "truth": "/images/s2_rust_eater.png",
+      "visual": "/images/s2_mine_bat.png",
       "affordances": [
         "inspect",
         "fight"
@@ -274,21 +295,19 @@
       "aliases": [
         "青い石",
         "光る石",
-        "輝く石",
+        "石",
         "あおいし",
         "ひかるいし",
-        "こころいし",
-        "動力",
-        "動力源",
-        "力の源"
+        "いし",
+        "心臓の石"
       ],
       "kind": "concept",
       "role": "main",
       "usage": "dialogue_condition",
       "scope": "campaign",
       "storyKey": true,
-      "surface": "ゆっくりと脈動して、青く光る石",
-      "truth": "何かの動力源になるような不思議な力を宿す。その力が衰えると、欠片となって剥がれ落ちる。"
+      "surface": "ゆっくりと脈動している青く光る石",
+      "truth": "何かの動力源になるような不思議な力を宿す"
     }
   ],
   "gmSprite": "gm_mascot.png",
@@ -303,21 +322,19 @@
       "aliases": [
         "青い石",
         "光る石",
-        "輝く石",
+        "石",
         "あおいし",
         "ひかるいし",
-        "こころいし",
-        "動力",
-        "動力源",
-        "力の源"
+        "いし",
+        "心臓の石"
       ],
       "kind": "concept",
       "role": "main",
       "usage": "dialogue_condition",
       "scope": "campaign",
       "storyKey": true,
-      "surface": "ゆっくりと脈動して、青く光る石",
-      "truth": "何かの動力源になるような不思議な力を宿す。その力が衰えると、欠片となって剥がれ落ちる。"
+      "surface": "ゆっくりと脈動している青く光る石",
+      "truth": "何かの動力源になるような不思議な力を宿す"
     }
   ],
   "items": [
@@ -327,10 +344,9 @@
       "aliases": [
         "ランプ",
         "灯り",
-        "らんぷ",
-        "火",
+        "ていとう",
         "らんたん",
-        "手元",
+        "手元灯",
         "照明"
       ],
       "kind": "item",
@@ -410,20 +426,7 @@
         "あおいし",
         "ひかるいし",
         "いし",
-        "心臓の石",
-        "心の石",
-        "胸の石",
-        "ど",
-        "どう",
-        "りょ",
-        "どうりょく",
-        "動力",
-        "動力源",
-        "力",
-        "力のみなもと",
-        "力の源",
-        "輝く石",
-        "心いし"
+        "心臓の石"
       ],
       "kind": "item",
       "parentConceptId": "concept_heartstone",
@@ -435,7 +438,7 @@
         "take",
         "give"
       ],
-      "requires": "ch1_s3_item_2",
+      "requires": "s3b",
       "surface": "青く光る小さな石の破片である。手に取るとかすかに温かい。強い力を秘めている。",
       "visual": ""
     }
@@ -452,29 +455,42 @@
   ],
   "castAttributes": {
     "gm": {
-      "gender": "male",
-      "firstPerson": "私",
-      "addressTerm": "君"
+      "gender": "unspecified",
+      "firstPerson": "",
+      "addressTerm": "",
+      "speechRules": "",
+      "speechFrequency": "standard"
     },
     "member_1": {
-      "gender": "female",
-      "firstPerson": "あたし",
-      "addressTerm": "あなた"
+      "gender": "unspecified",
+      "firstPerson": "",
+      "addressTerm": "",
+      "speechRules": "",
+      "speechFrequency": "standard"
     },
     "member_2": {
-      "gender": "male",
-      "firstPerson": "俺",
-      "addressTerm": "お前"
+      "gender": "unspecified",
+      "firstPerson": "",
+      "addressTerm": "",
+      "speechRules": "",
+      "speechFrequency": "standard"
     },
     "npc_1": {
-      "gender": "female",
-      "firstPerson": "私たち",
-      "addressTerm": "お前たち"
-    },
-    "npc_2": {
-      "gender": "other",
+      "gender": "unspecified",
       "firstPerson": "",
-      "addressTerm": ""
+      "addressTerm": "",
+      "speechRules": "",
+      "speechFrequency": "standard"
     }
+  },
+  "gm": {
+    "gender": "male",
+    "firstPerson": "私",
+    "addressTerm": "君",
+    "speechRules": "",
+    "id": "gm",
+    "name": "ダイス先輩",
+    "persona": "ゲームマスター。確定した結果を説明し、プレイヤーを案内する。",
+    "sprite": "gm_mascot.png"
   }
 }

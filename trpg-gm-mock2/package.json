@@ -12,7 +12,9 @@
     "build": "vite build",
     "preview": "vite preview",
     "test:inventory": "node src/inventory.test.mjs",
-    "test:scenario": "node src/scenario.test.mjs"
+    "test:scenario": "node src/scenario.test.mjs",
+    "test:progression": "node src/engine/progression.test.mjs",
+    "test": "npm run test:progression && npm run test:scenario && npm run test:inventory && npm run test:battle"
   },
   "dependencies": {
     "@litert-lm/core": "^0.14.0",

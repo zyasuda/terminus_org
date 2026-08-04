@@ -1,18 +1,18 @@
 {
   "version": 1,
-  "defaultCampaign": "campaign",
+  "defaultCampaign": "lanternhill",
   "campaigns": [
     {
-      "id": "campaign",
+      "id": "lanternhill",
       "title": "ランタンヒル年代記",
       "version": "0.2",
-      "campaign": "campaigns/campaign/campaign.json",
+      "campaign": "campaigns/lanternhill/campaign.json",
       "defaultChapter": "chapter_01",
       "chapters": [
         {
           "id": "chapter_01",
           "title": "廃坑の灯",
-          "file": "campaigns/campaign/chapter_01.json"
+          "file": "campaigns/lanternhill/chapter_01.json"
         }
       ]
     }
