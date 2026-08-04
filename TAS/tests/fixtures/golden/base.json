@@ -242,7 +242,7 @@
           "take",
           "give"
         ],
-        "requires": "ch1_s3_item_2",
+        "requires": "s3b",
         "surface": "青く光る小さな石の破片である。手に取るとかすかに温かい。強い力を秘めている。",
         "visual": ""
       },
@@ -439,7 +439,7 @@
           "take",
           "give"
         ],
-        "requires": "ch1_s3_item_2",
+        "requires": "s3b",
         "surface": "青く光る小さな石の破片である。手に取るとかすかに温かい。強い力を秘めている。",
         "visual": ""
       }
@@ -905,7 +905,7 @@
         "loot": [
           {
             "name": "心石の欠片",
-            "requires": "ch1_s3_item_2"
+            "requires": "s3b"
           }
         ],
         "secrets": [
@@ -953,11 +953,6 @@
             "usage": "event"
           }
         ],
-        "completeRequires": {
-          "secretsAny": [
-            "s3a"
-          ]
-        },
         "blockedText": "あの人影の正体を確かめないまま、ここを立ち去る気にはなれない。",
         "authoring": {
           "exits": [
@@ -974,7 +969,8 @@
               "to": 4,
               "requires": {
                 "secretsAll": [
-                  "s3b"
+                  "s3b",
+                  "s3a"
                 ]
               }
             }
@@ -1001,7 +997,8 @@
             "to": 4,
             "requires": {
               "secretsAll": [
-                "s3b"
+                "s3b",
+                "s3a"
               ]
             }
           }

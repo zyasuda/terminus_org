@@ -404,7 +404,7 @@
       "loot": [
         {
           "name": "心石の欠片",
-          "requires": "ch1_s3_item_2"
+          "requires": "s3b"
         }
       ],
       "secrets": [
@@ -452,11 +452,6 @@
           "usage": "event"
         }
       ],
-      "completeRequires": {
-        "secretsAny": [
-          "s3a"
-        ]
-      },
       "blockedText": "あの人影の正体を確かめないまま、ここを立ち去る気にはなれない。",
       "authoring": {
         "transitions": [],
@@ -515,7 +510,8 @@
           "to": 4,
           "requires": {
             "secretsAll": [
-              "s3b"
+              "s3b",
+              "s3a"
             ]
           }
         }

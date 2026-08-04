@@ -222,7 +222,7 @@
         "take",
         "give"
       ],
-      "requires": "ch1_s3_item_2",
+      "requires": "s3b",
       "surface": "青く光る小さな石の破片である。手に取るとかすかに温かい。強い力を秘めている。",
       "visual": ""
     },
@@ -408,7 +408,7 @@
         "take",
         "give"
       ],
-      "requires": "ch1_s3_item_2",
+      "requires": "s3b",
       "surface": "青く光る小さな石の破片である。手に取るとかすかに温かい。強い力を秘めている。",
       "visual": ""
     }
