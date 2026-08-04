@@ -33,6 +33,11 @@ const MOCK2_DIR = process.env.MOCK2_DIR || '/Users/yasuda_k/Desktop/Terminus/trp
 const MOCK2_IMAGES_DIR = path.join(MOCK2_DIR, 'images');
 const MOCK2_CAMPAIGNS_DIR = path.join(MOCK2_DIR, 'public', 'data', 'campaigns');
 const MOCK2_ASSETS_FILE = path.join(MOCK2_DIR, 'public', 'data', 'assets.json');
+/* ゲーム側はこの索引を読んでからキャンペーン本体を読む。ここを更新しないと、
+   キャンペーンIDが変わった時にゲームは古いディレクトリを読み続ける。
+   2026-08-04に実測: TASのIDが lanternhill に変わっていたのに索引は campaign を指しており、
+   出力しても一切届いていなかった(文体レバーが無い・出口が1つしかない等の原因) */
+const MOCK2_CAMPAIGNS_INDEX_FILE = path.join(MOCK2_DIR, 'public', 'data', 'campaigns.json');
 const MOCKDOCS_DIR = process.env.MOCKDOCS_DIR || '';
 
 const KEYS = {
@@ -139,6 +144,39 @@ function mergeAssetsLedger(ledger, exportedAssets) {
   for (const { id, asset } of existingByFile.values()) if (!exportedByFile.has(asset.file)) assets[id] = { ...asset, usedBy: keepManualUsedBy(asset.usedBy) };
   return { ledger: { ...ledger, updated: new Date().toISOString().slice(0, 10), assets }, added };
 }
+/* campaigns.json(ゲーム側の索引)へ、今回出力したキャンペーンを反映する。
+   他のキャンペーン・他の章の登録は決して壊さない。同じidの要素だけを更新し、無ければ追加する。
+   title/version/defaultChapter は新しい値が無ければ既存を維持する(空で上書きして消さない)。
+   defaultCampaign は作者が選んだものなので、未設定のときだけ埋める。 */
+function mergeCampaignsIndex(index, { campaignId, chapterId, chapterFile, campaign, chapter }) {
+  const list = Array.isArray(index.campaigns) ? index.campaigns : [];
+  const at = list.findIndex(entry => entry && entry.id === campaignId);
+  const prev = at >= 0 ? list[at] : {};
+  const meta = (campaign && campaign.meta) || {};
+  const prevChapters = Array.isArray(prev.chapters) ? prev.chapters : [];
+  const chapterAt = prevChapters.findIndex(entry => entry && entry.id === chapterId);
+  const prevChapter = chapterAt >= 0 ? prevChapters[chapterAt] : {};
+  const nextChapter = {
+    ...prevChapter,
+    id: chapterId,
+    title: (chapter && chapter.title) || prevChapter.title || chapterId,
+    file: `campaigns/${campaignId}/${chapterFile}`
+  };
+  const chapters = chapterAt >= 0
+    ? prevChapters.map((entry, i) => (i === chapterAt ? nextChapter : entry))
+    : [...prevChapters, nextChapter];
+  const entry = {
+    ...prev,
+    id: campaignId,
+    title: meta.title || prev.title || campaignId,
+    version: meta.version || prev.version || '0.1',
+    campaign: `campaigns/${campaignId}/campaign.json`,
+    defaultChapter: chapterId || prev.defaultChapter || (chapters[0] && chapters[0].id) || '',
+    chapters
+  };
+  const campaigns = at >= 0 ? list.map((x, i) => (i === at ? entry : x)) : [...list, entry];
+  return { ...index, campaigns, defaultCampaign: index.defaultCampaign || campaignId };
+}
 async function serveFile(res, file, cache = 'no-store') {
   try {
     const body = await fsp.readFile(file);
@@ -221,6 +259,19 @@ const server = http.createServer(async (req, res) => {
         const merged = mergeAssetsLedger(ledger, payload.assets);
         entries.push({ path: 'assets.json', absolute: MOCK2_ASSETS_FILE, value: merged.ledger });
         assetsAdded = merged.added;
+      }
+      /* 索引(campaigns.json)を追随させる。ここを飛ばすと、キャンペーンIDが変わった瞬間に
+         ゲームは古いディレクトリを読み続け、出力が一切届かなくなる。
+         読めない場合は中断する——作り直すと他のキャンペーンの登録が消えるため */
+      {
+        let index;
+        try { index = JSON.parse(await fsp.readFile(MOCK2_CAMPAIGNS_INDEX_FILE, 'utf8')); }
+        catch (cause) { throw new Error(`キャンペーン索引(campaigns.json)を読み込めません: ${cause.message}`); }
+        const chapterId = safeSegment(payload.chapterId, chapterFile.replace(/\.json$/, ''));
+        entries.push({
+          path: 'campaigns.json', absolute: MOCK2_CAMPAIGNS_INDEX_FILE,
+          value: mergeCampaignsIndex(index, { campaignId, chapterId, chapterFile, campaign: payload.campaign, chapter: payload.chapter })
+        });
       }
       const files = [];
       for (const entry of entries) { const content = `${JSON.stringify(entry.value, null, 2)}\n`; await fsp.writeFile(entry.absolute, content, 'utf8'); files.push({ path: entry.path, content }); }

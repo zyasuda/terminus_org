@@ -113,7 +113,7 @@ function runStructureCheck() {
   ok(files.includes(PIPELINE_FILE), `${PIPELINE_FILE} がある`);
   /* 出力の段はパイプラインより先に定義されていなければならない。
      パイプラインより後に置けるのは、段を定義しない画面専用のファイルだけ。 */
-  const AFTER_PIPELINE_ALLOWED=["44-chapter-overview.js","45-interlude.js","46-monster-registry.js","47-story-tree-navigation.js"];
+  const AFTER_PIPELINE_ALLOWED=["44-chapter-overview.js","45-interlude.js","46-monster-registry.js","47-story-tree-navigation.js","48-quick-start.js","49-auto-scene-links.js","50-gm-settings-navigation.js"];
   const after=files.slice(files.indexOf(PIPELINE_FILE)+1);
   ok(after.every(f=>AFTER_PIPELINE_ALLOWED.includes(f)),
     `${PIPELINE_FILE} より後にあるのは画面専用ファイルだけ`, `想定外: ${after.filter(f=>!AFTER_PIPELINE_ALLOWED.includes(f)).join(", ")}`);
@@ -364,6 +364,24 @@ async function runExport(browser, mock2Dir) {
     const first = await exportOnce(page);
     ok(first.status === 200, "出力が成功する", JSON.stringify(first.error));
     ok(first.saved.includes("assets.json"), "書き出したファイルに assets.json が含まれる", JSON.stringify(first.saved));
+
+    /* キャンペーン索引(campaigns.json)の追随。ここを更新しないと、キャンペーンIDが変わった
+       瞬間にゲームは古いディレクトリを読み続け、出力が一切届かなくなる(2026-08-04に実測)。
+       同時に、他のキャンペーンの登録を壊さないことも押さえる */
+    ok(first.saved.includes("campaigns.json"), "書き出したファイルに campaigns.json が含まれる", JSON.stringify(first.saved));
+    const index = JSON.parse(fs.readFileSync(path.join(mock2Dir, "public", "data", "campaigns.json"), "utf8"));
+    const byId = Object.fromEntries((index.campaigns || []).map(c => [c.id, c]));
+    ok(Boolean(byId[first.campaignId]), `出力したキャンペーン(${first.campaignId})が索引に載る`,
+      JSON.stringify(Object.keys(byId)));
+    ok(byId[first.campaignId]?.campaign === `campaigns/${first.campaignId}/campaign.json`,
+      "索引のキャンペーン本体のパスが出力先と一致する", byId[first.campaignId]?.campaign);
+    ok((byId[first.campaignId]?.chapters || []).some(c => c.file === `campaigns/${first.campaignId}/${first.chapterFile}`),
+      "索引の章ファイルのパスが出力先と一致する", JSON.stringify(byId[first.campaignId]?.chapters));
+    ok(byId.other_campaign?.title === "別キャンペーン（出力対象外。触れてはいけない）",
+      "出力対象外のキャンペーンの登録が変わらない", JSON.stringify(byId.other_campaign));
+    ok(index.defaultCampaign === "campaign",
+      "作者が選んだ defaultCampaign を勝手に切り替えない", String(index.defaultCampaign));
+
     const after1 = readLedger(mock2Dir);
 
     // 人間が書いた項目を触らない
