@@ -15,6 +15,11 @@ import {
 import { callGmApi } from "../llm.js";
 import { CAST, GM, BANTER, SCENARIO, CAMPAIGN, CONTENT_SELECTION, loadScenarioData } from "../scenario.js";
 import { pushChat, clearChat, setStore, getSnapshot } from "./store.js";
+import {
+  encounterRequiredElementsMet, resolveEncounterFoe,
+  matchSecretByText, matchSecretByTrigger, pickExamineSecret, examineDifficulty, requiresMet,
+  resolveExit, normalizeExit, exitTargetIndexIn, resolveSecretTarget
+} from "./progression.js";
 
 // campaign.json の cast[](NPC台帳)から、このシーンのNPCの一般情報(public)を引く。
 // cast[].direction はここでは使わない: 「青く脈打つ石」等、未開示secretの内容そのものを
@@ -1086,23 +1091,6 @@ async function resolveAmbushIfNeeded(playerText) {
 // resolveAmbushIfNeededにフォールバックする(既存データへの後方互換)。
 // timingフィールド(scene_enter/turn_start/movement/player_action/after_check)は、
 // このゲームがターン/移動フェーズを独立に持たないため、現状は区別せず毎回の宣言時に評価する。
-export function encounterRequiredElementsMet(enc, sc, ctx) {
-  const need = enc.requiredElements || [];
-  if (!need.length) return true;
-  const rev = ctx ? ctx.revealed : revealed;
-  const revealedLabels = sc.secrets.filter(s => rev.has(s.id)).flatMap(s => [s.entity, ...(s.aliases || [])]);
-  const hit = label => revealedLabels.includes(label);
-  return enc.requiredOperator === "any" ? need.some(hit) : need.every(hit);
-}
-// resolveEncounterIfNeededの「敵の能力の解決」だけを取り出した純粋関数。
-// enc.enemy優先、無ければsc.enemyへフォールバックし、名前の不一致は「解決できない」として返す
-export function resolveEncounterFoe(enc, sc) {
-  const foe = enc.enemy && enc.enemy.name ? enc.enemy : sc.enemy;
-  if (!foe) return null;
-  if (enc.monsterName && enc.monsterName !== foe.name) return null;
-  return foe;
-}
-
 async function resolveEncounterIfNeeded(playerText, sc) {
   for (const enc of sc.encounters) {
     /* 敵の能力は encounters[].enemy に直接書かれていればそれを使い、無ければ scenes[].enemy を使う。
@@ -1114,7 +1102,7 @@ async function resolveEncounterIfNeeded(playerText, sc) {
     if ((enc.blockedBy || []).some(n => state.defeated.includes(n) || (state.fled || []).includes(n))) continue;
     const count = (state.encounterCounts || {})[enc.id] || 0;
     if (enc.maxOccurrences != null && count >= enc.maxOccurrences) continue;
-    if (!encounterRequiredElementsMet(enc, sc)) continue;
+    if (!encounterRequiredElementsMet(enc, sc, { revealed, inventory: state.inventory })) continue;
     if ((enc.triggerTerms || []).length && !enc.triggerTerms.some(t => playerText.includes(t))) continue;
     if (enc.type === "random" && !(Math.random() * 100 < (enc.probability ?? 100))) continue;
 
@@ -1222,7 +1210,7 @@ async function tryCombatTurn(text) {
         const crit = roll === 20, fumble = roll === 1;
         const ok = crit || (!fumble && roll >= 12);
         await addDice(roll, 12, ok, crit, fumble, reason);
-        const matched = resolveSecretTarget(SCENARIO.scenes[state.sceneIndex], null, text, text);
+        const matched = resolveSecretTarget(SCENARIO.scenes[state.sceneIndex], null, text, text, { revealed, inventory: state.inventory });
         if (matched) markExamined(matched.entity);
         const secret = ok ? matched : null;
         if (secret) {
@@ -1340,56 +1328,6 @@ function extractActor(text) {
   return { actorId: "player", actorName: "あなた", rest: text };
 }
 
-/* テキストとsecretのentity/aliasesの照合(開示済み/未開示を指定)。複数ヒットは曖昧なのでnull。
-   minTermLength: これより短い語での一致を無視する。作者が明示したaliasesは「光」「石」等の
-   1文字も有効にしているが、1文字は当たりやすく、作者が書いたtriggerの一文に勝ってしまう */
-export function uniqueBestSecretTextMatch(candidates, text, minTermLength = 1) {
-  let bestLength = 0;
-  let hits = [];
-  candidates.forEach(s => {
-    const terms = [...s.entity.split(/[・()()]/).filter(t => t.length >= 2), ...(s.aliases || [])]
-      .filter(t => t && t.length >= minTermLength);
-    const length = Math.max(0, ...terms.filter(t => text.includes(t)).map(t => t.length));
-    if (length > bestLength) { bestLength = length; hits = [s]; }
-    else if (length && length === bestLength) hits.push(s);
-  });
-  return hits.length === 1 ? hits[0] : null;
-}
-
-function matchSecretByText(sc, text, wantRevealed, minTermLength) {
-  const pool = sc.secrets.filter(s => revealed.has(s.id) === wantRevealed);
-  return uniqueBestSecretTextMatch(pool, text, minTermLength);
-}
-
-// 作者がsecret.triggerへ書いた発火条件との照合。カンマ・読点で区切って語彙として扱うので、
-// 「調べる,見る,手に取る」のような列挙にも「その場に立ち止まり、空気を深く吸い込む。」のような
-// 一文にも効く。複数の秘密が該当したら曖昧なので決めない(matchSecretByTextと同じ方針)
-export function matchSecretByTrigger(sc, text, ctx) {
-  const rev = ctx ? ctx.revealed : revealed;
-  const hits = (sc.secrets || []).filter(s => {
-    if (rev.has(s.id) || !s.trigger) return false;
-    return String(s.trigger).split(/[,、]/)
-      .map(t => t.trim().replace(/[。.]$/, ""))
-      .filter(t => t.length >= 2)
-      .some(t => text.includes(t));
-  });
-  return hits.length === 1 ? hits[0] : null;
-}
-
-/* 調べる宣言に対して、どの秘密を対象にするかを1箇所で決める。
-   対象の特定はentity/aliasesを優先する（triggerには「調べる」のような汎用語が書かれることが
-   あり、それを優先すると別の対象を調べた時に取り違える）。ただし1文字の別名一致は例外で、
-   作者が明示したtriggerに劣後させる。
-   2026-08-04の実プレイで、s3aの開示方法「光の源に意識を集中させる」がs3bの1文字の別名「光」に
-   負け、灯りの主の正体が永久に開かず章を完了できなかった。 */
-export function pickExamineSecret(sc, triggerText, entityText, ctx) {
-  const triggerHit = matchSecretByTrigger(sc, triggerText, ctx);
-  const rev = ctx ? ctx.revealed : revealed;
-  const pool = (sc.secrets || []).filter(s => !rev.has(s.id));
-  const textHit = uniqueBestSecretTextMatch(pool, entityText, triggerHit ? 2 : 1);
-  return { secret: textHit || triggerHit, triggerHit, textHit };
-}
-
 // 調査のscripted処理: 判定→成功で開示(既存の開示機構=ポップアップ・背景切替・チップがそのまま動く)
 // 初めて判定を振った調査対象をチップ化する(失敗しても対象名は「知った」扱い。再挑戦を2タップに)
 function markExamined(entity) {
@@ -1415,11 +1353,6 @@ function emptyHandedNote() {
    かかり、1周は3連続失敗で1シーンも進めなかった。
    ponytail: 下限DC2は残す。自然な1のファンブルだけが失敗する状態で止め、完全な自動成功に
    はしない(振る意味を残すため)。「必ず開く」を保証したくなったら下限を1にすればよい */
-export function examineDifficulty(secret, failures = 0) {
-  const base = secret.dc || 12;
-  return Math.max(2, base - 2 * Math.max(0, failures));
-}
-
 async function scriptedExamine(secret, actorName = "あなた") {
   markExamined(secret.entity);
   state.examineFails = state.examineFails || {};
@@ -1468,35 +1401,11 @@ function revealFlavor(secret) {
   }).catch(() => {});
 }
 
-// requires: completeRequiresと同じ語彙(secretsAny/secretsAll)をexits単位でも使う
-/* ctxを渡すと、実行中の状態ではなく指定した開示済み集合・所持品で判定する。
-   進行の到達可能性を検証するハーネス(intent.test.mjs)が、ロジックを複製せずに
-   この関数そのものを使えるようにするため。省略時の挙動は従来どおり */
-export function requiresMet(requires, ctx) {
-  if (!requires) return true;
-  const rev = ctx ? ctx.revealed : revealed;
-  const bag = ctx ? ctx.inventory : state.inventory;
-  if (requires.secretsAny && !requires.secretsAny.some(id => rev.has(id))) return false;
-  if (requires.secretsAll && !requires.secretsAll.every(id => rev.has(id))) return false;
-  if (requires.itemsAny && !requires.itemsAny.some(n => inv.has(bag, n))) return false;
-  if (requires.itemsAll && !requires.itemsAll.every(n => inv.has(bag, n))) return false;
-  return true;
-}
-// TASの出力は到達時説明を exit.text として出すため、mock2の契約(arrivalText)へ正規化する。
-// 照合を経由しない選び方(viableExits由来)でも通す必要があるので関数に切り出してある
-function normalizeExit(exit) {
-  if (exit && !exit.arrivalText && exit.text) exit.arrivalText = exit.text;
-  return exit;
-}
-// 宣言文とexits[].matchの部分一致で出口を選ぶ。配列の先頭から順に評価し、最初に一致したものを採用
-export function resolveExit(sc, text) {
-  return normalizeExit((sc.exits || []).find(e => (e.match || []).some(m => text.includes(m))) || null);
-}
 /* requiresを満たし、かつ行き先を持つ出口。「照合語に外れたが本当は通れる」場面を見分けるために使う。
    2026-08-03のログで、必要な秘密2つを開示済みなのに「奥へ進む」が照合語(右/さく/木柵…)に
    一致せず9ターン進行不能になった。移動の意図は既に確定しているので、行き場が1つなら通す */
 function viableExits(node) {
-  return (node.exits || []).filter(e => requiresMet(e.requires) && e.to !== null && e.to !== undefined);
+  return (node.exits || []).filter(e => requiresMet(e.requires, { revealed, inventory: state.inventory }) && e.to !== null && e.to !== undefined);
 }
 // 通れる出口の呼び方(作者が書いたmatchの先頭語)。聞き返しの候補に使う。そのまま打てば必ず通る
 function exitChoiceLabels(node) {
@@ -1511,12 +1420,6 @@ function moveBlockedNote(node) {
   return labels.length > 1
     ? `どちらへ向かう? ${labels.join(" か ")} だ。`
     : `どちらへ向かうか、宣言してくれ。${labels[0]}へ行けそうだ。`;
-}
-// TASの移動先表記("scene:1"、数値、文字列id)をシーン配列のindexに解決する。
-// シーン配列を引数で受ける形にして、読み込み済みのSCENARIOに依存せず検証できるようにする
-export function exitTargetIndexIn(scenes, to) {
-  const key = String(to).replace(/^scene:/, "");
-  return scenes.findIndex(s => String(s.id) === key);
 }
 export function resolveExitTargetIndex(to) {
   return exitTargetIndexIn(SCENARIO.scenes, to);
@@ -1535,7 +1438,7 @@ function scriptedMoveForward(text) {
       if (viable.length !== 1) { addGm(moveBlockedNote(sc), "Neutral"); return; }
       exit = normalizeExit(viable[0]);
     }
-    if (!requiresMet(exit.requires)) {
+    if (!requiresMet(exit.requires, { revealed, inventory: state.inventory })) {
       addGm(exit.blockedText || sc.blockedText || "まだ進めない。", "Neutral");
       return;
     }
@@ -1583,13 +1486,14 @@ async function tryScripted(text) {
   }
   // EXAMINE_REは汎用動詞の辞書なので、作者がsecret.triggerへ書いた「触れてみる」
   // 「意識を集中させる」のような言い回しを拾えない。triggerが一致した時も調査として扱う
-  const triggerHit = matchSecretByTrigger(sc, text);
+  const ctx = { revealed, inventory: state.inventory };
+  const triggerHit = matchSecretByTrigger(sc, text, ctx);
   if (EXAMINE_RE.test(text) || triggerHit) {
     const { actorName, rest } = extractActor(text);
     // 対象の決定はpickExamineSecretに集約する(優先順位の根拠はあちらのコメント)
-    const { secret } = pickExamineSecret(sc, text, rest);
+    const { secret } = pickExamineSecret(sc, text, rest, ctx);
     if (secret) { await scriptedExamine(secret, actorName); return true; }
-    const known = matchSecretByText(sc, rest, true);
+    const known = matchSecretByText(sc, rest, true, undefined, ctx);
     if (known) { addGm("改めて確かめる。" + (known.playerText || known.text), "Neutral"); return true; }
     if (gmMode === "scripted") { addGm("特に変わったものは見つからない。", "Neutral"); return true; }
     return false; // hybrid: secretのない対象の描写はLLMの領分
@@ -1934,27 +1838,6 @@ function sceneCompleteAllowed(sc) {
    一致1: LLMがcheck.targetEntityに正名をそのまま返した場合(推奨経路。depthBlockで指示)
    一致2: 宣言文・判定名・targetEntityに、entityの部分語かaliases(章データの別名辞書)が含まれるか
    0件・複数件なら開示しない——誤った秘密を漏らすより「開示なし」の方が三層モデルとして安全 */
-export function resolveSecretTarget(sc, targetEntity, reason, playerText, ctx) {
-  const rev = ctx ? ctx.revealed : revealed;
-  const candidates = (sc.secrets || []).filter(s => !rev.has(s.id));
-  if (!candidates.length) return null;
-  if (targetEntity) {
-    const exact = candidates.filter(s => s.entity === String(targetEntity).trim());
-    if (exact.length === 1) return exact[0];
-  }
-  const hay = [targetEntity, reason, playerText].filter(Boolean).join(" ");
-  /* 作者がplayerTextに書かれた開示方法(trigger)を明示している場合は、それを尊重する。
-     LLMのreasonやtargetEntityが別の対象を指していても、プレイヤーが打った言葉が
-     作者の開示方法そのものなら、狙いはそちらである。
-     2026-08-04の実プレイで、プレイヤーが「光の源に意識を集中させる」(s3aのtrigger)と打ったのに
-     LLMのreasonが「胸の光るものを調べる」だったため、s3bが開示されs3aが永久に開かなかった */
-  const authored = playerText ? matchSecretByTrigger(sc, playerText, { revealed: rev }) : null;
-  // entityの自動分割語はノイズ防止で2文字以上のみ。著者が明示したaliasesは「光」「石」等の1文字も有効。
-  // 長い別名を優先し、例えば「光源」を「光」との衝突で曖昧にしない。
-  // ただし1文字の別名一致は、上の作者指定に劣後させる。
-  const byText = uniqueBestSecretTextMatch(candidates, hay, authored ? 2 : 1);
-  return byText || authored;
-}
 function unlockSecret(secret) {
   const sc = SCENARIO.scenes[state.sceneIndex];
   const before = new Set(availableLoot(sc));
@@ -2206,7 +2089,7 @@ export async function sendAction(text) {
          受諾を確定させるのは照合語の一致だけなので、ここで話が進んでしまうことはない */
       if (intro.npc && intro.npc.name) dialogueNodeReply(intro, text);
       else addGm(intro.blockedText || "どう答えるか、はっきりしない。別の言い方を試してくれ。", "Neutral");
-    } else if (!requiresMet(exit.requires)) {
+    } else if (!requiresMet(exit.requires, { revealed, inventory: state.inventory })) {
       addGm(exit.blockedText || "まだ準備ができていない。", "Neutral");
     } else {
       state.pendingIntro = false;
@@ -2227,7 +2110,7 @@ export async function sendAction(text) {
     if (!exit) {
       if (ending.npc && ending.npc.name) dialogueNodeReply(ending, text);
       else addGm(ending.blockedText || "どう締めくくるか、はっきりしない。別の言い方を試してくれ。", "Neutral");
-    } else if (!requiresMet(exit.requires)) {
+    } else if (!requiresMet(exit.requires, { revealed, inventory: state.inventory })) {
       addGm(exit.blockedText || ending.blockedText || "まだ進めない。", "Neutral");
     } else {
       if (Array.isArray(exit.removeItems)) applyUpdates({ remove_items: exit.removeItems });
@@ -2518,7 +2401,7 @@ export async function sendAction(text) {
       if (!attackIntent) {
         // 調べた対象に一致するsecretだけを開示する(一致しなければ開示なし)。
         // 判定の成否に関わらず、対象が特定できた時点でチップ化(失敗しても再挑戦を2タップに)
-        const secret = resolveSecretTarget(SCENARIO.scenes[state.sceneIndex], r.check.targetEntity, r.check.reason, text);
+        const secret = resolveSecretTarget(SCENARIO.scenes[state.sceneIndex], r.check.targetEntity, r.check.reason, text, { revealed, inventory: state.inventory });
         if (secret) markExamined(secret.entity);
         if (ok && secret) {
           unlockSecret(secret);

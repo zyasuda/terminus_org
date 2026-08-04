@@ -11,7 +11,7 @@
 import fs from "node:fs";
 import { resolveExit, requiresMet, exitTargetIndexIn, uniqueBestSecretTextMatch,
   encounterRequiredElementsMet, resolveEncounterFoe, pickExamineSecret, resolveSecretTarget,
-  examineDifficulty } from "./index.js";
+  examineDifficulty } from "./progression.js";
 
 /* CHAPTER=別の章.json で対象を差し替えられる。故意に壊したデータを通して
    「このハーネスが本当に落ちるか」を確かめるためにも使う */
