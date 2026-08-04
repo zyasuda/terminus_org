@@ -17,14 +17,15 @@ const nodeKey=(n,chapter=activeChapter)=>`${chapter}:${n.type}:${n.type==='scene
 const withSceneOverride=n=>{const merged={...n,...(sceneOverrides[nodeKey(n)]||{})};const discoveries=Array.isArray(merged.discoveries)?merged.discoveries:Array.isArray(merged.secrets)?merged.secrets:null;const {secrets,...rest}=merged;return discoveries?{...rest,discoveries:discoveries.map((x,i)=>normalizeDiscoveryFor(merged,x,i))}:rest};
 const chapterNodes=()=>{const d=chapterData();const opening=d.opening&&typeof d.opening==="object"?d.opening:{};const ending=d.ending&&typeof d.ending==="object"?d.ending:{};return [{...opening,type:"opening",id:"opening",name:opening.name||"イントロ",brief:opening.brief||d.intro||"依頼と今回の目的を提示する。",goal:opening.goal||"依頼を受け、坑道へ向かう目的を理解する。"},...currentScenes().map((s,index)=>({...s,type:"scene",index,name:s.name||fallbackScenes[index]?.name||`シーン${s.id??index+1}`})),{...ending,type:"ending",id:"ending",name:ending.name||"アウトロ",brief:ending.brief||"依頼の結果を締めくくり、章の余韻を残す。",goal:ending.goal||"今回の依頼を報告し、章の成果を確定する。"},{type:"intermission",id:"intermission",name:"インターミッション",brief:d.intermission?.brief||"章と章の間をつなぐ。次の依頼や世界の変化を整理する。",goal:d.intermission?.goal||"次章への持ち越し情報を確定する。"}].map(withSceneOverride)};
 const scene=()=>chapterNodes().find(n=>n.type===selectedNode.type&&n.index===selectedNode.index)||chapterNodes()[0];
-const sceneKey=()=>nodeKey(selectedNode);
+/* selectedNode は {type, index} で id を持たないため、nodeKey へ直接渡すとシーンのキーが
+   "ch1:scene:undefined" になる。読み出し側(withSceneOverride)は解決済みの実ノードから
+   nodeKey を計算するので、書き込みも同じ解決(scene())を通して揃える。
+   2026-08-03に、シーンの名称を編集してタブを移動すると編集が消える症状として実測した
+   (書き込み先と読み出し先のキーが食い違い、一度も読み戻されていなかった) */
+const sceneKey=()=>nodeKey(scene());
 const sceneRef=n=>n.type==="scene"?`scene:${n.id}`:n.type;
 const sceneRefLabel=n=>n.type==="scene"?`シーン${n.id}：${n.name}`:n.name;
 const sceneTargets=()=>chapterNodes().filter(n=>sceneRef(n)!==sceneRef(scene()));
-const TRANSITION_TYPES=[
-  ["flag","フラグ"],["discovery","調査対象"],["item","所持アイテム"],
-  ["check","判定結果"],["combat","戦闘結果"],["conversation","会話結果"]
-];
 const DISCOVERY_CATEGORIES=[["main","メイン進行"],["place","場所・背景"],["image","画像内要素"],["sense","音・匂い・感覚"],["object","調査対象"],["foreshadow","伏線・世界設定"],["npc","人物・痕跡"]];
 const DISCOVERY_IMPORTANCE=[["major","主線"],["support","補助"],["flavor","演出"]];
 const DISCOVERY_TEMPLATE_SETS=[

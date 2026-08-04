@@ -1,4 +1,3 @@
-const normalizeTransition=t=>({conditionType:(t.conditionType||t.type)==="secret"?"discovery":t.conditionType||t.type||"flag",conditionValue:t.conditionValue??t.value??t.condition??"",target:t.target||""});
 const slugifyKeyPart=(value,fallback)=>String(value||"").normalize("NFKC").toLowerCase().replace(/[^a-z0-9]+/g,"_").replace(/^_+|_+$/g,"")||fallback;
 const discoveryKeyPrefixFor=n=>`${activeChapter}_${n?.type==="scene"?`s${n.id}`:slugifyKeyPart(n?.type,"section")}`;
 const discoveryKey=(value,index,n=scene())=>`${discoveryKeyPrefixFor(n)}_${slugifyKeyPart(value,`item_${index+1}`)}`;

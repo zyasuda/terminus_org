@@ -50,7 +50,9 @@ function normalizeTerminologyInPage(){
   document.body.querySelectorAll('input,textarea,[aria-label],[title]').forEach(el=>{
     ['placeholder','aria-label','title'].forEach(attr=>{if(el.hasAttribute(attr))el.setAttribute(attr,normalizeTerminologyText(el.getAttribute(attr)))});
   });
-  document.querySelectorAll('.discovery-aliases').forEach(input=>input.closest('.field')?.querySelector('label')?.replaceChildren('トリガー語句（別名。カンマ区切り。1文字も可）'));
+  /* replaceChildrenはラベル内の<span class="chip">進行</span>も消す。用語を統一したいだけなので、
+     印は付け直す(2026-08-03。この欄は秘密の開示＝進行のゲートに直接効く) */
+  document.querySelectorAll('.discovery-aliases').forEach(input=>{const label=input.closest('.field')?.querySelector('label');if(!label)return;const chip=label.querySelector('.chip');label.replaceChildren('トリガー語句（別名。カンマ区切り。1文字も可）');if(chip)label.append(' ',chip)});
   document.querySelectorAll('.encounter-trigger-terms').forEach(input=>input.closest('.field')?.querySelector('label')?.replaceChildren('遭遇のトリガー語句（カンマ区切り）'));
   document.querySelectorAll('.monster-weakness-triggers').forEach(input=>input.closest('.field')?.querySelector('label')?.replaceChildren('弱点のトリガー語句（カンマ区切り）'));
   bindItemAddButton();
