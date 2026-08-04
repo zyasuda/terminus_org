@@ -9,6 +9,7 @@ const http = require('http');
 const fs = require('fs');
 const fsp = fs.promises;
 const path = require('path');
+const { spawnSync } = require('child_process');
 
 const ROOT = __dirname;
 const DATA_DIR = path.join(ROOT, 'data');
@@ -29,7 +30,11 @@ function loadEnv() {
 }
 loadEnv();
 
-const MOCK2_DIR = process.env.MOCK2_DIR || '/Users/yasuda_k/Desktop/Terminus/trpg-gm-mock2';
+if (!process.env.MOCK2_DIR) {
+  console.error('MOCK2_DIR を設定してください。');
+  process.exit(1);
+}
+const MOCK2_DIR = process.env.MOCK2_DIR;
 const MOCK2_IMAGES_DIR = path.join(MOCK2_DIR, 'images');
 const MOCK2_CAMPAIGNS_DIR = path.join(MOCK2_DIR, 'public', 'data', 'campaigns');
 const MOCK2_ASSETS_FILE = path.join(MOCK2_DIR, 'public', 'data', 'assets.json');
@@ -275,7 +280,23 @@ const server = http.createServer(async (req, res) => {
       }
       const files = [];
       for (const entry of entries) { const content = `${JSON.stringify(entry.value, null, 2)}\n`; await fsp.writeFile(entry.absolute, content, 'utf8'); files.push({ path: entry.path, content }); }
-      return json(res, 200, { saved: files.map(file => file.path), files, assetsAdded });
+      const chapterPath = path.join(targetDir, chapterFile);
+      let warning;
+      try {
+        const result = spawnSync(process.execPath, [path.join(MOCK2_DIR, 'src', 'engine', 'progression.test.mjs')], {
+          cwd: MOCK2_DIR,
+          env: { ...process.env, CHAPTER: chapterPath },
+          encoding: 'utf8'
+        });
+        if (result.status !== 0) {
+          const output = [result.stdout, result.stderr].filter(Boolean).join('\n').trim();
+          const failures = output.match(/^fail\s+.+$/gim);
+          warning = (failures ? failures.join('\n') : output || result.error?.message || '進行度回帰チェックを実行できませんでした。').slice(0, 2000);
+        }
+      } catch (cause) {
+        warning = `進行度回帰チェックを実行できませんでした: ${cause.message}`;
+      }
+      return json(res, 200, { saved: files.map(file => file.path), files, assetsAdded, ...(warning ? { warning } : {}) });
     }
     if (req.method === 'POST' && url.pathname === '/api/llm') {
       const result = await callLlmOnceWithRetry(await readJsonBody(req)); return json(res, 200, result);
