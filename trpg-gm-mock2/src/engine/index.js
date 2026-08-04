@@ -2075,30 +2075,18 @@ async function callGm(userContent, extraSystem) {
   }
 }
 
-/* ---------------- 1ターンの流れ ---------------- */
-export async function sendAction(text) {
-  text = text.trim();
-  if (!text || busy) return;
-  if (state.hp <= 0) { addNote("倒れている。「最初から」でやり直そう。"); return; }
-  // 終幕後も入力を受け付けてしまうと、最終シーン(報告等)の仕組みがそのまま動き続け、
-  // マイラが際限なく聞き返すループになる(クロニクル2026-07-20 T27-30)。終幕後はここで止める
-  if (state.chapterEnded) { addNote("物語は決着している。「最初から」で別の選択を試せる。"); return; }
-  busy = true;
-  setStore({ busy: true });
-  state.turn++;
-  addPlayer(text);
-  recordVerb(text); // 述語を頻度辞書へ記録(動詞チップの学習)
-  const previousAskedBack = !!state.unknownTarget?.lastTurnAskedBack;
-  state.unknownTarget = { lastTurnAskedBack: false, candidates: [] };
+/* 手番の最初の関門: 参加者の同意待ち・導入ノード(intro)・終端ノード(ending)。
+   3つとも通常シーンのロジックより先に解決し、決着したらこの手番を終える。
+   sendActionのtryブロックより手前で走るので、後始末(busy解除・renderDebug)は
+   finallyを通らない——finish()で自前に行う。trueなら呼び出し側はそのままreturnする */
+function turnDialogueNodes(text) {
+  const finish = () => { busy = false; setStore({ busy: false }); renderDebug(); return true; };
 
   // 導入受諾後は、参加者ごとの応答が揃うまでシーンへ進めない。
   if (state.pendingCompanionConsents) {
     const waiting = state.pendingCompanionConsents.find(p => p.response === null);
     if (waiting) addGm(`${(CAST[waiting.who] && CAST[waiting.who].name) || waiting.who}の返事を待っている。`, "Neutral");
-    busy = false;
-    setStore({ busy: false });
-    renderDebug();
-    return;
+    return finish();
   }
 
   // 導入ノード(intro)がオブジェクト形式(exits[]あり)の間は、シーンロジックより先に
@@ -2119,10 +2107,7 @@ export async function sendAction(text) {
       if (exit.arrivalText) addGm(exit.arrivalText, "Neutral");
       beginCompanionConsent(targetIdx >= 0 ? targetIdx : 0);
     }
-    busy = false;
-    setStore({ busy: false });
-    renderDebug();
-    return;
+    return finish();
   }
 
   // 終端ノード(ending)もintroと同じく、通常シーンの解決より先にexits[]を解決する。
@@ -2142,25 +2127,192 @@ export async function sendAction(text) {
       if (exit.npcSay) addNpc(exit.npcSay, ending.npc); // 締めの台詞はNPCの吹き出しへ(GMの地の文にしない)
       finishChapter();
     }
-    busy = false;
-    setStore({ busy: false });
-    renderDebug();
-    return;
+    return finish();
   }
+  return false;
+}
+
+/* 同じ状況で同じ宣言を繰り返した手番。判定の余地が無いので結論は変わらない——
+   LLMを呼ばずに打ち切る。trueなら呼び出し側はそのままreturnする */
+function turnRepeatGuard(normalizedText, fp) {
+  const prev = state.lastAction;
+  if (!(prev && prev.text === normalizedText && prev.fingerprint === fp && !prev.hadCheck)) return false;
+  addNote("🔁 同じ状況で同じ行動を繰り返した。判定の余地もなく、結論は変わらない(APIは呼んでいない) — 別の行動を試すか、先へ進もう");
+  renderDebug();
+  busy = false;
+  setStore({ busy: false });
+  return true;
+}
+
+/* 辞書でも分類器でも決着しなかった宣言を、GMの語り(LLM)で解決する手番の本体。
+   会話ターンの計数 → 語りの呼び出し → 判定の解決 → 進行判定とシーン遷移、までが
+   ひと続きの計算になっている(r・revealGate・progressed が段をまたいで縦断するため
+   これ以上は割れない)。ctx は sendAction が集めた材料——progressed はここで書き換える
+   ので、値ではなくオブジェクトのプロパティとして受け渡す。
+   例外は握らない: 呼び出し側(sendAction)の catch/finally が後始末を持つ */
+async function turnFreeform(text, ctx) {
+  // talkTurnsMin条件用: 会話系の宣言だけを数える(調査連打で報告シーンが決着するのを防ぐ。Codexレビュー指摘)
+  if (!ctx.cls || ["talk", "talk_gm", "other"].includes(ctx.cls.intent)) {
+    state.sceneTalkTurns = (state.sceneTalkTurns || 0) + 1;
+    // 報告シーンでは会話そのものが前進(クリア条件がtalkTurnsMin)。前進扱いにしないと
+    // noProgressTurnsが積み上がり、停滞ナッジが誤爆して同行者が毎ターン喋り出す
+    // (クロニクル2026-07-18: マイラの部屋でリディア/ガレスが喋りすぎる問題)
+    if (SCENARIO.scenes[state.sceneIndex].report) ctx.progressed = true;
+  }
+  // 「考え中(…)」表示: 語りの主体であるGMは常に、宛先が同行者ならそのキャラにも出す
+  // (NPCへの表示は npcAgentReply 側で管理。非同期でターン終了後に届くため寿命が別)
+  const addressedWho = Object.keys(CAST).find(id => text.includes(CAST[id].name)) || null;
+  setThinking("gm", true);
+  if (addressedWho) setThinking(addressedWho, true);
+  /* この場でtakeLootRevealCue()を呼ぶ(ctx.cls分岐より前で計算・消費すると、決定論の経路が
+     LLMを呼ばずにreturnした時に控えが黒く消える。2026-08-03の実測: 「胸の光るもの」開示の直後、
+     「奥へ進む」が決定論の移動経路で解決されて念押しが一度も出なかった。ここまで来て初めて
+     消費すれば、LLMを呼ぶ手番が来るまで控えが持続し、必ずどこかの手番で届く) */
+  let r = await callGm(`プレイヤーの宣言: ${text}`, ctx.banterCue + ctx.stagnationCue + ctx.injuryCue + takeLootRevealCue() + ctx.gmDirectCue + takeRollReactionCue());
+  setThinking("gm", false);
+  state.pendingFailedCheck = null; state.blockedMove = false;
+  if (r.narration) addGmNarration(trimNarration(r.narration), r.emotion);
+  if (addressedWho) setThinking(addressedWho, false);
+  // 報告シーンの対話の主役はNPCとプレイヤー。同行者のスロットル解除は「直接話しかけられた時」
+  // だけに限定する(停滞・負傷の割り込みでは口を挟ませない)
+  const revealGate = revealTurnBeats(r, ctx.addressed ||
+    ((ctx.nudgeActive || ctx.concernActive) && !SCENARIO.scenes[state.sceneIndex].report));
+  // NPCの一言は専用エージェント(npcAgentReply)が非同期で生成する。r.npc.sayは受け皿として捨てる
+  npcAgentReply(text, revealGate);
+  if (r.meta_request) {
+    addNote(`⚖ メタ発言を検知(${r.meta_request.topic || "内容不明"}) — GMが確認中。状態は変更されていない`);
+    r.state_updates = null;
+  }
+  maybeEngage(r);
+  applyUpdatesLogged(r.state_updates, { allowPlayerDamage: !!state.enemy });
+  if (r.flee_enemy && state.enemy) { addNote(`⚔ ${enemyName(state.enemy)}との戦闘を離脱`); logSceneEvent(`${enemyName(state.enemy)}と戦わずに切り抜けた`); (state.fled ||= []).push(state.enemy.name); state.enemy = null; }
+  if (checkEnemyDown()) ctx.progressed = true;
+  renderDebug();
+
+  // 開示済みのsecretへの再判定は振らせない(成功しても何も起きない空振りターンになる。2026-07-17(6) T20/T26)。
+  // 「改めて確かめる」の再提示で応える
+  if (r.check && r.check.targetEntity) {
+    const already = SCENARIO.scenes[state.sceneIndex].secrets
+      .find(s => revealed.has(s.id) && s.entity === r.check.targetEntity);
+    if (already) {
+      addGm("改めて確かめる。" + (already.playerText || already.text), "Neutral");
+      r.check = null;
+    }
+  }
+
+  if (r.check && r.check.difficulty) {
+    const diff = Math.max(5, Math.min(18, r.check.difficulty));
+    // 誰の判定か(同行者に任せた行動はLLMがcheck.actorで申告)。ダイスは名義を出してプレイヤーが振る
+    const actor = normalizeWho(r.check.actor, "player");
+    const actorName = actor === "player" ? "あなた" : CAST[actor].name;
+    const reason = (actor === "player" ? "" : `${actorName}: `) + (r.check.reason || "判定");
+    const roll = await requestPlayerRoll(reason, diff, actorName);
+    const crit = roll === 20, fumble = roll === 1;
+    const ok = crit || (!fumble && roll >= diff);
+    await addDice(roll, diff, ok, crit, fumble, reason);
+
+    let extra = "";
+    // 識別は「敵への攻撃」の判定に限定する(戦闘状態が滞留した時に、無関係な調査判定で
+    // 正体が判明してしまう誤爆があったため。クロニクル2026-07-12(1) T33)
+    const attackIntent = /攻撃|斬|切りかか|殴|撃|叩|突|蹴|剣|斧|弓|矢/.test(text) ||
+      (r.check.targetEntity && state.enemy &&
+        (r.check.targetEntity === state.enemy.name || r.check.targetEntity === state.enemy.unknownName));
+    if (state.enemy && attackIntent) extra += identifyEnemy(); // 攻撃して初めて正体が判明する(ウィザードリィ式)
+    if (ok) ctx.progressed = true;
+    if (!ok) state.pendingFailedCheck = { reason: r.check.reason || "判定", sceneIndex: state.sceneIndex };
+    // 開示は攻撃判定以外なら戦闘中でも可(戦闘状態の滞留で探索judgが全て無駄になるのを防ぐ。
+    // 開示対象は二段階マッチングで限定済みなので誤開示の危険はない)
+    if (!attackIntent) {
+      // 調べた対象に一致するsecretだけを開示する(一致しなければ開示なし)。
+      // 判定の成否に関わらず、対象が特定できた時点でチップ化(失敗しても再挑戦を2タップに)
+      const secret = resolveSecretTarget(SCENARIO.scenes[state.sceneIndex], r.check.targetEntity, r.check.reason, text, { revealed, inventory: state.inventory });
+      if (secret) markExamined(secret.entity);
+      if (ok && secret) {
+        unlockSecret(secret);
+        extra += `\n# 判定成功によりシステムが開示する新情報(これを語りに織り込め)\n・${secret.text}`;
+      }
+    }
+    const outcome = crit ? "クリティカル(自動成功)" : fumble ? "ファンブル(自動失敗)" : ok ? "成功" : "失敗";
+    const hint = crit ? "劇的な大成功として、効果を大きめに描写せよ。"
+      : fumble ? "手痛い代償を必ず発生させよ(hp_delta可)。"
+      : ok ? "" : "失敗は「手がかりが得られない」「状況がわずかに悪化する」ことで描け。戦闘中でない限り、負傷やhp_deltaを発生させるな。";
+    let enemyDirective = "";
+    let enemyAttackCause = null; // ダメージ通知に敵の攻撃のダイス結果を明示するため保持
+    if (state.enemy) {
+      const eRoll = rollD20();
+      const eHit = eRoll >= 10;
+      if (eHit) enemyAttackCause = `${enemyName(state.enemy)}の攻撃が命中(d20=${eRoll})`;
+      addNote(`⚔ ${enemyName(state.enemy)}の行動: d20=${eRoll} → ${eHit ? "攻撃が届く" : "外れ/牽制"}`); // 未識別なら本名を出さない
+      enemyDirective = eHit
+        ? `戦闘中:判定成功なら enemy_hp_delta を提案してよい。さらに${state.enemy.name}も行動し、攻撃が届いた——反撃の描写と hp_delta(-1〜-2)を必ず含めよ。`
+        : `戦闘中:判定成功なら enemy_hp_delta を提案してよい。${state.enemy.name}も行動したが攻撃は届かない——牽制や威嚇として描写せよ(hp_delta不要)。`;
+    }
+    setThinking("gm", true);
+    const r2 = await callGm(
+      `【システム】判定結果: d20=${roll}(DC${diff})→${outcome}。結果を描写せよ。${hint}${enemyDirective}`,
+      extra
+    );
+    setThinking("gm", false);
+    if (r2.narration) addGmNarration(trimNarration(r2.narration), r2.emotion);
+    await revealTurnBeats(r2, false);
+    // NPCの一言はメイン応答側(npcAgentReply)で1ターン1回だけ生成済み。r2側では発火しない
+    maybeEngage(r2);
+    applyUpdatesLogged(r2.state_updates, { allowEnemyDamage: ok, allowPlayerDamage: !!state.enemy || fumble }, enemyAttackCause);
+    if (r2.flee_enemy && state.enemy) { addNote(`⚔ ${enemyName(state.enemy)}との戦闘を離脱`); logSceneEvent(`${enemyName(state.enemy)}と戦わずに切り抜けた`); (state.fled ||= []).push(state.enemy.name); state.enemy = null; }
+    if (checkEnemyDown()) ctx.progressed = true;
+    r.scene_complete = r.scene_complete || r2.scene_complete;
+  }
+
+  await revealGate;
+  state.lastAction = { text: ctx.normalizedText, fingerprint: ctx.fp, hadCheck: !!(r.check && r.check.difficulty) };
+
+  // LLMのscene_complete申告をシステム側で検証(条件未達なら却下)。
+  // メタなシステムノートは興醒めなので、GMの語りとして「進めない」ことだけ伝える
+  if (r.scene_complete && !sceneCompleteAllowed(SCENARIO.scenes[state.sceneIndex])) {
+    r.scene_complete = false;
+    state.blockedMove = true; // 次の手番のプロンプトで「先へ進んだ描写をするな」を注入
+    // 通れる出口があるなら「進めない」は嘘になる。moveBlockedNoteが状態に合わせて出し分ける
+    addGm(moveBlockedNote(SCENARIO.scenes[state.sceneIndex]));
+  }
+
+  if (inv.held(state.inventory).length > ctx.itemsBefore) ctx.progressed = true;
+  if (state.enemy) ctx.progressed = true;
+  if (r.scene_complete) ctx.progressed = true;
+  state.noProgressTurns = ctx.progressed ? 0 : state.noProgressTurns + 1;
+
+  renderDebug();
+
+  if (state.hp <= 0) {
+    addNote(gameOverText());
+  } else if (r.scene_complete) {
+    advanceScene();
+    renderDebug();
+  }
+}
+
+/* ---------------- 1ターンの流れ ---------------- */
+export async function sendAction(text) {
+  text = text.trim();
+  if (!text || busy) return;
+  if (state.hp <= 0) { addNote("倒れている。「最初から」でやり直そう。"); return; }
+  // 終幕後も入力を受け付けてしまうと、最終シーン(報告等)の仕組みがそのまま動き続け、
+  // マイラが際限なく聞き返すループになる(クロニクル2026-07-20 T27-30)。終幕後はここで止める
+  if (state.chapterEnded) { addNote("物語は決着している。「最初から」で別の選択を試せる。"); return; }
+  busy = true;
+  setStore({ busy: true });
+  state.turn++;
+  addPlayer(text);
+  recordVerb(text); // 述語を頻度辞書へ記録(動詞チップの学習)
+  const previousAskedBack = !!state.unknownTarget?.lastTurnAskedBack;
+  state.unknownTarget = { lastTurnAskedBack: false, candidates: [] };
+
+  if (turnDialogueNodes(text)) return;
 
   applySceneStateUpdates(text); // 宣言文中の条件語句からflag_setを発火(プレイヤーの選択によるフラグ確定)
 
   const normalizedText = text.trim();
   const fp = stateFingerprint();
-  const prev = state.lastAction;
-  const isRepeat = prev && prev.text === normalizedText && prev.fingerprint === fp && !prev.hadCheck;
-  if (isRepeat) {
-    addNote("🔁 同じ状況で同じ行動を繰り返した。判定の余地もなく、結論は変わらない(APIは呼んでいない) — 別の行動を試すか、先へ進もう");
-    renderDebug();
-    busy = false;
-    setStore({ busy: false });
-    return;
-  }
+  if (turnRepeatGuard(normalizedText, fp)) return;
 
   const banterCue = takeBanterCue();
   const addressed = Object.values(CAST).some(c => text.includes(c.name));
@@ -2169,7 +2321,7 @@ export async function sendAction(text) {
   const injuryCue = takeInjuryCue();
   const concernActive = injuryCue !== "";
   const itemsBefore = inv.held(state.inventory).length;
-  let progressed = false;
+  // progressed(前進したか)は turnFreeform 内でしか変わらないので、ctxのプロパティとして渡す
 
   // 戦闘中の宣言: 解決の間は全パネルを閉じて戦闘演出を見せる。ターン解決が終わったら
   // (finally)下パネルだけ開いて次の入力を促す。戦闘開始ターン(engageEnemy)も同じ流れ
@@ -2349,143 +2501,11 @@ export async function sendAction(text) {
       // talk / other / 対象不明のinvestigate → 従来のLLMレーン(語りと会話の領分)
     }
 
-    // talkTurnsMin条件用: 会話系の宣言だけを数える(調査連打で報告シーンが決着するのを防ぐ。Codexレビュー指摘)
-    if (!cls || ["talk", "talk_gm", "other"].includes(cls.intent)) {
-      state.sceneTalkTurns = (state.sceneTalkTurns || 0) + 1;
-      // 報告シーンでは会話そのものが前進(クリア条件がtalkTurnsMin)。前進扱いにしないと
-      // noProgressTurnsが積み上がり、停滞ナッジが誤爆して同行者が毎ターン喋り出す
-      // (クロニクル2026-07-18: マイラの部屋でリディア/ガレスが喋りすぎる問題)
-      if (SCENARIO.scenes[state.sceneIndex].report) progressed = true;
-    }
-    // 「考え中(…)」表示: 語りの主体であるGMは常に、宛先が同行者ならそのキャラにも出す
-    // (NPCへの表示は npcAgentReply 側で管理。非同期でターン終了後に届くため寿命が別)
-    const addressedWho = Object.keys(CAST).find(id => text.includes(CAST[id].name)) || null;
-    setThinking("gm", true);
-    if (addressedWho) setThinking(addressedWho, true);
-    /* この場でtakeLootRevealCue()を呼ぶ(cls分岐より前で計算・消費すると、決定論の経路が
-       LLMを呼ばずにreturnした時に控えが黒く消える。2026-08-03の実測: 「胸の光るもの」開示の直後、
-       「奥へ進む」が決定論の移動経路で解決されて念押しが一度も出なかった。ここまで来て初めて
-       消費すれば、LLMを呼ぶ手番が来るまで控えが持続し、必ずどこかの手番で届く) */
-    let r = await callGm(`プレイヤーの宣言: ${text}`, banterCue + stagnationCue + injuryCue + takeLootRevealCue() + gmDirectCue + takeRollReactionCue());
-    setThinking("gm", false);
-    state.pendingFailedCheck = null; state.blockedMove = false;
-    if (r.narration) addGmNarration(trimNarration(r.narration), r.emotion);
-    if (addressedWho) setThinking(addressedWho, false);
-    // 報告シーンの対話の主役はNPCとプレイヤー。同行者のスロットル解除は「直接話しかけられた時」
-    // だけに限定する(停滞・負傷の割り込みでは口を挟ませない)
-    const revealGate = revealTurnBeats(r, addressed ||
-      ((nudgeActive || concernActive) && !SCENARIO.scenes[state.sceneIndex].report));
-    // NPCの一言は専用エージェント(npcAgentReply)が非同期で生成する。r.npc.sayは受け皿として捨てる
-    npcAgentReply(text, revealGate);
-    if (r.meta_request) {
-      addNote(`⚖ メタ発言を検知(${r.meta_request.topic || "内容不明"}) — GMが確認中。状態は変更されていない`);
-      r.state_updates = null;
-    }
-    maybeEngage(r);
-    applyUpdatesLogged(r.state_updates, { allowPlayerDamage: !!state.enemy });
-    if (r.flee_enemy && state.enemy) { addNote(`⚔ ${enemyName(state.enemy)}との戦闘を離脱`); logSceneEvent(`${enemyName(state.enemy)}と戦わずに切り抜けた`); (state.fled ||= []).push(state.enemy.name); state.enemy = null; }
-    if (checkEnemyDown()) progressed = true;
-    renderDebug();
-
-    // 開示済みのsecretへの再判定は振らせない(成功しても何も起きない空振りターンになる。2026-07-17(6) T20/T26)。
-    // 「改めて確かめる」の再提示で応える
-    if (r.check && r.check.targetEntity) {
-      const already = SCENARIO.scenes[state.sceneIndex].secrets
-        .find(s => revealed.has(s.id) && s.entity === r.check.targetEntity);
-      if (already) {
-        addGm("改めて確かめる。" + (already.playerText || already.text), "Neutral");
-        r.check = null;
-      }
-    }
-
-    if (r.check && r.check.difficulty) {
-      const diff = Math.max(5, Math.min(18, r.check.difficulty));
-      // 誰の判定か(同行者に任せた行動はLLMがcheck.actorで申告)。ダイスは名義を出してプレイヤーが振る
-      const actor = normalizeWho(r.check.actor, "player");
-      const actorName = actor === "player" ? "あなた" : CAST[actor].name;
-      const reason = (actor === "player" ? "" : `${actorName}: `) + (r.check.reason || "判定");
-      const roll = await requestPlayerRoll(reason, diff, actorName);
-      const crit = roll === 20, fumble = roll === 1;
-      const ok = crit || (!fumble && roll >= diff);
-      await addDice(roll, diff, ok, crit, fumble, reason);
-
-      let extra = "";
-      // 識別は「敵への攻撃」の判定に限定する(戦闘状態が滞留した時に、無関係な調査判定で
-      // 正体が判明してしまう誤爆があったため。クロニクル2026-07-12(1) T33)
-      const attackIntent = /攻撃|斬|切りかか|殴|撃|叩|突|蹴|剣|斧|弓|矢/.test(text) ||
-        (r.check.targetEntity && state.enemy &&
-          (r.check.targetEntity === state.enemy.name || r.check.targetEntity === state.enemy.unknownName));
-      if (state.enemy && attackIntent) extra += identifyEnemy(); // 攻撃して初めて正体が判明する(ウィザードリィ式)
-      if (ok) progressed = true;
-      if (!ok) state.pendingFailedCheck = { reason: r.check.reason || "判定", sceneIndex: state.sceneIndex };
-      // 開示は攻撃判定以外なら戦闘中でも可(戦闘状態の滞留で探索judgが全て無駄になるのを防ぐ。
-      // 開示対象は二段階マッチングで限定済みなので誤開示の危険はない)
-      if (!attackIntent) {
-        // 調べた対象に一致するsecretだけを開示する(一致しなければ開示なし)。
-        // 判定の成否に関わらず、対象が特定できた時点でチップ化(失敗しても再挑戦を2タップに)
-        const secret = resolveSecretTarget(SCENARIO.scenes[state.sceneIndex], r.check.targetEntity, r.check.reason, text, { revealed, inventory: state.inventory });
-        if (secret) markExamined(secret.entity);
-        if (ok && secret) {
-          unlockSecret(secret);
-          extra += `\n# 判定成功によりシステムが開示する新情報(これを語りに織り込め)\n・${secret.text}`;
-        }
-      }
-      const outcome = crit ? "クリティカル(自動成功)" : fumble ? "ファンブル(自動失敗)" : ok ? "成功" : "失敗";
-      const hint = crit ? "劇的な大成功として、効果を大きめに描写せよ。"
-        : fumble ? "手痛い代償を必ず発生させよ(hp_delta可)。"
-        : ok ? "" : "失敗は「手がかりが得られない」「状況がわずかに悪化する」ことで描け。戦闘中でない限り、負傷やhp_deltaを発生させるな。";
-      let enemyDirective = "";
-      let enemyAttackCause = null; // ダメージ通知に敵の攻撃のダイス結果を明示するため保持
-      if (state.enemy) {
-        const eRoll = rollD20();
-        const eHit = eRoll >= 10;
-        if (eHit) enemyAttackCause = `${enemyName(state.enemy)}の攻撃が命中(d20=${eRoll})`;
-        addNote(`⚔ ${enemyName(state.enemy)}の行動: d20=${eRoll} → ${eHit ? "攻撃が届く" : "外れ/牽制"}`); // 未識別なら本名を出さない
-        enemyDirective = eHit
-          ? `戦闘中:判定成功なら enemy_hp_delta を提案してよい。さらに${state.enemy.name}も行動し、攻撃が届いた——反撃の描写と hp_delta(-1〜-2)を必ず含めよ。`
-          : `戦闘中:判定成功なら enemy_hp_delta を提案してよい。${state.enemy.name}も行動したが攻撃は届かない——牽制や威嚇として描写せよ(hp_delta不要)。`;
-      }
-      setThinking("gm", true);
-      const r2 = await callGm(
-        `【システム】判定結果: d20=${roll}(DC${diff})→${outcome}。結果を描写せよ。${hint}${enemyDirective}`,
-        extra
-      );
-      setThinking("gm", false);
-      if (r2.narration) addGmNarration(trimNarration(r2.narration), r2.emotion);
-      await revealTurnBeats(r2, false);
-      // NPCの一言はメイン応答側(npcAgentReply)で1ターン1回だけ生成済み。r2側では発火しない
-      maybeEngage(r2);
-      applyUpdatesLogged(r2.state_updates, { allowEnemyDamage: ok, allowPlayerDamage: !!state.enemy || fumble }, enemyAttackCause);
-      if (r2.flee_enemy && state.enemy) { addNote(`⚔ ${enemyName(state.enemy)}との戦闘を離脱`); logSceneEvent(`${enemyName(state.enemy)}と戦わずに切り抜けた`); (state.fled ||= []).push(state.enemy.name); state.enemy = null; }
-      if (checkEnemyDown()) progressed = true;
-      r.scene_complete = r.scene_complete || r2.scene_complete;
-    }
-
-    await revealGate;
-    state.lastAction = { text: normalizedText, fingerprint: fp, hadCheck: !!(r.check && r.check.difficulty) };
-
-    // LLMのscene_complete申告をシステム側で検証(条件未達なら却下)。
-    // メタなシステムノートは興醒めなので、GMの語りとして「進めない」ことだけ伝える
-    if (r.scene_complete && !sceneCompleteAllowed(SCENARIO.scenes[state.sceneIndex])) {
-      r.scene_complete = false;
-      state.blockedMove = true; // 次の手番のプロンプトで「先へ進んだ描写をするな」を注入
-      // 通れる出口があるなら「進めない」は嘘になる。moveBlockedNoteが状態に合わせて出し分ける
-      addGm(moveBlockedNote(SCENARIO.scenes[state.sceneIndex]));
-    }
-
-    if (inv.held(state.inventory).length > itemsBefore) progressed = true;
-    if (state.enemy) progressed = true;
-    if (r.scene_complete) progressed = true;
-    state.noProgressTurns = progressed ? 0 : state.noProgressTurns + 1;
-
-    renderDebug();
-
-    if (state.hp <= 0) {
-      addNote(gameOverText());
-    } else if (r.scene_complete) {
-      advanceScene();
-      renderDebug();
-    }
+    await turnFreeform(text, {
+      cls, gmDirectCue, banterCue, stagnationCue, injuryCue,
+      addressed, nudgeActive, concernActive, itemsBefore,
+      progressed: false, normalizedText, fp
+    });
   } catch (e) {
     addNote("通信エラー: " + e.message);
   } finally {

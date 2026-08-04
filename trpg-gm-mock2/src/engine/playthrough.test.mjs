@@ -59,7 +59,9 @@ function gmResponse(body) {
     const candidates = (system.match(/対象の候補: ([^\n]*)/)?.[1] || "")
       .split("、").filter(x => x && x !== "(なし)");
     const target = candidates.filter(x => text.includes(x)).sort((a, b) => b.length - a.length)[0] || null;
-    const intent = /拾|取る|手に入れ/.test(text) ? "take"
+    // 「ポケットにしまう」は tryScripted の TAKE_RE を外すので分類器まで届く。実物のLLMも
+    // これを take と読むはずの言い回しであり、スタブを賢くしているのではなく素直に写している
+    const intent = /拾|取る|手に入れ|しまう|懐に|袋に入れ/.test(text) ? "take"
       : /進む|向かう|入る|奥へ/.test(text) ? "move"
       : /戻る|引き返/.test(text) ? "back"
       : /話|聞く|尋ね|報告|伝え/.test(text) ? "talk"
@@ -290,9 +292,13 @@ while (turns < MAX_TURNS) {
   }
   for (const name of availableLootNames(cur.node, rev)) {
     if (heldItems().includes(name)) continue;
-    await say(`${name}を拾う`);
+    /* hybridでは、まず辞書(TAKE_RE)を外す言い回しで試す。これで分類器のtakeレーン
+       (index.js 2309-2344、品物の取得を解決する35行)が検査下に入る。取れなければ
+       辞書に当たる「拾う」へ落とす——検査の目的は章の完走であって、詰ませることではない */
+    if (mode === "hybrid") await say(`${name}をポケットにしまう`);
+    if (!heldItems().includes(name)) await say(`${name}を拾う`);
     check(heldItems().includes(name), `${cur.label} 品物「${name}」を入手できた`,
-      `開示条件は満たしているのに、拾う宣言で手に入らない`);
+      `開示条件は満たしているのに、取得の宣言で手に入らない`);
   }
 
   // (3) 出口へ進む
