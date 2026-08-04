@@ -35,30 +35,6 @@ renderTabs=function(){
   $("layerTabs").querySelector('[data-tab="matchWords"]')?.remove();
 };
 
-function renderEntityLedgerForGm(){
-  const holder=document.createElement("div");
-  holder.innerHTML=renderEntities();
-  holder.querySelector("h2")?.remove();
-  holder.querySelector("p.hint")?.remove();
-  return holder.innerHTML;
-}
-var baseRenderTabForStoryTree=renderTab;
-renderTab=function(){
-  baseRenderTabForStoryTree();
-  if(activeTab!=="concepts")return;
-  const content=$("tabContent");
-  content.insertAdjacentHTML("beforeend",`<details class="card entity-gm-settings"><summary>名前・別名の台帳</summary><p class="hint">キャラクター、モンスター、アイテム以外の重要な名前や別名を管理します。</p>${renderEntityLedgerForGm()}</details>`);
-  bindEntities();
-  document.querySelectorAll("[data-entity-destination-tab]").forEach(button=>button.onclick=()=>{
-    if(button.dataset.entityDetailIndex!==undefined){const details=document.querySelector(".entity-details");if(details)details.open=true;document.querySelector(`[data-entity-index="${button.dataset.entityDetailIndex}"]`)?.scrollIntoView({behavior:"smooth",block:"center"});return}
-    const tab=button.dataset.entityDestinationTab;
-    selectedTarget="campaign";
-    activeTab=tab==="entities"?"concepts":tab;
-    if(activeTab==="cast")pendingCastFocus=button.dataset.entityDestinationFocus||null;
-    renderScenes();renderAll();
-  });
-};
-
 var baseRenderRightPanelForStoryTree=renderRightPanel;
 renderRightPanel=function(){
   baseRenderRightPanelForStoryTree();

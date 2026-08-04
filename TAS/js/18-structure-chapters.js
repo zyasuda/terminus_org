@@ -87,9 +87,11 @@ function bindStructureManager(){
   document.querySelectorAll('[data-structure-scene-down]').forEach(b=>b.onclick=()=>moveManagedScene(b.dataset.structureSceneDown,Number(b.dataset.structureSceneIndex),1));
   document.querySelectorAll('[data-structure-scene-delete]').forEach(b=>b.onclick=()=>deleteManagedScene(b.dataset.structureSceneDelete,Number(b.dataset.structureSceneIndex)));
   const add=$('btnStructureAddChapter');if(add)add.onclick=addManagedChapter;
+  document.querySelectorAll('[data-campaign-chapter]').forEach(button=>button.onclick=()=>{activeChapter=button.dataset.campaignChapter;selectedTarget='chapter';activeTab='chapterOverview';collapsedCampaign=false;collapsedChapters[activeChapter]=false;saveWorkspaceDraft(true);renderScenes();renderAll();renderTabs()});
 }
+function renderCampaignChapterList(){ensureStructureChapters();const rows=chapterOrder.map((key,index)=>`<button type="button" class="sub" data-campaign-chapter="${escapeHtml(key)}">${escapeHtml(structureChapterLabel(key,index))}</button>`).join('');return `<div class="card campaign-chapter-list"><h3>チャプター一覧</h3><p class="hint">登録済みのチャプターです。クリックするとチャプター設定を開きます。</p><div class="campaign-chapter-links" style="display:grid;gap:6px">${rows||'<p class="hint">チャプターがありません。</p>'}</div><div class="manager-toolbar"><button class="sub" id="btnStructureAddChapter">＋ チャプターを追加</button></div></div>`}
 var baseRenderWorldForStructure=renderWorld;
-renderWorld=function(){const html=baseRenderWorldForStructure();return html+'<div class="manager-toolbar"><button class="sub" id="btnStructureAddChapter">＋ チャプターを追加</button></div>'};
+renderWorld=function(){return baseRenderWorldForStructure()+renderCampaignChapterList()};
 var baseBindWorldForStructure=bindWorld;
 bindWorld=function(){baseBindWorldForStructure();bindStructureManager()};
 var baseWorkspaceDraftForStructure=workspaceDraft;

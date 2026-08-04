@@ -173,7 +173,8 @@ function imageFolderMarkup(){
   return `<div class="card image-library-card"><h3>画像管理</h3><p class="hint">${folderText}<br>${countText}<br>${note}</p><button type="button" class="sub image-folder-button" id="btnChooseImageFolder">${action}</button><input id="imageFolderInput" type="file" accept="image/*" webkitdirectory directory multiple></div>`;
 }
 var baseRenderWorldForImageLibrary=renderWorld;
-renderWorld=function(){return baseRenderWorldForImageLibrary().replace('</p>','</p>'+imageFolderMarkup())};
+// 画像フォルダの入口はキャンペーン画像の選択欄に統合する。隠し入力は非対応ブラウザ用に残す。
+renderWorld=function(){const holder=document.createElement('div');holder.innerHTML=baseRenderWorldForImageLibrary().replace('</p>','</p><input id="imageFolderInput" type="file" accept="image/*" webkitdirectory directory multiple style="display:none">');const name=holder.querySelector('#campaignName')?.closest('.field');const image=holder.querySelector('#campaignImageInput')?.closest('.field');if(name&&image)image.before(name);return holder.innerHTML};
 var baseRenderTabForImageLibrary=renderTab;
 renderTab=function(){baseRenderTabForImageLibrary();decorateImageInputs()};
 var baseRenderAllForImageLibrary=renderAll;
