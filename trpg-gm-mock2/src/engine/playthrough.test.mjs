@@ -7,8 +7,8 @@
    データが正しいことと、エンジンがそのデータで進めることは別の問題である。
 
    進め方:
-   - gmMode="scripted" で走らせる。この経路はLLMを一切呼ばないので、出目以外は決定論になる。
-     LLMを呼んだら fetch のスタブが例外を投げ、検査として落ちる(「LLMゼロ」の保証も兼ねる)。
+   - 既定は gmMode="scripted"。MODE=hybrid では分類・語りだけを決定論スタブで置換し、
+     進行の解決は実物のエンジンに任せる。
    - 台本は手書きしない。章データから「そのシーンの秘密を全部開き、置かれた品を全部拾い、
      出口へ進む」を機械的に導く。台本を書くと、データが変わったとき台本が腐る。
    - 出目は種付き乱数で固定する。失敗しても examineDifficulty が難易度を下げるので、
@@ -18,6 +18,7 @@
      node src/engine/playthrough.test.mjs
      CAMPAIGN=lanternhill CHAPTER_ID=chapter_01 node src/engine/playthrough.test.mjs
      SEED=999 node src/engine/playthrough.test.mjs      # 別の出目で通るかを見る
+     MODE=hybrid STUB_CHECK=1 node src/engine/playthrough.test.mjs
    ========================================================= */
 import fs from "node:fs";
 import path from "node:path";
@@ -42,11 +43,53 @@ const chapterId = process.env.CHAPTER_ID || "";
 const qs = [campaignId && `campaign=${campaignId}`, chapterId && `chapter=${chapterId}`].filter(Boolean).join("&");
 globalThis.location = { search: qs ? `?${qs}` : "" };
 
-// scriptedモードで起動する(index.jsはモジュール読み込み時にこのキーを読む。importより前に置く)
-mem.set("terminus_gm_mode_v1", "scripted");
+const mode = process.env.MODE || "scripted";
+if (!["scripted", "hybrid"].includes(mode)) throw new Error(`MODEは scripted または hybrid: ${mode}`);
+// index.jsはモジュール読み込み時にこのキーを読む。importより前に置く
+mem.set("terminus_gm_mode_v1", mode);
 
 let llmCalls = 0;
-globalThis.fetch = async url => {
+const llmCallCounts = { classify: 0, gm: 0, flavor: 0, checkResult: 0 };
+let lastClassification = null;
+function gmResponse(body) {
+  const system = String(body.system || "");
+  const messages = body.messages || [];
+  const text = String(messages.at(-1)?.content || "");
+  if (system.startsWith("プレイヤーの宣言を分類する")) {
+    const candidates = (system.match(/対象の候補: ([^\n]*)/)?.[1] || "")
+      .split("、").filter(x => x && x !== "(なし)");
+    const target = candidates.filter(x => text.includes(x)).sort((a, b) => b.length - a.length)[0] || null;
+    const intent = /拾|取る|手に入れ/.test(text) ? "take"
+      : /進む|向かう|入る|奥へ/.test(text) ? "move"
+      : /戻る|引き返/.test(text) ? "back"
+      : /話|聞く|尋ね|報告|伝え/.test(text) ? "talk"
+      : target ? "investigate" : "other";
+    lastClassification = { intent, target };
+    llmCallCounts.classify++;
+    return { intent, target, named: target, actor: "player" };
+  }
+  if (system.startsWith("ソロTRPGの同行者として")) {
+    const who = system.match(/同行者: ([^=\s]+)=/)?.[1];
+    if (!who) throw new Error("同行者IDを取得できない");
+    llmCallCounts.flavor++;
+    return { who, say: "……" };
+  }
+  if (body.max_tokens === 1000 || body.maxTokens === 1000) {
+    llmCallCounts.gm++;
+    /* 判定結果の描写呼び出し。これは sendAction の `r.check && r.check.difficulty` ブロック
+       内(index.js 2449)からしか出ないので、「エンジンが判定を解決した」ことの曖昧さのない
+       証拠になる。pendingRollの回数で数えると scriptedExamine の判定も混ざって偽陽性になる */
+    if (text.startsWith("【システム】判定結果:")) llmCallCounts.checkResult++;
+    const check = process.env.STUB_CHECK === "1" && lastClassification?.intent === "investigate" && lastClassification.target
+      // index.jsはtargetEntityを読む。targetはAPI上の指定名を保つ。
+      ? { target: lastClassification.target, targetEntity: lastClassification.target, reason: "確かめる", difficulty: 12 }
+      : null;
+    return { narration: "(スタブ)", companion: null, npc: null, check,
+      state_updates: null, engage_enemy: false, flee_enemy: false, scene_complete: false, meta_request: null };
+  }
+  throw new Error("想定外のLLMリクエスト");
+}
+globalThis.fetch = async (url, init) => {
   const u = String(url);
   if (u.startsWith("/data/")) {
     const file = path.join(PUBLIC_DIR, u);
@@ -54,8 +97,12 @@ globalThis.fetch = async url => {
     const text = fs.readFileSync(file, "utf8");
     return { ok: true, status: 200, json: async () => JSON.parse(text) };
   }
-  // scripted経路はLLMを呼ばないはず。呼んだら黙って通さず、検査として落とす
-  if (u.startsWith("/api/gm")) { llmCalls++; throw new Error("scriptedモードなのにLLMを呼んだ"); }
+  if (u.startsWith("/api/gm")) {
+    llmCalls++;
+    if (mode === "scripted") throw new Error("scriptedモードなのにLLMを呼んだ");
+    const response = gmResponse(JSON.parse(init?.body || "{}"));
+    return { ok: true, status: 200, json: async () => ({ content: [{ text: JSON.stringify(response) }], usage: { input_tokens: 0, output_tokens: 0 } }) };
+  }
   return { ok: false, status: 503, json: async () => ({}) }; // /api/model-info 等
 };
 
@@ -118,14 +165,19 @@ function drainPopups() {
 /* 1手番進める。判定要求(pendingRoll)はプレイヤーのクリック待ちなので、ここで代わりに振る。
    ブラウザで「ダイスを振る!」を押すのと同じ操作である */
 let turns = 0;
+let pendingRolls = 0;
 async function say(text) {
   turns++;
   drainPopups();
   let settled = false;
   const p = eng.sendAction(text).then(v => { settled = true; return v; }, e => { settled = true; throw e; });
+  let sawPendingRoll = false;
   for (let i = 0; i < 3000 && !settled; i++) {
     await tick();
-    if (getSnapshot().pendingRoll) eng.performRoll();
+    if (getSnapshot().pendingRoll) {
+      if (!sawPendingRoll) { pendingRolls++; sawPendingRoll = true; }
+      eng.performRoll();
+    }
   }
   await p;
   await tick();
@@ -153,6 +205,10 @@ function nodeSignature() {
 /* 秘密を開く宣言の候補。作者が書いた trigger を第一候補にする(実プレイで開かなかったのは
    まさにここ)。通らなければ entity を使った素直な言い回しへ落とす */
 function examineAttempts(secret) {
+  if (mode === "hybrid") {
+    return [`${secret.entity}はどうなっている?`, `${secret.entity}のことが気になる`, `${secret.entity}を調べる`,
+      ...(secret.trigger ? String(secret.trigger).split(/[,、]/).map(t => t.trim().replace(/[。.]$/, "")).filter(t => t.length >= 2) : [])];
+  }
   const out = [];
   if (secret.trigger) {
     String(secret.trigger).split(/[,、]/).map(t => t.trim().replace(/[。.]$/, "")).filter(t => t.length >= 2)
@@ -193,11 +249,19 @@ const EXAMINE_TRIES = 8; // examineDifficultyは失敗ごとにDCを2下げ、�
 const visited = [];
 const revealLog = [];
 let stalled = null;
+const hybridNarrated = new Set();
+const hybridChecked = new Set();
 
 while (turns < MAX_TURNS) {
   const cur = currentNode();
   if (cur.kind === "ended") break;
   visited.push(cur.label);
+
+  // 辞書外の自由文は分類後にGM語りへ届く。進行を決める返答は一切受け取らない。
+  if (mode === "hybrid" && cur.kind === "scene" && !hybridNarrated.has(cur.state.sceneIndex)) {
+    hybridNarrated.add(cur.state.sceneIndex);
+    await say("周りの様子は?");
+  }
 
   // (1) このノードの秘密を全部開く
   for (const secret of cur.node.secrets || []) {
@@ -218,6 +282,12 @@ while (turns < MAX_TURNS) {
 
   // (2) 置かれた品を全部拾う（出口や後のノードが要求する）
   const rev = readSaved().revealed;
+  // lootは分類候補だがsecretではないため、調査分類がGM語りへ流れる。STUB_CHECK時だけ判定解決も通す。
+  const firstLoot = availableLootNames(cur.node, rev)[0];
+  if (mode === "hybrid" && process.env.STUB_CHECK === "1" && firstLoot && !hybridChecked.has(`${cur.label}:${firstLoot}`)) {
+    hybridChecked.add(`${cur.label}:${firstLoot}`);
+    await say(`${firstLoot}はどうなっている?`);
+  }
   for (const name of availableLootNames(cur.node, rev)) {
     if (heldItems().includes(name)) continue;
     await say(`${name}を拾う`);
@@ -274,8 +344,19 @@ check(missed.length === 0, "章内の全ての秘密を開示できた",
   `未開示: ${missed.map(s => `${s.id}(${s.entity})`).join(", ")}`);
 check(allSecrets.length > 0, "秘密が1件以上ある（検査が空振りしていない）");
 
-section("4. scriptedモードはLLMを呼ばない");
-check(llmCalls === 0, "LLMの呼び出しが0件", `${llmCalls}件呼んだ`);
+section(`4. ${mode}モードのLLM経路`);
+if (mode === "scripted") {
+  check(llmCalls === 0, "LLMの呼び出しが0件", `${llmCalls}件呼んだ`);
+} else {
+  check(llmCallCounts.classify > 0, "意図分類の呼び出しが1件以上", `${llmCallCounts.classify}件`);
+  check(llmCallCounts.gm > 0, "GMの語りの呼び出しが1件以上", `${llmCallCounts.gm}件`);
+  /* pendingRollの回数では数えない。scriptedExamineの判定も立てるため常に1以上になり、
+     判定解決の経路(index.js 2401-2462)を1行も通らなくても緑になってしまう(実測済み) */
+  if (process.env.STUB_CHECK === "1") {
+    check(llmCallCounts.checkResult > 0, "LLMが要求した判定をエンジンが解決した",
+      `判定結果の描写呼び出しが0件。ダイスは${pendingRolls}回立ったが、すべてscripted経路のもの`);
+  }
+}
 
 console.log(`\n通ったノード: ${visited.join(" → ")}`);
 console.log(`開示順: ${revealLog.join(" → ")}`);

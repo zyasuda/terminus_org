@@ -15,7 +15,8 @@
     "test:scenario": "node src/scenario.test.mjs",
     "test:progression": "node src/engine/progression.test.mjs",
     "test:playthrough": "node src/engine/playthrough.test.mjs",
-    "test": "npm run test:progression && npm run test:playthrough && npm run test:scenario && npm run test:inventory && npm run test:battle"
+    "test:playthrough:hybrid": "MODE=hybrid node src/engine/playthrough.test.mjs",
+    "test": "npm run test:progression && npm run test:playthrough && npm run test:playthrough:hybrid && npm run test:scenario && npm run test:inventory && npm run test:battle"
   },
   "dependencies": {
     "@litert-lm/core": "^0.14.0",
