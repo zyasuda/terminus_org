@@ -1,0 +1,449 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ソロTRPG GMモック — 廃坑の灯</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg: #14161c;
+    --panel: #1d2029;
+    --panel2: #232735;
+    --line: #33394a;
+    --text: #d8dae2;
+    --dim: #8b90a0;
+    --lantern: #e8a33d;
+    --lantern-dim: #7a5a26;
+    --ok: #6fbf85;
+    --ng: #d96b6b;
+    --sys: #5d8fc9;
+  }
+  body {
+    background: var(--bg); color: var(--text);
+    font-family: "Hiragino Kaku Gothic ProN", "Yu Gothic", sans-serif;
+    height: 100vh; height: 100dvh;
+    display: flex; flex-direction: column;
+  }
+  header {
+    padding: 10px 16px; border-bottom: 1px solid var(--line);
+    display: flex; align-items: baseline; gap: 12px; flex-shrink: 0;
+  }
+  header h1 { font-size: 15px; font-weight: 600; color: var(--lantern); letter-spacing: .08em; }
+  header .sub { font-size: 11px; color: var(--dim); }
+  header button {
+    margin-left: auto; background: none; border: 1px solid var(--line);
+    color: var(--dim); border-radius: 6px; padding: 4px 12px; font-size: 12px; cursor: pointer;
+  }
+  main { flex: 1; display: flex; min-height: 0; }
+
+  /* ---- chat ---- */
+  #chatCol { flex: 1.4; display: flex; flex-direction: column; min-width: 0; border-right: 1px solid var(--line); }
+  #chat { flex: 1; overflow-y: auto; padding: 16px; display: flex; flex-direction: column; gap: 12px; }
+  .msg { max-width: 92%; line-height: 1.75; font-size: 14px; white-space: pre-wrap; }
+  .gm {
+    align-self: flex-start;
+    font-family: "Hiragino Mincho ProN", "Yu Mincho", serif;
+    background: var(--panel); border-left: 3px solid var(--lantern);
+    padding: 10px 14px; border-radius: 0 8px 8px 0;
+  }
+  .player {
+    align-self: flex-end; background: var(--panel2);
+    padding: 8px 14px; border-radius: 8px 8px 0 8px; color: var(--text);
+  }
+  .dice {
+    align-self: center; font-size: 12.5px; letter-spacing: .05em;
+    border: 1px dashed var(--sys); color: var(--sys);
+    padding: 6px 14px; border-radius: 999px; background: rgba(93,143,201,.08);
+  }
+  .dice b.ok { color: var(--ok); } .dice b.ng { color: var(--ng); }
+  .sysnote { align-self: center; font-size: 11.5px; color: var(--dim); }
+  .reveal {
+    align-self: center; font-size: 12px; color: var(--lantern);
+    border: 1px solid var(--lantern-dim); padding: 5px 12px; border-radius: 6px;
+    background: rgba(232,163,61,.06);
+  }
+  #inputRow { display: flex; gap: 8px; padding: 12px 16px; border-top: 1px solid var(--line); flex-shrink: 0; }
+  #inputRow input {
+    flex: 1; background: var(--panel); border: 1px solid var(--line);
+    color: var(--text); border-radius: 8px; padding: 10px 12px; font-size: 14px;
+  }
+  #inputRow input:focus { outline: 1px solid var(--lantern-dim); }
+  #inputRow button {
+    background: var(--lantern); border: none; color: #1a1408; font-weight: 700;
+    border-radius: 8px; padding: 0 20px; font-size: 14px; cursor: pointer;
+  }
+  #inputRow button:disabled { background: var(--lantern-dim); cursor: wait; }
+
+  /* ---- debug ---- */
+  #debugCol { flex: 1; display: flex; flex-direction: column; min-width: 0; overflow-y: auto; }
+  #debugCol section { border-bottom: 1px solid var(--line); padding: 12px 14px; }
+  #debugCol h2 {
+    font-size: 11px; font-weight: 600; letter-spacing: .14em; color: var(--dim);
+    text-transform: uppercase; margin-bottom: 8px;
+  }
+  #debugCol h2 .tag { color: var(--sys); font-weight: 400; letter-spacing: 0; }
+  pre { font-family: "SF Mono", Menlo, monospace; font-size: 11.5px; line-height: 1.6;
+        color: #a8c0d8; white-space: pre-wrap; word-break: break-all; }
+  .secretRow { font-size: 12px; line-height: 1.7; display: flex; gap: 8px; align-items: baseline; }
+  .secretRow .lock { flex-shrink: 0; font-size: 11px; }
+  .secretRow.locked { color: var(--dim); }
+  .secretRow.locked .body { filter: blur(0px); }
+  .secretRow.open { color: var(--lantern); }
+  #diceLog { font-size: 11.5px; color: var(--dim); line-height: 1.7; font-family: Menlo, monospace; }
+  .hpbar { display: flex; align-items: center; gap: 8px; font-size: 13px; }
+  .hpbar .track { flex: 1; height: 8px; background: var(--panel2); border-radius: 4px; overflow: hidden; }
+  .hpbar .fill { height: 100%; background: var(--ok); transition: width .3s; }
+
+  @media (max-width: 760px) {
+    main { flex-direction: column; }
+    #chatCol { border-right: none; flex: 1; }
+    #debugCol { flex: none; max-height: 38vh; border-top: 1px solid var(--line); }
+  }
+</style>
+</head>
+<body>
+<header>
+  <h1>廃坑の灯</h1>
+  <span class="sub">ソロTRPG GMモック — 左:対話(LLM) / 右:システムの中身(通常は非公開)</span>
+  <button onclick="resetGame()">最初から</button>
+</header>
+<main>
+  <div id="chatCol">
+    <div id="chat"></div>
+    <div id="inputRow">
+      <input id="playerInput" placeholder="行動を宣言(例:灯りに近づいて様子を見る)" onkeydown="if(event.key==='Enter')sendAction()">
+      <button id="sendBtn" onclick="sendAction()">宣言</button>
+    </div>
+  </div>
+  <div id="debugCol">
+    <section>
+      <h2>キャラクター状態 <span class="tag">← JSが管理、LLMは書き換え不可</span></h2>
+      <div class="hpbar">HP <div class="track"><div class="fill" id="hpFill"></div></div><span id="hpNum"></span></div>
+      <pre id="stateView"></pre>
+    </section>
+    <section>
+      <h2>シナリオの秘密 <span class="tag">← プロンプトには開放済みのみ注入</span></h2>
+      <div id="secretsView"></div>
+    </section>
+    <section>
+      <h2>ダイスログ <span class="tag">← 乱数はJS、LLMは要求と語りのみ</span></h2>
+      <div id="diceLog"></div>
+    </section>
+    <section>
+      <h2>直近のAPIリクエスト概要</h2>
+      <pre id="apiView">(まだ通信なし)</pre>
+    </section>
+  </div>
+</main>
+
+<script>
+/* =========================================================
+   システム側(JS)が権威を持つデータ。LLMには一切変更させない。
+   ========================================================= */
+const SCENARIO = {
+  title: "廃坑の灯",
+  intro: "山あいの廃坑に、夜ごと揺れる灯りが見えるという。依頼を受けた君は、日暮れ前に坑口へ辿り着いた。",
+  scenes: [
+    {
+      id: 1,
+      brief: "坑口。朽ちたトロッコ軌道が闇へ続く。壁に古い作業札が掛かっている。奥からかすかな金属音。",
+      goal: "プレイヤーが坑道の奥へ進む決断をしたら scene_complete を true にする。",
+      secrets: [
+        { id: "s1a", text: "作業札の日付は30年前で止まっており、最後の記録は『第三坑道、封鎖。誰も近づくな』とある。" },
+        { id: "s1b", text: "軌道の錆には最近こすれた跡がある。何かが今もトロッコを動かしている。" }
+      ]
+    },
+    {
+      id: 2,
+      brief: "第二坑道の分岐点。天井から水が滴り、足場が悪い。灯りは右手の第三坑道方向で揺れている。落盤の危険がある。",
+      goal: "プレイヤーが第三坑道(封鎖区画)へ入る手段を見つけたら scene_complete を true にする。",
+      enemy: { name: "錆喰い", hp: 5, maxHp: 5, trait: "レールの錆を喰う犬ほどの甲殻獣。縄張りに入る者を威嚇し、襲う。光を嫌う。" },
+      secrets: [
+        { id: "s2a", text: "封鎖の木柵は内側から何度も修繕されている。中の『何か』は外に出たくないのだ。" },
+        { id: "s2b", text: "柵の脇に人一人分の隙間があり、油の匂いが漂う。機械油だ。" }
+      ]
+    },
+    {
+      id: 3,
+      brief: "第三坑道の最奥。広い空洞にランタンの灯り。その持ち主がこちらを向く——最終シーン。",
+      goal: "プレイヤーが灯りの正体と対峙し、対話か戦闘か逃走のいずれかで決着したら scene_complete を true にする。",
+      enemy: { name: "灯の番人", hp: 8, maxHp: 8, trait: "ランタンを掲げた大柄な人影。プレイヤーが敵対しない限り自分からは攻撃しない。" },
+      secrets: [
+        { id: "s3a", text: "灯りの正体は、30年前に置き去りにされた鉱山用の旧式自動人形。ずっと一人で坑道を保守し続けていた。" },
+        { id: "s3b", text: "自動人形は敵意を持たないが、動力源が尽きかけている。彼が守ってきた坑道は、彼が止まれば崩れる。" }
+      ]
+    }
+  ]
+};
+
+let state, history, revealed, busy;
+
+function initialState() {
+  return { hp: 10, maxHp: 10, items: ["ランタン", "ロープ", "ナイフ"], sceneIndex: 0, turn: 0,
+           enemy: null, defeated: [] };
+}
+
+function resetGame() {
+  state = initialState();
+  history = [];
+  revealed = new Set();
+  busy = false;
+  document.getElementById("chat").innerHTML = "";
+  document.getElementById("diceLog").innerHTML = "";
+  addGm(SCENARIO.intro + "\n\n" + SCENARIO.scenes[0].brief + "\n\nどうする?");
+  renderDebug();
+}
+
+/* ---------------- UI helpers ---------------- */
+const chat = () => document.getElementById("chat");
+function addMsg(cls, text) {
+  const d = document.createElement("div");
+  d.className = "msg " + cls;
+  d.textContent = text;
+  chat().appendChild(d);
+  chat().scrollTop = chat().scrollHeight;
+}
+const addGm = t => addMsg("gm", t);
+const addPlayer = t => addMsg("player", t);
+const addNote = t => addMsg("sysnote", t);
+function addDice(d1, d2, total, diff, ok, reason) {
+  const el = document.createElement("div");
+  el.className = "msg dice";
+  el.innerHTML = `🎲 ${reason} — 2d6 → ${d1} + ${d2} = <b>${total}</b> / 難易度 ${diff} … <b class="${ok?"ok":"ng"}">${ok?"成功":"失敗"}</b>`;
+  chat().appendChild(el);
+  chat().scrollTop = chat().scrollHeight;
+  const log = document.getElementById("diceLog");
+  log.innerHTML = `[T${state.turn}] ${d1}+${d2}=${total} vs ${diff} ${ok?"OK":"NG"} (${reason})<br>` + log.innerHTML;
+}
+function addReveal(text) {
+  const el = document.createElement("div");
+  el.className = "msg reveal";
+  el.textContent = "🔓 情報開示:システムがこの秘密をLLMに注入した";
+  chat().appendChild(el);
+}
+
+function renderDebug() {
+  document.getElementById("hpFill").style.width = (state.hp / state.maxHp * 100) + "%";
+  document.getElementById("hpFill").style.background = state.hp <= 3 ? "var(--ng)" : "var(--ok)";
+  document.getElementById("hpNum").textContent = `${state.hp}/${state.maxHp}`;
+  document.getElementById("stateView").textContent = JSON.stringify(
+    { scene: state.sceneIndex + 1, turn: state.turn, items: state.items,
+      enemy: state.enemy ? { name: state.enemy.name, hp: state.enemy.hp + "/" + state.enemy.maxHp } : null },
+    null, 1);
+  const sv = document.getElementById("secretsView");
+  sv.innerHTML = "";
+  SCENARIO.scenes.forEach(sc => sc.secrets.forEach(s => {
+    const open = revealed.has(s.id);
+    const row = document.createElement("div");
+    row.className = "secretRow " + (open ? "open" : "locked");
+    row.innerHTML = `<span class="lock">${open ? "🔓" : "🔒"}</span><span class="body">${
+      open ? s.text : "シーン" + sc.id + "の未開示情報(判定成功で開放)"}</span>`;
+    sv.appendChild(row);
+  }));
+}
+
+/* ---------------- ゲームロジック(システム側の権威) ---------------- */
+function roll2d6() {
+  const d1 = 1 + Math.floor(Math.random() * 6);
+  const d2 = 1 + Math.floor(Math.random() * 6);
+  return { d1, d2, total: d1 + d2 };
+}
+
+// LLMが返した state_updates を検証・クランプして適用。勝手な回復や即死は許さない。
+function applyUpdates(u) {
+  if (!u) return;
+  if (typeof u.hp_delta === "number") {
+    const delta = Math.max(-3, Math.min(2, Math.round(u.hp_delta)));
+    state.hp = Math.max(0, Math.min(state.maxHp, state.hp + delta));
+  }
+  // 敵へのダメージ提案。戦闘中のみ有効、-1〜-3にクランプ(回復・即死は不可)
+  if (state.enemy && typeof u.enemy_hp_delta === "number") {
+    const delta = Math.max(-3, Math.min(0, Math.round(u.enemy_hp_delta)));
+    state.enemy.hp = Math.max(0, state.enemy.hp + delta);
+  }
+  if (Array.isArray(u.add_items)) u.add_items.slice(0, 2).forEach(i => {
+    if (typeof i === "string" && i.length <= 20 && !state.items.includes(i)) state.items.push(i);
+  });
+  if (Array.isArray(u.remove_items)) u.remove_items.forEach(i => {
+    const k = state.items.indexOf(i); if (k >= 0) state.items.splice(k, 1);
+  });
+}
+
+// LLMの戦闘開始要求。シーンに敵が定義済みで、未撃破・未交戦の場合のみシステムが許可する
+function maybeEngage(r) {
+  const sc = SCENARIO.scenes[state.sceneIndex];
+  if (r.engage_enemy && sc.enemy && !state.enemy && !state.defeated.includes(sc.enemy.name)) {
+    state.enemy = { ...sc.enemy };
+    addNote(`⚔ 戦闘開始:${state.enemy.name}(HP管理はシステム側)`);
+  }
+}
+
+// 撃破・戦闘離脱の確定はシステム側
+function checkEnemyDown() {
+  if (state.enemy && state.enemy.hp <= 0) {
+    addNote(`⚔ ${state.enemy.name}を倒した`);
+    state.defeated.push(state.enemy.name);
+    state.enemy = null;
+    return true;
+  }
+  return false;
+}
+
+// 判定成功時、現シーンの未開示秘密を1つ開放して返す(=このターンだけLLMに注入)
+function unlockNextSecret() {
+  const sc = SCENARIO.scenes[state.sceneIndex];
+  const next = sc.secrets.find(s => !revealed.has(s.id));
+  if (!next) return null;
+  revealed.add(next.id);
+  return next.text;
+}
+
+/* ---------------- プロンプト構築 ---------------- */
+function systemPrompt(extra) {
+  const sc = SCENARIO.scenes[state.sceneIndex];
+  const revealedTexts = sc.secrets.filter(s => revealed.has(s.id)).map(s => "・" + s.text);
+  const enemyBlock = state.enemy
+    ? `\n# 戦闘中の敵(HP管理はシステム。あなたは変更できない)\n${JSON.stringify({ name: state.enemy.name, hp: state.enemy.hp, maxHp: state.enemy.maxHp })}\n特徴:${state.enemy.trait}`
+    : (sc.enemy && !state.defeated.includes(sc.enemy.name)
+        ? `\n# このシーンに潜む敵(まだ交戦していない)\n名前:${sc.enemy.name} / 特徴:${sc.enemy.trait}\nプレイヤーが刺激した場合や物語上自然な場合、engage_enemy を true にして戦闘を開始できる。`
+        : "");
+  return `あなたはソロTRPGのゲームマスター。日本語で、簡潔で雰囲気のある語りをする。地の文は150字以内。
+
+# 現在のシーン(${state.sceneIndex + 1}/3)
+${sc.brief}
+シーンの目標:${sc.goal}
+
+# プレイヤー状態(システム管理。あなたは直接変更できない)
+${JSON.stringify({ hp: state.hp, items: state.items })}
+${enemyBlock}
+
+# 開示済みの情報(これ以外の真相をあなたは知らない。捏造禁止)
+${revealedTexts.length ? revealedTexts.join("\n") : "(まだなし)"}
+${extra || ""}
+
+# ルール
+- 不確実な行動(調査、危険な移動、説得、戦闘等)には判定を要求する。難易度は2d6に対し 6=易 8=並 10=難。
+- 単なる会話や安全な行動に判定は不要。
+- 戦闘ルール:攻撃は必ず判定(難易度7〜9)。判定成功時のみ enemy_hp_delta(-1〜-3)を提案。失敗時は敵の反撃として hp_delta でプレイヤーにダメージを与えてよい。撃破の宣言はシステムが行うので、あなたは敵のHPが0になったと語ってはならない。
+- 戦闘以外の解決(説得、逃走、罠、光で追い払う等)も判定で認めてよい。その場合 flee_enemy を true にすれば戦闘を終了できる。
+- HPの増減はhp_delta(-3〜+2)で提案するだけ。確定するのはシステム。
+- 未開示の真相を勝手に作らない。判定成功時にシステムから情報が渡される。
+- 応答は必ず次のJSONのみ。前置きやコードフェンス禁止:
+{"narration":"地の文","check":{"reason":"何の判定か","difficulty":8}または null,"state_updates":{"hp_delta":0,"enemy_hp_delta":0,"add_items":[],"remove_items":[]}または null,"engage_enemy":false,"flee_enemy":false,"scene_complete":false}`;
+}
+
+async function callGm(userContent, extraSystem) {
+  const messages = [...history, { role: "user", content: userContent }];
+  document.getElementById("apiView").textContent =
+    `system: シーン${state.sceneIndex + 1}の概要 + 状態JSON + 開示済み秘密${extraSystem ? " + 今回の新規開示" : ""}\n` +
+    `messages: ${messages.length}件\nuser: ${userContent.slice(0, 80)}`;
+  const res = await fetch("https://api.anthropic.com/v1/messages", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      model: "claude-sonnet-4-6",
+      max_tokens: 1000,
+      system: systemPrompt(extraSystem),
+      messages
+    })
+  });
+  let data;
+  try { data = await res.json(); } catch (e) { data = null; }
+  if (!res.ok) {
+    const detail = data && data.error ? `${data.error.type}: ${data.error.message}` : "(本文なし)";
+    throw new Error(`HTTP ${res.status} — ${detail}`);
+  }
+  const text = ((data && data.content) || []).map(b => b.text || "").join("");
+  history.push({ role: "user", content: userContent });
+  history.push({ role: "assistant", content: text });
+  if (history.length > 24) history = history.slice(-24); // 簡易な履歴圧縮
+  try {
+    return JSON.parse(text.replace(/```json|```/g, "").trim());
+  } catch (e) {
+    return { narration: text || "(応答の解析に失敗)", check: null, state_updates: null, scene_complete: false };
+  }
+}
+
+/* ---------------- 1ターンの流れ ---------------- */
+async function sendAction() {
+  const input = document.getElementById("playerInput");
+  const text = input.value.trim();
+  if (!text || busy) return;
+  if (state.hp <= 0) { addNote("倒れている。「最初から」でやり直そう。"); return; }
+  busy = true;
+  document.getElementById("sendBtn").disabled = true;
+  input.value = "";
+  state.turn++;
+  addPlayer(text);
+
+  try {
+    // Phase A: 宣言の解釈と語り(必要なら判定要求)
+    let r = await callGm(`プレイヤーの宣言: ${text}`);
+    if (r.narration) addGm(r.narration);
+    maybeEngage(r);
+    applyUpdates(r.state_updates);
+    if (r.flee_enemy && state.enemy) { addNote(`⚔ ${state.enemy.name}との戦闘を離脱`); state.enemy = null; }
+    checkEnemyDown();
+    renderDebug();
+
+    // Phase B: 判定要求があればシステムがダイスを振り、結果を渡して続きを語らせる
+    if (r.check && r.check.difficulty) {
+      const diff = Math.max(5, Math.min(11, r.check.difficulty)); // 難易度もクランプ
+      const { d1, d2, total } = roll2d6();
+      const ok = total >= diff;
+      addDice(d1, d2, total, diff, ok, r.check.reason || "判定");
+
+      let extra = "";
+      if (ok && !state.enemy) {
+        const secret = unlockNextSecret();
+        if (secret) {
+          addReveal(secret);
+          extra = `\n# 判定成功によりシステムが開示する新情報(これを語りに織り込め)\n・${secret}`;
+        }
+      }
+      const r2 = await callGm(
+        `【システム】判定結果: 2d6=${total}(難易度${diff})→${ok ? "成功" : "失敗"}。結果を描写せよ。失敗ならリスクを発生させてよい(hp_delta可)。${state.enemy ? "戦闘中:成功なら enemy_hp_delta、失敗なら敵の反撃を。" : ""}`,
+        extra
+      );
+      if (r2.narration) addGm(r2.narration);
+      maybeEngage(r2);
+      applyUpdates(r2.state_updates);
+      if (r2.flee_enemy && state.enemy) { addNote(`⚔ ${state.enemy.name}との戦闘を離脱`); state.enemy = null; }
+      if (checkEnemyDown()) {
+        // 撃破もシーンの秘密開示トリガーとして扱う
+        const secret = unlockNextSecret();
+        if (secret) addReveal(secret);
+      }
+      r.scene_complete = r.scene_complete || r2.scene_complete;
+    }
+
+    renderDebug();
+
+    // シーン進行と終了判定(これもシステム側)
+    if (state.hp <= 0) {
+      addNote("HPが0になった。君は坑道の闇に倒れた——ゲームオーバー。");
+    } else if (r.scene_complete) {
+      if (state.sceneIndex < SCENARIO.scenes.length - 1) {
+        state.sceneIndex++;
+        state.enemy = null; // 戦闘はシーンをまたがない
+        history = []; // シーン切替で履歴をリセット(状態はシステムが保持している証明)
+        addNote(`—— シーン${state.sceneIndex + 1} ——`);
+        addGm(SCENARIO.scenes[state.sceneIndex].brief + "\n\nどうする?");
+      } else {
+        addNote("—— 物語は決着した。おつかれさま。「最初から」で別の選択を試せる ——");
+      }
+      renderDebug();
+    }
+  } catch (e) {
+    addNote("通信エラー: " + e.message);
+  } finally {
+    busy = false;
+    document.getElementById("sendBtn").disabled = false;
+  }
+}
+
+resetGame();
+</script>
+</body>
+</html>

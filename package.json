@@ -1,0 +1,35 @@
+{
+  "name": "trpg-gm-mock2",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "dev:api": "node server.cjs",
+    "check:assets": "node scripts/check-assets.mjs",
+    "test:battle": "node src/battle/core.test.mjs && node src/battle/battleResult.test.mjs",
+    "smoke:battle": "node src/battle/smoke.mjs",
+    "build": "vite build",
+    "preview": "vite preview",
+    "test:inventory": "node src/inventory.test.mjs",
+    "test:scenario": "node src/scenario.test.mjs",
+    "test:progression": "node src/engine/progression.test.mjs",
+    "test:playthrough": "node src/engine/playthrough.test.mjs",
+    "test:playthrough:hybrid": "MODE=hybrid node src/engine/playthrough.test.mjs",
+    "test": "npm run test:progression && npm run test:playthrough && npm run test:playthrough:hybrid && npm run test:scenario && npm run test:inventory && npm run test:battle"
+  },
+  "dependencies": {
+    "@litert-lm/core": "^0.14.0",
+    "phaser": "^3.87.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "three": "^0.185.1"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-basic-ssl": "^1.2.0",
+    "@vitejs/plugin-react": "^4.3.4",
+    "playwright": "^1.61.1",
+    "sharp": "^0.35.3",
+    "vite": "^5.4.11"
+  }
+}

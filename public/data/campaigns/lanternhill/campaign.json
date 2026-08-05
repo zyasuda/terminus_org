@@ -1,0 +1,496 @@
+{
+  "meta": {
+    "id": "lanternhill",
+    "title": "ランタンヒル年代記",
+    "version": "0.2"
+  },
+  "style": {
+    "narration": "日本語の「である調」(だ・である。ですます調は禁止)で語る。地の文は3文以内、合計80字以内。1文は短く、主語と動詞だけのシンプルな形で書く。",
+    "readingLevel": "小学校高学年が読んですぐ分かる、やさしい言葉だけを使う。難しい漢語・比喩・抽象語は禁止(例:「遷回する」「制する」「悲鳴めいた」「逡巡」「譲歩」「甲殻」「獲物」「警戒音」「くねる」「佇まい」は不可)。内面や状況を評価語で語らず、見えたこと・聞こえたことをそのまま短い動詞で書け(例:「よける」「当たる」「外れる」「近づく」)。",
+    "goodExample": "廊下は暗くて静かだ。足音がよく響く。",
+    "badExample": "薄明の廊下に、沈黙を湛えた気配が漂っている。",
+    "extra": [
+      "戦闘の描写も同じ基準を守る。動きを凝った言い回しで飾らない。一度に説明する情報は1つか2つまでにする。",
+      "プレイヤーが「まとめて報告する」「全部話す」のように行動をまとめて宣言した時も、事実を箇条書き的に並べるな。相手の反応を交えた、つながりのある自然な会話として書け。",
+      "「軌条」など説明なしで通じない言葉は使わず、やさしい言い換え(レール等)を使え。"
+    ],
+    "forbiddenWords": [
+      "懐中電灯",
+      "電灯",
+      "モーター",
+      "エンジン",
+      "電池",
+      "メートル"
+    ],
+    "world": "ミステリ / ロー・ファンタジー。静かで神秘的、少し切ない。",
+    "terms": "現代語彙を避ける。\n禁止語：懐中電灯、電灯、モーター、エンジン、電池、メートル\n言い換えが必要な場合は、世界観に合う平易な表現を使う。",
+    "rollReaction": {
+      "critical": "",
+      "fumble": ""
+    },
+    "emptyHanded": [],
+    "unknownTarget": "",
+    "conversationSpread": "standard"
+  },
+  "flags": {
+    "guardian_fate": [
+      "対話",
+      "撃破",
+      "回避"
+    ],
+    "learned_heartstone": [
+      true,
+      false
+    ],
+    "heartstone_choice": [
+      "渡した",
+      "隠した",
+      "砕いた"
+    ],
+    "guardian_alive": [
+      true,
+      false
+    ]
+  },
+  "cast": [
+    {
+      "id": "myra",
+      "name": "マイラ・ヴェイン",
+      "nameEn": "Myra Vane",
+      "public": "ランタンヒル村の顔役。廃坑再開で村を立て直したい。実利的だが村人思いに見える元行商人",
+      "direction": "報告に『青く脈打つ石』への言及があれば、抑えきれない関心を一瞬見せろ。すぐ取り繕わせろ"
+    }
+  ],
+  "companions": [
+    {
+      "id": "member_1",
+      "name": "リディア",
+      "persona": "遺工に詳しい斥候である。物事を慎重に考える。皮肉をよく言う。ガレスの尻ぬぐいをいつもしている。",
+      "flags": {
+        "chat": true,
+        "propose": true,
+        "act": false,
+        "mutate": false
+      },
+      "image": "assets/casts/member_1.png",
+      "sprite": "portrait_lydia_alt.png",
+      "gender": "female",
+      "firstPerson": "あたし",
+      "addressTerm": "あなた",
+      "speechFrequency": "standard"
+    },
+    {
+      "id": "member_2",
+      "name": "ガレス",
+      "persona": "無口な戦士である。言葉を少なく話す。実用的な動きだけをする。",
+      "flags": {
+        "chat": true,
+        "propose": true,
+        "act": false,
+        "mutate": false
+      },
+      "image": "assets/casts/member_2.png",
+      "sprite": "portrait_gareth_alt.png",
+      "gender": "male",
+      "firstPerson": "俺",
+      "addressTerm": "お前",
+      "speechFrequency": "standard"
+    }
+  ],
+  "companionsHint": "場面に合う方を選べ(戦闘寄り=ガレス、調査・遺工・慎重論=リディア)",
+  "entities": [
+    {
+      "id": "member_1",
+      "ja": "リディア",
+      "aliases": [],
+      "kind": "character",
+      "importance": "support",
+      "surface": "",
+      "truth": "",
+      "visual": "",
+      "affordances": [
+        "talk",
+        "inspect"
+      ]
+    },
+    {
+      "id": "member_2",
+      "ja": "ガレス",
+      "aliases": [],
+      "kind": "character",
+      "importance": "support",
+      "surface": "",
+      "truth": "",
+      "visual": "",
+      "affordances": [
+        "talk",
+        "inspect"
+      ]
+    },
+    {
+      "id": "npc_1",
+      "ja": "NPC1",
+      "aliases": [],
+      "kind": "npc",
+      "importance": "support",
+      "surface": "",
+      "truth": "",
+      "visual": "",
+      "affordances": [
+        "talk",
+        "inspect"
+      ]
+    },
+    {
+      "id": "item_lantern",
+      "ja": "ランタン",
+      "aliases": [
+        "ランプ",
+        "灯り",
+        "ていとう",
+        "らんたん",
+        "手元灯",
+        "照明"
+      ],
+      "kind": "item",
+      "parentConceptId": null,
+      "scope": "campaign",
+      "acquisition": "starting_inventory",
+      "persistent": true,
+      "capabilities": [
+        "inspect",
+        "use"
+      ],
+      "requires": "",
+      "surface": "金属製の小さな灯りである。ガラスのなかで火が揺れている。暗い場所を照らす。",
+      "visual": ""
+    },
+    {
+      "id": "item_rope",
+      "ja": "ロープ",
+      "aliases": [
+        "綱",
+        "紐",
+        "麻縄",
+        "つな",
+        "ひも",
+        "あさなわ",
+        "コード"
+      ],
+      "kind": "item",
+      "parentConceptId": null,
+      "scope": "campaign",
+      "acquisition": "starting_inventory",
+      "persistent": true,
+      "capabilities": [
+        "inspect",
+        "use"
+      ],
+      "requires": "",
+      "surface": "麻で編んだ丈夫な綱である。物を縛るのに使う。",
+      "visual": ""
+    },
+    {
+      "id": "item_knife",
+      "ja": "ナイフ",
+      "aliases": [
+        "刃物",
+        "刀",
+        "小刀",
+        "ないふ",
+        "はもの",
+        "かたな",
+        "ブレード"
+      ],
+      "kind": "item",
+      "parentConceptId": null,
+      "scope": "campaign",
+      "acquisition": "starting_inventory",
+      "persistent": true,
+      "capabilities": [
+        "inspect",
+        "use"
+      ],
+      "requires": "",
+      "surface": "柄の短い小さな刃物である。銀色の刃は冷たく光る。ものを切るために使う。",
+      "visual": ""
+    },
+    {
+      "id": "item_heartstone_fragment",
+      "ja": "心石の欠片",
+      "aliases": [
+        "心石",
+        "こころいし",
+        "青い石",
+        "光る石",
+        "かけら",
+        "破片",
+        "石",
+        "あおいし",
+        "ひかるいし",
+        "いし",
+        "心臓の石"
+      ],
+      "kind": "item",
+      "parentConceptId": "concept_heartstone",
+      "scope": "scene",
+      "acquisition": "dialogue",
+      "persistent": true,
+      "capabilities": [
+        "inspect",
+        "take",
+        "give"
+      ],
+      "requires": "s3b",
+      "surface": "青く光る小さな石の破片である。手に取るとかすかに温かい。強い力を秘めている。",
+      "visual": ""
+    },
+    {
+      "id": "monster_1",
+      "ja": "錆喰い",
+      "aliases": [],
+      "kind": "enemy",
+      "importance": "support",
+      "surface": "",
+      "truth": "/images/s2_rust_eater.png",
+      "visual": "/images/s2_rust_eater.png",
+      "affordances": [
+        "inspect",
+        "fight"
+      ]
+    },
+    {
+      "id": "monster_2",
+      "ja": "灯りの番人",
+      "aliases": [],
+      "kind": "enemy",
+      "importance": "support",
+      "surface": "",
+      "truth": "/images/s3_guardian.png",
+      "visual": "/images/s3_guardian.png",
+      "affordances": [
+        "inspect",
+        "fight"
+      ]
+    },
+    {
+      "id": "monster_3",
+      "ja": "坑道蝙蝠",
+      "aliases": [
+        "羽ばたく影"
+      ],
+      "kind": "enemy",
+      "importance": "support",
+      "surface": "",
+      "truth": "/images/s2_rust_eater.png",
+      "visual": "/images/s2_mine_bat.png",
+      "affordances": [
+        "inspect",
+        "fight"
+      ]
+    },
+    {
+      "id": "concept_heartstone",
+      "ja": "心石",
+      "aliases": [
+        "青い石",
+        "光る石",
+        "石",
+        "あおいし",
+        "ひかるいし",
+        "いし",
+        "心臓の石"
+      ],
+      "kind": "concept",
+      "role": "main",
+      "usage": "dialogue_condition",
+      "scope": "campaign",
+      "storyKey": true,
+      "surface": "ゆっくりと脈動している青く光る石",
+      "truth": "何かの動力源になるような不思議な力を宿す"
+    }
+  ],
+  "gmSprite": "gm_mascot.png",
+  "player": {
+    "agility": 6
+  },
+  "image": "locked_iron_gate.jpg",
+  "concepts": [
+    {
+      "id": "concept_heartstone",
+      "ja": "心石",
+      "aliases": [
+        "青い石",
+        "光る石",
+        "石",
+        "あおいし",
+        "ひかるいし",
+        "いし",
+        "心臓の石"
+      ],
+      "kind": "concept",
+      "role": "main",
+      "usage": "dialogue_condition",
+      "scope": "campaign",
+      "storyKey": true,
+      "surface": "ゆっくりと脈動している青く光る石",
+      "truth": "何かの動力源になるような不思議な力を宿す"
+    }
+  ],
+  "items": [
+    {
+      "id": "item_lantern",
+      "ja": "ランタン",
+      "aliases": [
+        "ランプ",
+        "灯り",
+        "ていとう",
+        "らんたん",
+        "手元灯",
+        "照明"
+      ],
+      "kind": "item",
+      "parentConceptId": null,
+      "scope": "campaign",
+      "acquisition": "starting_inventory",
+      "persistent": true,
+      "capabilities": [
+        "inspect",
+        "use"
+      ],
+      "requires": "",
+      "surface": "金属製の小さな灯りである。ガラスのなかで火が揺れている。暗い場所を照らす。",
+      "visual": ""
+    },
+    {
+      "id": "item_rope",
+      "ja": "ロープ",
+      "aliases": [
+        "綱",
+        "紐",
+        "麻縄",
+        "つな",
+        "ひも",
+        "あさなわ",
+        "コード"
+      ],
+      "kind": "item",
+      "parentConceptId": null,
+      "scope": "campaign",
+      "acquisition": "starting_inventory",
+      "persistent": true,
+      "capabilities": [
+        "inspect",
+        "use"
+      ],
+      "requires": "",
+      "surface": "麻で編んだ丈夫な綱である。物を縛るのに使う。",
+      "visual": ""
+    },
+    {
+      "id": "item_knife",
+      "ja": "ナイフ",
+      "aliases": [
+        "刃物",
+        "刀",
+        "小刀",
+        "ないふ",
+        "はもの",
+        "かたな",
+        "ブレード"
+      ],
+      "kind": "item",
+      "parentConceptId": null,
+      "scope": "campaign",
+      "acquisition": "starting_inventory",
+      "persistent": true,
+      "capabilities": [
+        "inspect",
+        "use"
+      ],
+      "requires": "",
+      "surface": "柄の短い小さな刃物である。銀色の刃は冷たく光る。ものを切るために使う。",
+      "visual": ""
+    },
+    {
+      "id": "item_heartstone_fragment",
+      "ja": "心石の欠片",
+      "aliases": [
+        "心石",
+        "こころいし",
+        "青い石",
+        "光る石",
+        "かけら",
+        "破片",
+        "石",
+        "あおいし",
+        "ひかるいし",
+        "いし",
+        "心臓の石"
+      ],
+      "kind": "item",
+      "parentConceptId": "concept_heartstone",
+      "scope": "scene",
+      "acquisition": "dialogue",
+      "persistent": true,
+      "capabilities": [
+        "inspect",
+        "take",
+        "give"
+      ],
+      "requires": "s3b",
+      "surface": "青く光る小さな石の破片である。手に取るとかすかに温かい。強い力を秘めている。",
+      "visual": ""
+    }
+  ],
+  "initialInventory": [
+    "ランタン",
+    "ロープ",
+    "ナイフ"
+  ],
+  "initialInventoryIds": [
+    "item_lantern",
+    "item_rope",
+    "item_knife"
+  ],
+  "castAttributes": {
+    "gm": {
+      "gender": "unspecified",
+      "firstPerson": "",
+      "addressTerm": "",
+      "speechRules": "",
+      "speechFrequency": "standard"
+    },
+    "member_1": {
+      "gender": "unspecified",
+      "firstPerson": "",
+      "addressTerm": "",
+      "speechRules": "",
+      "speechFrequency": "standard"
+    },
+    "member_2": {
+      "gender": "unspecified",
+      "firstPerson": "",
+      "addressTerm": "",
+      "speechRules": "",
+      "speechFrequency": "standard"
+    },
+    "npc_1": {
+      "gender": "unspecified",
+      "firstPerson": "",
+      "addressTerm": "",
+      "speechRules": "",
+      "speechFrequency": "standard"
+    }
+  },
+  "gm": {
+    "gender": "male",
+    "firstPerson": "私",
+    "addressTerm": "君",
+    "speechRules": "",
+    "id": "gm",
+    "name": "ダイス先輩",
+    "persona": "ゲームマスター。確定した結果を説明し、プレイヤーを案内する。",
+    "sprite": "gm_mascot.png"
+  }
+}

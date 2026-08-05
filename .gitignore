@@ -1,0 +1,10 @@
+node_modules/
+dist/
+.env
+.DS_Store
+assets/_staging/
+public/models/
+
+# 現在どのデータからも参照していない画像の置き場。
+# 使うときは images/ へ戻し、public/data/assets.json に登録する。
+images-unused/
