@@ -268,11 +268,11 @@ const server = http.createServer(async (req, res) => {
       /* 索引(campaigns.json)を追随させる。ここを飛ばすと、キャンペーンIDが変わった瞬間に
          ゲームは古いディレクトリを読み続け、出力が一切届かなくなる。
          読めない場合は中断する——作り直すと他のキャンペーンの登録が消えるため */
+      const chapterId = safeSegment(payload.chapterId, chapterFile.replace(/\.json$/, ''));
       {
         let index;
         try { index = JSON.parse(await fsp.readFile(MOCK2_CAMPAIGNS_INDEX_FILE, 'utf8')); }
         catch (cause) { throw new Error(`キャンペーン索引(campaigns.json)を読み込めません: ${cause.message}`); }
-        const chapterId = safeSegment(payload.chapterId, chapterFile.replace(/\.json$/, ''));
         entries.push({
           path: 'campaigns.json', absolute: MOCK2_CAMPAIGNS_INDEX_FILE,
           value: mergeCampaignsIndex(index, { campaignId, chapterId, chapterFile, campaign: payload.campaign, chapter: payload.chapter })
@@ -290,12 +290,37 @@ const server = http.createServer(async (req, res) => {
         });
         if (result.status !== 0) {
           const output = [result.stdout, result.stderr].filter(Boolean).join('\n').trim();
-          const failures = output.match(/^fail\s+.+$/gim);
-          warning = (failures ? failures.join('\n') : output || result.error?.message || '進行度回帰チェックを実行できませんでした。').slice(0, 2000);
+          /* progression.test.mjs/playthrough.test.mjsは失敗行を"  NG  <ラベル>"(先頭に空白)
+             で出す。^fail(先頭一致・空白無し)は本文と一致しない語・書式で一度もマッチせず、
+             常に全出力(okの行も含む数百行)へフォールバックしていた(2026-08-05発見。
+             .slice(2000)が要約より先に本文で埋まり、警告が実質何も要約できていなかった) */
+          const failures = output.match(/^\s*NG\s+.+$/gm);
+          warning = `進行度検査:\n${failures ? failures.join('\n') : output || result.error?.message || '進行度回帰チェックを実行できませんでした。'}`;
         }
       } catch (cause) {
-        warning = `進行度回帰チェックを実行できませんでした: ${cause.message}`;
+        warning = `進行度検査:\n進行度回帰チェックを実行できませんでした: ${cause.message}`;
       }
+      try {
+        const result = spawnSync(process.execPath, [path.join(MOCK2_DIR, 'src', 'engine', 'playthrough.test.mjs')], {
+          cwd: MOCK2_DIR,
+          /* MOCK2_PUBLIC_DIRを明示しないと、playthrough.test.mjsはimport.meta.url(symlink解決
+             されるため常に本物のtrpg-gm-mock2/srcを指す)から自分でpublicを推測してしまい、
+             MOCK2_DIRが一時ディレクトリの時、たった今書き込んだデータではなく本番データを
+             検証してしまう(2026-08-05発見、実測で確認済み) */
+          env: { ...process.env, CAMPAIGN: campaignId, CHAPTER_ID: chapterId, MOCK2_PUBLIC_DIR: path.join(MOCK2_DIR, 'public') },
+          encoding: 'utf8'
+        });
+        if (result.status !== 0) {
+          const output = [result.stdout, result.stderr].filter(Boolean).join('\n').trim();
+          const failures = output.match(/^\s*NG\s+.+$/gm);
+          const playthroughWarning = `手番検査:\n${failures ? failures.join('\n') : output || result.error?.message || '手番回帰チェックを実行できませんでした。'}`;
+          warning = warning ? `${warning}\n\n${playthroughWarning}` : playthroughWarning;
+        }
+      } catch (cause) {
+        const playthroughWarning = `手番検査:\n手番回帰チェックを実行できませんでした: ${cause.message}`;
+        warning = warning ? `${warning}\n\n${playthroughWarning}` : playthroughWarning;
+      }
+      if (warning) warning = warning.slice(0, 2000);
       return json(res, 200, { saved: files.map(file => file.path), files, assetsAdded, ...(warning ? { warning } : {}) });
     }
     if (req.method === 'POST' && url.pathname === '/api/llm') {

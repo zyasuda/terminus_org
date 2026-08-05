@@ -25,8 +25,14 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { encounterRequiredElementsMet } from "./progression.js";
 
+/* MOCK2_PUBLIC_DIR で上書きできるようにする。Nodeはメインスクリプトのimport.meta.urlを
+   symlink解決してしまうため(実測済み: symlink経由で起動しても、表示されるURLは常に
+   symlink先の実パスになる)、TASが一時ディレクトリ(MOCK2_DIR/src がtrpg-gm-mock2/srcへの
+   symlink)からこのスクリプトを起動すると、HEREは常に本物のtrpg-gm-mock2/srcを指し、
+   一時ディレクトリへ書き込んだばかりのデータではなく本番のpublicを読んでしまう
+   (2026-08-05発見。TAS出力時の検証が実質何も検証していなかった) */
 const HERE = path.dirname(fileURLToPath(import.meta.url));
-const PUBLIC_DIR = path.join(HERE, "..", "..", "public");
+const PUBLIC_DIR = process.env.MOCK2_PUBLIC_DIR || path.join(HERE, "..", "..", "public");
 
 /* ---------------- ブラウザAPIの最小の代役 ----------------
    engine/index.js が触るブラウザAPIは localStorage・location・fetch の3つだけ
