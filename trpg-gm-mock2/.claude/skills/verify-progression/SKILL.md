@@ -115,6 +115,8 @@ CAMPAIGN=lanternhill CHAPTER_ID=chapter_01 npm run test:playthrough
 - 作業の前後で`git status --short -- trpg-gm-mock2/public/data/`を確認し、意図しない差分が無いか見る
 - 混入に気づいたら、削除ではなく**退避**（別ディレクトリへ移動）してから調べる。原因が確定するまで確証のない推測を報告に書かない
 
+**一時MOCK2_DIRの`src`はsymlinkにしても、`import.meta.url`ベースの相対パス計算は本物を指す。** Nodeはメインスクリプトのsymlinkを解決するため（`node <symlink経由のパス>`で`import.meta.url`を出力しても、常にsymlink先の実パスが返る。実測済み）、`playthrough.test.mjs`のように`import.meta.url`から`PUBLIC_DIR`を計算するスクリプトを一時`MOCK2_DIR`から起動すると、**たった今書き込んだ一時データではなく本物のtrpg-gm-mock2/publicを検証してしまう**（2026-08-05発見。TAS出力時の手番検査が実質何も検証していなかった）。`progression.test.mjs`は`CHAPTER=`という絶対パスを直接受け取るためこの罠に嵌らないが、`playthrough.test.mjs`は`MOCK2_PUBLIC_DIR`環境変数で明示的に上書きする必要がある（`server.cjs`は既に対応済み）。**`import.meta.url`から相対パスを組み立てるテストスクリプトを新設するときは、必ず環境変数での上書き口を用意すること。**
+
 ## 守ること
 
 - **緑を目的にしない。** 落ちたら、まず「テストが正しいか」ではなく「データが正しいか」を疑う。過去に実際の欠陥（心石の欠片が永久に出現せず章をクリア不能）をこの検査が見つけた
