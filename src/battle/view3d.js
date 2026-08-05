@@ -10,6 +10,7 @@
    ========================================================= */
 
 import * as THREE from "three";
+import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import { elevationAt, makeRng } from "./core.js";
 
 const TILE = 0.92;       // 床タイルの一辺(セル間にわずかな目地を残す)
@@ -31,6 +32,16 @@ const COLOR = {
 };
 
 const CAMERA_DIST = 20;   // placeCamera()の r と同じ値。fogのnear/farはここからの相対距離で決める
+
+const modelTemplates = new Map();
+const loadModel = path => {
+  if (!modelTemplates.has(path)) {
+    modelTemplates.set(path, new Promise((resolve, reject) => {
+      new GLTFLoader().load(path, gltf => resolve(gltf.scene), undefined, reject);
+    }));
+  }
+  return modelTemplates.get(path);
+};
 
 export function createBattleScene(container, grid) {
   const scene = new THREE.Scene();
@@ -59,9 +70,12 @@ export function createBattleScene(container, grid) {
   const offZ = (grid.h - 1) / 2;
   const worldOf = (x, y) => [x - offX, y - offZ];
 
-  /* --- カメラ(正射影・Y軸90度刻みの4方向固定) --- */
-  const viewSize = Math.max(grid.w, grid.h) + 4;
-  const camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0.1, 200);
+  /* --- カメラ(戦闘は正射影、会話相手は一人称の透視投影) --- */
+  const baseViewSize = Math.max(grid.w, grid.h) + 4;
+  let viewSize = baseViewSize;
+  const isoCamera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0.1, 200);
+  const firstPersonCamera = new THREE.PerspectiveCamera(90, 1, 0.05, 200);
+  let camera = isoCamera;
   let dirIndex = 0;
   let camAngle = Math.PI / 4;        // 実際の角度(なめらかに目標へ寄せる)
   const target = new THREE.Vector3(0, 0, 0);
@@ -70,18 +84,21 @@ export function createBattleScene(container, grid) {
     const w = container.clientWidth || 1;
     const h = container.clientHeight || 1;
     const aspect = w / h;
-    camera.left = (-viewSize * aspect) / 2;
-    camera.right = (viewSize * aspect) / 2;
-    camera.top = viewSize / 2;
-    camera.bottom = -viewSize / 2;
-    camera.updateProjectionMatrix();
+    isoCamera.left = (-viewSize * aspect) / 2;
+    isoCamera.right = (viewSize * aspect) / 2;
+    isoCamera.top = viewSize / 2;
+    isoCamera.bottom = -viewSize / 2;
+    isoCamera.updateProjectionMatrix();
+    firstPersonCamera.aspect = aspect;
+    firstPersonCamera.updateProjectionMatrix();
   };
 
   const placeCamera = () => {
+    if (camera !== isoCamera) return;
     // 真のアイソメトリックに近い見下ろし角(atan(1/√2) ≒ 35.26度)
     const r = CAMERA_DIST, y = r * Math.tan(Math.atan(1 / Math.SQRT2));
-    camera.position.set(Math.cos(camAngle) * r, y, Math.sin(camAngle) * r);
-    camera.lookAt(target);
+    isoCamera.position.set(Math.cos(camAngle) * r, y, Math.sin(camAngle) * r);
+    isoCamera.lookAt(target);
   };
 
   /* --- ライト ---
@@ -177,10 +194,6 @@ export function createBattleScene(container, grid) {
   scene.add(obstacleGroup);
   const waterGroup = new THREE.Group();
   scene.add(waterGroup);
-  // 柱の下にも床を敷く。柱のマスは(旧実装で)床を作らずcontinueしていたため、
-  // 柱の底と床タイルの間に背景が透けて見える隙間ができていた(実際に指摘を受けた不具合)。
-  // 「床がない=穴」という見た目自体は面白いとのことなので、削除はせず穴として
-  // 独立にon/offできるようGroupへ分ける(既定は穴off=床が敷かれた通常状態)
   const groundPatchGroup = new THREE.Group();
   scene.add(groundPatchGroup);
 
@@ -195,7 +208,14 @@ export function createBattleScene(container, grid) {
         // 柱・地形の壁とは違い、何も置かない(完全な空白のまま)
         if (cell.void) continue;
 
-        // 地形の壁と、高さ1.0の障害物(柱)。どちらも進入不可だが色で見分ける
+        // 木柵はステージ固有の板で描く。通行不可という規則はセル側が持つ。
+        if (cell.obstacle?.kind === "barrier") {
+          const floor = new THREE.Mesh(tileGeo, floorMat.clone());
+          floor.position.set(wx, -TILE_H / 2, wz);
+          groundPatchGroup.add(floor);
+          continue;
+        }
+
         const m = new THREE.Mesh(wallGeo, cell.obstacle ? pillarMat : wallMat);
         m.position.set(wx, WALL_H / 2, wz);
         (cell.obstacle ? obstacleGroup : scene).add(m);
@@ -228,6 +248,40 @@ export function createBattleScene(container, grid) {
         w.rotation.x = -Math.PI / 2;
         w.position.set(wx, 0.012, wz);
         waterGroup.add(w);
+      }
+    }
+  }
+
+  // ステージ固有の物は盤面規則と切り離して描く。重要物の座標はgrid.stageに残る。
+  const propGroup = new THREE.Group();
+  scene.add(propGroup);
+  const woodMat = new THREE.MeshLambertMaterial({ color: 0x6f4024 });
+  const rockMat = new THREE.MeshLambertMaterial({ color: 0x655c54 });
+  for (const prop of grid.stage?.props || []) {
+    const [wx, wz] = worldOf(prop.x, prop.y);
+    if (prop.kind === "barrier") {
+      const fence = new THREE.Group();
+      for (const offset of [-0.28, 0, 0.28]) {
+        const plank = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.9, 0.12), woodMat);
+        plank.position.set(offset, 0.45, 0);
+        fence.add(plank);
+      }
+      for (const y of [0.28, 0.66]) {
+        const rail = new THREE.Mesh(new THREE.BoxGeometry(0.8, 0.1, 0.12), woodMat);
+        rail.position.set(0, y, 0);
+        fence.add(rail);
+      }
+      fence.position.set(wx, 0, wz);
+      fence.userData = { kind: "stage-prop", role: prop.role };
+      propGroup.add(fence);
+    }
+    if (prop.kind === "collapse") {
+      for (const [x, z, size] of [[-0.22, -0.12, 0.34], [0.16, -0.18, 0.26], [0.04, 0.2, 0.3]]) {
+        const rock = new THREE.Mesh(new THREE.DodecahedronGeometry(size, 0), rockMat);
+        rock.position.set(wx + x, size * 0.55, wz + z);
+        rock.rotation.set(x * 4, z * 5, x - z);
+        rock.userData = { kind: "stage-prop", role: prop.role };
+        propGroup.add(rock);
       }
     }
   }
@@ -398,9 +452,11 @@ export function createBattleScene(container, grid) {
     }
   }
 
-  /* --- ユニット(箱)と手番マーカー --- */
+  /* --- ユニット(低ポリの仮フィギュア)と手番マーカー --- */
   const unitMeshes = new Map();  // id → メッシュ
   const unitGroup = new THREE.Group();
+  let enemiesVisible = true;
+  let firstPersonUnitId = null;
   scene.add(unitGroup);
 
   const markerGeo = new THREE.ConeGeometry(0.18, 0.4, 4);
@@ -409,20 +465,40 @@ export function createBattleScene(container, grid) {
   marker.visible = false;
   scene.add(marker);
 
-  // ユニットは陣営を問わず箱で表す。
-  // 一度は味方を円錐+球、敵を三角柱にしてみたが、Phase 3の判断材料としては箱が正しい。
-  // 2D表現なら箱の各面(前後左右・上)にテクスチャを貼ることになり、3Dモデルなら
-  // その箱が占める体積にモデルを置くことになるため、どちらの見当もつけやすい
+  // Blenderモデルを置く前の比較用フィギュア。味方は人型、敵は甲殻獣型にし、
+  // どちらも少数プリミティブと同じ単色材質だけで低ポリの輪郭を作る。
   const makeUnitObject = unit => {
     const g = new THREE.Group();
+    const fallback = new THREE.Group();
+    g.add(fallback);
     const h = unit.height ?? 2;
-    const mat = new THREE.MeshLambertMaterial({ color: 0xffffff });
-    const m = new THREE.Mesh(new THREE.BoxGeometry(0.5, h, 0.5), mat);
-    m.position.y = h / 2;
-    m.userData = { kind: "unit", id: unit.id };   // 子を直接クリックしても拾えるように
-    g.add(m);
+    const mat = new THREE.MeshLambertMaterial({ color: 0xffffff, flatShading: true });
+    const part = (geometry, x, y, z, rotation = null) => {
+      const m = new THREE.Mesh(geometry, mat);
+      m.position.set(x, y, z);
+      if (rotation) m.rotation.set(...rotation);
+      m.userData = { kind: "unit", id: unit.id };
+      fallback.add(m);
+      return m;
+    };
+    const addModel = (path, scale, y = 0) => {
+      loadModel(path).then(template => {
+        if (!g.parent) return;
+        const model = template.clone(true);
+        model.scale.set(...scale);
+        model.position.y = y;
+        model.traverse(obj => {
+          if (obj.isMesh) obj.userData = { kind: "unit", id: unit.id };
+        });
+        fallback.visible = false;
+        g.add(model);
+      }).catch(() => {});
+    };
 
-    if (unit.side === "party") {
+    if (unit.side === "party" || unit.side === "npc") {
+      part(new THREE.ConeGeometry(0.28, h * 0.46, 4), 0, h * 0.37, 0, [0, Math.PI / 4, 0]);
+      part(new THREE.DodecahedronGeometry(h * 0.14, 0), 0, h * 0.76, 0);
+      for (const x of [-0.11, 0.11]) part(new THREE.BoxGeometry(0.11, h * 0.28, 0.12), x, h * 0.14, 0);
       // 味方はランタンを提げている。光源をGroupに入れてあるので移動に追従する。
       // decay=0(距離減衰なし)にしてあるのが肝。既定の逆二乗系のままだと、
       // 光源のすぐ隣にある持ち主の体だけが白飛びして陣営の色まで失われる。
@@ -433,17 +509,33 @@ export function createBattleScene(container, grid) {
       light.position.set(0, h * 0.9, 0);   // 頭のあたり。光源だけを置き、球体は出さない
       light.visible = lanternOverrides.has(unit.id) ? lanternOverrides.get(unit.id) : true;
       g.add(light);
-      lanterns.push({ id: unit.id, light, base, phase: lanterns.length * 2.7 });
+      if (unit.side === "party") lanterns.push({ id: unit.id, light, base, phase: lanterns.length * 2.7 });
+      addModel(`/models/${unit.modelId || unit.id}-v02.glb`, [1, 1, 1]);
     } else {
-
+      const shell = part(new THREE.DodecahedronGeometry(0.34, 0), 0, h * 0.44, 0);
+      shell.scale.set(1.15, 0.7, 0.9);
+      part(new THREE.DodecahedronGeometry(0.2, 0), 0, h * 0.4, 0.26);
+      for (const [x, z] of [[-0.22, -0.16], [0.22, -0.16], [-0.22, 0.16], [0.22, 0.16]]) {
+        part(new THREE.ConeGeometry(0.07, h * 0.36, 3), x, h * 0.18, z, [Math.PI, 0, 0]);
+      }
+      const modelId = unit.modelId || "rust-eater";
+      const model = modelId === "mine-bat"
+        ? { path: "/models/mine-bat-v02.glb", scale: [0.62, 0.62, 0.62], y: 0.03 }
+        : { path: "/models/rust-eater-v02.glb", scale: [0.8, 0.8, 0.8], y: 0 };
+      addModel(model.path, model.scale, model.y);
     }
 
-    g.userData = { kind: "unit", id: unit.id, mats: [mat] };
+    g.userData = { kind: "unit", id: unit.id, side: unit.side, modelId: unit.modelId, mats: [mat] };
     return g;
   };
 
   const meshFor = unit => {
     let g = unitMeshes.get(unit.id);
+    if (g && g.userData.modelId !== unit.modelId) {
+      unitGroup.remove(g);
+      unitMeshes.delete(unit.id);
+      g = null;
+    }
     if (!g) {
       g = makeUnitObject(unit);
       unitGroup.add(g);
@@ -488,6 +580,7 @@ export function createBattleScene(container, grid) {
   // highlights: [{x, y, kind:"reach"|"target"}] / targetIds: 攻撃できる相手のid
   // coins: [{id, x, y}] 倒れた駒の跡
   function sync({ units, highlights = [], activeId = null, targetIds = [], coins = [] }) {
+    marker.visible = false;
     for (const [, m] of tiles) m.material.color.setHex(COLOR.floor);
     for (const h of highlights) {
       const t = tiles.get(h.x + "," + h.y);
@@ -497,7 +590,7 @@ export function createBattleScene(container, grid) {
     for (const u of units) {
       const g = meshFor(u);
       // 戦闘不能の駒は盤面から退く(その場にはコインが残る)
-      if (u.hp <= 0) { g.visible = false; continue; }
+      if (u.hp <= 0 || u.id === firstPersonUnitId) { g.visible = false; continue; }
 
       const [wx, wz] = worldOf(u.x, u.y);
       const h = u.height ?? 2;
@@ -505,14 +598,15 @@ export function createBattleScene(container, grid) {
       // 0固定にしていた頃は瓦礫の箱にめり込んで見えていた
       const e = elevationAt(grid, u.x, u.y);
       g.position.set(wx, e, wz);
+      if (u.facing !== undefined) g.rotation.y = u.facing;
       // 攻撃できる相手は自身を光らせる。足元のマスを塗っても本体に隠れて見えないため
       const glow = targetIds.includes(u.id) ? COLOR.target : 0x000000;
       for (const mat of g.userData.mats) {
         mat.color.setHex(u.side === "party" ? COLOR.party : COLOR.enemy);
         mat.emissive.setHex(glow);
       }
-      g.visible = true;
-      if (u.id === activeId) {
+      g.visible = u.side !== "enemy" || enemiesVisible;
+      if (u.id === activeId && g.visible) {
         marker.visible = true;
         marker.position.set(wx, e + h + 0.5, wz);
       }
@@ -731,10 +825,10 @@ export function createBattleScene(container, grid) {
     raycaster.setFromCamera(ndc, camera);
     // ユニットを床より優先して拾う(敵の足元をクリックしても攻撃対象として扱えるように)。
     // ユニットはGroup(円錐+球など)なので再帰的に当てる
-    const hits = raycaster.intersectObjects([...unitGroup.children, ...tiles.values()], true);
+    const hits = raycaster.intersectObjects([...unitGroup.children, ...propGroup.children, ...tiles.values()], true);
     const unitHit = hits.find(h => h.object.userData.kind === "unit");
     const hit = unitHit || hits[0];
-    if (hit) pickHandler(hit.object.userData);
+    if (hit) pickHandler(hit.object.userData.kind ? hit.object.userData : hit.object.parent?.userData || {});
   };
 
   /* --- レンダラーとループ --- */
@@ -807,6 +901,30 @@ export function createBattleScene(container, grid) {
     playShove,
     playSweep,
     rotate(delta) { dirIndex += delta; },
+    setCameraFocus(unit = null, subject = null) {
+      if (unit) {
+        camera = firstPersonCamera;
+        firstPersonUnitId = unit.id;
+        const [x, z] = worldOf(unit.x, unit.y);
+        const eyeY = elevationAt(grid, unit.x, unit.y) + Math.max(1.18, (unit.height ?? 1.6) * 0.92);
+        const [subjectX, subjectZ] = subject ? worldOf(subject.x, subject.y) : [x, z - 5];
+        const dx = subjectX - x, dz = subjectZ - z;
+        const length = Math.hypot(dx, dz) || 1;
+        // 自分の頭の内側ではなく、視線方向へ少し出した位置を目線にする。
+        firstPersonCamera.position.set(x + (dx / length) * 0.16, eyeY, z + (dz / length) * 0.16);
+        const subjectY = subject
+          ? elevationAt(grid, subject.x, subject.y) + Math.max(1.12, (subject.height ?? 1.6) * 0.9)
+          : eyeY + 0.04;
+        firstPersonCamera.lookAt(subjectX, subjectY, subjectZ);
+        return;
+      }
+      camera = isoCamera;
+      firstPersonUnitId = null;
+      viewSize = baseViewSize;
+      target.set(0, 0, 0);
+      applyFrustum();
+      placeCamera();
+    },
     setPickHandler(fn) { pickHandler = fn; },
     // 検証パネル用のトグル・フェーダー。強さ0〜1: 0=ほぼ無効(farを遠くへ逃がす)、
     // 1=現状のチューニング値(near=CAMERA_DIST-1 / far=CAMERA_DIST+10)
@@ -827,8 +945,14 @@ export function createBattleScene(container, grid) {
     setWallsEnabled(on) { backdropGroup.visible = on; },
     setObstaclesEnabled(on) { obstacleGroup.visible = on; },
     setWaterEnabled(on) { waterGroup.visible = on; },
-    // 「穴」on = 柱の下の床を隠す(背景が透けて見える見た目)。既定はoff(床あり=隙間なし)
     setHolesEnabled(on) { groundPatchGroup.visible = !on; },
+    setEnemiesVisible(on) {
+      enemiesVisible = on;
+      for (const g of unitMeshes.values()) {
+        if (g.userData.side === "enemy") g.visible = on;
+      }
+      if (!on) marker.visible = false;
+    },
     // 光源は各ユニットのGroupの子なのでGroup化できない。lanterns配列のlightに
     // 直接visibleを立てる(Three.jsはvisible=falseの光を照明計算から除外する)
     // ユニットごとに個別で点灯/消灯する(ガレスだけ消す、リディアの手番でリディアの

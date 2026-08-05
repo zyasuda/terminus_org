@@ -13,103 +13,30 @@
 import React, { useEffect, useRef, useState } from "react";
 import { createBattleScene } from "./view3d.js";
 import {
-  createGrid, isAdjacent, movePointsFor, reachableCells,
+  isAdjacent, movePointsFor, reachableCells,
   turnOrder, resolveMelee, resolveSweep, resolveShove, chooseEnemyAction,
-  makeRng, scatterObstacles, scatterWater, carveShape, occupiedBy, pathTo
+  occupiedBy, pathTo
 } from "./core.js";
 import {
   GUARD_LABEL, applyMeleeResult, snapshotOf, advanceTurn, applyMoveResult, applySweepResult
 } from "./battleResult.js";
-
-// 「最初から」でステージ設定をランダムに引き直す時の背景色候補。
-// 任意のRGBだと読みにくい配色になり得るので、あらかじめ用意した候補から選ぶ。
-// 明るすぎると見づらいとの指摘を受け、すべて明度(HSLのL)50%以下の暗めの色にしてある
-const BG_COLOR_CHOICES = ["#161a22", "#20242e", "#2a2035", "#3a4a3a", "#2a4a5e", "#5a3f20"];
-const randomPick = arr => arr[Math.floor(Math.random() * arr.length)];
-
-/* --- 盤面 ---
-   8x8を基本としていたが、8〜12の長方形をランダムに選び、角を大きく削ったり
-   辺に切れ込みを入れたりする外形の変形も加えるようにした。素の盤面は全面が床で、
-   遮蔽はランダムに散らす(左右対称に置くと展開が読めてしまうため)。
-   柱(高さ1.0)は進入不可、瓦礫(0.25〜0.75)は乗り越えられる */
-const BOARD_SIZE_MIN = 8, BOARD_SIZE_MAX = 12;
-const baseMapFor = (w, h) => Array(h).fill(".".repeat(w));
-
-// 開始位置。盤面の幅・高さが変わっても使えるよう、絶対座標ではなく幅・高さからの
-// 相対位置で持つ。?fixture=melee で「すでに隣接している」状態から始められる
-// (交戦中の挙動を毎回同じ手順で確認するため)
-const START = {
-  default: (w, h) => ({
-    gareth: [0, Math.floor(h / 2) - 1], lydia: [0, Math.floor(h / 2)],
-    rust1: [w - 1, Math.floor(h / 2) - 1], rust2: [w - 1, Math.floor(h / 2)]
-  }),
-  melee: (w, h) => {
-    const cx = Math.floor(w / 2), cy = Math.floor(h / 2);
-    return { gareth: [cx, cy], lydia: [cx - 1, cy], rust1: [cx + 1, cy], rust2: [cx + 1, cy + 1] };
-  }
-};
-
-const params = () => new URLSearchParams(location.search);
-
-const makeUnits = (w, h) => {
-  const p = (START[params().get("fixture")] || START.default)(w, h);
-  return [
-    { id: "gareth", name: "ガレス", side: "party", x: p.gareth[0], y: p.gareth[1], hp: 16, maxHp: 16, atk: 3, agility: 7, defenseDc: 12, height: 1.5 },
-    { id: "lydia", name: "リディア", side: "party", x: p.lydia[0], y: p.lydia[1], hp: 14, maxHp: 14, atk: 2, agility: 4, defenseDc: 12, height: 1.425 },
-    { id: "rust1", name: "錆喰い", side: "enemy", x: p.rust1[0], y: p.rust1[1], hp: 10, maxHp: 10, atk: 2, agility: 5, defenseDc: 12, height: 0.8 },
-    { id: "rust2", name: "錆喰い(2)", side: "enemy", x: p.rust2[0], y: p.rust2[1], hp: 10, maxHp: 10, atk: 2, agility: 5, defenseDc: 12, height: 0.8 }
-  ];
-};
-
-// 盤面の幅・高さ(それぞれ独立に8〜12)をseedから決める。obstacle用のrngとは
-// 別ストリームにして(seedを直接ではなくオフセットした値で乱数器を作って)、
-// 他の抽選と独立させる
-const boardDimsFor = seed => {
-  const rng = makeRng(seed + 4242);
-  const span = BOARD_SIZE_MAX - BOARD_SIZE_MIN + 1;
-  return { w: BOARD_SIZE_MIN + Math.floor(rng() * span), h: BOARD_SIZE_MIN + Math.floor(rng() * span) };
-};
-
-// ?seed=123 を付けると同じ盤面(サイズ・外形込み)を再現できる(検証用)。無指定なら毎回変わる
-const makeGrid = ({ w, h }, seed) => {
-  const units = makeUnits(w, h);
-  const clear = units.map(u => ({ x: u.x, y: u.y }));
-  let grid = createGrid(baseMapFor(w, h));
-  // 外形の変形(角を削る/辺に切れ込み/変形なし)。障害物・水溜りより先に行うことで、
-  // 削られたマスにはそもそも障害物や水溜りが置かれないようにする
-  grid = carveShape(grid, makeRng(seed + 1313), { keepClear: clear });
-  // 障害物・水溜りの密度は、元の8x8(64マス)での比率(柱5・瓦礫6・水4)に揃える。
-  // 絶対数のままだと盤面が広がるほどスカスカになってしまう
-  const area = w * h;
-  const pillars = Math.round((area * 5) / 64);
-  const rubble = Math.round((area * 6) / 64);
-  const waterCount = Math.round((area * 4) / 64);
-  grid = scatterObstacles(grid, makeRng(seed), { pillars, rubble, keepClear: clear });
-  // 水溜り(足元を取られる地形)は障害物とは別のrngで散らす。同じrngを使い回すと
-  // 障害物の個数を変えた時に水溜りの配置まで連動して変わってしまうため
-  return scatterWater(grid, makeRng(seed + 9973), { count: waterCount, keepClear: clear });
-};
+import { createJunctionStage } from "../stage/junction.js";
+import { createLightChamberStage } from "../stage/lightChamber.js";
 
 const rollD20 = () => 1 + Math.floor(Math.random() * 20);
+const DIALOGUE_VIEW = { background: "#6f8fa5", light: "day" };
 
-const initialState = (seed = Number(params().get("seed")) || (Date.now() & 0xffff)) => {
-  // ?w= / ?h= で盤面の幅・高さを固定できる(検証用)。無指定ならseedから決める
-  const seedDims = boardDimsFor(seed);
-  const dims = {
-    w: Number(params().get("w")) || seedDims.w,
-    h: Number(params().get("h")) || seedDims.h
-  };
-  const units = makeUnits(dims.w, dims.h);
+const initialJunctionState = () => {
+  const { grid, units } = createJunctionStage();
   const base = {
-    seed,
-    grid: makeGrid(dims, seed),
+    grid,
     units,
     order: turnOrder(units).map(u => u.id),
     turn: 0,
     hasMoved: false,
-    coins: [],        // 倒れた駒の跡。通りかかると拾える
-    purse: 0,         // 拾ったコインの数
-    log: ["戦闘開始。"]
+    coins: [],
+    purse: 0,
+    log: ["分かれ道で錆喰いが姿を現した。"]
   };
   return { ...base, snapshot: snapshotOf(base) };
 };
@@ -119,7 +46,7 @@ const alive = (units, side) => units.some(u => u.side === side && u.hp > 0);
 export default function BattleView() {
   const mountRef = useRef(null);
   const sceneRef = useRef(null);
-  const [state, setState] = useState(initialState);
+  const [state, setState] = useState(initialJunctionState);
   // 演出の見た目調整用。ゲームの状態ではないので「やり直す」「最初から」の対象外
   const [fogOn, setFogOn] = useState(false);
   const [fogLevel, setFogLevel] = useState(1);
@@ -135,44 +62,148 @@ export default function BattleView() {
   const [obstaclesOn, setObstaclesOn] = useState(false);
   const [waterOn, setWaterOn] = useState(false);
   const [holesOn, setHolesOn] = useState(false);
+  const [mode, setMode] = useState("dialogue");
+  const [closeCamera, setCloseCamera] = useState(false);
+  const [dialogueFocusId, setDialogueFocusId] = useState("gareth");
+  const [investigations, setInvestigations] = useState([]);
+  const [encounters, setEncounters] = useState([]);
+  const [exits, setExits] = useState([]);
+  const [revealedSecretIds, setRevealedSecretIds] = useState([]);
+  const [selectedInvestigation, setSelectedInvestigation] = useState(null);
+  const [encounterCue, setEncounterCue] = useState(null);
+  const [activeEncounterId, setActiveEncounterId] = useState(null);
+  const [completedEncounterIds, setCompletedEncounterIds] = useState([]);
+  const triggeredEncounters = useRef(new Set());
   // 攻撃の種類。"通常"以外は1回選んだら使ったら"通常"へ戻す(構えのように持ち越さない)
   const [attackMode, setAttackMode] = useState("normal");
 
   const { grid, units, order, turn, hasMoved, coins } = state;
   const active = units.find(u => u.id === order[turn] && u.hp > 0) || null;
+  const dialogueFocus = units.find(u => u.id === dialogueFocusId);
+  const dialogueSubject = units.find(u => u.id === "guardian") || null;
   const partyAlive = alive(units, "party");
   const enemyAlive = alive(units, "enemy");
+  const battleMode = mode === "battle";
+  const sceneView = battleMode
+    ? { background: bgColor, light: lightPreset, walls: wallsOn, fog: fogOn, dust: dustOn, rain: rainOn }
+    : { ...DIALOGUE_VIEW, walls: true, fog: false, dust: false, rain: false };
   const over = !partyAlive || !enemyAlive;
+  const openInvestigation = investigation => {
+    setRevealedSecretIds(ids => ids.includes(investigation.secretId) ? ids : [...ids, investigation.secretId]);
+    setSelectedInvestigation(investigation);
+    if (investigation.speakerId) {
+      setDialogueFocusId(investigation.speakerId);
+      setCloseCamera(true);
+    }
+    const encounter = encounters.find(item => item.requiredElements?.includes(investigation.entity));
+    if (encounter && !triggeredEncounters.current.has(encounter.id) && !completedEncounterIds.includes(encounter.id)) {
+      triggeredEncounters.current.add(encounter.id);
+      setEncounterCue(encounter);
+    }
+  };
+
+  useEffect(() => {
+    let cancelled = false;
+    const stageInvestigations = grid.stage?.investigations || [];
+    fetch("/data/campaigns/lanternhill/chapter_01.json")
+      .then(r => r.ok ? r.json() : Promise.reject(new Error("campaign load failed")))
+      .then(chapter => {
+        const scene = chapter.scenes.find(s => s.id === grid.stage?.scenarioSceneId);
+        const resolved = stageInvestigations.map(placement => {
+          const secret = scene?.secrets.find(s => s.id === placement.secretId);
+          return secret && { ...placement, ...secret };
+        }).filter(Boolean);
+        if (!cancelled) {
+          setInvestigations(resolved);
+          setEncounters(scene?.encounters || []);
+          setExits(scene?.exits || []);
+        }
+      })
+      .catch(() => { if (!cancelled) { setInvestigations([]); setEncounters([]); setExits([]); } });
+    return () => { cancelled = true; };
+  }, [grid]);
+
+  useEffect(() => {
+    if (!encounterCue) return;
+    const timer = setTimeout(() => {
+      setState(s => {
+        let enemyIndex = 0;
+        const units = s.units.map(unit => {
+          if (unit.side !== "enemy") return unit;
+          const suffix = enemyIndex++ ? "(2)" : "";
+          return {
+            ...unit,
+            modelId: encounterCue.monsterName === "坑道蝙蝠" ? "mine-bat" : "rust-eater",
+            name: `${encounterCue.enemy.name}${suffix}`,
+            hp: encounterCue.enemy.hp,
+            maxHp: encounterCue.enemy.maxHp,
+            atk: encounterCue.enemy.atk,
+            agility: encounterCue.enemy.agility,
+            defenseDc: encounterCue.enemy.defenseDc,
+            height: encounterCue.monsterName === "坑道蝙蝠" ? 0.9 : 0.8
+          };
+        });
+        const next = {
+          ...s,
+          units,
+          order: turnOrder(units).map(unit => unit.id),
+          turn: 0,
+          hasMoved: false,
+          log: [...s.log, encounterCue.onsetText]
+        };
+        return { ...next, snapshot: snapshotOf(next) };
+      });
+      setSelectedInvestigation(null);
+      setCloseCamera(false);
+      setActiveEncounterId(encounterCue.id);
+      setMode("battle");
+      setEncounterCue(null);
+    }, 1200);
+    return () => clearTimeout(timer);
+  }, [encounterCue]);
+
+  useEffect(() => {
+    if (!battleMode || enemyAlive || !activeEncounterId) return;
+    const timer = setTimeout(() => {
+      setCompletedEncounterIds(ids => [...ids, activeEncounterId]);
+      setActiveEncounterId(null);
+      setCloseCamera(false);
+      setMode("dialogue");
+    }, 900);
+    return () => clearTimeout(timer);
+  }, [battleMode, enemyAlive, activeEncounterId]);
 
   /* --- シーンの生成と破棄。盤面が変わったら作り直す(「最初から」で新しい配置になる) --- */
   useEffect(() => {
     const s = createBattleScene(mountRef.current, grid);
     sceneRef.current = s;
     // 新しい盤面を作った直後は既定値に戻るので、現在のパネルの設定を反映し直す
-    s.setFogEnabled(fogOn);
+    s.setFogEnabled(sceneView.fog);
     s.setFogIntensity(fogLevel);
     s.setFogColor(fogColor);
-    s.setDustEnabled(dustOn);
-    s.setRainEnabled(rainOn);
-    s.setWallsEnabled(wallsOn);
-    s.setBackgroundColor(bgColor);
-    s.setLightPreset(lightPreset);
+    s.setDustEnabled(sceneView.dust);
+    s.setRainEnabled(sceneView.rain);
+    s.setWallsEnabled(sceneView.walls);
+    s.setBackgroundColor(sceneView.background);
+    s.setLightPreset(sceneView.light);
     for (const [id, on] of Object.entries(lanternOn)) s.setLanternEnabled(id, on);
     s.setObstaclesEnabled(obstaclesOn);
     s.setWaterEnabled(waterOn);
     s.setHolesEnabled(holesOn);
+    s.setEnemiesVisible(battleMode);
+    s.setCameraFocus(closeCamera ? dialogueFocus : null, dialogueSubject);
     return () => { s.dispose(); sceneRef.current = null; };
   }, [grid]);
 
   /* --- 演出パネルの設定を反映(盤面を作り直さず、既存シーンへその場で効かせる) --- */
-  useEffect(() => { sceneRef.current?.setFogEnabled(fogOn); }, [fogOn, grid]);
+  useEffect(() => { sceneRef.current?.setFogEnabled(sceneView.fog); }, [sceneView.fog, grid]);
   useEffect(() => { sceneRef.current?.setFogIntensity(fogLevel); }, [fogLevel, grid]);
   useEffect(() => { sceneRef.current?.setFogColor(fogColor); }, [fogColor, grid]);
-  useEffect(() => { sceneRef.current?.setDustEnabled(dustOn); }, [dustOn, grid]);
-  useEffect(() => { sceneRef.current?.setRainEnabled(rainOn); }, [rainOn, grid]);
-  useEffect(() => { sceneRef.current?.setWallsEnabled(wallsOn); }, [wallsOn, grid]);
-  useEffect(() => { sceneRef.current?.setBackgroundColor(bgColor); }, [bgColor, grid]);
-  useEffect(() => { sceneRef.current?.setLightPreset(lightPreset); }, [lightPreset, grid]);
+  useEffect(() => { sceneRef.current?.setDustEnabled(sceneView.dust); }, [sceneView.dust, grid]);
+  useEffect(() => { sceneRef.current?.setRainEnabled(sceneView.rain); }, [sceneView.rain, grid]);
+  useEffect(() => { sceneRef.current?.setWallsEnabled(sceneView.walls); }, [sceneView.walls, grid]);
+  useEffect(() => { sceneRef.current?.setBackgroundColor(sceneView.background); }, [sceneView.background, grid]);
+  useEffect(() => { sceneRef.current?.setLightPreset(sceneView.light); }, [sceneView.light, grid]);
   useEffect(() => {
     const s = sceneRef.current;
     if (!s) return;
@@ -181,6 +212,8 @@ export default function BattleView() {
   useEffect(() => { sceneRef.current?.setObstaclesEnabled(obstaclesOn); }, [obstaclesOn, grid]);
   useEffect(() => { sceneRef.current?.setWaterEnabled(waterOn); }, [waterOn, grid]);
   useEffect(() => { sceneRef.current?.setHolesEnabled(holesOn); }, [holesOn, grid]);
+  useEffect(() => { sceneRef.current?.setEnemiesVisible(battleMode); }, [battleMode, grid]);
+  useEffect(() => { sceneRef.current?.setCameraFocus(closeCamera ? dialogueFocus : null, dialogueSubject); }, [closeCamera, dialogueFocusId, dialogueSubject?.id, grid]);
 
   /* --- 手番の解決 --- */
   const endTurn = () => setState(advanceTurn);
@@ -188,19 +221,41 @@ export default function BattleView() {
   // 手番の開始時点へ戻す。移動した位置も、途中で拾ったコインも元通りになる
   const undoTurn = () => setState(s => ({ ...s, ...s.snapshot }));
 
-  // 「最初から」は盤面を作り直すだけでなく、ステージ設定(背景色・昼夜・壁/障害物/
-  // 水溜り/穴の有無)もランダムに引き直す。霧・塵・雨はここでは変えない
-  // (地形・障害物の見え方を確認する用途なので、それを隠しかねない演出は手動操作のまま残す)
-  const restartWithRandomStage = () => {
-    setState(initialState());
-    setBgColor(randomPick(BG_COLOR_CHOICES));
-    setLightPreset(Math.random() < 0.5 ? "night" : "day");
-    setWallsOn(Math.random() < 0.5);
-    setWaterOn(Math.random() < 0.5);
-    const withObstacles = Math.random() < 0.5;
-    setObstaclesOn(withObstacles);
-    // 穴は障害物(柱)の下に生まれる隙間の演出なので、柱が無ければ意味を持たない
-    setHolesOn(withObstacles && Math.random() < 0.5);
+  const restartJunctionStage = () => {
+    triggeredEncounters.current.clear();
+    setEncounterCue(null);
+    setSelectedInvestigation(null);
+    setActiveEncounterId(null);
+    setCompletedEncounterIds([]);
+    setRevealedSecretIds([]);
+    setState(initialJunctionState());
+  };
+
+  const exitAllowed = exit => {
+    const requiredSecrets = exit.requires?.secretsAll || [];
+    const requiredEntities = investigations
+      .filter(item => requiredSecrets.includes(item.secretId))
+      .map(item => item.entity);
+    const requiredEncounters = encounters.filter(encounter =>
+      encounter.requiredElements?.some(element => requiredEntities.includes(element))
+    );
+    return requiredSecrets.every(id => revealedSecretIds.includes(id)) &&
+      requiredEncounters.every(encounter => completedEncounterIds.includes(encounter.id));
+  };
+  const enterExit = exit => {
+    if (!exitAllowed(exit) || exit.to !== 3) return;
+    setState(current => {
+      const next = createLightChamberStage(current.units.filter(unit => unit.side === "party"));
+      const base = { grid: next.grid, units: next.units, order: turnOrder(next.units).map(unit => unit.id), turn: 0, hasMoved: false, coins: [], purse: current.purse, log: [exit.text] };
+      return { ...base, snapshot: snapshotOf(base) };
+    });
+    setCloseCamera(false);
+    setSelectedInvestigation(null);
+    setInvestigations([]);
+    setEncounters([]);
+    setExits([]);
+    setRevealedSecretIds([]);
+    setMode("dialogue");
   };
 
   // 演出(命中/外れの視覚効果)は見た目だけで、確定した結果は変えない。
@@ -292,7 +347,7 @@ export default function BattleView() {
 
   /* --- 敵の手番は自動で進める --- */
   useEffect(() => {
-    if (over || !active || active.side !== "enemy") return;
+    if (!battleMode || over || !active || active.side !== "enemy") return;
     const t = setTimeout(() => {
       const act = chooseEnemyAction(grid, active, units);
       if (act.type === "attack") {
@@ -304,10 +359,10 @@ export default function BattleView() {
       setTimeout(endTurn, 350);
     }, 500);
     return () => clearTimeout(t);
-  }, [active?.id, turn, over]);
+  }, [active?.id, turn, over, battleMode]);
 
   /* --- ハイライトと入力 --- */
-  const playerTurn = !!active && active.side === "party" && !over;
+  const playerTurn = battleMode && !!active && active.side === "party" && !over;
   const reach = playerTurn && !hasMoved
     ? reachableCells(grid, active, movePointsFor(active.agility), occupiedBy(units, active.id))
     : [];
@@ -322,8 +377,13 @@ export default function BattleView() {
       ...reach.map(c => ({ x: c.x, y: c.y, kind: "reach" })),
       ...targets.map(t => ({ x: t.x, y: t.y, kind: "target" }))
     ];
-    s.sync({ units, highlights, activeId: active?.id ?? null, targetIds: targets.map(t => t.id), coins });
+    s.sync({ units, highlights, activeId: battleMode ? active?.id ?? null : null, targetIds: targets.map(t => t.id), coins });
     s.setPickHandler(data => {
+      if (!battleMode && data.kind === "stage-prop") {
+        const investigation = investigations.find(i => i.anchor === data.role);
+        if (investigation) openInvestigation(investigation);
+        return;
+      }
       if (!playerTurn) return;
       if (data.kind === "unit") {
         const t = units.find(u => u.id === data.id);
@@ -348,11 +408,11 @@ export default function BattleView() {
     (state.units !== state.snapshot.units || state.coins !== state.snapshot.coins);
 
   return (
-    <div style={S.page}>
+    <div style={{ ...S.page, background: battleMode ? S.page.background : DIALOGUE_VIEW.background }}>
       <div ref={mountRef} style={S.canvas} />
 
-      <div style={S.hud}>
-        <div style={S.row}>
+      <div style={{ ...S.hud, background: battleMode ? S.hud.background : "rgba(38,60,79,.94)" }}>
+        {battleMode && <div style={S.row}>
           <strong style={{ color: "#f2df7e" }}>
             {status ? `—— ${status} ——` : active ? `${active.name} の手番` : "—"}
           </strong>
@@ -362,9 +422,9 @@ export default function BattleView() {
           {(state.purse > 0 || coins.length > 0) && (
             <span style={S.dim}>拾った物 {state.purse}{coins.length ? ` / 落ちている ${coins.length}` : ""}</span>
           )}
-        </div>
+        </div>}
 
-        <div style={S.row}>
+        {battleMode && <div style={S.row}>
           {units.map(u => (
             <span key={u.id} style={{ ...S.chip, opacity: u.hp > 0 ? 1 : 0.35,
               borderColor: u.side === "party" ? "#6f9ad3" : "#c4634a" }}>
@@ -372,17 +432,28 @@ export default function BattleView() {
               {u.guard ? ` [${GUARD_LABEL[u.guard.type]}${u.guard.used ? "済" : ""}]` : ""}
             </span>
           ))}
-        </div>
+        </div>}
 
         <div style={S.row}>
           <button style={S.btn} onClick={() => sceneRef.current?.rotate(-1)}>◀ 視点</button>
           <button style={S.btn} onClick={() => sceneRef.current?.rotate(1)}>視点 ▶</button>
-          <button style={S.btn} disabled={!canUndo} onClick={undoTurn}>やり直す</button>
-          <button style={S.btn} disabled={!playerTurn} onClick={endTurn}>ターン終了</button>
-          {/* 押し間違えないよう他のボタンとは少し間隔を空けるが、遠すぎない位置に置く */}
-          <button style={{ ...S.btn, marginLeft: 20 }} onClick={restartWithRandomStage}>最初から</button>
+          {battleMode ? <>
+            <button style={S.btn} disabled={!canUndo} onClick={undoTurn}>やり直す</button>
+            <button style={S.btn} disabled={!playerTurn} onClick={endTurn}>ターン終了</button>
+            <button style={{ ...S.btn, marginLeft: 20 }} onClick={restartJunctionStage}>最初から</button>
+            <button style={S.btn} onClick={() => { setCloseCamera(false); setMode("dialogue"); }}>会話モードへ</button>
+          </> : <>
+            <strong style={{ color: "#f2df7e" }}>会話モード</strong>
+            <span style={S.dim}>{closeCamera ? `${dialogueFocus?.name}視点：${dialogueSubject?.name || "坑道の奥"}を見ている。` : `${grid.stage?.name}を調べ、相手と話す。`}</span>
+            {units.filter(u => u.side === "party").map(u => (
+              <button key={u.id} style={S.btn} onClick={() => { setDialogueFocusId(u.id); setCloseCamera(true); }}>{u.name}視点</button>
+            ))}
+            {closeCamera && <button style={S.btn} onClick={() => setCloseCamera(false)}>広域表示</button>}
+            {encounters.length > 0 && <button style={S.btn} onClick={() => { setCloseCamera(false); setSelectedInvestigation(null); setMode("battle"); }}>戦闘開始</button>}
+          </>}
         </div>
 
+        {battleMode && <>
         {/* 攻撃モード: 選んでから相手をクリックすると発動する。1回使うと通常へ戻る。
             薙ぎ払いだけは相手を選ばず即発動するボタン(単一対象への「モード」ではないため) */}
         <div style={S.row}>
@@ -426,12 +497,37 @@ export default function BattleView() {
           ))}
         </div>
 
-        <div style={S.hint}>
-          青いマス=移動先 / 赤いマス=攻撃できる相手。攻撃するとターンが終わる。
-        </div>
+        <div style={S.hint}>青いマス=移動先 / 赤いマス=攻撃できる相手。攻撃するとターンが終わる。</div>
+        </>}
+
+        {!battleMode && investigations.length > 0 && <div style={S.row}>
+          <span style={S.dim}>調べる:</span>
+          {investigations.map(item => (
+            <button key={item.secretId} style={S.btn} onClick={() => openInvestigation(item)}>
+              {item.entity}{encounters.some(e => e.requiredElements?.includes(item.entity) && completedEncounterIds.includes(e.id)) ? "（撃退済み）" : ""}
+            </button>
+          ))}
+        </div>}
+        {!battleMode && selectedInvestigation && <div style={S.inspect}>
+          <strong>{selectedInvestigation.entity}</strong>
+          <div>{selectedInvestigation.surface}</div>
+          <div style={{ marginTop: 4, color: "#f2df7e" }}>{selectedInvestigation.text}</div>
+          {selectedInvestigation.companionLine && <div style={S.companionLine}>
+            {selectedInvestigation.companionLine.speaker}「{selectedInvestigation.companionLine.text}」
+          </div>}
+          {encounterCue ? <div style={{ marginTop: 6, color: "#ffcb6b" }}>{encounterCue.onsetText}</div> :
+            <button style={{ ...S.btn, marginTop: 6 }} onClick={() => setSelectedInvestigation(null)}>閉じる</button>}
+        </div>}
+
+        {!battleMode && exits.length > 0 && <div style={S.row}>
+          <span style={S.dim}>進む:</span>
+          {exits.map(exit => <button key={exit.id} style={S.btn} disabled={!exitAllowed(exit)} onClick={() => enterExit(exit)}>
+            {exit.match[0]}へ {exitAllowed(exit) ? "進む" : "（まだ進めない）"}
+          </button>)}
+        </div>}
 
         {/* 演出の見た目調整(検証用)。盤面のルールには影響しない */}
-        <div style={S.row}>
+        {battleMode && <div style={S.row}>
           <label style={S.toggle}>
             <input type="checkbox" checked={fogOn} onChange={e => setFogOn(e.target.checked)} />
             霧
@@ -481,12 +577,12 @@ export default function BattleView() {
             <input type="checkbox" checked={holesOn} onChange={e => setHolesOn(e.target.checked)} />
             穴
           </label>
-        </div>
+        </div>}
 
         {/* GMの語りはログに残す(Phase 1は定型文。Phase 4でGMの語りへ差し替える) */}
-        <div style={S.log}>
+        {battleMode && <div style={S.log}>
           {state.log.slice(-8).map((l, i) => <div key={i}>{l}</div>)}
-        </div>
+        </div>}
       </div>
     </div>
   );
@@ -508,5 +604,7 @@ const S = {
   toggle: { display: "flex", alignItems: "center", gap: 4, color: "#8b93a7", fontSize: 12, cursor: "pointer" },
   select: { background: "#2b303c", color: "#e6e8ee", border: "1px solid #3c4354", borderRadius: 4, font: "inherit" },
   log: { maxHeight: 116, overflowY: "auto", background: "#11141b",
-    border: "1px solid #2b303c", borderRadius: 6, padding: "6px 9px" }
+    border: "1px solid #2b303c", borderRadius: 6, padding: "6px 9px" },
+  inspect: { background: "#20242e", border: "1px solid #8a7648", borderRadius: 6, padding: "7px 9px", marginBottom: 6 },
+  companionLine: { marginTop: 7, color: "#d98cc9", fontWeight: 600 }
 };
