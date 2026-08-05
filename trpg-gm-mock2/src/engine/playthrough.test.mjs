@@ -23,6 +23,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { encounterRequiredElementsMet } from "./progression.js";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const PUBLIC_DIR = path.join(HERE, "..", "..", "public");
@@ -280,6 +281,31 @@ while (turns < MAX_TURNS) {
         : `作者の開示方法「${secret.trigger || "(未記入)"}」でも「${secret.entity}を調べる」でも開かない。`
           + `${EXAMINE_TRIES}回×${examineAttempts(secret).length}通りを試した`);
     if (done) revealLog.push(secret.id);
+  }
+
+  /* (1.5) このノードの遭遇(encounters)を発火させる。
+     2026-08-05発見: encounterは「必要な秘密が“既に”開示済み」であることを要求するが、
+     判定は同じ手番内で開示より先に評価される(index.js resolveEncounterIfNeeded は
+     tryScripted/scriptedExamineより前に走る)。つまり開示が成功したその手番では
+     まだ間に合わず、開示後もう一度同じ照合語を宣言する手番が要る。上の(1)は開示できた
+     瞬間に宣言をやめるので、これが無いとencounterは一生検査下に入らない(章データから
+     機械的に導く: triggerTermsの先頭を再宣言するだけ。台本は書かない) */
+  for (const enc of cur.node.encounters || []) {
+    const { state: st, revealed: encRev } = readSaved();
+    const foeName = (enc.enemy && enc.enemy.name) || (cur.node.enemy && cur.node.enemy.name);
+    if (foeName && ((st.defeated || []).includes(foeName) || (st.fled || []).includes(foeName))) continue;
+    const count = (st.encounterCounts || {})[enc.id] || 0;
+    if (enc.maxOccurrences != null && count >= enc.maxOccurrences) continue;
+    if (!encounterRequiredElementsMet(enc, cur.node, { revealed: encRev, inventory: st.inventory })) continue;
+    const trigger = (enc.triggerTerms || [])[0];
+    if (!trigger) continue;
+    await say(trigger);
+    const fired = Boolean(readSaved().state.enemy);
+    check(fired, `${cur.label} 遭遇${enc.id}が実際に発火した（開示後の再宣言で）`,
+      `必要要素は満たしているのに「${trigger}」で発生しなかった`);
+    if (fired) {
+      for (let i = 0; i < 5 && readSaved().state.enemy; i++) await say("逃げる");
+    }
   }
 
   // (2) 置かれた品を全部拾う（出口や後のノードが要求する）
