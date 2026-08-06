@@ -36,10 +36,33 @@ function gamePayloadToWorkspaceDraft(raw){
   if(terminalObject(chapter.intro).img)sceneBackgrounds["ch1:opening:opening"]=importedAssetRef(chapter.intro.img);
   if(terminalObject(chapter.ending).img)sceneBackgrounds["ch1:ending:ending"]=importedAssetRef(chapter.ending.img);
   /* アウトロもイントロと同じように下書きへ入れる。イントロだけを入れていたため、アウトロは
-     画面の入力が常に空として扱われ、画面で編集しても出力へ反映されなかった(2026-07-30)。 */
-  const terminalOverride=value=>({brief:typeof value==="string"?value:(terminalObject(value).brief||""),goal:terminalObject(value).goal||"",greeting:terminalObject(value).greeting||"",hintChips:Array.isArray(terminalObject(value).hintChips)?terminalObject(value).hintChips:[]});
+     画面の入力が常に空として扱われ、画面で編集しても出力へ反映されなかった(2026-07-30)。
+     2026-08-06、brief/goal以外の全フィールド(npc/npcSprite/exits/npcSay/greeting/hintChips)が
+     ここで黙って消えていたことが発覚(mock2出力を「読込」で再取り込むと、依頼人の設定や
+     出口の照合語・台詞が全部消える)。npc周りも保持する */
+  const terminalNpc=value=>terminalObject(value).npc||null;
+  const terminalOverride=value=>{
+    const v=terminalObject(value);
+    const npc=terminalNpc(value);
+    return {brief:typeof value==="string"?value:(v.brief||""),goal:v.goal||"",greeting:v.greeting||"",
+      hintChips:Array.isArray(v.hintChips)?v.hintChips:[],
+      npcs:npc?.id?[npc.id]:[],
+      exits:Array.isArray(v.exits)?v.exits:[]};
+  };
   const sceneOverrides={"ch1:opening:opening":terminalOverride(chapter.intro),"ch1:ending:ending":terminalOverride(chapter.ending)};
+  /* イントロ・アウトロ・各シーンのNPC名・立ち絵・番号をcastNames/castImages/npcCountへ登録する。
+     登録しないと画面のNPC選択肢に出ず、選んでも名前が「NPC1」のような既定名に化ける */
+  const allNpcHolders=[chapter.intro,chapter.ending,...scenes];
+  allNpcHolders.forEach(value=>{
+    const v=terminalObject(value);const npc=v.npc;
+    if(!npc?.id)return;
+    if(npc.name&&!castNames[npc.id])castNames[npc.id]=npc.name;
+    if(v.npcSprite)castImages[npc.id]=importedAssetRef(v.npcSprite);
+  });
+  const maxNpcNum=allNpcHolders.reduce((max,value)=>{
+    const m=/^npc_(\d+)$/.exec(terminalObject(value).npc?.id||"");return m?Math.max(max,Number(m[1])):max;
+  },0);
   scenes.forEach((s,i)=>{const key=`ch1:scene:${i}`;const image=sceneBackgrounds[key];const sky=importedAssetRef(s?.parallax?.sky);if(image||sky)sceneOverrides[key]={...(image?{img:image}:{}),...(sky?{parallaxSky:sky}:{})};});
-  return {campaignName:campaign.meta?.title||campaign.title||payload.title||"",campaignImage:importedAssetRef(campaign.image||campaign.img),campaignWorld:campaign.style?.world||campaign.world||"",campaignTerms:campaign.style?.terms||campaign.terms||"",campaignStyle:normalizeCampaignStyle({conversationSpread:campaign.style?.conversationSpread,narration:campaign.style?.narration,readingLevel:campaign.style?.readingLevel,goodExample:campaign.style?.goodExample,badExample:campaign.style?.badExample,extra:Array.isArray(campaign.style?.extra)?campaign.style.extra.join("\n"):"",forbiddenWords:Array.isArray(campaign.style?.forbiddenWords)?campaign.style.forbiddenWords.join("、"):"",rollReactionCritical:campaign.style?.rollReaction?.critical,rollReactionFumble:campaign.style?.rollReaction?.fumble,emptyHanded:Array.isArray(campaign.style?.emptyHanded)?campaign.style.emptyHanded.join("\n"):"",unknownTarget:campaign.style?.unknownTarget,companionsHint:campaign.companionsHint}),freshCampaign:true,customChapterScenes:{ch1:scenes},chapterNames:{ch1:chapter.title||"チャプター1"},chapterOrder:["ch1"],activeChapter:"ch1",selectedNode:{type:"opening"},selectedTarget:"campaign",extraCompanions:Math.max(0,companions.length-1),npcCount:Math.max(1,Array.isArray(chapter.scenes?.[0]?.npcs)?chapter.scenes[0].npcs.length:1),monsters,items,castImages,castNames,castProfiles,castAttributes,sceneBackgrounds,sceneOverrides,rightPanelEnabled:false,collapsedCampaign:false,collapsedChapters:{ch1:false},campaignId:payload.campaignId||campaign.meta?.id||"campaign",chapterIds:{ch1:payload.chapterId||"chapter_01"}};
+  return {campaignName:campaign.meta?.title||campaign.title||payload.title||"",campaignImage:importedAssetRef(campaign.image||campaign.img),campaignWorld:campaign.style?.world||campaign.world||"",campaignTerms:campaign.style?.terms||campaign.terms||"",campaignStyle:normalizeCampaignStyle({conversationSpread:campaign.style?.conversationSpread,narration:campaign.style?.narration,readingLevel:campaign.style?.readingLevel,goodExample:campaign.style?.goodExample,badExample:campaign.style?.badExample,extra:Array.isArray(campaign.style?.extra)?campaign.style.extra.join("\n"):"",forbiddenWords:Array.isArray(campaign.style?.forbiddenWords)?campaign.style.forbiddenWords.join("、"):"",rollReactionCritical:campaign.style?.rollReaction?.critical,rollReactionFumble:campaign.style?.rollReaction?.fumble,emptyHanded:Array.isArray(campaign.style?.emptyHanded)?campaign.style.emptyHanded.join("\n"):"",unknownTarget:campaign.style?.unknownTarget,companionsHint:campaign.companionsHint}),freshCampaign:true,customChapterScenes:{ch1:scenes},chapterNames:{ch1:chapter.title||"チャプター1"},chapterOrder:["ch1"],activeChapter:"ch1",selectedNode:{type:"opening"},selectedTarget:"campaign",extraCompanions:Math.max(0,companions.length-1),npcCount:Math.max(1,maxNpcNum,Array.isArray(chapter.scenes?.[0]?.npcs)?chapter.scenes[0].npcs.length:1),monsters,items,castImages,castNames,castProfiles,castAttributes,sceneBackgrounds,sceneOverrides,rightPanelEnabled:false,collapsedCampaign:false,collapsedChapters:{ch1:false},campaignId:payload.campaignId||campaign.meta?.id||"campaign",chapterIds:{ch1:payload.chapterId||"chapter_01"}};
 }
 function loadCampaignFile(file){if(!file)return;const reader=new FileReader();reader.onload=()=>{try{const parsed=JSON.parse(reader.result);const source=parsed.data||parsed;const draft=source.campaign||source.chapter||Array.isArray(source.chapters)||Array.isArray(source.scenes)?gamePayloadToWorkspaceDraft(parsed):null;applyWorkspaceDraft(draft||source);saveWorkspaceDraft();renderScenes();renderAll();setStatus(draft?"ゲーム出力JSONをTASへ読み込みました":"キャンペーンデータを読み込みました")}catch(e){setStatus("読込に失敗しました: "+e.message)}};reader.readAsText(file)}
