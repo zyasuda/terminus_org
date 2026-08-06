@@ -13,6 +13,16 @@ const http = require("http");
 const fs = require("fs");
 const path = require("path");
 
+// 実際にAIへ何を送り何が返ったかを人間が後から確認するためのログ(1行1JSON)。
+// ゲーム進行には一切関与しない、ローカルのデバッグ専用ファイル
+const LLM_LOG_PATH = path.join(__dirname, "logs", "llm.jsonl");
+function logLlmTurn(entry) {
+  try {
+    fs.mkdirSync(path.dirname(LLM_LOG_PATH), { recursive: true });
+    fs.appendFileSync(LLM_LOG_PATH, JSON.stringify(entry) + "\n");
+  } catch (e) { console.error("llm.jsonlへの書き込みに失敗:", e.message); }
+}
+
 // .env ファイルを読み込む
 const envPath = path.join(__dirname, ".env");
 if (fs.existsSync(envPath)) {
@@ -329,6 +339,12 @@ const server = http.createServer((req, res) => {
           await new Promise(r => setTimeout(r, waitMs));
           result = await call();
         }
+        logLlmTurn({
+          ts: new Date().toISOString(),
+          backend: BACKEND, model: MODEL,
+          system: payload.system, messages: payload.messages,
+          status: result.status, response: result.body
+        });
         res.writeHead(result.status, { "Content-Type": "application/json" });
         res.end(JSON.stringify(result.body));
       } catch (e) {
