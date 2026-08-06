@@ -664,13 +664,6 @@
         "brief": "封鎖の木柵と左右の坑道。奥に灯りが揺れる。",
         "img": "s2_barrier.jpg",
         "goal": "第三坑道へ入る手段を見つける",
-        "completeRequires": {
-          "secretsAny": [
-            "s2a",
-            "s2b",
-            "s2c"
-          ]
-        },
         "direction": "封鎖柵は「外から閉じ込める」ためではなく「内側の意思で維持されている」という違和感を、断定せずに漂わせよ。危険の予感と同時に、奥にあるものへの哀感を予感させよ。",
         "enemy": {
           "name": "錆喰い",
@@ -757,6 +750,32 @@
             "appearances": [],
             "tags": [],
             "usage": "inspect"
+          },
+          {
+            "id": "s2a_gap",
+            "entity": "抜け道",
+            "aliases": [],
+            "text": "錆喰いが崩していったのだろう、柵の根元が錆で朽ちて崩れ、人ひとり通れるだけの隙間ができている。",
+            "category": "object",
+            "importance": "support",
+            "appearances": [],
+            "tags": [],
+            "usage": "event",
+            "surface": "",
+            "trigger": ""
+          },
+          {
+            "id": "s2c_gap",
+            "entity": "壊れた機械人形",
+            "aliases": [],
+            "text": "崩落の先、壊れた機械人形の残骸が横たわっている。",
+            "category": "main",
+            "importance": "major",
+            "appearances": [],
+            "tags": [],
+            "usage": "event",
+            "surface": "",
+            "trigger": ""
           }
         ],
         "blockedText": "先へ続いているのは右の坑道だけだが、封鎖の木柵が行く手をふさいでいる。古い木のはずなのに、崩れる気配がない。左の坑道は崩れて行き止まりだ。",
@@ -773,32 +792,11 @@
             "to": 3,
             "requires": {
               "secretsAll": [
-                "s2a",
-                "s2b"
+                "s2a_gap"
               ]
             },
-            "blockedText": "柵の板は内側から打ち直されている。何をどう外せばいいのか、まだ見当がつかない。",
-            "text": "木柵を越え、右の坑道を抜けて灯りの部屋へ進んだ。"
-          },
-          {
-            "id": "to_scene03_collapse",
-            "match": [
-              "左",
-              "崩れた",
-              "崩落",
-              "岩",
-              "隙間",
-              "岩をどける",
-              "隙間をくぐる"
-            ],
-            "to": 3,
-            "requires": {
-              "secretsAll": [
-                "s2c"
-              ]
-            },
-            "blockedText": "崩れた岩の山は高い。どこから登れるのか、まだ見当がつかない。",
-            "text": "岩の隙間をくぐり、左の坑道を抜けて灯りの部屋へ進んだ。"
+            "blockedText": "柵はまだそのまま塞がっている。何か通り抜ける方法を見つけない限り、越えられそうにない。",
+            "text": "見つけた隙間から柵の奥へ抜け、右の坑道を通って灯りの部屋へ進んだ。"
           }
         ],
         "authoring": {
@@ -815,32 +813,11 @@
               "to": 3,
               "requires": {
                 "secretsAll": [
-                  "s2a",
-                  "s2b"
+                  "s2a_gap"
                 ]
               },
-              "blockedText": "柵の板は内側から打ち直されている。何をどう外せばいいのか、まだ見当がつかない。",
-              "text": "木柵を越え、右の坑道を抜けて灯りの部屋へ進んだ。"
-            },
-            {
-              "id": "to_scene03_collapse",
-              "match": [
-                "左",
-                "崩れた",
-                "崩落",
-                "岩",
-                "隙間",
-                "岩をどける",
-                "隙間をくぐる"
-              ],
-              "to": 3,
-              "requires": {
-                "secretsAll": [
-                  "s2c"
-                ]
-              },
-              "blockedText": "崩れた岩の山は高い。どこから登れるのか、まだ見当がつかない。",
-              "text": "岩の隙間をくぐり、左の坑道を抜けて灯りの部屋へ進んだ。"
+              "blockedText": "柵はまだそのまま塞がっている。何か通り抜ける方法を見つけない限り、越えられそうにない。",
+              "text": "見つけた隙間から柵の奥へ抜け、右の坑道を通って灯りの部屋へ進んだ。"
             }
           ],
           "dialogueRules": [],
@@ -883,7 +860,8 @@
               "agility": 8,
               "ambushDc": 12,
               "ambush": true,
-              "sprite": "s2_rust_eater.png"
+              "sprite": "s2_rust_eater.png",
+              "revealOnDefeat": "s2a_gap"
             }
           },
           {
@@ -912,16 +890,14 @@
               "unknownName": "不気味な影",
               "surface": "天井の隙間から降りてくる、掌ほどの蝙蝠の群れだ。",
               "trait": "天井の隙間から降りてくる、掌ほどの蝙蝠の群れだ。物音に反応する。",
-              "ambushTrigger": "プレイヤーが頭上の気配を確かめないまま、崩れた坑道の隙間へ近づいた時のみ",
               "hp": 6,
               "maxHp": 6,
               "atk": 1,
               "defenseDc": 12,
               "fleeDc": 10,
               "agility": 8,
-              "ambushDc": 12,
-              "ambush": true,
-              "sprite": "s2_mine_bat.png"
+              "sprite": "s2_mine_bat.png",
+              "revealOnDefeat": "s2c_gap"
             }
           }
         ]

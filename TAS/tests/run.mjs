@@ -289,7 +289,11 @@ const COVERAGE = [
   ["scenes[].enemy", g => (g.chapter?.scenes || []).filter(s => s.enemy).length],
   ["scenes[].loot", g => (g.chapter?.scenes || []).filter(s => (s.loot || []).length).length],
   ["scenes[].exits", g => (g.chapter?.scenes || []).filter(s => (s.exits || []).length).length],
-  ["scenes[].completeRequires", g => (g.chapter?.scenes || []).filter(s => Object.keys(s.completeRequires || {}).length).length],
+  /* scenes[].completeRequiresは2026-08-06に削除した。mock2エンジンのsceneCompleteAllowedは
+     「exits[]を持つシーンでは常にfalse(完全に無視)」を先に返すため、exits[]がある限り
+     死んだフィールドになる。唯一この項目を出していたシーン2にexits[]を追加したため出力
+     経路が無くなった。exits無しのシーン(報告シーン等)で使う機能自体はまだ残っているので、
+     次にそのようなシーンを作る時に復活を検討する */
   ["scenes[].secrets", g => (g.chapter?.scenes || []).filter(s => (s.secrets || []).length).length],
   ["scenes[].direction", g => (g.chapter?.scenes || []).filter(s => s.direction).length],
   ["scenes[].parallax", g => (g.chapter?.scenes || []).filter(s => s.parallax).length],

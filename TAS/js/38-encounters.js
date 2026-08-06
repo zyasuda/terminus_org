@@ -17,6 +17,11 @@ function normalizeEncounter(value,index=0){
      モンスタータブに登録があればそれを能力値の正とする（参照）。未登録の旧データだけ、
      直接埋め込まれた値をフォールバックとして使う（複製ではなく移行用の救済） */
   const enemy=monster?definedEnemyFields(monster):(x.enemy&&typeof x.enemy==='object'?x.enemy:null);
+  /* この遭遇の敵を倒した時に開示する調査対象ID。モンスタータブ(モンスター本体)ではなく
+     遭遇カード側に持たせる——同じモンスターでも遭遇ごとに開示する秘密が違いうるため
+     (例:シーン2は同じ「錆喰い」を右の柵と左の崩落の両方に出さない設計だが、将来同種の
+     敵を複数の遭遇に置く時にモンスター側で共有すると事故る) */
+  const revealOnDefeat=String(x.revealOnDefeat||x.enemy?.revealOnDefeat||'').trim();
   return {
     id:String(x.id||`encounter_${index+1}`),type,
     monsterId,monsterName,
@@ -29,12 +34,14 @@ function normalizeEncounter(value,index=0){
     blockedBy:parseList(x.blockedBy||x.preventedBy||''),
     onsetText:String(x.onsetText||x.text||x.description||''),
     notes:String(x.notes||''),
-    ...(enemy?{enemy}:{})
+    revealOnDefeat,
+    ...(enemy?{enemy:revealOnDefeat?{...enemy,revealOnDefeat}:enemy}:{})
   };
 }
 function sceneEncounters(){return (scene().encounters||[]).map(normalizeEncounter)}
 function encounterMonsterOptions(selected){return `<option value="">選択してください</option>${monsters.filter(x=>x.name).map(x=>{const id=String(x.id||x.name);return `<option value="${escapeHtml(id)}" ${selected===id?'selected':''}>${escapeHtml(x.name)}${x.id?`（${escapeHtml(x.id)}）`:''}</option>`}).join('')}`}
 function encounterDiscoveryNames(){return (scene().discoveries||[]).map((x,i)=>normalizeDiscoveryFor(scene(),x,i).label).filter(Boolean)}
+function encounterDiscoveryIds(){return (scene().discoveries||[]).map((x,i)=>normalizeDiscoveryFor(scene(),x,i).id).filter(Boolean)}
 /* blockedByはmock2側で「撃破済み・離脱済みの敵名」としてしか照合されない(engine/index.jsのresolveEncounterIfNeeded)。
    フラグやイベントIDを入れても効かないため、モンスター名の候補だけを出す */
 function encounterMonsterNames(){return monsters.filter(x=>x.name).map(x=>x.name)}
@@ -54,6 +61,7 @@ function renderEncounterCard(enc,index){
     <div class="field span-2"><label>発生禁止条件（撃破済み・離脱済みの敵名。カンマ区切り）</label><input class="encounter-blocked-by" data-encounter-index="${index}" list="encounterMonsterNameList" value="${escapeHtml(enc.blockedBy.join(', '))}" placeholder="灯の番人"><p class="hint">モンスター名だけが判定に使われます。フラグやイベントIDを入れても発生条件には反映されません。</p></div>
     <div class="field span-2"><label>遭遇時の演出</label><textarea class="encounter-onset-text" data-encounter-index="${index}" placeholder="暗がりから錆喰いが飛び出してくる。">${escapeHtml(enc.onsetText)}</textarea></div>
     <div class="field span-2"><label>GM補足メモ</label><textarea class="encounter-notes" data-encounter-index="${index}" placeholder="この遭遇を発生させる意図や例外条件">${escapeHtml(enc.notes)}</textarea></div>
+    <div class="field"><label>撃破時に開示する要素ID</label><input class="encounter-reveal-on-defeat" data-encounter-index="${index}" list="encounterDiscoveryIdList" value="${escapeHtml(enc.revealOnDefeat||'')}" placeholder="例：s2a_gap"><p class="hint">この敵を倒した時に自動で開示する調査対象。空欄なら何も起きない。</p></div>
     <div class="field"><label>出口ID</label><input class="encounter-id" data-encounter-index="${index}" value="${escapeHtml(enc.id)}" placeholder="encounter_s2_rust_eater"></div>
     <div class="field encounter-actions"><button class="sub delete-btn" data-remove-encounter="${index}">削除</button></div>
   </div></details>`;
@@ -61,8 +69,9 @@ function renderEncounterCard(enc,index){
 function renderEncounterSection(){
   const encounters=sceneEncounters();
   const names=encounterDiscoveryNames();
+  const ids=encounterDiscoveryIds();
   const monsterNames=encounterMonsterNames();
-  return `<div class="card encounter-section"><h3>エンカウンター設定</h3><p class="hint">このシーンで敵との遭遇が発生する条件を設定します。通常・条件付き・任意・ランダムを同じ一覧で管理できます。現在はTASで保存・ゲーム側JSONへ出力する試作段階です。</p><datalist id="encounterDiscoveryNameList">${names.map(name=>`<option value="${escapeHtml(name)}">`).join('')}</datalist><datalist id="encounterMonsterNameList">${monsterNames.map(name=>`<option value="${escapeHtml(name)}">`).join('')}</datalist>${encounters.length?encounters.map(renderEncounterCard).join(''):`<div class="empty-card"><p class="hint">遭遇設定はありません。敵が登場するシーンだけ追加してください。</p></div>`}<div class="bottom"><button class="sub" id="btnAddEncounter">＋ 遭遇を追加</button></div></div>`;
+  return `<div class="card encounter-section"><h3>エンカウンター設定</h3><p class="hint">このシーンで敵との遭遇が発生する条件を設定します。通常・条件付き・任意・ランダムを同じ一覧で管理できます。現在はTASで保存・ゲーム側JSONへ出力する試作段階です。</p><datalist id="encounterDiscoveryNameList">${names.map(name=>`<option value="${escapeHtml(name)}">`).join('')}</datalist><datalist id="encounterDiscoveryIdList">${ids.map(id=>`<option value="${escapeHtml(id)}">`).join('')}</datalist><datalist id="encounterMonsterNameList">${monsterNames.map(name=>`<option value="${escapeHtml(name)}">`).join('')}</datalist>${encounters.length?encounters.map(renderEncounterCard).join(''):`<div class="empty-card"><p class="hint">遭遇設定はありません。敵が登場するシーンだけ追加してください。</p></div>`}<div class="bottom"><button class="sub" id="btnAddEncounter">＋ 遭遇を追加</button></div></div>`;
 }
 function collectEncounters(){
   return Array.from(document.querySelectorAll('.encounter-card')).map((card,index)=>normalizeEncounter({
@@ -78,7 +87,8 @@ function collectEncounters(){
     maxOccurrences:card.querySelector(`.encounter-max-occurrences[data-encounter-index="${index}"]`)?.value,
     blockedBy:card.querySelector(`.encounter-blocked-by[data-encounter-index="${index}"]`)?.value,
     onsetText:card.querySelector(`.encounter-onset-text[data-encounter-index="${index}"]`)?.value,
-    notes:card.querySelector(`.encounter-notes[data-encounter-index="${index}"]`)?.value
+    notes:card.querySelector(`.encounter-notes[data-encounter-index="${index}"]`)?.value,
+    revealOnDefeat:card.querySelector(`.encounter-reveal-on-defeat[data-encounter-index="${index}"]`)?.value
   },index));
 }
 function saveEncounters(value){const key=sceneKey();sceneOverrides[key]={...(sceneOverrides[key]||{}),encounters:value};saveWorkspaceDraft(true);renderScenes();renderRightPanel();renderValidation()}
@@ -93,4 +103,7 @@ function outputEncounters(payload){
      待たない非同期の呼び出しであってはならない。出力の入口(この段)で直接呼び、
      描画のタイミングに関係なく遭遇の敵解決ができるようにする */
   ensureMonsters();
-  if(Array.isArray(payload.chapter?.scenes)){const nodes=chapterNodes().filter(n=>n.type==='scene');payload.chapter.scenes=payload.chapter.scenes.map((raw,index)=>{const node=nodes[index];const encounters=(node?.encounters||raw.encounters||[]).map(normalizeEncounter);return encounters.length?{...raw,encounters}:raw})}return payload};
+  /* revealOnDefeatはUI表示用にトップレベルへも持たせている(normalizeEncounter参照)が、
+     ゲーム側が読むのはenemy.revealOnDefeatだけ。出力にトップレベルの空文字列キーを
+     混ぜないよう、ここで捨てる */
+  if(Array.isArray(payload.chapter?.scenes)){const nodes=chapterNodes().filter(n=>n.type==='scene');payload.chapter.scenes=payload.chapter.scenes.map((raw,index)=>{const node=nodes[index];const encounters=(node?.encounters||raw.encounters||[]).map(normalizeEncounter).map(({revealOnDefeat,...rest})=>rest);return encounters.length?{...raw,encounters}:raw})}return payload};
