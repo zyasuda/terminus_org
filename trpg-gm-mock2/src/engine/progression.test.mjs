@@ -15,8 +15,9 @@ import { resolveExit, requiresMet, exitTargetIndexIn, uniqueBestSecretTextMatch,
 
 /* CHAPTER=別の章.json で対象を差し替えられる。故意に壊したデータを通して
    「このハーネスが本当に落ちるか」を確かめるためにも使う */
-const chapter = JSON.parse(fs.readFileSync(process.env.CHAPTER
-  || new URL("../../public/data/campaigns/lanternhill/chapter_01.json", import.meta.url)));
+const chapterPath = process.env.CHAPTER
+  || new URL("../../public/data/campaigns/lanternhill/chapter_01.json", import.meta.url);
+const chapter = JSON.parse(fs.readFileSync(chapterPath));
 const scenes = chapter.scenes;
 /* intro / ending は scenes 配列の外にあり、それぞれ独自の exits を持つ(null運用)。
    endingの出口は品物を要求することがあり(章の完了条件)、ここを見落とすと
@@ -367,6 +368,86 @@ for (const ref of itemRefs) {
 }
 ok(itemRefs.length > 0, "品物を要求する出口が1件以上ある（検査が空振りしていない）",
   "この章には品物条件が無い。検査8は実質何も見ていない");
+
+// ───────────────────────────────────────────────
+section("16. 遭遇が一度の宣言で発火できる");
+// ───────────────────────────────────────────────
+/* 遭遇の triggerTerms が、requiredElements の秘密を開示する語でもあると、1回目の宣言は
+   開示に消費され、同じ言葉をもう一度打たない限り遭遇が起きない。誰も同じ宣言を2回連打しないので、
+   その遭遇は実質発火しない。2026-08-06の実プレイでencounter_1/encounter_2とも一度も起きず、
+   章が「倒した敵: なし」で終わった(承の山場である戦闘が丸ごと失われた)。
+   検査11は「発火できるか」しか見ないためこの形はPASSする。開示に何が使われるかは
+   実物の pickExamineSecret に同じ文字列を通して確かめる */
+for (const s of scenes) {
+  for (const enc of s.encounters || []) {
+    const needed = enc.requiredElements || [];
+    if (!needed.length) continue;
+    for (const term of enc.triggerTerms || []) {
+      const picked = pickExamineSecret(s, term, term, { revealed: new Set() }).secret;
+      const eats = picked && needed.some(el => el === picked.entity || (picked.aliases || []).includes(el));
+      ok(!eats, `シーン${s.id} 遭遇${enc.id} 「${term}」が一度の宣言で発火できる`,
+        `この言葉は先に秘密${picked && picked.id}(${picked && picked.entity})の開示に使われる。` +
+        `遭遇は${needed.join("・")}が開示済みであることを要求するので、同じ言葉をもう一度打つまで発生しない`);
+    }
+  }
+}
+
+// ───────────────────────────────────────────────
+/* 章の構成(起承転結)の宣言と、実データの突き合わせ。<章>.structure.json は任意で、
+   無ければこの検査は動かない。作者が頭の中に持っている構成をファイルへ出し、
+   データがそこから外れた時に機械が気づけるようにするためのもの。
+   TASは章JSONしか書き換えないので、このファイルは保存で消えない */
+const structureRef = String(chapterPath).replace(/\.json$/, ".structure.json");
+const structurePath = structureRef.startsWith("file:") ? new URL(structureRef) : structureRef;
+if (fs.existsSync(structurePath)) {
+  section("17. 章の構成(起承転結)の宣言と実データが合っている");
+  const acts = JSON.parse(fs.readFileSync(structurePath)).acts || [];
+  const nodeOf = ref => {
+    const n = ref === "intro" ? chapter.intro : ref === "ending" ? chapter.ending
+      : scenes.find(s => String(s.id) === String(ref));
+    return n && typeof n === "object" ? n : null;
+  };
+
+  ok(acts.map(a => a.act).join("") === "起承転結", "幕が起承転結の順に並んでいる",
+    `宣言されているのは ${acts.map(a => a.act).join("→") || "(空)"}`);
+
+  const claimed = new Set(acts.flatMap(a => a.scenes || []).map(String));
+  for (const s of scenes) {
+    ok(claimed.has(String(s.id)), `シーン${s.id}(${s.name}) がどれかの幕に属している`,
+      `構成のどの幕にも書かれていない。作者が幕として数えていないシーンが章に混ざっている`);
+  }
+
+  for (const a of acts) {
+    const p = a.payoff;
+    if (p && p.kind === "secret") {
+      const sec = scenes.flatMap(s => s.secrets || []).find(x => x.id === p.id);
+      ok(Boolean(sec), `${a.act}の山場 ${p.id} が実在する`, `章内のどのシーンにも ${p.id} が無い`);
+      if (sec) {
+        const body = String(sec.playerText || sec.text || "").trim();
+        ok(Boolean(body) && body !== String(sec.entity || "").trim(),
+          `${a.act}の山場 ${p.id}(${sec.entity}) に開示の本文がある`,
+          `本文が空、またはentity名そのまま。この幕の山場でプレイヤーが受け取る文が無い` +
+          (a.handoff ? `。${a.handoff}への引きもここで失われる` : ""));
+      }
+    }
+    if (p && p.kind === "encounter") {
+      ok(scenes.some(s => (s.encounters || []).some(e => e.id === p.id)),
+        `${a.act}の山場 遭遇${p.id} が実在する`, `章内のどのシーンにも無い`);
+    }
+    const beats = a.beats || [];
+    if (beats.length) {
+      const filled = (a.scenes || []).map(nodeOf).filter(n => n &&
+        ((n.secrets || []).length || n.npc || (n.exits || []).some(e => e.npcSay)));
+      ok(filled.length >= beats.length, `${a.act}の${beats.length}段が、中身のあるノードに乗っている`,
+        `この幕は「${beats.join("」「")}」の${beats.length}段だが、中身(秘密・NPC・台詞)を持つノードは` +
+        `${filled.length}件しかない。段の一部が空のシーンに割り当たっている`);
+    }
+  }
+} else {
+  /* 黙って飛ばすと「構成は検査済み」と誤解する。2026-08-06、TASの出力先が別IDへ逸れて
+     構成ファイルの無い場所を検査し、通ったように見えた。飛ばしたことは必ず画面に出す */
+  section(`17. 章の構成(起承転結) — 実行せず（${String(structureRef).replace(/^.*\//, "")} が無い）`);
+}
 
 /* 検査15(同行者のquirks/battleMutters/battleEnd未入力チェック)は2026-08-04に
    一時追加したが、即日で src/scenario.js 側に既定値(DEFAULT_COMPANION_QUIRKS等)を
