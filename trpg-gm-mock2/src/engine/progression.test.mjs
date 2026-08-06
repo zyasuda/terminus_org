@@ -118,7 +118,8 @@ const PHRASES = [
   [1, "座って休む", null],
   [2, "右へ向かう", "to_scean03"],
   [2, "木柵を越えて進む", "to_scean03"],
-  [2, "左の隙間をくぐる", "to_scene03_collapse"],
+  // 左(崩落)はシーン3への出口ではない。蝙蝠を倒すまでは行き止まりのまま(2026-08-06に出口を削除)
+  [2, "左の隙間をくぐる", null],
   [3, "村へ戻る", "to_cean04"],
 ];
 for (const [sceneId, text, expected] of PHRASES) {
@@ -132,15 +133,18 @@ for (const [sceneId, text, expected] of PHRASES) {
 section("5. 進行に必要な秘密に、開示する手段が書かれている");
 // ───────────────────────────────────────────────
 /* 検査3は「全知なら到達できる」上限しか見ない。実際にはプレイヤーが秘密を開示できなければ
-   出口は開かない。開示の入口は entity名・aliases・trigger の3つで、どれも無い秘密は
-   (LLMがtargetEntityを正確に返す偶然を除けば)開示手段が無い */
+   出口は開かない。開示の入口は「調べる」(aliases・trigger)か「敵を倒す」(revealOnDefeat)の
+   どちらか。entityだけではpickExamineSecretのpool(progression.js)から除外され調べても開かない
+   (revealOnDefeat専用の秘密がentityだけでも「examineで開ける」と誤判定しないよう2026-08-06に厳格化) */
 const gateIds = new Set(refs.map(r => r.id));
+const revealOnDefeatIds = new Set(
+  scenes.flatMap(s => (s.encounters || []).map(e => e.enemy?.revealOnDefeat).filter(Boolean)));
 for (const s of scenes) {
   for (const sec of s.secrets || []) {
     if (!gateIds.has(sec.id)) continue; // 進行に関与しない秘密は対象外(装飾情報)
-    const hasWay = Boolean(sec.entity) || (sec.aliases || []).length > 0 || Boolean(sec.trigger);
+    const hasWay = (sec.aliases || []).length > 0 || Boolean(sec.trigger) || revealOnDefeatIds.has(sec.id);
     ok(hasWay, `シーン${s.id} ${sec.id}(${sec.entity || "名前なし"}) に開示の手がかりがある`,
-      `entity・aliases・triggerのどれも無い。プレイヤーが指し示す語が存在しない`);
+      `aliases・triggerが無く、revealOnDefeatの対象でもない。プレイヤーが開示する手段が存在しない`);
   }
 }
 

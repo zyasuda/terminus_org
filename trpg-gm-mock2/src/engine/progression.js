@@ -59,7 +59,11 @@ export function matchSecretByTrigger(sc, text, ctx) {
    作者が明示したtriggerに劣後させる。 */
 export function pickExamineSecret(sc, triggerText, entityText, ctx) {
   const triggerHit = matchSecretByTrigger(sc, triggerText, ctx);
-  const pool = (sc.secrets || []).filter(s => !ctx.revealed.has(s.id));
+  // trigger・aliasesを両方持たない秘密は「調べる」では絶対に開かない(revealOnDefeat等、
+  // 別の決定論的な経路だけが開示手段だという作者の意図をここで守る。entityだけを持たせて
+  // いるのはチップ・reveal表示用の名称であって、examineの入口にはしない)
+  const pool = (sc.secrets || []).filter(s =>
+    !ctx.revealed.has(s.id) && (s.trigger || (s.aliases || []).length));
   const textHit = uniqueBestSecretTextMatch(pool, entityText, triggerHit ? 2 : 1);
   return { secret: textHit || triggerHit, triggerHit, textHit };
 }

@@ -275,8 +275,18 @@ while (turns < MAX_TURNS) {
     await say("周りの様子は?");
   }
 
-  // (1) このノードの秘密を全部開く
+  // (1) このノードの秘密を全部開く。ただしtrigger・aliasesを両方持たない秘密は
+  // 「調べる」では開かない(progression.js pickExamineSecret参照)。revealOnDefeat等、
+  // 別の決定論的な経路(下の1.5)だけが開示手段のはずなので、examineでは試さずスキップする
+  const revealOnDefeatIds = new Set(
+    (cur.node.encounters || []).map(e => e.enemy?.revealOnDefeat).filter(Boolean));
   for (const secret of cur.node.secrets || []) {
+    if (!secret.trigger && !(secret.aliases || []).length) {
+      check(revealOnDefeatIds.has(secret.id),
+        `${cur.label} 秘密「${secret.entity}」(${secret.id})は調べる以外の開示手段を持つ`,
+        `trigger・aliasesが無いのにrevealOnDefeatの対象でもない。開示する手段が存在しない`);
+      continue;
+    }
     let done = readSaved().revealed.has(secret.id);
     for (const attempt of examineAttempts(secret)) {
       if (done) break;
@@ -312,7 +322,17 @@ while (turns < MAX_TURNS) {
     const fired = Boolean(readSaved().state.enemy);
     check(fired, `${cur.label} 遭遇${enc.id}が実際に発火した（開示後の再宣言で）`,
       `必要要素は満たしているのに「${trigger}」で発生しなかった`);
-    if (fired) {
+    if (fired && enc.enemy?.revealOnDefeat) {
+      // revealOnDefeatを持つ遭遇は「倒すこと」自体が開示手段(下の(1)がスキップした秘密の
+      // 唯一の開示経路)なので、逃げずに倒し切る
+      for (let i = 0; i < 20 && readSaved().state.enemy; i++) await say("攻撃する");
+      const defeated = !readSaved().state.enemy;
+      check(defeated, `${cur.label} 遭遇${enc.id}の敵を倒せた`,
+        `20回攻撃しても倒せなかった`);
+      if (defeated) check(readSaved().revealed.has(enc.enemy.revealOnDefeat),
+        `${cur.label} 遭遇${enc.id}の撃破でrevealOnDefeat(${enc.enemy.revealOnDefeat})が開示された`,
+        `倒したのに指定の秘密が開示されていない`);
+    } else if (fired) {
       for (let i = 0; i < 5 && readSaved().state.enemy; i++) await say("逃げる");
     }
   }
