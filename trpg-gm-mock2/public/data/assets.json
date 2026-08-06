@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updated": "2026-08-04",
+  "updated": "2026-08-06",
   "assets": {
     "mine_entrance": {
       "file": "mine_entrance.png",
@@ -62,7 +62,9 @@
       "status": "archived",
       "target": "full-body transparent PNG",
       "alpha": true,
-      "usedBy": [],
+      "usedBy": [
+        "chapter_01.scenes.4.npcSprite"
+      ],
       "source": "imagegen",
       "promptVersion": 1,
       "notes": "Figmaオーバーレイ UIでパーティ枠に置換され未使用(将来プレイヤー枠で再利用候補)"
@@ -106,9 +108,7 @@
       "kind": "background",
       "status": "approved",
       "target": "1920x1080",
-      "usedBy": [
-        "chapter_01.scenes.2.img"
-      ],
+      "usedBy": [],
       "source": "imagegen",
       "promptVersion": 1,
       "notes": "2026-07-12生成。16:9にクロップして配置。"
@@ -118,7 +118,9 @@
       "kind": "background",
       "status": "approved",
       "target": "1920x1080",
-      "usedBy": [],
+      "usedBy": [
+        "chapter_01.scenes.2.img"
+      ],
       "source": "imagegen",
       "promptVersion": 1,
       "notes": "2026-07-12生成。封鎖の木柵に合わせた。16:9にクロップして配置。2026-07-31にシーン2の柵ルートで再利用するためimages/へ戻した。"
