@@ -350,7 +350,11 @@
           "monsterId": "monster_1",
           "monsterName": "錆喰い",
           "triggerTerms": [
-            "柵を調べる"
+            "右へ進む",
+            "右に進む",
+            "柵を越える",
+            "柵をこわす",
+            "柵を壊す"
           ],
           "requiredElements": [
             "封鎖の木柵"
@@ -360,7 +364,7 @@
           "timing": "player_action",
           "maxOccurrences": null,
           "blockedBy": [],
-          "onsetText": "得体の知れない影が近づく",
+          "onsetText": "柵を越えた先、錆の匂いの中で何かが動いた",
           "notes": ""
         },
         {
@@ -369,7 +373,10 @@
           "monsterId": "monster_3",
           "monsterName": "坑道蝙蝠",
           "triggerTerms": [
-            "崩れた坑道を調べる"
+            "左へ進む",
+            "左に進む",
+            "隙間をくぐる",
+            "岩をどける"
           ],
           "requiredElements": [
             "崩れた坑道"
@@ -379,7 +386,7 @@
           "timing": "player_action",
           "maxOccurrences": null,
           "blockedBy": [],
-          "onsetText": "頭上で羽ばたきが響く",
+          "onsetText": "崩落の隙間から、頭上で羽ばたきが響いた",
           "notes": "",
           "enemy": {
             "name": "坑道蝙蝠",
