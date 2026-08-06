@@ -281,6 +281,9 @@ const COVERAGE = [
   ["chapter.ending.exits", g => (g.chapter?.ending?.exits || []).length],
   ["scenes[].npc", g => (g.chapter?.scenes || []).filter(s => s.npc).length],
   ["scenes[].npcSprite", g => (g.chapter?.scenes || []).filter(s => s.npcSprite).length],
+  ["scenes[].greeting / intro.greeting", g =>
+    (g.chapter?.scenes || []).filter(s => s.greeting).length + (g.chapter?.intro?.greeting ? 1 : 0)],
+  ["intro.hintChips", g => (g.chapter?.intro?.hintChips || []).length],
   ["scenes[].encounters", g => (g.chapter?.scenes || []).filter(s => (s.encounters || []).length).length],
   ["scenes[].stateUpdates", g => (g.chapter?.scenes || []).filter(s => (s.stateUpdates || []).length).length],
   ["scenes[].enemy", g => (g.chapter?.scenes || []).filter(s => s.enemy).length],
