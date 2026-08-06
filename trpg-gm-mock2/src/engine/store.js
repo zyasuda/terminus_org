@@ -31,6 +31,7 @@ let snapshot = {
   stateJsonText: "",
   secrets: [],          // {open, text}[]
   revealedEntities: [], // 開示済みsecretのentity名(重複なし)。入力補助チップに使う
+  introHints: [], // イントロ中だけ出す固定チップ(「依頼について」等)。タップでそのまま入力欄に入る
   verbChips: [],        // 使用頻度順の動詞チップ(プレイをまたいで端末に蓄積)。名詞チップと組み合わせて2タップで指示を作る
   pendingRoll: null,    // {reason, diff, actorName} プレイヤーの「ダイスを振る!」待ち。同行者の判定も名義を表示して本人が振る
   gmMode: "hybrid",     // GMモード: hybrid(移動・調査はscripted、他はLLM) / scripted(LLMゼロ) / llm(従来)

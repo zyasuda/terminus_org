@@ -157,16 +157,26 @@ function showDialogueNode(node) {
   clearTimeout(overlayTimer);
   overlayTimer = setTimeout(() => setStore({ underPanelOpen: true }), 1000);
   addGm(node.brief || node.text || "", "Neutral");
+  // シーン到着時、NPCが最初の一言を自動で語る(作者がnode.greetingを書いた場合のみ)。
+  // GMの状況説明と同時に見えないよう、少し遅らせる
+  if (node.npc && node.greeting) setTimeout(() => addNpc(node.greeting, node.npc), CONSENT_GAP_MS);
   renderDebug();
 }
 
-// ダイス結果・開示画像は一旦ポップアップで表示する(下パネル=会話専用の暫定措置。表示方法は別途検討)
+// ダイス結果・開示画像は一旦ポップアップで表示する(下パネル=会話専用の暫定措置。表示方法は別途検討)。
+// 呼び出し側がPromiseを待てば、プレイヤーが閉じるまで後続のGM語り・同行者の一言を保留できる
+// (ダイス結果を閉じる前からGMやリディアが話し始めてしまう問題への対処)
+let popupResolvers = [];
 function pushPopup(p) {
-  setStore(s => ({ popups: [...s.popups, p] }));
+  return new Promise(resolve => {
+    popupResolvers.push(resolve);
+    setStore(s => ({ popups: [...s.popups, p] }));
+  });
 }
 export function dismissPopup() {
   const cur = getSnapshot().popups[0];
   setStore(s => ({ popups: s.popups.slice(1) }));
+  popupResolvers.shift()?.();
   if (cur && cur.kind === "intro") {
     // 開幕シーケンス: 幕が開く(1.2s) → シーン説明フェードイン(1s) → GM自己紹介+下パネルのスライドイン
     setStore({ curtain: false });
@@ -568,7 +578,9 @@ async function addDice(roll, diff, ok, crit, fumble, reason) {
      出目の判定を新しく書かずに1箇所で拾える。この手番でLLMを呼ばずに終わった場合は
      消費されないまま残るが、次の手番の頭で捨てるので1手番遅れて出ることはない */
   if (crit || fumble) state.pendingRollOutcome = crit ? "critical" : "fumble";
-  pushPopup({ kind: "dice", title: "判定", body: `🎲 ${reason} — d20 → ${roll} / DC ${diff} … ${label}` });
+  // プレイヤーがポップアップを閉じるまで、呼び出し元(await addDice)の後続処理(GMの語り・
+  // 開示・同行者の一言)を保留する
+  await pushPopup({ kind: "dice", title: "判定", body: `🎲 ${reason} — d20 → ${roll} / DC ${diff} … ${label}` });
 }
 // secretを開示する。text=LLM注入用(GM向け注記込み)、playerText=プレイヤー表示用(あれば優先)
 function addReveal(s) {
@@ -638,7 +650,12 @@ function renderDebug() {
   (state.unknownTarget?.candidates || []).forEach(name => {
     if (name && !revealedEntities.includes(name)) revealedEntities.push(name);
   });
+  // イントロ中(pendingIntro)だけ、作者が書いた固定のヒント(「依頼について」等)を出す。
+  // 名詞チップ(revealedEntities)と違い「を」を付け足さずそのまま入力欄に入れるため別枠にする
+  const introHints = state.pendingIntro && SCENARIO.intro && Array.isArray(SCENARIO.intro.hintChips)
+    ? SCENARIO.intro.hintChips : [];
   setStore({
+    introHints,
     directionText: curScene.report ? reportDirection() : curScene.direction,
     hp: state.hp, maxHp: state.maxHp, items: inv.held(state.inventory),
     inventoryByOwner: inv.byOwner(state.inventory, ownerDisplayName),
@@ -666,7 +683,11 @@ function renderDebug() {
         return { enemySprite: { src: curScene.enemy.sprite, identified: revealed.has(curScene.enemy.identifySecret) }, sceneNpcName: null };
       }
       // intro / ending もシーンNPCと同じスロット・表示ロジックを使う。
-      const dialogueNode = state.pendingIntro ? SCENARIO.intro : (state.pendingEnding ? SCENARIO.ending : null);
+      // 章完了後(chapterEnded)もendingのスプライトを維持する。渡す等の出口処理で
+      // pendingEndingがfalseに戻った直後、まだsceneIndexは最後のシーンのままのため、
+      // ここで切り替えないとcurScene(村人等)のスプライトへ逆戻りしていた
+      const dialogueNode = state.pendingIntro ? SCENARIO.intro
+        : (state.pendingEnding || state.chapterEnded) ? SCENARIO.ending : null;
       if (dialogueNode && dialogueNode.npcSprite) {
         return { enemySprite: { src: dialogueNode.npcSprite, identified: true }, sceneNpcName: (dialogueNode.npc && dialogueNode.npc.name) || null };
       }
@@ -1743,8 +1764,12 @@ function advanceScene(targetIndex) {
     // シーン説明のフェードイン(1s)が終わったところでGMが新しいシーンの一言を語る
     const sceneNo = state.sceneIndex + 1;
     setTimeout(() => addGm(gmSceneArrivalLine(sceneNo, newScene.name || ""), "Happy"), 1000);
-    // GMの一言と同時に出て読む順に迷わないよう、CONSENT_GAP_MSぶん遅らせて重ならないようにする
-    setTimeout(() => companionSceneArrivalLine(), 1000 + CONSENT_GAP_MS);
+    // シーン常在NPC(村人等)がいれば、GMの状況説明の直後に最初の一言を語る
+    // (作者がnewScene.greetingを書いた場合のみ)。同行者の一言はさらに後ろへずらす
+    const hasNpcGreeting = newScene.npc && newScene.greeting;
+    if (hasNpcGreeting) setTimeout(() => addNpc(newScene.greeting, newScene.npc), 1000 + CONSENT_GAP_MS);
+    // GMやNPCの一言と同時に出て読む順に迷わないよう、CONSENT_GAP_MSぶん遅らせて重ならないようにする
+    setTimeout(() => companionSceneArrivalLine(), 1000 + CONSENT_GAP_MS * (hasNpcGreeting ? 2 : 1));
     history.push({ role: "user", content: "【システム】シーンが切り替わった。" });
     history.push({ role: "assistant", content: JSON.stringify({ narration: newBrief, companion: null, npc: null, check: null, state_updates: null, engage_enemy: false, flee_enemy: false, scene_complete: false, meta_request: null }) });
   } else {

@@ -187,6 +187,9 @@ async function say(text) {
       if (!sawPendingRoll) { pendingRolls++; sawPendingRoll = true; }
       eng.performRoll();
     }
+    // ダイス結果ポップアップはプレイヤーが閉じるまでsendActionの後続処理を保留する
+    // (ブラウザでは並行して閉じられるが、Nodeのこのループも同じ役をする必要がある)
+    if (getSnapshot().popups.length) eng.dismissPopup();
   }
   await p;
   await tick();
