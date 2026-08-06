@@ -1,5 +1,9 @@
 import * as inv from "../inventory.js";
 
+// EXAMINE_REは「調べる」系の汎用動詞の辞書。index.jsのtryScriptedと、テストの検査16が
+// 同じ判定を共有するためここに置く(複製すると本体とテストがずれる)
+export const EXAMINE_RE = /調べ|よく見|見る|見て|読|観察|探|嗅|眺め|確かめ/;
+
 // TASの「エンカウンター設定」用の、開示済み要素の判定。
 export function encounterRequiredElementsMet(enc, sc, ctx) {
   const need = enc.requiredElements || [];

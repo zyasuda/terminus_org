@@ -11,7 +11,7 @@
 import fs from "node:fs";
 import { resolveExit, requiresMet, exitTargetIndexIn, uniqueBestSecretTextMatch,
   encounterRequiredElementsMet, resolveEncounterFoe, pickExamineSecret, resolveSecretTarget,
-  examineDifficulty } from "./progression.js";
+  examineDifficulty, matchSecretByTrigger, EXAMINE_RE } from "./progression.js";
 
 /* CHAPTER=別の章.json で対象を差し替えられる。故意に壊したデータを通して
    「このハーネスが本当に落ちるか」を確かめるためにも使う */
@@ -377,13 +377,23 @@ section("16. 遭遇が一度の宣言で発火できる");
    その遭遇は実質発火しない。2026-08-06の実プレイでencounter_1/encounter_2とも一度も起きず、
    章が「倒した敵: なし」で終わった(承の山場である戦闘が丸ごと失われた)。
    検査11は「発火できるか」しか見ないためこの形はPASSする。開示に何が使われるかは
-   実物の pickExamineSecret に同じ文字列を通して確かめる */
+   実物の pickExamineSecret に同じ文字列を通して確かめる。
+   ただしpickExamineSecretはtryScripted内で無条件には呼ばれない——EXAMINE_RE(調べる系の
+   動詞)にマッチするか、作者が書いたtriggerと文字列一致した時だけ呼ばれる。この2条件を
+   シミュレートせずpickExamineSecretを直接呼ぶと、「柵を越える」のような移動フレーズまで
+   秘密に食われたと誤判定する(実際は動詞が調べる系ではないので開示経路を一切通らない) */
 for (const s of scenes) {
   for (const enc of s.encounters || []) {
     const needed = enc.requiredElements || [];
     if (!needed.length) continue;
     for (const term of enc.triggerTerms || []) {
-      const picked = pickExamineSecret(s, term, term, { revealed: new Set() }).secret;
+      const ctx = { revealed: new Set() };
+      const triggerHit = matchSecretByTrigger(s, term, ctx);
+      if (!EXAMINE_RE.test(term) && !triggerHit) {
+        ok(true, `シーン${s.id} 遭遇${enc.id} 「${term}」が一度の宣言で発火できる`);
+        continue;
+      }
+      const picked = pickExamineSecret(s, term, term, ctx).secret;
       const eats = picked && needed.some(el => el === picked.entity || (picked.aliases || []).includes(el));
       ok(!eats, `シーン${s.id} 遭遇${enc.id} 「${term}」が一度の宣言で発火できる`,
         `この言葉は先に秘密${picked && picked.id}(${picked && picked.entity})の開示に使われる。` +

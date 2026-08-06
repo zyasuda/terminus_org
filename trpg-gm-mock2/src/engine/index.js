@@ -18,6 +18,7 @@ import { pushChat, clearChat, setStore, getSnapshot } from "./store.js";
 import { openUnderPanelAfterOverlay, setDialogueNodeInfo, setSceneInfo, showSceneOverlay } from "./scene-ui.js";
 import { gmGreeting, gmVoiceRule, voiceRule } from "./voice.js";
 import {
+  EXAMINE_RE,
   encounterRequiredElementsMet, resolveEncounterFoe,
   matchSecretByText, matchSecretByTrigger, pickExamineSecret, examineDifficulty, requiresMet,
   resolveExit, normalizeExit, exitTargetIndexIn, resolveSecretTarget
@@ -1289,7 +1290,6 @@ export function toggleGmMode() {
   setStore({ gmMode });
 }
 
-const EXAMINE_RE = /調べ|よく見|見る|見て|読|観察|探|嗅|眺め|確かめ/;
 const MOVE_RE = /進む|進も|向かう|向かお|入る|入ろ|行く|行こ|降り|登る|渡る/;
 const BACK_RE = /戻る|戻ろ|引き返|退く/;
 const TALK_RE = /話|聞く|聞いて|尋ね|訊|呼びかけ|声をかけ/;
