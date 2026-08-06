@@ -2133,6 +2133,7 @@ function turnDialogueNodes(text) {
       state.pendingIntro = false;
       const targetIdx = exit.to === null || exit.to === undefined ? 0 : resolveExitTargetIndex(exit.to);
       if (exit.arrivalText) addGm(exit.arrivalText, "Neutral");
+      if (exit.npcSay) addNpc(exit.npcSay, intro.npc); // 依頼の一言はNPCの吹き出しへ(GMの地の文にしない。endingと対)
       beginCompanionConsent(targetIdx >= 0 ? targetIdx : 0);
     }
     return finish();
