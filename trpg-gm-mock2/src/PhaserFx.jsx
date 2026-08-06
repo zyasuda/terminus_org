@@ -5,30 +5,6 @@ import { useEffect, useRef } from "react";
 import Phaser from "phaser";
 import { subscribe, getSnapshot } from "./engine/store.js";
 
-function playDice(scene, { roll, ok, crit, fumble }) {
-  const cx = scene.scale.width / 2, cy = scene.scale.height / 2;
-  const style = {
-    fontFamily: '"Kosugi Maru", sans-serif',
-    fontSize: Math.round(scene.scale.height * 0.22) + "px",
-    fontStyle: "bold",
-    color: "#f90",
-    stroke: "#000",
-    strokeThickness: 8
-  };
-  const txt = scene.add.text(cx, cy, "?", style).setOrigin(0.5);
-  // 出目がぱらぱら回ってから確定する(旧チャット内アニメのPhaser移植)
-  scene.time.addEvent({
-    delay: 60, repeat: 11,
-    callback: () => txt.setText(String(1 + Math.floor(Math.random() * 20)))
-  });
-  scene.time.delayedCall(760, () => {
-    txt.setText(String(roll));
-    txt.setColor(crit ? "#f90" : fumble ? "#f87171" : ok ? "#7dd3fc" : "#f87171");
-    scene.tweens.add({ targets: txt, scale: 1.4, duration: 150, yoyo: true });
-    scene.tweens.add({ targets: txt, alpha: 0, delay: 700, duration: 300, onComplete: () => txt.destroy() });
-  });
-}
-
 export default function PhaserFx() {
   const ref = useRef(null);
   useEffect(() => {
@@ -45,9 +21,7 @@ export default function PhaserFx() {
       const fx = getSnapshot().phaserFx;
       if (!scene || fx.seq === lastSeq) return;
       lastSeq = fx.seq;
-      if (fx.type === "dice") {
-        playDice(scene, fx);
-      } else if (fx.type === "crit") {
+      if (fx.type === "crit") {
         scene.cameras.main.flash(500, 255, 153, 0);
         scene.cameras.main.shake(400, 0.012);
       } else if (fx.type === "fumble") {

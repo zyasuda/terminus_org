@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { useEngine } from "./hooks/useEngine.js";
 import { setStore } from "./engine/store.js";
 import PhaserFx from "./PhaserFx.jsx";
+import { D20Overlay } from "@terminus/d20-overlay";
 
 function ChatEntry({ entry }) {
   if (entry.kind === "msg") return <div className={"msg " + entry.cls}>{entry.text}</div>;
@@ -457,16 +458,12 @@ export default function App() {
         {/* 新規開始の幕: 依頼ポップアップの間は背景を隠し、「はじめる」でフェードアウトして開ける */}
         <div id="curtain" className={eng.curtain ? "" : "lifted"}></div>
 
-        {/* ダイスロール待ち: 判定はプレイヤー自身が「ダイスを振る!」で確定する。同行者の判定も名義を出して本人が振る */}
-        {eng.pendingRoll && (
-          <div id="popupOverlay">
-            <div id="popupBox" className="glassPanel">
-              <div className="popupTitle">{eng.pendingRoll.actorName}の判定</div>
-              <div className="popupBody">🎲 {eng.pendingRoll.reason}(難易度 {eng.pendingRoll.diff})</div>
-              <button className="popupBtn rollBtn" onClick={eng.performRoll}>ダイスを振る!</button>
-            </div>
-          </div>
-        )}
+        {eng.pendingRoll && <D20Overlay
+          open
+          result={eng.pendingRoll.result}
+          title={`${eng.pendingRoll.actorName}の判定（難易度 ${eng.pendingRoll.diff}）`}
+          onComplete={() => eng.performRoll(eng.pendingRoll.result)}
+        />}
 
         {/* 通知型ポップアップ(EVENT_MAP.md)。依頼提示・ダイス結果・開示画像をキューで順に表示する */}
         {eng.popups.length > 0 && (

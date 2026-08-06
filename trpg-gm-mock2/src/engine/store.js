@@ -9,7 +9,7 @@ let snapshot = {
   activePortrait: "",
   fx: "",              // ""|"crit"|"fumble" (旧CSS演出。USE_PHASER_FX=false時のフォールバック)
   shakeSeq: 0,          // shakeクラス再トリガー用のカウンタ
-  phaserFx: { type: "", seq: 0 }, // Phaser演出のトリガー {type:'dice'|'crit'|'fumble', seq, roll?, ok?, crit?, fumble?}
+  phaserFx: { type: "", seq: 0 }, // Phaser演出のトリガー {type:'crit'|'fumble'|'damage', seq, roll?, ok?, crit?, fumble?}
   leftPanelOpen: false,  // 3パネル独立開閉(排他制御の復活はUI_REDESIGN.md参照)。開幕は全パネル閉→シーケンスで下パネルだけ開く
   rightPanelOpen: false,
   underPanelOpen: true,  // 再開(前回の続き)ではすぐ操作できるよう下パネルは開けておく

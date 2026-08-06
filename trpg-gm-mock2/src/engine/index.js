@@ -558,15 +558,11 @@ function screenFx(kind) {
   setStore(s => ({ fx: kind, shakeSeq: s.shakeSeq + 1 }));
   setTimeout(() => setStore({ fx: "" }), 700);
 }
-// ダイス演出はPhaser(主画面で出目がぱらぱら回って確定)、結果の文言はポップアップで通知
+// ダイス演出はD20Overlay(判定待ちの間に主画面で回って確定)、結果の文言はポップアップで通知
 async function addDice(roll, diff, ok, crit, fumble, reason) {
   const label = crit ? "クリティカル!" : fumble ? "ファンブル…" : ok ? "成功" : "失敗";
   chron.push({ t: state.turn, ts: Date.now(), kind: "dice", roll, diff, ok, crit, fumble, reason });
   pushDiceLog(state.turn, roll, diff, ok, crit, fumble, reason);
-  if (USE_PHASER_FX) {
-    firePhaserFx("dice", { roll, ok, crit, fumble });
-    await sleep(900); // 出目の確定(760ms)を見せてから次へ
-  }
   if (crit || fumble) screenFx(crit ? "crit" : "fumble");
   /* 判定リアクション(campaign.style.rollReaction)の材料。全てのダイスはここを通るので、
      出目の判定を新しく書かずに1箇所で拾える。この手番でLLMを呼ばずに終わった場合は
@@ -687,19 +683,22 @@ function renderDebug() {
 function rollD20() { return 1 + Math.floor(Math.random() * 20); }
 
 /* ダイスはプレイヤー自身に振らせる: 判定が要求されたら「ダイスを振る!」ボタンで手を止め、
-   タップされてから出目を確定する(乱数は従来通りJS側)。同行者(actor)の判定も名義を表示して
-   プレイヤーが代わりに振る——卓の上のダイスは全部プレイヤーの手で振る、という体験 */
+   タップされてから出目を確定する(乱数は従来通りJS側)。同行者(actor)の判定はプレイヤーの
+   手を止めず自動で確定する——止まるのはプレイヤー自身の判定だけ */
 let rollResolver = null;
 function requestPlayerRoll(reason, diff, actorName) {
-  setStore({ pendingRoll: { reason, diff, actorName } });
+  if (actorName && actorName !== "あなた") return Promise.resolve(rollD20());
+  // 出目は演出の開始前に確定する。UIはこの値を見せるだけで、演出完了後に解決する。
+  setStore({ pendingRoll: { reason, diff, actorName, result: rollD20() } });
   return new Promise(resolve => { rollResolver = resolve; });
 }
-export function performRoll() {
+export function performRoll(result) {
   if (!rollResolver) return;
   const resolve = rollResolver;
   rollResolver = null;
+  const value = result ?? getSnapshot().pendingRoll?.result ?? rollD20();
   setStore({ pendingRoll: null });
-  resolve(rollD20());
+  resolve(value);
 }
 
 function applyUpdates(u, opts = {}) {
