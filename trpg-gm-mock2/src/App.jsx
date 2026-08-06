@@ -418,7 +418,7 @@ export default function App() {
         </div>
 
         <div id="underPanel" className={eng.underPanelOpen ? "open" : ""}>
-          {eng.introHints.length > 0 && (
+          {(eng.introHints.length > 0 || eng.revealedEntities.length > 0 || eng.verbChips.length > 0) && (
             <div id="entityChips">
               {/* イントロ専用のヒント。すでに完成した宣言文なので「を」を足さずそのまま入力欄に入れる */}
               {eng.introHints.map(hint => (
@@ -426,10 +426,6 @@ export default function App() {
                   {hint}
                 </button>
               ))}
-            </div>
-          )}
-          {(eng.revealedEntities.length > 0 || eng.verbChips.length > 0) && (
-            <div id="entityChips">
               {/* 名詞(開示済みオブジェクト)→「〜を」、動詞(使用頻度順)→述語。2タップで指示が完成する */}
               {eng.revealedEntities.map(name => (
                 <button key={"n" + name} className="entityChip" onClick={() => setInput(prev => prev + name + "を")}>
