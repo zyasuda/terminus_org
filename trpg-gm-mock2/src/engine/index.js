@@ -15,6 +15,8 @@ import {
 import { callGmApi } from "../llm.js";
 import { CAST, GM, BANTER, SCENARIO, CAMPAIGN, CONTENT_SELECTION, loadScenarioData } from "../scenario.js";
 import { pushChat, clearChat, setStore, getSnapshot } from "./store.js";
+import { openUnderPanelAfterOverlay, setDialogueNodeInfo, setSceneInfo, showSceneOverlay } from "./scene-ui.js";
+import { gmGreeting, gmVoiceRule, voiceRule } from "./voice.js";
 import {
   encounterRequiredElementsMet, resolveEncounterFoe,
   matchSecretByText, matchSecretByTrigger, pickExamineSecret, examineDifficulty, requiresMet,
@@ -113,40 +115,13 @@ function inventoryForPrompt() {
 // シーン説明の表示先(UI_REDESIGN.md: 下パネルは会話専用、主画面は演出専用):
 // ・主画面: フェードアウトするナレーションオーバーレイ(初見の演出)
 // ・左パネル: 同じ内容を消えずに保持(いつでも見返せる記録)
-function setSceneInfo() {
-  const sc = SCENARIO.scenes[state.sceneIndex];
-  // report: 依頼人への報告シーン。依頼人(マイラ)のポートレートを出す判定に使う
-  // 「第n話」はシーン番号(numをそのまま表示に使う)。章タイトルはtitle
-  setStore({ sceneInfo: {
-    num: state.sceneIndex + 1, total: SCENARIO.scenes.length, brief: sc.brief, report: !!sc.report,
-    title: SCENARIO.title, name: sc.name || ""
-  } });
-}
-// intro / ending はシーン配列には入れず、同じ表示経路だけを使う対話ノード。
-// 左パネルと中央オーバーレイにも、そのノード自身の説明を出す。
-function setDialogueNodeInfo(node) {
-  setStore({ sceneInfo: {
-    num: state.sceneIndex + 1, total: SCENARIO.scenes.length, brief: node.brief || node.text || "", report: false,
-    title: SCENARIO.title, name: node.name || ""
-  } });
-}
 // シーン切替の演出: 下パネルを閉じてシーン説明をフェードイン表示(#sceneDesc、CSSで
 // 1sイン→約10s表示→1sアウト)し、フェードインが終わったところで下パネルをスライドインさせる
-let overlayTimer = null;
-function showSceneOverlay() {
-  const sc = SCENARIO.scenes[state.sceneIndex];
-  setStore(s => ({
-    overlay: { text: sc.brief, seq: s.overlay.seq + 1 },
-    underPanelOpen: false
-  }));
-  clearTimeout(overlayTimer);
-  overlayTimer = setTimeout(() => setStore({ underPanelOpen: true }), 1000); // フェードイン(1s)完了と同時
-}
 function showDialogueNode(node) {
   // intro.img が未指定の旧データ互換では、従来の導入画像へフォールバックする。
   const backdropNode = state.pendingIntro && !node.img ? { ...node, img: "locked_iron_gate.jpg" } : node;
   setSceneBackdrop(backdropNode);
-  setDialogueNodeInfo(node);
+  setDialogueNodeInfo(node, state);
   setStore(s => ({
     overlay: { text: node.brief || node.text || "", seq: s.overlay.seq + 1 },
     underPanelOpen: false,
@@ -154,8 +129,7 @@ function showDialogueNode(node) {
     companionBubbles: {},
     npcBubble: { text: "", seq: 0 }
   }));
-  clearTimeout(overlayTimer);
-  overlayTimer = setTimeout(() => setStore({ underPanelOpen: true }), 1000);
+  openUnderPanelAfterOverlay();
   addGm(node.brief || node.text || "", "Neutral");
   // シーン到着時、NPCが最初の一言を自動で語る(作者がnode.greetingを書いた場合のみ)。
   // GMの状況説明と同時に見えないよう、少し遅らせる
@@ -184,7 +158,7 @@ export function dismissPopup() {
       if (state.pendingIntro) {
         showDialogueNode(SCENARIO.intro);
       } else {
-        showSceneOverlay(); // テキストのフェードイン開始。フェードイン完了時に下パネルが開く(showSceneOverlay内)
+        showSceneOverlay(state); // テキストのフェードイン開始。フェードイン完了時に下パネルが開く(showSceneOverlay内)
         setTimeout(() => addGm(gmGreeting(), "Happy"), 1000);
       }
     }, 1200);
@@ -261,7 +235,7 @@ export function restoreGame(saved) {
   // GMペットにも直前の語りを喋らせる(左パネルの履歴と同期。タップでの再表示もここから効くようになる)
   const lastGm = [...chron].reverse().find(e => e.kind === "gm");
   if (lastGm) setStore(s => ({ gmBubble: { text: lastGm.text, emotion: lastGm.emotion || "Neutral", seq: s.gmBubble.seq + 1 } }));
-  setSceneInfo();
+  setSceneInfo(state);
   renderDebug();
 }
 
@@ -353,7 +327,7 @@ export function resetGame() {
     overlay: { text: "", seq: 0 }, curtain: popups.length > 0,
     leftPanelOpen: false, rightPanelOpen: false, underPanelOpen: false
   });
-  setSceneInfo();
+  setSceneInfo(state);
   const introNarration = introIsObject ? (intro.brief || "") : (typeof intro === "string" && intro ? intro : "");
   const openingBrief = introIsObject ? introNarration : (introNarration ? introNarration + "\n\n" : "") + SCENARIO.scenes[0].brief;
   history.push({ role: "user", content: "【システム】セッションが始まった。" });
@@ -773,48 +747,6 @@ function applyUpdatesLogged(u, opts, cause) {
 // 名前からidを引き、どうしても解決できない時だけfallbackを使う(誤帰属でキャラが入れ替わるのを防ぐ)
 // キャラのgender(male/female/none)から語尾の制約を機械的に生成する(一人称の厳密指定は別途firstPerson)。
 // キャラごとに手書きする代わりにここで一元管理し、書き漏れ(片方だけ指定漏れ等)を構造的に防ぐ
-function genderToneRule(gender) {
-  if (gender === "male") return " 「〜わ」「〜のよ」「〜かしら」「〜ね」等の女性的な語尾は使わない。";
-  if (gender === "female") return " 「〜だぜ」「〜だろ」等の乱暴な男性的語尾は使わない。";
-  return ""; // none/未指定: 制約なし
-}
-// 一人称: firstPersonが明示されていればその一語に固定(gender由来のカテゴリより優先・厳密)。
-// 未指定ならgenderのカテゴリ表現(男性的なもの/女性的なもの)まで下げる
-function firstPersonRule(c) {
-  if (c.firstPerson) return ` 一人称は「${c.firstPerson}」で統一せよ。`;
-  if (c.gender === "male") return " 一人称は男性的なもの(俺・僕等)。";
-  if (c.gender === "female") return " 一人称は女性的なもの(私・あたし等)。";
-  return "";
-}
-// 呼称・二人称: プレイヤーを呼ぶ時の語をaddressTermで固定する(未指定なら制約なし、名前呼びも可のまま)
-function addressTermRule(c) {
-  return c.addressTerm ? ` プレイヤーを二人称で呼ぶ時は「${c.addressTerm}」で統一せよ(名前で呼ぶ場面ではそちらでもよい)。` : "";
-}
-/* GMの発話ルール。同行者の voiceRule() をそのまま再利用すると、GMには効かせたくない
-   「地の文でも一人称を使う」という読み方になる。GMは語り手も兼ねるので、
-   一人称・呼称はプレイヤーへ直接語りかける時だけに限定する一文を必ず添える。
-   speechRules(作者の自由記述)もここで足す */
-function gmVoiceRule() {
-  const voice = voiceRule(GM);
-  if (!voice && !GM.speechRules) return "";
-  const scope = (GM.firstPerson || GM.addressTerm)
-    ? " これらはプレイヤーへ直接語りかける時だけ使う。情景を語る地の文では使わない。"
-    : "";
-  return voice + scope + (GM.speechRules ? ` ${GM.speechRules}` : "");
-}
-/* 起動時の自己紹介。「よろしくぅ」は既定GM(ダイス先輩)固有の口調なので、
-   作者が別のGMを設定した時にそのまま流用すると人格と口調が食い違う。
-   既定名のままの時だけ従来文を使い、変えられていたら口調を持たない文にする */
-function gmGreeting() {
-  return GM.isDefaultName
-    ? "今回のGMを担当するダイス先輩です。よろしくぅ"
-    : `今回のGMを担当する${GM.name}だ。よろしく`;
-}
-// キャラの発話ルール一式(一人称・語尾・呼称)をまとめて生成する
-function voiceRule(c) {
-  return firstPersonRule(c) + genderToneRule(c.gender) + addressTermRule(c);
-}
-
 function normalizeWho(w, fallback) {
   if (CAST[w]) return w;
   const s = String(w || "");
@@ -1758,8 +1690,8 @@ function advanceScene(targetIndex) {
     addNote(`—— シーン${state.sceneIndex + 1} ——`);
     const newScene = SCENARIO.scenes[state.sceneIndex];
     const newBrief = newScene.brief;
-    setSceneInfo();
-    showSceneOverlay();
+    setSceneInfo(state);
+    showSceneOverlay(state);
     // GMペットの吹き出し・語り履歴が前のシーンへの回答のまま残らないよう、
     // シーン説明のフェードイン(1s)が終わったところでGMが新しいシーンの一言を語る
     const sceneNo = state.sceneIndex + 1;
