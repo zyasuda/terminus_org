@@ -317,7 +317,33 @@
     "title": "チャプター1",
     "quest": "灯りの正体を確かめ、坑道が使えるか村に報告する(依頼人:村の顔役マイラ・ヴェイン)",
     "flagsOut": [],
-    "intro": "夕暮れの村。マイラ・ヴェインは机に坑道の古い見取り図を広げ、消えた作業員と坑道の奥から聞こえる金属音について語り始める。",
+    "intro": {
+      "id": "ch1_intro",
+      "name": "マイラの部屋",
+      "brief": "夕暮れの村。マイラ・ヴェインは机に坑道の古い見取り図を広げ、消えた作業員と坑道の奥から聞こえる金属音について語り始める。",
+      "img": "s4_myra_room.jpg",
+      "npcSprite": "s4_myra_full_transparent.png",
+      "npc": {
+        "id": "npc_1",
+        "name": "マイラ"
+      },
+      "exits": [
+        {
+          "id": "to_scean01",
+          "match": [
+            "引き受け",
+            "承知",
+            "わかった",
+            "分かった",
+            "任せ",
+            "受ける",
+            "どうする"
+          ],
+          "to": "scene:1",
+          "npcSay": "坑道の奥から、まだ物音がするの。危ないのは分かってる。でも、確かめてきてほしい。"
+        }
+      ]
+    },
     "flagRules": {},
     "reference": {
       "genre": "ミステリ / ロー・ファンタジー",
@@ -379,7 +405,8 @@
       "kind": "background",
       "status": "candidate",
       "usedBy": [
-        "chapter_01.ending.img"
+        "chapter_01.ending.img",
+        "chapter_01.intro.img"
       ]
     },
     "s4_myra_full_transparent-png": {
@@ -387,7 +414,8 @@
       "kind": "sprite",
       "status": "candidate",
       "usedBy": [
-        "chapter_01.ending.npcSprite"
+        "chapter_01.ending.npcSprite",
+        "chapter_01.intro.npcSprite"
       ]
     }
   },

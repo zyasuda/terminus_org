@@ -505,7 +505,33 @@
       "learned_heartstone",
       "heartstone_choice"
     ],
-    "intro": "夕暮れの村。マイラ・ヴェインは机に坑道の古い見取り図を広げ、消えた作業員と坑道の奥から聞こえる金属音について語り始める。",
+    "intro": {
+      "id": "ch1_intro",
+      "name": "マイラの部屋",
+      "brief": "夕暮れの村。マイラ・ヴェインは机に坑道の古い見取り図を広げ、消えた作業員と坑道の奥から聞こえる金属音について語り始める。",
+      "img": "s4_myra_room.jpg",
+      "npcSprite": "s4_myra_full_transparent.png",
+      "npc": {
+        "id": "npc_1",
+        "name": "マイラ"
+      },
+      "exits": [
+        {
+          "id": "to_scean01",
+          "match": [
+            "引き受け",
+            "承知",
+            "わかった",
+            "分かった",
+            "任せ",
+            "受ける",
+            "どうする"
+          ],
+          "to": "scene:1",
+          "npcSay": "坑道の奥から、まだ物音がするの。危ないのは分かってる。でも、確かめてきてほしい。"
+        }
+      ]
+    },
     "flagRules": {
       "guardian_alive": [
         {
@@ -1023,8 +1049,8 @@
               "淡い光"
             ],
             "dc": 8,
-            "surface": "胸元に淡い光が宿っている。それはまるで、生きているかのように青く微かに揺らめいている。彼の動力なのか。",
-            "text": "胸の光るもの",
+            "surface": "胸元に淡い光が宿っている。それはまるで、生きているかのように青く微かに揺らめいている。彼の動力源なのか。",
+            "text": "灯りの主の胸に光るものは、「心石」と呼ばれ、ながく失われたものとして言い伝えられていた。どのような力が秘められているかは分からない。彼の胸のあたりには「心石の欠片」が２つ剥がれ落ちていた。",
             "trigger": "その光を注意深く見つめる。",
             "category": "main",
             "importance": "major",
@@ -1159,6 +1185,24 @@
         "campaign.companions.member_2.sprite"
       ]
     },
+    "s4_myra_room-jpg": {
+      "file": "s4_myra_room.jpg",
+      "kind": "background",
+      "status": "candidate",
+      "usedBy": [
+        "chapter_01.ending.img",
+        "chapter_01.intro.img"
+      ]
+    },
+    "s4_myra_full_transparent-png": {
+      "file": "s4_myra_full_transparent.png",
+      "kind": "sprite",
+      "status": "candidate",
+      "usedBy": [
+        "chapter_01.ending.npcSprite",
+        "chapter_01.intro.npcSprite"
+      ]
+    },
     "mine_entrance-png": {
       "file": "mine_entrance.png",
       "kind": "background",
@@ -1215,22 +1259,6 @@
       "status": "candidate",
       "usedBy": [
         "chapter_01.scenes.4.img"
-      ]
-    },
-    "s4_myra_room-jpg": {
-      "file": "s4_myra_room.jpg",
-      "kind": "background",
-      "status": "candidate",
-      "usedBy": [
-        "chapter_01.ending.img"
-      ]
-    },
-    "s4_myra_full_transparent-png": {
-      "file": "s4_myra_full_transparent.png",
-      "kind": "sprite",
-      "status": "candidate",
-      "usedBy": [
-        "chapter_01.ending.npcSprite"
       ]
     }
   },

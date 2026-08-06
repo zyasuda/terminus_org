@@ -26,9 +26,15 @@ const extraEntities=[...monsters.map(m=>m.name),...items.map(x=>x.name)].filter(
 if(extraEntities.length)campaign.entities=[...(campaign.entities||[]),...extraEntities];const scenes=chapterNodes().filter(n=>n.type==="scene").map((node,i)=>{const original=baseChapter.scenes?.[i]||{};const override=sceneOverrides[nodeKey(node)]||{};const merged={...original,...node,...override};
 /* enemyだけは浅いコピーで潰さない。下書き(node)や画面上書き(override)が薄いenemyを持っていても、
    章データ(original)のunknownName・ambush・weakness等を落とさずに重ねる。
-   ponytail: 深いマージはenemyに限定する。他のキーで同じ事故が出たらここに足す */
+   ponytail: 深いマージはenemyに限定する。他のキーで同じ事故が出たらここに足す
+
+   secrets[].text(真相)に要素名(d.label/old.entity)を代入してはならない。空欄のまま
+   書き出すこと。2026-08-06の実プレイで、s3b「胸の光るもの」の真相が要素名のまま
+   表示された(作者は「確定事実」欄に何も書いておらず、この既定値が空欄を埋めていた)。
+   空でない文字列になるため、どの検査も異常と見なせなかった。空で出せばmock2の
+   progression.test.mjs 検査17が落ちる */
 const enemyLayers=[original.enemy,node.enemy,override.enemy].filter(e=>e&&typeof e==="object");
-if(enemyLayers.length)merged.enemy=Object.assign({},...enemyLayers);if(Array.isArray(node.discoveries)){merged.secrets=node.discoveries.map((raw,j)=>{const d=normalizeDiscoveryFor(node,raw,j);const old=(original.secrets||[]).find(o=>o.id===d.id)||{};return {...old,id:d.id||`s${node.id}_${j+1}`,entity:d.label||old.entity||`調査対象${j+1}`,aliases:d.aliases.length?d.aliases:old.aliases||[],dc:d.dc||undefined,surface:d.surface||old.surface||d.trigger||"",text:d.fact||old.text||d.label||old.entity||"",trigger:d.trigger||old.trigger||"",category:d.category||old.category||"object",importance:d.importance||old.importance||"support",appearances:d.appearances||old.appearances||[],tags:d.tags||old.tags||[]}})}
+if(enemyLayers.length)merged.enemy=Object.assign({},...enemyLayers);if(Array.isArray(node.discoveries)){merged.secrets=node.discoveries.map((raw,j)=>{const d=normalizeDiscoveryFor(node,raw,j);const old=(original.secrets||[]).find(o=>o.id===d.id)||{};return {...old,id:d.id||`s${node.id}_${j+1}`,entity:d.label||old.entity||`調査対象${j+1}`,aliases:d.aliases.length?d.aliases:old.aliases||[],dc:d.dc||undefined,surface:d.surface||old.surface||d.trigger||"",text:d.fact||old.text||"",trigger:d.trigger||old.trigger||"",category:d.category||old.category||"object",importance:d.importance||old.importance||"support",appearances:d.appearances||old.appearances||[],tags:d.tags||old.tags||[]}})}
 const secretIdByToken={};(merged.secrets||[]).forEach(s=>{secretIdByToken[s.id]=s.id;if(s.entity&&!secretIdByToken[s.entity])secretIdByToken[s.entity]=s.id;[...(s.tags||[]),...(s.aliases||[])].forEach(t=>{if(t&&!secretIdByToken[t])secretIdByToken[t]=s.id})});
 const configuredExits=Array.isArray(merged.exits)?merged.exits.map(normalizeExit):[];
 const exitSecretId=(token)=>secretIdByToken[String(token||"").trim().replace(/^(flag|discovery|item|npc|scene|battle):/i,"")];

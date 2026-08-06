@@ -95,4 +95,10 @@ var baseCreateNewChapterForStable=createNewChapter;
 createNewChapter=function(){baseCreateNewChapterForStable();tasChapterIds[activeChapter]=`chapter_${String(chapterOrder.indexOf(activeChapter)+1).padStart(2,"0")}`;saveWorkspaceDraft(true)};
 if(newChapterButton)newChapterButton.onclick=createNewChapter;
 var baseBindWorldForStable=bindWorld;
-bindWorld=function(){baseBindWorldForStable();const input=$("campaignName");if(input)input.oninput=e=>{campaignName=e.target.value.trim()||DEFAULT_CAMPAIGN_NAME;if(!tasCampaignId||tasCampaignId==="lanternhill"&&freshCampaign)tasCampaignId=stableId(campaignName,"campaign");renderScenes();saveWorkspaceDraft(true);setStatus("キャンペーン名を更新しました")}}
+/* IDはキャンペーン作成時(createNewCampaign)または取り込み時(applyWorkspaceDraft)に1度だけ決める。
+   タイトルの編集で作り直してはならない。かつてtasCampaignId==="lanternhill"を「見本キャンペーンの
+   仮ID」の目印として、タイトルを打つたびにIDを作り直す条件がここにあったが、実データのIDも
+   "lanternhill"になり得るため区別できず、タイトルを直しただけでIDが別物にすり替わっていた
+   (2026-08-06、mock2側の出力が毎回別フォルダへ流れる不具合として発覚)。IDを変えたい場合は
+   別途、明示的な操作を用意すること */
+bindWorld=function(){baseBindWorldForStable();const input=$("campaignName");if(input)input.oninput=e=>{campaignName=e.target.value.trim()||DEFAULT_CAMPAIGN_NAME;renderScenes();saveWorkspaceDraft(true);setStatus("キャンペーン名を更新しました")}}

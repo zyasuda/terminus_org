@@ -113,7 +113,7 @@ function runStructureCheck() {
   ok(files.includes(PIPELINE_FILE), `${PIPELINE_FILE} がある`);
   /* 出力の段はパイプラインより先に定義されていなければならない。
      パイプラインより後に置けるのは、段を定義しない画面専用のファイルだけ。 */
-  const AFTER_PIPELINE_ALLOWED=["44-chapter-overview.js","45-interlude.js","46-monster-registry.js","47-story-tree-navigation.js","48-quick-start.js","49-auto-scene-links.js","50-gm-settings-navigation.js"];
+  const AFTER_PIPELINE_ALLOWED=["44-chapter-overview.js","45-interlude.js","46-monster-registry.js","47-story-tree-navigation.js","48-quick-start.js","49-auto-scene-links.js","50-gm-settings-navigation.js","51-campaign-id-edit.js"];
   const after=files.slice(files.indexOf(PIPELINE_FILE)+1);
   ok(after.every(f=>AFTER_PIPELINE_ALLOWED.includes(f)),
     `${PIPELINE_FILE} より後にあるのは画面専用ファイルだけ`, `想定外: ${after.filter(f=>!AFTER_PIPELINE_ALLOWED.includes(f)).join(", ")}`);
@@ -272,7 +272,10 @@ const COVERAGE = [
   ["chapter.flagsOut", g => (g.chapter?.flagsOut || []).length],
   ["chapter.flagRules", g => Object.keys(g.chapter?.flagRules || {}).length],
   ["chapter.intro（オブジェクト）", g => (g.chapter?.intro && typeof g.chapter.intro === "object" ? 1 : 0)],
-  ["chapter.intro（文字列）", g => (typeof g.chapter?.intro === "string" && g.chapter.intro ? 1 : 0)],
+  /* chapter.intro（文字列）は2026-08-06に削除した。実データ(TAS/data)を新形式(オブジェクト)へ
+     揃えたことで、この経路を通すフィクスチャが1つも無くなった。旧形式は後方互換のため
+     mock2エンジン側にはまだ残っているが、TASからは新規に出力しない前提とし、このカバレッジは
+     追わないことにした(作者の判断) */
   ["chapter.intro.interlude（入）", g => (g.chapter?.intro?.interlude?.enabled ? 1 : 0)],
   ["chapter.ending.interlude（切でも本文を保つ）", g => (g.chapter?.ending?.interlude && !g.chapter.ending.interlude.enabled && g.chapter.ending.interlude.text ? 1 : 0)],
   ["chapter.ending.exits", g => (g.chapter?.ending?.exits || []).length],
@@ -452,6 +455,51 @@ async function runExport(browser, mock2Dir) {
     ok(fs.readFileSync(chapterFile, "utf8") === "SENTINEL", "台帳の読み込みに失敗したら章JSONも書かない");
     fs.writeFileSync(ledgerPathIn(mock2Dir), ledgerText1, "utf8");
 
+    ok(pageErrors.length === 0, "画面実行エラーが出ない", pageErrors.join(" / "));
+  } finally {
+    await page.close();
+  }
+}
+
+/* ------------------------------------------------ 空欄を勝手に埋めていないか */
+// secrets[].text(真相)の既定値が要素名(d.label)だったため、「確定事実」を書かないまま
+// 出力しても空でない文字列が入り、どの検査も異常と見なせなかった。2026-08-06の実プレイで
+// s3b「胸の光るもの」の真相が要素名のまま画面に出て、章のクライマックスが消えていた。
+// 空欄は空欄のまま出す——そうすればmock2のprogression.test.mjs 検査17が落ちる。
+async function runBlankFieldCheck(browser) {
+  section("空欄を勝手に埋めていない（真相）");
+  const { page, pageErrors } = await openPage(browser, null);
+  try {
+    const draft = await page.evaluate(async () => {
+      const ctx = await (await fetch("/api/context")).json();
+      const key = Object.keys(ctx.dataFiles).find(k => /chapter_/.test(k));
+      const chapter = JSON.parse(ctx.dataFiles[key]);
+      const d = gamePayloadToWorkspaceDraft({
+        campaign: JSON.parse(ctx.dataFiles["campaign.json"]), chapter });
+      /* 章データに元が無い新規の調査対象を、確定事実だけ空で足す(作者が欄を触らなかった状態) */
+      const sc = chapter.scenes[0];
+      const discoveries = [
+        ...sc.secrets.map((s, i) => normalizeDiscoveryFor(sc, s, i)),
+        { ...normalizeDiscoveryFor(sc, { label: "検査用の空欄要素" }, 99),
+          id: "blank_field_probe", label: "検査用の空欄要素",
+          surface: "何かが置かれている。", fact: "", aliases: ["空欄要素"], dc: 8 }
+      ];
+      d.sceneOverrides["ch1:scene:0"] = { ...(d.sceneOverrides["ch1:scene:0"] || {}), discoveries };
+      return d;
+    });
+    await page.evaluate(([k, v]) => localStorage.setItem(k, v), [DRAFT_KEY, JSON.stringify(draft)]);
+    await page.reload({ waitUntil: "domcontentloaded" });
+    await page.waitForFunction(() => {
+      try { return typeof mockCampaignPayload === "function" } catch { return false }
+    }, null, { timeout: 15000 });
+    const payload = await capturePayload(page);
+    const probe = (payload.chapter.scenes || []).flatMap(s => s.secrets || [])
+      .find(x => x.entity === "検査用の空欄要素");
+    ok(Boolean(probe), "検査用の調査対象が出力に含まれる", "下書きの投入経路が変わっています");
+    ok(probe ? probe.text === "" : false,
+      "確定事実が空なら、真相も空のまま出る（要素名で埋めない）",
+      `text に ${JSON.stringify(probe && probe.text)} が入りました。要素名や別のフィールドを` +
+      `既定値にすると、作者の書き忘れが空でない文字列になり、検査をすり抜けます`);
     ok(pageErrors.length === 0, "画面実行エラーが出ない", pageErrors.join(" / "));
   } finally {
     await page.close();
@@ -658,6 +706,7 @@ try {
     if (flag("make-fixtures")) await makeFixtures(browser);
     else {
       if (wants("snapshot")) await runSnapshot(browser, flag("update"));
+      if (wants("import")) await runBlankFieldCheck(browser);
       if (wants("import")) await runImportCheck(browser);
       if (wants("export")) await runExport(browser, tempMock2);
     }
