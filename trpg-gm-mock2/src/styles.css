@@ -517,6 +517,9 @@ body {
   padding: 8px 32px;
   cursor: pointer;
 }
+/* 続きから/最初からの2択(resume)。片方は控えめな配色にして、続行が既定の選択に見えるようにする */
+.popupBtnRow { display: flex; gap: 16px; flex: none; }
+.popupBtn.secondary { background: transparent; border: 1px solid var(--panel-border); color: inherit; }
 
 /* ---- 共通グラスパネル(Left/Right/Under Panel) ---- */
 .glassPanel {

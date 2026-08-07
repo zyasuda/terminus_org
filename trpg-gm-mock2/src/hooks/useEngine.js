@@ -17,6 +17,8 @@ export function useEngine() {
     sendAction: engine.sendAction,
     exportChronicle: engine.exportChronicle,
     resetGame: engine.resetGame,
+    resumeSavedGame: engine.resumeSavedGame,
+    startNewGame: engine.startNewGame,
     dismissPopup: engine.dismissPopup,
     replayGmBubble: engine.replayGmBubble,
     replayCompanionBubble: engine.replayCompanionBubble,

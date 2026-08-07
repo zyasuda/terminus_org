@@ -22,6 +22,11 @@ function normalizeEncounter(value,index=0){
      (例:シーン2は同じ「錆喰い」を右の柵と左の崩落の両方に出さない設計だが、将来同種の
      敵を複数の遭遇に置く時にモンスター側で共有すると事故る) */
   const revealOnDefeat=String(x.revealOnDefeat||x.enemy?.revealOnDefeat||'').trim();
+  // 撃破時に渡す品物と個数。現状ゲーム側は「回復薬」だけ専用処理(state.healPotionsという
+  // 一意名を持たないスタック可能カウンタ)を持つ。個数は未入力なら1個(ゲーム側の既定値)。
+  // revealOnDefeatと同じ理由(遭遇ごとに違いうる)でモンスター本体ではなく遭遇カード側に持たせる
+  const itemOnDefeat=String(x.itemOnDefeat||x.enemy?.itemOnDefeat||'').trim();
+  const itemOnDefeatCount=x.itemOnDefeatCount??x.enemy?.itemOnDefeatCount??null;
   return {
     id:String(x.id||`encounter_${index+1}`),type,
     monsterId,monsterName,
@@ -35,7 +40,9 @@ function normalizeEncounter(value,index=0){
     onsetText:String(x.onsetText||x.text||x.description||''),
     notes:String(x.notes||''),
     revealOnDefeat,
-    ...(enemy?{enemy:revealOnDefeat?{...enemy,revealOnDefeat}:enemy}:{})
+    itemOnDefeat,
+    itemOnDefeatCount,
+    ...(enemy?{enemy:(revealOnDefeat||itemOnDefeat||itemOnDefeatCount!==null)?{...enemy,...(revealOnDefeat?{revealOnDefeat}:{}),...(itemOnDefeat?{itemOnDefeat}:{}),...(itemOnDefeatCount!==null?{itemOnDefeatCount}:{})}:enemy}:{})
   };
 }
 function sceneEncounters(){return (scene().encounters||[]).map(normalizeEncounter)}
@@ -62,6 +69,8 @@ function renderEncounterCard(enc,index){
     <div class="field span-2"><label>遭遇時の演出</label><textarea class="encounter-onset-text" data-encounter-index="${index}" placeholder="暗がりから錆喰いが飛び出してくる。">${escapeHtml(enc.onsetText)}</textarea></div>
     <div class="field span-2"><label>GM補足メモ</label><textarea class="encounter-notes" data-encounter-index="${index}" placeholder="この遭遇を発生させる意図や例外条件">${escapeHtml(enc.notes)}</textarea></div>
     <div class="field"><label>撃破時に開示する要素ID</label><input class="encounter-reveal-on-defeat" data-encounter-index="${index}" list="encounterDiscoveryIdList" value="${escapeHtml(enc.revealOnDefeat||'')}" placeholder="例：s2a_gap"><p class="hint">この敵を倒した時に自動で開示する調査対象。空欄なら何も起きない。</p></div>
+    <div class="field"><label>撃破時に渡すアイテム</label><input class="encounter-item-on-defeat" data-encounter-index="${index}" value="${escapeHtml(enc.itemOnDefeat||'')}" placeholder="例：回復薬"><p class="hint">この敵を倒した時にプレイヤーへ渡す品物。現状「回復薬」だけ対応(2個・戦闘中も使用可)。空欄なら何も起きない。</p></div>
+    <div class="field"><label>撃破時に渡す個数</label><input type="number" min="1" class="encounter-item-on-defeat-count" data-encounter-index="${index}" value="${enc.itemOnDefeatCount??''}" placeholder="空欄なら1個"></div>
     <div class="field"><label>出口ID</label><input class="encounter-id" data-encounter-index="${index}" value="${escapeHtml(enc.id)}" placeholder="encounter_s2_rust_eater"></div>
     <div class="field encounter-actions"><button class="sub delete-btn" data-remove-encounter="${index}">削除</button></div>
   </div></details>`;
@@ -88,7 +97,9 @@ function collectEncounters(){
     blockedBy:card.querySelector(`.encounter-blocked-by[data-encounter-index="${index}"]`)?.value,
     onsetText:card.querySelector(`.encounter-onset-text[data-encounter-index="${index}"]`)?.value,
     notes:card.querySelector(`.encounter-notes[data-encounter-index="${index}"]`)?.value,
-    revealOnDefeat:card.querySelector(`.encounter-reveal-on-defeat[data-encounter-index="${index}"]`)?.value
+    revealOnDefeat:card.querySelector(`.encounter-reveal-on-defeat[data-encounter-index="${index}"]`)?.value,
+    itemOnDefeat:card.querySelector(`.encounter-item-on-defeat[data-encounter-index="${index}"]`)?.value,
+    itemOnDefeatCount:card.querySelector(`.encounter-item-on-defeat-count[data-encounter-index="${index}"]`)?.value
   },index));
 }
 function saveEncounters(value){const key=sceneKey();sceneOverrides[key]={...(sceneOverrides[key]||{}),encounters:value};saveWorkspaceDraft(true);renderScenes();renderRightPanel();renderValidation()}
@@ -103,7 +114,7 @@ function outputEncounters(payload){
      待たない非同期の呼び出しであってはならない。出力の入口(この段)で直接呼び、
      描画のタイミングに関係なく遭遇の敵解決ができるようにする */
   ensureMonsters();
-  /* revealOnDefeatはUI表示用にトップレベルへも持たせている(normalizeEncounter参照)が、
-     ゲーム側が読むのはenemy.revealOnDefeatだけ。出力にトップレベルの空文字列キーを
+  /* revealOnDefeat/itemOnDefeatはUI表示用にトップレベルへも持たせている(normalizeEncounter参照)が、
+     ゲーム側が読むのはenemy側の同名フィールドだけ。出力にトップレベルの空文字列キーを
      混ぜないよう、ここで捨てる */
-  if(Array.isArray(payload.chapter?.scenes)){const nodes=chapterNodes().filter(n=>n.type==='scene');payload.chapter.scenes=payload.chapter.scenes.map((raw,index)=>{const node=nodes[index];const encounters=(node?.encounters||raw.encounters||[]).map(normalizeEncounter).map(({revealOnDefeat,...rest})=>rest);return encounters.length?{...raw,encounters}:raw})}return payload};
+  if(Array.isArray(payload.chapter?.scenes)){const nodes=chapterNodes().filter(n=>n.type==='scene');payload.chapter.scenes=payload.chapter.scenes.map((raw,index)=>{const node=nodes[index];const encounters=(node?.encounters||raw.encounters||[]).map(normalizeEncounter).map(({revealOnDefeat,itemOnDefeat,itemOnDefeatCount,...rest})=>rest);return encounters.length?{...raw,encounters}:raw})}return payload};

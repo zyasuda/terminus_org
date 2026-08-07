@@ -338,6 +338,25 @@
         "talk",
         "inspect"
       ]
+    },
+    {
+      "id": "item_5-msicql8t-ewjn8d",
+      "ja": "回復薬",
+      "aliases": [
+        "薬",
+        "くすり"
+      ],
+      "kind": "item",
+      "parentConceptId": null,
+      "scope": "campaign",
+      "acquisition": "dialogue",
+      "persistent": false,
+      "capabilities": [
+        "inspect"
+      ],
+      "requires": "",
+      "surface": "体力（HP）を少し回復する",
+      "visual": ""
     }
   ],
   "gmSprite": "gm_mascot.png",
@@ -486,6 +505,25 @@
       ],
       "requires": "ch1_s3_item_2",
       "surface": "青く光る小さな石の破片である。手に取るとかすかに温かい。強い力を秘めている。",
+      "visual": ""
+    },
+    {
+      "id": "item_5-msicql8t-ewjn8d",
+      "ja": "回復薬",
+      "aliases": [
+        "薬",
+        "くすり"
+      ],
+      "kind": "item",
+      "parentConceptId": null,
+      "scope": "campaign",
+      "acquisition": "dialogue",
+      "persistent": false,
+      "capabilities": [
+        "inspect"
+      ],
+      "requires": "",
+      "surface": "体力（HP）を少し回復する",
       "visual": ""
     }
   ],

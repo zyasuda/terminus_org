@@ -8,6 +8,7 @@ export function initialState() {
            /* 所持品の正本。キャラクター別に持つ。平坦な一覧は inventory.js の held() で取る。
               旧セーブ（items が文字列配列）は normalizeInventory() が読み替える */
            inventory: normalizeInventory({ items: ["ランタン", "ロープ", "ナイフ"] }),
+           healPotions: 0, // 回復薬の所持数。inventory(一意な品名の集合)とは別枠のスタック可能な消耗品
            sceneIndex: 0, turn: 0,
            enemy: null, defeated: [], lastCompanionTurnByWho: {},
            banterCharge: {},

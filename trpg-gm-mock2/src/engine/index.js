@@ -131,10 +131,13 @@ function showDialogueNode(node) {
     npcBubble: { text: "", seq: 0 }
   }));
   openUnderPanelAfterOverlay();
-  addGm(node.brief || node.text || "", "Neutral");
-  // シーン到着時、NPCが最初の一言を自動で語る(作者がnode.greetingを書いた場合のみ)。
-  // GMの状況説明と同時に見えないよう、少し遅らせる
-  if (node.npc && node.greeting) setTimeout(() => addNpc(node.greeting, node.npc), CONSENT_GAP_MS);
+  const gmText = node.brief || node.text || "";
+  // NPCの第一声は作者がnode.greetingを書いた場合のみ。GMの発言に続けて話す
+  const steps = [{ text: gmText, speak: () => addGm(gmText, "Neutral") }];
+  if (node.npc && node.greeting) {
+    steps.push({ text: node.greeting, speak: () => addNpc(node.greeting, node.npc) });
+  }
+  runSpeechSequence(steps);
   renderDebug();
 }
 
@@ -177,6 +180,22 @@ function setSceneBackdrop(sc) {
     : "linear-gradient(135deg, #151720 0%, #1e2230 100%)";
   // parallaxがあれば空レイヤー+透過前景の2層で表示(素材が404の間は単層imgにフォールバック)
   setStore({ sceneBg: value, parallax: (sc && sc.parallax) || null });
+}
+
+/* 現在の進行状態(イントロ中/アウトロ中/通常シーン)に応じて、背景に使うノードを1箇所で決める。
+   renderDebugのenemySprite算出(pendingIntro?SCENARIO.intro: ...)と同じ分岐だが、こちらは
+   backdrop用にimg未指定時のフォールバック(locked_iron_gate.jpg)も面倒を見る。
+   以前はresetGame/restoreGameがそれぞれ別々にこの分岐を書いており、restoreGameだけ
+   pendingIntro/pendingEndingを見ずに常にSCENARIO.scenes[sceneIndex]を使っていたため、
+   イントロ中にリロードすると背景だけシーン1に化ける不具合があった */
+function currentBackdropNode() {
+  if (state.pendingIntro && SCENARIO.intro) {
+    return SCENARIO.intro.img ? SCENARIO.intro : { ...SCENARIO.intro, img: "locked_iron_gate.jpg" };
+  }
+  if ((state.pendingEnding || state.chapterEnded) && SCENARIO.ending) {
+    return SCENARIO.ending.img ? SCENARIO.ending : { ...SCENARIO.ending, img: "locked_iron_gate.jpg" };
+  }
+  return SCENARIO.scenes[state.sceneIndex];
 }
 
 // chronの1件をstoreへ再生する(chronへの再pushはしない=保存済みログをそのまま画面に描き直すだけ)
@@ -226,20 +245,37 @@ export function restoreGame(saved) {
   chron = saved.chron || [];
   history = saved.history || [];
   revealed = new Set(saved.revealed || []);
-  setSceneBackdrop(SCENARIO.scenes[state.sceneIndex]);
+  // pendingIntro/pendingEnding中のリロードでもcurrentBackdropNode()で正しい背景を選ぶ。
+  // 以前はここが常にSCENARIO.scenes[state.sceneIndex]決め打ちで、イントロ中(sceneIndexは
+  // 既定値の0のまま)にリロードすると、背景だけシーン1に見えるのに他の表示(NPCスプライト等)
+  // はイントロのままという食い違いが起きていた
+  setSceneBackdrop(currentBackdropNode());
   busy = false;
   clearChat();
   setStore({ diceLog: [] });
   chron.forEach(renderChronEntry);
   // 再開ノートは画面にだけ出す。chronに積むとリロードのたびにクロニクルへ蓄積して汚染する
   pushChat({ kind: "msg", cls: "sysnote", text: `↻ 前回の続きから再開しました(シーン${state.sceneIndex + 1} / ターン${state.turn})` });
-  // GMペットにも直前の語りを喋らせる(左パネルの履歴と同期。タップでの再表示もここから効くようになる)
+  // GM/NPC/同行者、それぞれの立ち絵にも直前の発言を喋らせる(左パネルの履歴と同期。
+  // タップでの再表示もここから効くようになる)。以前はgmBubbleしか復元しておらず、
+  // リロード直後にマイラや同行者をタップしても何も出ない不具合があった
   const lastGm = [...chron].reverse().find(e => e.kind === "gm");
   if (lastGm) setStore(s => ({ gmBubble: { text: lastGm.text, emotion: lastGm.emotion || "Neutral", seq: s.gmBubble.seq + 1 } }));
+  const lastNpc = [...chron].reverse().find(e => e.kind === "npc");
+  if (lastNpc) setStore(s => ({ npcBubble: { text: lastNpc.text, seq: s.npcBubble.seq + 1 } }));
+  Object.keys(CAST).forEach(who => {
+    const lastLine = [...chron].reverse().find(e => e.kind === "companion" && e.who === who);
+    if (lastLine) {
+      setStore(s => ({ companionBubbles: { ...s.companionBubbles,
+        [who]: { text: lastLine.text, seq: ((s.companionBubbles[who] || {}).seq || 0) + 1 } } }));
+    }
+  });
   setSceneInfo(state);
   renderDebug();
 }
 
+// 起動時に既存セーブが見つかった場合の「続きから/最初から」選択待ち。resumeSavedGame/startNewGameが消費する
+let pendingResumeSave = null;
 export async function boot() {
   renderModelInfo();
   // シナリオデータはpublic/data/のJSONから読む(DATA_EXCHANGE.md v0.2)。
@@ -275,8 +311,34 @@ export async function boot() {
   }); // GMモードと現在のコンテンツをUIへ
   const saved = loadGame();
   if (saved && saved.state && Array.isArray(saved.chron)) {
-    try { restoreGame(saved); return; } catch (e) { /* 壊れた保存は無視して新規開始 */ }
+    // 以前はここで問答無用にrestoreGame()していたため、リロード=常に前回の続きに戻され、
+    // 「新しく始めたつもりが変な画面から再開した」という混乱の元になっていた。
+    // 続きから/最初からをプレイヤー自身に選ばせる(resumeSavedGame/startNewGameへ)
+    pendingResumeSave = saved;
+    setStore({
+      busy: true,
+      popups: [{
+        kind: "resume",
+        title: "続きから始めますか?",
+        body: `前回の続き(シーン${(saved.state.sceneIndex ?? 0) + 1} / ターン${saved.state.turn ?? 0})があります。`
+      }]
+    });
+    return;
   }
+  resetGame();
+}
+export function resumeSavedGame() {
+  const saved = pendingResumeSave;
+  pendingResumeSave = null;
+  setStore({ popups: [] });
+  try {
+    if (!saved) throw new Error("保存データが無い");
+    restoreGame(saved);
+  } catch (e) { resetGame(); } // 壊れた保存は無視して新規開始
+}
+export function startNewGame() {
+  pendingResumeSave = null;
+  setStore({ popups: [] });
   resetGame();
 }
 
@@ -304,7 +366,8 @@ export function resetGame() {
   busy = false;
   const intro = SCENARIO.intro;
   const introIsObject = intro && typeof intro === "object";
-  setSceneBackdrop(introIsObject ? (intro.img ? intro : { ...intro, img: "locked_iron_gate.jpg" }) : SCENARIO.scenes[0]);
+  state.pendingIntro = introIsObject; // currentBackdropNode()より先に立てる(この状態を見て背景を選ぶ)
+  setSceneBackdrop(currentBackdropNode());
   clearChat();
   // 依頼導入(intro)は通知型ポップアップで提示し、シーン説明(brief)は主画面オーバーレイ+左パネルへ。
   // 下パネルのチャットは会話専用にする(UI_REDESIGN.md / EVENT_MAP.mdの「シナリオ開始=依頼ポップアップ」)。
@@ -315,7 +378,6 @@ export function resetGame() {
   // opening/introはnull運用(TAS_導入終端ノード出力仕様_null運用_2026-07-22):
   // null=未作成(ポップアップを出さない)、文字列=旧形式、オブジェクト(exits[]あり)=新形式。
   // 新形式の場合、"はじめる"の後はシーン0へ直行せず、intro.exits[]の解決を待つ(sendAction側で処理)
-  state.pendingIntro = introIsObject;
   const popups = [];
   if (CAMPAIGN.opening) {
     popups.push({ kind: "intro", title: CAMPAIGN.opening.name || "オープニング", body: CAMPAIGN.opening.brief || CAMPAIGN.opening.text || "", img: CAMPAIGN.opening.img || "locked_iron_gate.jpg" });
@@ -526,6 +588,55 @@ const addNpc = (t, speaker) => {
   setStore(s => ({ npcBubble: { text: t, seq: s.npcBubble.seq + 1 } }));
   saveGame(); // 非同期(npcAgentReply)でターン確定後に届くため、ここで保存しないとリロードで消える
 };
+/* ---------------- 表示シーケンス ----------------
+   「Aを話す→Aを読み終わる頃合いまで待つ→前の吹き出しを消す→Bを話す→…」という進行を
+   1箇所に集約する。個々の呼び出し側でCONSENT_GAP_MS的な場当たりのsetTimeout値を
+   書かない(2026-08-07以前は箇所ごとに違う固定値がハードコードされ、短すぎて
+   同時に見えたり、逆に短すぎて読む間もなくシーン転換したりしていた)。
+
+   吹き出し(gmBubble/npcBubble/companionBubbles)はどれもCSSアニメーションで
+   8〜10.6秒間は表示され続けるため、次の話者が話す前に明示的に消さないと
+   画面上で重なって見える。読了目安の時間はテキストの文字数から機械的に計算する
+   (声優の読み上げ速度を模した値ではなく、プレイヤーが目で追える最低限の時間)。 */
+function readDelayMs(text) {
+  return Math.min(4000, Math.max(900, (text || "").length * 60));
+}
+function clearGmBubble() {
+  setStore(s => (s.gmBubble.text ? { gmBubble: { ...s.gmBubble, text: "" } } : {}));
+}
+function clearNpcBubble() {
+  setStore(s => (s.npcBubble.text ? { npcBubble: { ...s.npcBubble, text: "" } } : {}));
+}
+function clearCompanionBubble(who) {
+  setStore(s => (s.companionBubbles[who]?.text
+    ? { companionBubbles: { ...s.companionBubbles, [who]: { ...s.companionBubbles[who], text: "" } } }
+    : {}));
+}
+function clearAllBubbles() {
+  clearGmBubble();
+  clearNpcBubble();
+  setStore(s => ({
+    companionBubbles: Object.fromEntries(
+      Object.entries(s.companionBubbles).map(([who, b]) => [who, { ...b, text: "" }]))
+  }));
+}
+/* steps: [{ text, speak(), clear() }, ...]。各stepの直前にclear()(省略時はclearAllBubbles)
+   を呼んで前の話者の吹き出しを消し、speak()を呼ぶ。次のstepまではreadDelayMs(text)だけ待つ。
+   全stepの後、最後のtextの読了目安だけ待ってからonDone()を呼ぶ(省略可) */
+function runSpeechSequence(steps, onDone) {
+  const run = idx => {
+    if (idx >= steps.length) {
+      const lastText = steps.length ? steps[steps.length - 1].text : "";
+      if (onDone) setTimeout(onDone, lastText ? readDelayMs(lastText) : 0);
+      return;
+    }
+    const s = steps[idx];
+    (s.clear || clearAllBubbles)();
+    s.speak();
+    setTimeout(() => run(idx + 1), readDelayMs(s.text));
+  };
+  run(0);
+}
 // クリティカル/ファンブル時の画面演出。フラッシュはPhaser(PhaserFx.jsx)、
 // シェイクはDOM全体を揺らす必要があるため従来のCSS(body.shake)のまま。
 // Phaser側で問題が出たらUSE_PHASER_FX=falseで旧CSSフラッシュ(#fx)に戻せる。
@@ -633,7 +744,13 @@ function renderDebug() {
     introHints,
     directionText: curScene.report ? reportDirection() : curScene.direction,
     hp: state.hp, maxHp: state.maxHp, items: inv.held(state.inventory),
-    inventoryByOwner: inv.byOwner(state.inventory, ownerDisplayName),
+    // 回復薬はinventory(一意な品名)の外で個数管理しているため、表示だけここで合流させる
+    inventoryByOwner: inv.byOwner(
+      state.healPotions > 0
+        ? { ...state.inventory, [inv.PLAYER]: [...(state.inventory[inv.PLAYER] || []), `${HEAL_POTION_NAME}×${state.healPotions}`] }
+        : state.inventory,
+      ownerDisplayName
+    ),
     stateJsonText: JSON.stringify(
       { scene: state.sceneIndex + 1, turn: state.turn, items: inv.held(state.inventory),
         enemy: state.enemy ? { name: state.enemy.name, hp: state.enemy.hp + "/" + state.enemy.maxHp } : null,
@@ -779,6 +896,10 @@ function resolveCompanion(r) {
   console.warn("companion.who を解決できないため台詞を破棄:", r.companion.who, say);
 }
 
+// 「考え中」表示の最低表示時間や、reveal直後にNPCの非同期応答を一拍置く等、
+// 読了目安(readDelayMs)を計算するほどの内容が無い箇所向けの短い間。
+// 話者間の読了待ち(GM→NPC→同行者等)はreadDelayMs/runSpeechSequenceを使う
+const SHORT_PACING_MS = 350;
 const FREQUENCY_GAP = { none: Infinity, low: 6, standard: 3, high: 1 };
 function shouldShowCompanion(companion, addressed) {
   if (!companion) return false;
@@ -806,7 +927,7 @@ async function revealTurnBeats(r, addressed) {
   const companion = resolveCompanion(r);
   const willSpeak = companion && companion.who && shouldShowCompanion(companion, addressed);
   if (willSpeak) setThinking(companion.who, true);
-  await sleep(CONSENT_GAP_MS);
+  await sleep(SHORT_PACING_MS);
   if (willSpeak) setThinking(companion.who, false);
   return maybeCompanion(r, addressed, companion);
 }
@@ -843,7 +964,7 @@ function npcAgentReply(playerText, revealGate) {
     const m = raw.match(/\{[\s\S]*\}/);
     const r = JSON.parse(m ? m[0] : raw);
     const say = sanitizeSay(String(r.say || "").slice(0, 120));
-    if (revealGate && await revealGate) await sleep(CONSENT_GAP_MS);
+    if (revealGate && await revealGate) await sleep(SHORT_PACING_MS);
     // 前回と同じ一言は表示しない(固定化の再発防止。沈黙の方が壊れて見えない)
     if (!say || say === state.lastNpcLine) return;
     state.lastNpcLine = say;
@@ -1077,6 +1198,7 @@ const COMBAT_DEFEND_RE = /防御|身を守|守りを固|盾|構え/;
 const COMBAT_FLEE_RE = /逃げ|逃走|退却|撤退|離脱/;
 
 function classifyCombatAction(text) {
+  if (canUseHealPotion(text)) return "heal";
   const w = state.enemy.weakness;
   if (w && (w.triggers || []).some(t => text.includes(t))) return "weakness";
   if (COMBAT_FLEE_RE.test(text)) return "flee";
@@ -1145,6 +1267,11 @@ async function tryCombatTurn(text) {
         } else {
           fact("逃げ場を探したが、退路を塞がれた");
         }
+      } else if (action === "heal") {
+        const result = useHealPotion();
+        fact(result
+          ? `${HEAL_POTION_NAME}を使った(HP ${result.before}→${result.after})`
+          : `${HEAL_POTION_NAME}を持っているが、今は万全だ`);
       } else if (action === "weakness") {
         const w = enemy.weakness;
         fact(w.text || `${enemyName(enemy)}は怯んだ`);
@@ -1257,11 +1384,13 @@ const GM_SCENE_ARRIVAL_LINES = [
 function gmSceneArrivalLine(sceneNo, name) {
   return GM_SCENE_ARRIVAL_LINES[Math.floor(Math.random() * GM_SCENE_ARRIVAL_LINES.length)](sceneNo, name);
 }
-function companionSceneArrivalLine() {
+// runSpeechSequenceのstepに使うため、話す内容を先に決めて返すだけにする(speak()の実行はしない)
+function pickCompanionSceneArrivalLine() {
   const ids = Object.keys(CAST);
-  if (!ids.length) return;
+  if (!ids.length) return null;
   const who = ids[Math.floor(Math.random() * ids.length)];
-  addCompanion(SCENE_ARRIVAL_LINES[Math.floor(Math.random() * SCENE_ARRIVAL_LINES.length)], who);
+  const text = SCENE_ARRIVAL_LINES[Math.floor(Math.random() * SCENE_ARRIVAL_LINES.length)];
+  return { who, text };
 }
 
 function companionBattleEndLine(outcome) {
@@ -1295,6 +1424,25 @@ const BACK_RE = /戻る|戻ろ|引き返|退く/;
 const TALK_RE = /話|聞く|聞いて|尋ね|訊|呼びかけ|声をかけ/;
 const TAKE_RE = /拾|取る|取っ|手に入れ|回収|持ち帰|持って(いく|行く)/;
 const SCRIPTED_ATTACK_RE = /攻撃|斬|切りかか|殴|撃つ|叩く|突く|蹴/;
+
+/* 回復薬: 汎用のuse/give intent(未実装)を待たず、この品名にだけ効く決定論アクション。
+   「使う/飲む」+品名の一致だけで判定する。戦闘中はclassifyCombatActionが同じ判定を使い、
+   1ターン消費する行動として扱う(他の戦闘行動と同じ枠に入るだけで、専用の待機は無い) */
+const HEAL_POTION_NAME = "回復薬";
+const HEAL_AMOUNT = 2; // 1回の使用でのHP回復量。既存のhp_delta上限(-3〜+2)に合わせた固定値
+const DEFAULT_ITEM_ON_DEFEAT_COUNT = 1;
+const USE_HEAL_RE = /使う|使っ|飲む|飲ん|服用/;
+function canUseHealPotion(text) {
+  return state.healPotions > 0 && USE_HEAL_RE.test(text) && text.includes(HEAL_POTION_NAME);
+}
+// 呼び出し前にcanUseHealPotion()を確認していること。満タンなら消費せずnullを返す
+function useHealPotion() {
+  if (state.hp >= state.maxHp) return null;
+  state.healPotions--;
+  const before = state.hp;
+  applyUpdatesLogged({ hp_delta: HEAL_AMOUNT });
+  return { before, after: state.hp };
+}
 
 // 主語(誰が)の確定情報抽出(2026-07-21: 動詞+オブジェクトの分類改善、BORG/TRPG/MockDocs/RULE_INVENTORY.md 意図分類表)。
 // 立ち絵タップは必ず「名前、」を宣言の先頭に挿入するため、この確実な信号をLLMに推測させず直接読む。
@@ -1480,6 +1628,16 @@ async function tryScripted(text) {
     if (gmMode === "scripted") { addGm("特に変わったものは見つからない。", "Neutral"); return true; }
     return false; // hybrid: secretのない対象の描写はLLMの領分
   }
+  if (canUseHealPotion(text)) {
+    const result = useHealPotion();
+    if (result) {
+      logSceneEvent(`${HEAL_POTION_NAME}を使った`);
+      addGm(`${HEAL_POTION_NAME}を飲んだ。HPが${result.after}/${state.maxHp}まで戻った。`, "Happy");
+    } else {
+      addGm("今は万全だ。使う必要はない。", "Neutral");
+    }
+    return true;
+  }
   /* 品物の取得。scriptedモードは「LLM呼び出し完全ゼロで遊べる」ことが売りだが、
      取得のレーンが無いため、品物を要求する出口がある章はここで詰んでいた(アウトロの
      「心石の欠片を渡す」が典型)。判定は要らない——availableLootが開示状況で既に
@@ -1607,22 +1765,23 @@ function grantAuthoredItems(names) {
   });
 }
 
-const CONSENT_GAP_MS = 350;       // 同行者が順に答える/会話ターンの表示を分ける間隔
-const CONSENT_LAST_HOLD_MS = 900; // 最後の同意を読ませてからシーンへ進むまでの間
-
 // 同行者の同意は参加者ごとの応答として記録する。CPU自動応答はこの入口を呼ぶ実装の一つであり、
 // 将来人間プレイヤーが操作する場合も、この関数へ応答を渡せば同じ進行になる。
+// 応答は1人ずつ届く(CPUが即答するとは限らない・将来は人間の入力待ちもありうる)ため、
+// 静的なsteps配列を組めない。runSpeechSequenceと同じ「前の吹き出しを消す→話す→読了目安だけ待つ」
+// 原則を、届いた順に手動でチェーンする
 function submitCompanionConsent(who, response) {
   const waiting = state.pendingCompanionConsents;
   if (!waiting) return;
   const participant = waiting.find(p => p.who === who && p.response === null);
   if (!participant) return;
+  clearAllBubbles(); // 直前の話者(GMの促し、または前の同行者)の吹き出しを消してから話す
   participant.response = response;
   addCompanion(response, who);
   renderDebug();
   const next = waiting.find(p => p.response === null);
   if (next) {
-    setTimeout(() => resolveCpuCompanionConsent(next.who), CONSENT_GAP_MS);
+    setTimeout(() => resolveCpuCompanionConsent(next.who), readDelayMs(response));
     return;
   }
   // 最後の1人の吹き出しも読ませてからシーンへ進む。advanceSceneは冒頭でcompanionBubblesを
@@ -1632,7 +1791,7 @@ function submitCompanionConsent(who, response) {
   const targetIdx = state.pendingIntroTarget;
   state.pendingCompanionConsents = null;
   state.pendingIntroTarget = null;
-  setTimeout(() => advanceScene(targetIdx), CONSENT_LAST_HOLD_MS);
+  setTimeout(() => advanceScene(targetIdx), readDelayMs(response));
 }
 
 function companionConsentLine(companion) {
@@ -1660,8 +1819,12 @@ function beginCompanionConsent(targetIdx) {
   if (!participants.length) { advanceScene(targetIdx); return; }
   state.pendingCompanionConsents = participants;
   state.pendingIntroTarget = targetIdx;
-  addGm("同行する者にも、意思を確かめよう。", "Neutral");
-  resolveCpuCompanionConsent(participants[0].who);
+  const prompt = "同行する者にも、意思を確かめよう。";
+  clearAllBubbles();
+  addGm(prompt, "Neutral");
+  // GMの促しが読み終わる頃合いまで待ってから最初の同行者に答えさせる(以前はここが0秒待ちで、
+  // GMの吹き出しと最初の同行者の返事が同時に出ていた)
+  setTimeout(() => resolveCpuCompanionConsent(participants[0].who), readDelayMs(prompt));
 }
 
 function finishChapter() {
@@ -1693,15 +1856,19 @@ function advanceScene(targetIndex) {
     setSceneInfo(state);
     showSceneOverlay(state);
     // GMペットの吹き出し・語り履歴が前のシーンへの回答のまま残らないよう、
-    // シーン説明のフェードイン(1s)が終わったところでGMが新しいシーンの一言を語る
+    // シーン説明のフェードイン(1s)が終わったところでGM→NPC(いれば)→同行者の順に語らせる。
+    // 各stepの間隔・前の吹き出しを消すタイミングはrunSpeechSequenceに一本化してある
     const sceneNo = state.sceneIndex + 1;
-    setTimeout(() => addGm(gmSceneArrivalLine(sceneNo, newScene.name || ""), "Happy"), 1000);
-    // シーン常在NPC(村人等)がいれば、GMの状況説明の直後に最初の一言を語る
-    // (作者がnewScene.greetingを書いた場合のみ)。同行者の一言はさらに後ろへずらす
-    const hasNpcGreeting = newScene.npc && newScene.greeting;
-    if (hasNpcGreeting) setTimeout(() => addNpc(newScene.greeting, newScene.npc), 1000 + CONSENT_GAP_MS);
-    // GMやNPCの一言と同時に出て読む順に迷わないよう、CONSENT_GAP_MSぶん遅らせて重ならないようにする
-    setTimeout(() => companionSceneArrivalLine(), 1000 + CONSENT_GAP_MS * (hasNpcGreeting ? 2 : 1));
+    const arrivalLine = gmSceneArrivalLine(sceneNo, newScene.name || "");
+    const steps = [{ text: arrivalLine, speak: () => addGm(arrivalLine, "Happy") }];
+    if (newScene.npc && newScene.greeting) {
+      steps.push({ text: newScene.greeting, speak: () => addNpc(newScene.greeting, newScene.npc) });
+    }
+    const companionLine = pickCompanionSceneArrivalLine();
+    if (companionLine) {
+      steps.push({ text: companionLine.text, speak: () => addCompanion(companionLine.text, companionLine.who) });
+    }
+    setTimeout(() => runSpeechSequence(steps), 1000);
     history.push({ role: "user", content: "【システム】シーンが切り替わった。" });
     history.push({ role: "assistant", content: JSON.stringify({ narration: newBrief, companion: null, npc: null, check: null, state_updates: null, engage_enemy: false, flee_enemy: false, scene_complete: false, meta_request: null }) });
   } else {
@@ -1728,10 +1895,21 @@ function checkEnemyDown() {
     state.defeated.push(state.enemy.name);
     // 撃破で開示される秘密は章データのenemy.revealOnDefeatで指定する(定義順の自動開示は廃止)
     const revealId = state.enemy.revealOnDefeat;
+    const itemId = state.enemy.itemOnDefeat;
+    // 個数は章データのenemy.itemOnDefeatCountが正(TAS「撃破時に渡す個数」欄)。
+    // 未指定の遭遇(1個で十分な品)を壊さないよう既定値1にフォールバックする
+    const itemCount = Math.max(1, Number(state.enemy.itemOnDefeatCount) || DEFAULT_ITEM_ON_DEFEAT_COUNT);
     state.enemy = null;
     if (revealId) {
       const secret = SCENARIO.scenes[state.sceneIndex].secrets.find(s => s.id === revealId && !revealed.has(s.id));
       if (secret) unlockSecret(secret);
+    }
+    // itemOnDefeatは現状「回復薬」専用(state.healPotionsという専用カウンタで数を持つ)。
+    // 他の品を渡す遭遇が増えたらinv.give経由の分岐をここに足す
+    if (itemId === HEAL_POTION_NAME) {
+      state.healPotions += itemCount;
+      addNote(`⚔ ${HEAL_POTION_NAME}を${itemCount}個手に入れた`);
+      logSceneEvent(`${HEAL_POTION_NAME}を${itemCount}個手に入れた`);
     }
     return true;
   }

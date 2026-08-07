@@ -528,8 +528,8 @@
       ],
       "greeting": "坑道の奥から、まだ物音がするの。危ないのは分かってる。でも、確かめてきてほしい。",
       "hintChips": [
-        "依頼について",
-        "坑道について"
+        "見取り図",
+        "金属音"
       ]
     },
     "flagRules": {},
@@ -889,7 +889,9 @@
               "fleeDc": 10,
               "agility": 8,
               "sprite": "s2_mine_bat.png",
-              "revealOnDefeat": "s2c_gap"
+              "revealOnDefeat": "s2c_gap",
+              "itemOnDefeat": "回復薬",
+              "itemOnDefeatCount": 2
             }
           }
         ]

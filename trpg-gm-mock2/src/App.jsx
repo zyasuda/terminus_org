@@ -484,9 +484,16 @@ export default function App() {
                   alt=""
                 />
               )}
-              <button className="popupBtn" onClick={eng.dismissPopup}>
-                {eng.popups[0].kind === "intro" ? "はじめる" : "閉じる"}
-              </button>
+              {eng.popups[0].kind === "resume" ? (
+                <div className="popupBtnRow">
+                  <button className="popupBtn" onClick={eng.resumeSavedGame}>続きから</button>
+                  <button className="popupBtn secondary" onClick={eng.startNewGame}>最初から</button>
+                </div>
+              ) : (
+                <button className="popupBtn" onClick={eng.dismissPopup}>
+                  {eng.popups[0].kind === "intro" ? "はじめる" : "閉じる"}
+                </button>
+              )}
             </div>
           </div>
         )}

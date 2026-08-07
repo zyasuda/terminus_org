@@ -26,13 +26,16 @@
           "どうする"
         ],
         "to": "scene:1",
-        "npcSay": "ええ、頼んだわよ。気をつけて。"
+        "addItems": [
+          "回復薬"
+        ],
+        "npcSay": "坑道の奥から、まだ物音がするの。危ないのは分かってる。これを持って行って。"
       }
     ],
     "greeting": "坑道の奥から、まだ物音がするの。危ないのは分かってる。でも、確かめてきてほしい。",
     "hintChips": [
-      "依頼について",
-      "坑道について"
+      "見取り図",
+      "金属音"
     ]
   },
   "flagRules": {},
@@ -157,7 +160,7 @@
       "id": 2,
       "name": "分かれ道",
       "brief": "封鎖の木柵と左右の坑道。奥に灯りが揺れる。",
-      "img": "s2_barrier.jpg",
+      "img": "mine_entrance.png",
       "goal": "第三坑道へ入る手段を見つける",
       "direction": "封鎖柵は「外から閉じ込める」ためではなく「内側の意思で維持されている」という違和感を、断定せずに漂わせよ。危険の予感と同時に、奥にあるものへの哀感を予感させよ。",
       "enemy": {
@@ -255,7 +258,9 @@
           "importance": "support",
           "appearances": [],
           "tags": [],
-          "usage": "event"
+          "usage": "event",
+          "surface": "",
+          "trigger": ""
         },
         {
           "id": "s2c_gap",
@@ -266,7 +271,9 @@
           "importance": "major",
           "appearances": [],
           "tags": [],
-          "usage": "event"
+          "usage": "event",
+          "surface": "",
+          "trigger": ""
         }
       ],
       "blockedText": "先へ続いているのは右の坑道だけだが、封鎖の木柵が行く手をふさいでいる。古い木のはずなのに、崩れる気配がない。左の坑道は崩れて行き止まりだ。",
@@ -381,7 +388,9 @@
             "fleeDc": 10,
             "agility": 8,
             "sprite": "s2_mine_bat.png",
-            "revealOnDefeat": "s2c_gap"
+            "revealOnDefeat": "s2c_gap",
+            "itemOnDefeat": "回復薬",
+            "itemOnDefeatCount": 2
           }
         }
       ]
@@ -391,7 +400,7 @@
       "name": "灯りの部屋",
       "noBanter": true,
       "brief": "ランタンを持つ人影がこちらを向く。",
-      "img": "s3_chamber.jpg",
+      "img": "s2_junction.jpg",
       "goal": "灯りの主と決着する",
       "direction": "番人に敵意がないことを、正体を明かさずに佇まいと所作で示唆せよ。プレイヤーが刃を向けない限り、脅威ではなく孤独と献身を感じさせる存在として描け。",
       "enemy": {
@@ -527,12 +536,12 @@
         "dialogueRules": [],
         "gmSceneNotes": ""
       },
+      "greeting": "あ、あの……何か、気になることでもある?",
       "npcSprite": "player_avatar.png",
       "npc": {
         "id": "npc_3",
         "name": "村人"
-      },
-      "greeting": "あ、あの……何か、気になることでもある?"
+      }
     }
   ],
   "ending": {
