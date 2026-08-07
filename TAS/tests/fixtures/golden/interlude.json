@@ -76,8 +76,32 @@
         "image": "assets/casts/member_1.png",
         "sprite": "portrait_lydia_alt.png",
         "gender": "female",
-        "firstPerson": "あたし",
+        "firstPerson": "わたし",
         "addressTerm": "あなた",
+        "quirks": [
+          {
+            "mutter": "遺工は、急いで触るものじゃないわ。"
+          },
+          {
+            "mutter": "ガレス、壊すのは調べてからにして。"
+          }
+        ],
+        "battleMutters": [
+          "足元を見て。古い仕掛けかもしれない。",
+          "無茶をしないで、ガレス。"
+        ],
+        "battleEnd": {
+          "win": [
+            "片付いたわね。次は痕跡を見ましょう。"
+          ],
+          "fled": [
+            "引く判断は正しいわ。道を変えましょう。"
+          ],
+          "repelled": [
+            "追い払えたみたい。今のうちに進みましょう。"
+          ]
+        },
+        "idleLine": "何か見つけた？",
         "speechFrequency": "standard"
       },
       {
@@ -95,6 +119,30 @@
         "gender": "male",
         "firstPerson": "俺",
         "addressTerm": "お前",
+        "quirks": [
+          {
+            "mutter": "道を見ろ。"
+          },
+          {
+            "mutter": "必要な物だけ持つ。"
+          }
+        ],
+        "battleMutters": [
+          "下がれ。",
+          "俺が前に出る。"
+        ],
+        "battleEnd": {
+          "win": [
+            "終わりだ。進める。"
+          ],
+          "fled": [
+            "退く。足を止めるな。"
+          ],
+          "repelled": [
+            "追い払った。今だ。"
+          ]
+        },
+        "idleLine": "なんだ。",
         "speechFrequency": "standard"
       }
     ],
@@ -463,18 +511,66 @@
         "speechFrequency": "standard"
       },
       "member_1": {
-        "gender": "unspecified",
-        "firstPerson": "",
-        "addressTerm": "",
+        "gender": "female",
+        "firstPerson": "わたし",
+        "addressTerm": "あなた",
         "speechRules": "",
-        "speechFrequency": "standard"
+        "speechFrequency": "standard",
+        "quirks": [
+          {
+            "mutter": "遺工は、急いで触るものじゃないわ。"
+          },
+          {
+            "mutter": "ガレス、壊すのは調べてからにして。"
+          }
+        ],
+        "battleMutters": [
+          "足元を見て。古い仕掛けかもしれない。",
+          "無茶をしないで、ガレス。"
+        ],
+        "battleEnd": {
+          "win": [
+            "片付いたわね。次は痕跡を見ましょう。"
+          ],
+          "fled": [
+            "引く判断は正しいわ。道を変えましょう。"
+          ],
+          "repelled": [
+            "追い払えたみたい。今のうちに進みましょう。"
+          ]
+        },
+        "idleLine": "何か見つけた？"
       },
       "member_2": {
-        "gender": "unspecified",
-        "firstPerson": "",
-        "addressTerm": "",
+        "gender": "male",
+        "firstPerson": "俺",
+        "addressTerm": "お前",
         "speechRules": "",
-        "speechFrequency": "standard"
+        "speechFrequency": "standard",
+        "quirks": [
+          {
+            "mutter": "道を見ろ。"
+          },
+          {
+            "mutter": "必要な物だけ持つ。"
+          }
+        ],
+        "battleMutters": [
+          "下がれ。",
+          "俺が前に出る。"
+        ],
+        "battleEnd": {
+          "win": [
+            "終わりだ。進める。"
+          ],
+          "fled": [
+            "退く。足を止めるな。"
+          ],
+          "repelled": [
+            "追い払った。今だ。"
+          ]
+        },
+        "idleLine": "なんだ。"
       },
       "npc_1": {
         "gender": "unspecified",
@@ -791,7 +887,9 @@
               "さく",
               "木柵",
               "柵をこわす",
-              "柵を越える"
+              "柵を越える",
+              "封鎖の木柵に進む",
+              "封鎖の木柵へ進む"
             ],
             "to": 3,
             "requires": {
@@ -812,7 +910,9 @@
                 "さく",
                 "木柵",
                 "柵をこわす",
-                "柵を越える"
+                "柵を越える",
+                "封鎖の木柵に進む",
+                "封鎖の木柵へ進む"
               ],
               "to": 3,
               "requires": {
@@ -838,7 +938,9 @@
               "右に進む",
               "柵を越える",
               "柵をこわす",
-              "柵を壊す"
+              "柵を壊す",
+              "封鎖の木柵に進む",
+              "封鎖の木柵へ進む"
             ],
             "requiredElements": [
               "封鎖の木柵"
@@ -877,7 +979,9 @@
               "左へ進む",
               "左に進む",
               "隙間をくぐる",
-              "岩をどける"
+              "岩をどける",
+              "崩れた坑道に進む",
+              "崩れた坑道へ進む"
             ],
             "requiredElements": [
               "崩れた坑道"
@@ -1091,6 +1195,17 @@
         "enabled": false,
         "text": "幕間の本文だけ書き、挿入は切っている状態。"
       }
+    },
+    "startingInventory": {
+      "player": [
+        "ランタン",
+        "ナイフ"
+      ],
+      "member_2": [
+        "ロープ",
+        "ナイフ",
+        "ランタン"
+      ]
     }
   },
   "chapterFile": "chapter_01.json",

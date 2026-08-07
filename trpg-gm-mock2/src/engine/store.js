@@ -27,7 +27,6 @@ let snapshot = {
   tokenText: "",
   modelText: "(取得中)",
   directionText: "",
-  stateJsonText: "",
   secrets: [],          // {open, text}[]
   revealedEntities: [], // 開示済みsecretのentity名(重複なし)。入力補助チップに使う
   introHints: [], // イントロ中だけ出す固定チップ(「依頼について」等)。タップでそのまま入力欄に入る

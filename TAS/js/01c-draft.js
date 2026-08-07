@@ -18,7 +18,7 @@ function gamePayloadToWorkspaceDraft(raw){
   const scenes=Array.isArray(chapter.scenes)?chapter.scenes:[];
   const companions=Array.isArray(campaign.companions)?campaign.companions:[];
   const castNames={};const castProfiles={};const castImages={};const castAttributes={};
-  companions.forEach((c,index)=>{if(!c)return;const id=index===0?"gareth":`member_${index+1}`;castNames[id]=c.name||c.id||id;castProfiles[id]=c.persona||c.profile||"";if(c.sprite||c.image)castImages[id]=importedAssetRef(c.sprite||c.image);if(c.gender||c.firstPerson||c.addressTerm||c.speechRules||c.speechFrequency)castAttributes[id]={gender:c.gender||"unspecified",firstPerson:c.firstPerson||"",addressTerm:c.addressTerm||"",speechRules:c.speechRules||"",speechFrequency:c.speechFrequency||""}});
+  companions.forEach((c,index)=>{if(!c)return;const id=index===0?"gareth":`member_${index+1}`;castNames[id]=c.name||c.id||id;castProfiles[id]=c.persona||c.profile||"";if(c.sprite||c.image)castImages[id]=importedAssetRef(c.sprite||c.image);if(c.gender||c.firstPerson||c.addressTerm||c.speechRules||c.speechFrequency||["quirks","battleMutters","battleEnd","idleLine"].some(key=>key in c))castAttributes[id]={gender:c.gender||"unspecified",firstPerson:c.firstPerson||"",addressTerm:c.addressTerm||"",speechRules:c.speechRules||"",speechFrequency:c.speechFrequency||"",...Object.fromEntries(["quirks","battleMutters","battleEnd","idleLine"].filter(key=>key in c).map(key=>[key,c[key]]))}});
   /* GMも取り込む。入れないと、既存キャンペーンを開いた時にGMの名前・役割・一人称・呼称が空に戻り、
      そのまま出力すると campaign.gm と castAttributes.gm を既定値で潰す。
      旧データは campaign.gm を持たず castAttributes.gm だけを持つので、両方を見る */

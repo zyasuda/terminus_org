@@ -230,7 +230,34 @@
         "id": "gareth",
         "name": "ガレス",
         "persona": "寡黙で実用的な戦士。短く話す。",
-        "speechFrequency": "standard"
+        "gender": "female",
+        "firstPerson": "わたし",
+        "addressTerm": "あなた",
+        "speechFrequency": "standard",
+        "quirks": [
+          {
+            "mutter": "遺工は、急いで触るものじゃないわ。"
+          },
+          {
+            "mutter": "ガレス、壊すのは調べてからにして。"
+          }
+        ],
+        "battleMutters": [
+          "足元を見て。古い仕掛けかもしれない。",
+          "無茶をしないで、ガレス。"
+        ],
+        "battleEnd": {
+          "win": [
+            "片付いたわね。次は痕跡を見ましょう。"
+          ],
+          "fled": [
+            "引く判断は正しいわ。道を変えましょう。"
+          ],
+          "repelled": [
+            "追い払えたみたい。今のうちに進みましょう。"
+          ]
+        },
+        "idleLine": "何か見つけた？"
       }
     ],
     "image": null,
@@ -277,11 +304,35 @@
         "speechFrequency": "standard"
       },
       "gareth": {
-        "gender": "unspecified",
-        "firstPerson": "",
-        "addressTerm": "",
+        "gender": "female",
+        "firstPerson": "わたし",
+        "addressTerm": "あなた",
         "speechRules": "",
-        "speechFrequency": "standard"
+        "speechFrequency": "standard",
+        "quirks": [
+          {
+            "mutter": "遺工は、急いで触るものじゃないわ。"
+          },
+          {
+            "mutter": "ガレス、壊すのは調べてからにして。"
+          }
+        ],
+        "battleMutters": [
+          "足元を見て。古い仕掛けかもしれない。",
+          "無茶をしないで、ガレス。"
+        ],
+        "battleEnd": {
+          "win": [
+            "片付いたわね。次は痕跡を見ましょう。"
+          ],
+          "fled": [
+            "引く判断は正しいわ。道を変えましょう。"
+          ],
+          "repelled": [
+            "追い払えたみたい。今のうちに進みましょう。"
+          ]
+        },
+        "idleLine": "何か見つけた？"
       },
       "npc_1": {
         "gender": "unspecified",
@@ -400,6 +451,17 @@
           ],
           "npcSay": "よくやってくれた。これは謝礼だ。しかし、この欠片にはまだ秘密がある。もう少し手伝ってくれないか?"
         }
+      ]
+    },
+    "startingInventory": {
+      "player": [
+        "ランタン",
+        "ナイフ"
+      ],
+      "member_2": [
+        "ロープ",
+        "ナイフ",
+        "ランタン"
       ]
     }
   },

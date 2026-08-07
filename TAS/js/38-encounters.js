@@ -108,6 +108,14 @@ renderStructure=function(){const holder=document.createElement('div');holder.inn
 var baseBindStructureForEncounters=bindStructure;
 bindStructure=function(){baseBindStructureForEncounters();const section=document.querySelector('.encounter-section');if(!section)return;const update=()=>saveEncounters(collectEncounters());section.querySelectorAll('input,select,textarea').forEach(input=>{input.oninput=update;input.onchange=update});section.querySelectorAll('[data-remove-encounter]').forEach(button=>button.onclick=()=>{saveEncounters(sceneEncounters().filter((_,i)=>i!==Number(button.dataset.removeEncounter)));renderTab()});const add=section.querySelector('#btnAddEncounter');if(add)add.onclick=()=>{saveEncounters([...sceneEncounters(),normalizeEncounter({id:`encounter_${sceneEncounters().length+1}`,type:'conditional'},sceneEncounters().length)]);renderTab()};};
 
+/* 入力補助チップに出る調査対象を選ぶと、mock2の部分一致照合に必要な移動文を補う。 */
+function secretTriggerOptions(){return (scene().discoveries||[]).map((value,index)=>normalizeDiscoveryFor(scene(),value,index).label).filter(Boolean)}
+function appendSecretMovementTerms(input,entity){const terms=parseList(input.value);for(const term of [`${entity}に進む`,`${entity}へ進む`])if(!terms.includes(term))terms.push(term);input.value=terms.join(', ');input.dispatchEvent(new Event('input',{bubbles:true}));input.dispatchEvent(new Event('change',{bubbles:true}))}
+var baseRenderStructureForSecretTriggerTerms=renderStructure;
+renderStructure=function(){const holder=document.createElement('div');holder.innerHTML=baseRenderStructureForSecretTriggerTerms();const options=secretTriggerOptions();if(!options.length)return holder.innerHTML;const select=kind=>`<select class="secret-trigger-select" data-secret-trigger-kind="${kind}"><option value="">調査対象から移動語を追加</option>${options.map(name=>`<option value="${escapeHtml(name)}">${escapeHtml(name)}（〜に進む／〜へ進む）</option>`).join('')}</select>`;holder.querySelectorAll('.encounter-trigger-terms').forEach(input=>input.closest('.field')?.insertAdjacentHTML('beforeend',select('encounter')));holder.querySelectorAll('.exit-match').forEach(input=>input.closest('.field')?.insertAdjacentHTML('beforeend',select('exit')));return holder.innerHTML};
+var baseBindStructureForSecretTriggerTerms=bindStructure;
+bindStructure=function(){baseBindStructureForSecretTriggerTerms();document.querySelectorAll('.secret-trigger-select').forEach(select=>select.onchange=()=>{const input=select.dataset.secretTriggerKind==='encounter'?select.closest('.field')?.querySelector('.encounter-trigger-terms'):select.closest('.field')?.querySelector('.exit-match');if(input&&select.value)appendSecretMovementTerms(input,select.value);select.value=''})};
+
 /* 出力の段: scenes[].encounters を作る。段の並びは js/43-output-pipeline.js */
 function outputEncounters(payload){
   /* ensureMonsters()は本来renderAll/workspaceDraftの描画サイクルで走るが、出力はそれを

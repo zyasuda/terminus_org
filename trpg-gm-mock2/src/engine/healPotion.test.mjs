@@ -154,7 +154,7 @@ console.log("── 回復薬: 満タンなら消費しない");
   check(s.hp === 10, "満タン時はHPが変わらない", `実際は${s.hp}`);
 }
 
-console.log("── 回復薬: 持っていなければ何も起きない(単なる調べる扱いに落ちる)");
+console.log("── 回復薬: 持っていなければ回復しない(在庫0でLLMに回復させない)");
 {
   eng.restoreGame({
     state: { ...initialState(), sceneIndex: 1, hp: 5, maxHp: 10, healPotions: 0, enemy: null },
@@ -164,6 +164,21 @@ console.log("── 回復薬: 持っていなければ何も起きない(単な
   const s = readSaved();
   check(s.healPotions === 0, "所持数0のまま", `実際は${s.healPotions}`);
   check(s.hp === 5, "HPが変わらない", `実際は${s.hp}`);
+  const last = getSnapshot().gmBubble.text;
+  check(last.includes("残っていない"), "在庫切れを明示して断る", `実際は「${last}」`);
+}
+
+console.log("── 回復薬: 戦闘中に在庫0で使おうとしても回復しない");
+{
+  eng.restoreGame({
+    state: { ...initialState(), sceneIndex: 1, hp: 5, maxHp: 10, healPotions: 0,
+      enemy: { name: "坑道蝙蝠", identified: true, sprite: "bat.png", hp: 5, maxHp: 5, ac: 12, dmg: "1d2" } },
+    chron: [], history: [], revealed: []
+  });
+  await say("回復薬を使う");
+  const s = readSaved();
+  check(s.healPotions === 0, "所持数0のまま(戦闘中)", `実際は${s.healPotions}`);
+  check(s.hp <= 5, "HPが増えない(戦闘中)", `実際は${s.hp}`);
 }
 
 console.log(`\nPASS: ${passed}/${passed + failures.length} 件`);

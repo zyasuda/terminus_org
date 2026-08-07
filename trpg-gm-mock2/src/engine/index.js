@@ -757,7 +757,7 @@ function renderDebug() {
     // 名詞チップは現在のシーンの分だけ(チップ列が横に伸び続けるのを防ぐ。過去の手がかりは左パネルで参照)。
     // 開示済みに加え、一度でも判定を振った対象(examined)も出す(失敗後の再挑戦を2タップに)
     const known = open || (state.examined || []).includes(s.entity);
-    const chipLabel = (s.aliases && s.aliases[0]) || s.entity;
+    const chipLabel = s.entity; // aliasesは入力照合用の別名辞書。表示は作者が書いたentityを使う
     if (known && chipLabel && sc === curScene && !revealedEntities.includes(chipLabel)) revealedEntities.push(chipLabel);
     if (open) clues.push(s.playerText || s.text);
   }));
@@ -781,13 +781,6 @@ function renderDebug() {
         : state.inventory,
       ownerDisplayName
     ),
-    stateJsonText: JSON.stringify(
-      { scene: state.sceneIndex + 1, turn: state.turn, items: inv.held(state.inventory),
-        enemy: state.enemy ? { name: state.enemy.name, hp: state.enemy.hp + "/" + state.enemy.maxHp } : null,
-        ambushResolved: state.ambushResolved || [],
-        noProgressTurns: state.noProgressTurns,
-        worldFlags: state.worldFlags || null },
-      null, 1),
     secrets,
     revealedEntities,
     clues,
@@ -1228,7 +1221,7 @@ const COMBAT_DEFEND_RE = /防御|身を守|守りを固|盾|構え/;
 const COMBAT_FLEE_RE = /逃げ|逃走|退却|撤退|離脱/;
 
 function classifyCombatAction(text) {
-  if (canUseHealPotion(text)) return "heal";
+  if (mentionsHealPotionUse(text)) return "heal"; // 在庫切れもここで受ける(判定行動に落とさない)
   const w = state.enemy.weakness;
   if (w && (w.triggers || []).some(t => text.includes(t))) return "weakness";
   if (COMBAT_FLEE_RE.test(text)) return "flee";
@@ -1298,10 +1291,14 @@ async function tryCombatTurn(text) {
           fact("逃げ場を探したが、退路を塞がれた");
         }
       } else if (action === "heal") {
-        const result = useHealPotion();
-        fact(result
-          ? `${HEAL_POTION_NAME}を使った(HP ${result.before}→${result.after})`
-          : `${HEAL_POTION_NAME}を持っているが、今は万全だ`);
+        if (!state.healPotions) {
+          fact(`${HEAL_POTION_NAME}は残っていない`);
+        } else {
+          const result = useHealPotion();
+          fact(result
+            ? `${HEAL_POTION_NAME}を使った(HP ${result.before}→${result.after})`
+            : `${HEAL_POTION_NAME}を持っているが、今は万全だ`);
+        }
       } else if (action === "weakness") {
         const w = enemy.weakness;
         fact(w.text || `${enemyName(enemy)}は怯んだ`);
@@ -1462,8 +1459,13 @@ const HEAL_POTION_NAME = "回復薬";
 const HEAL_AMOUNT = 2; // 1回の使用でのHP回復量。既存のhp_delta上限(-3〜+2)に合わせた固定値
 const DEFAULT_ITEM_ON_DEFEAT_COUNT = 1;
 const USE_HEAL_RE = /使う|使っ|飲む|飲ん|服用/;
+// 「回復薬を飲む」という宣言かどうか(在庫は見ない)。在庫が無い時にここで拾わずLLMへ
+// 流すと、持っていない品でLLMが勝手に回復させてしまう(2026-08-07のプレイで発生)
+function mentionsHealPotionUse(text) {
+  return USE_HEAL_RE.test(text) && text.includes(HEAL_POTION_NAME);
+}
 function canUseHealPotion(text) {
-  return state.healPotions > 0 && USE_HEAL_RE.test(text) && text.includes(HEAL_POTION_NAME);
+  return state.healPotions > 0 && mentionsHealPotionUse(text);
 }
 // 呼び出し前にcanUseHealPotion()を確認していること。満タンなら消費せずnullを返す
 function useHealPotion() {
@@ -1658,7 +1660,11 @@ async function tryScripted(text) {
     if (gmMode === "scripted") { addGm("特に変わったものは見つからない。", "Neutral"); return true; }
     return false; // hybrid: secretのない対象の描写はLLMの領分
   }
-  if (canUseHealPotion(text)) {
+  if (mentionsHealPotionUse(text)) {
+    if (!state.healPotions) {
+      addGm(`${HEAL_POTION_NAME}はもう残っていない。`, "Neutral");
+      return true;
+    }
     const result = useHealPotion();
     if (result) {
       logSceneEvent(`${HEAL_POTION_NAME}を使った`);
@@ -2012,7 +2018,7 @@ function availableLoot(sc) {
 function askBackCandidates(sc) {
   const candidates = [];
   const add = name => { if (name && !candidates.includes(name)) candidates.push(name); };
-  sc.secrets.filter(s => revealed.has(s.id)).forEach(s => add((s.aliases && s.aliases[0]) || s.entity));
+  sc.secrets.filter(s => revealed.has(s.id)).forEach(s => add(s.entity));
   availableLoot(sc).forEach(add);
   Object.values(CAST).forEach(c => add(c.name));
   if (state.enemy) add(enemyName(state.enemy));

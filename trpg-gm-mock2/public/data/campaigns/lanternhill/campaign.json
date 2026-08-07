@@ -77,7 +77,21 @@
       "gender": "female",
       "firstPerson": "わたし",
       "addressTerm": "あなた",
-      "speechFrequency": "standard"
+      "speechFrequency": "standard",
+      "quirks": [
+        { "mutter": "遺工は、急いで触るものじゃないわ。" },
+        { "mutter": "ガレス、壊すのは調べてからにして。" }
+      ],
+      "battleMutters": [
+        "足元を見て。古い仕掛けかもしれない。",
+        "無茶をしないで、ガレス。"
+      ],
+      "battleEnd": {
+        "win": ["片付いたわね。次は痕跡を見ましょう。"],
+        "fled": ["引く判断は正しいわ。道を変えましょう。"],
+        "repelled": ["追い払えたみたい。今のうちに進みましょう。"]
+      },
+      "idleLine": "何か見つけた？"
     },
     {
       "id": "member_2",
@@ -94,7 +108,21 @@
       "gender": "male",
       "firstPerson": "俺",
       "addressTerm": "お前",
-      "speechFrequency": "standard"
+      "speechFrequency": "standard",
+      "quirks": [
+        { "mutter": "道を見ろ。" },
+        { "mutter": "必要な物だけ持つ。" }
+      ],
+      "battleMutters": [
+        "下がれ。",
+        "俺が前に出る。"
+      ],
+      "battleEnd": {
+        "win": ["終わりだ。進める。"],
+        "fled": ["退く。足を止めるな。"],
+        "repelled": ["追い払った。今だ。"]
+      },
+      "idleLine": "なんだ。"
     }
   ],
   "companionsHint": "場面に合う方を選べ(戦闘寄り=ガレス、調査・遺工・慎重論=リディア)",
@@ -548,16 +576,38 @@
     "member_1": {
       "gender": "female",
       "firstPerson": "わたし",
-      "addressTerm": "",
+      "addressTerm": "あなた",
       "speechRules": "",
-      "speechFrequency": "standard"
+      "speechFrequency": "standard",
+      "quirks": [
+        { "mutter": "遺工は、急いで触るものじゃないわ。" },
+        { "mutter": "ガレス、壊すのは調べてからにして。" }
+      ],
+      "battleMutters": ["足元を見て。古い仕掛けかもしれない。", "無茶をしないで、ガレス。"],
+      "battleEnd": {
+        "win": ["片付いたわね。次は痕跡を見ましょう。"],
+        "fled": ["引く判断は正しいわ。道を変えましょう。"],
+        "repelled": ["追い払えたみたい。今のうちに進みましょう。"]
+      },
+      "idleLine": "何か見つけた？"
     },
     "member_2": {
       "gender": "male",
       "firstPerson": "俺",
       "addressTerm": "お前",
       "speechRules": "",
-      "speechFrequency": "standard"
+      "speechFrequency": "standard",
+      "quirks": [
+        { "mutter": "道を見ろ。" },
+        { "mutter": "必要な物だけ持つ。" }
+      ],
+      "battleMutters": ["下がれ。", "俺が前に出る。"],
+      "battleEnd": {
+        "win": ["終わりだ。進める。"],
+        "fled": ["退く。足を止めるな。"],
+        "repelled": ["追い払った。今だ。"]
+      },
+      "idleLine": "なんだ。"
     },
     "npc_1": {
       "gender": "female",

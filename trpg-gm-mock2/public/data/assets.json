@@ -10,7 +10,7 @@
       "usedBy": [
         "chapter_01.scenes.1.img",
         "chapter_01.scenes.1.parallax.fg",
-        "chapter_01.scenes.2.img"
+        "chapter_01.scenes.3.img"
       ],
       "notes": "透過前景レイヤー(左上に山の稜線状の透過あり)。パララックス前景として使用。対応する新しいsky画像はTASに再生成依頼中(s1_skyは旧デザインのまま暫定使用)。"
     },
@@ -109,9 +109,7 @@
       "kind": "background",
       "status": "approved",
       "target": "1920x1080",
-      "usedBy": [
-        "chapter_01.scenes.3.img"
-      ],
+      "usedBy": [],
       "source": "imagegen",
       "promptVersion": 1,
       "notes": "2026-07-12生成。16:9にクロップして配置。"
@@ -121,7 +119,9 @@
       "kind": "background",
       "status": "approved",
       "target": "1920x1080",
-      "usedBy": [],
+      "usedBy": [
+        "chapter_01.scenes.2.img"
+      ],
       "source": "imagegen",
       "promptVersion": 1,
       "notes": "2026-07-12生成。封鎖の木柵に合わせた。16:9にクロップして配置。2026-07-31にシーン2の柵ルートで再利用するためimages/へ戻した。"

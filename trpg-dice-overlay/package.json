@@ -1,0 +1,12 @@
+{
+  "name": "@terminus/d20-overlay",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "exports": {
+    ".": "./src/D20Overlay.jsx"
+  },
+  "peerDependencies": {
+    "react": "^18.0.0"
+  }
+}

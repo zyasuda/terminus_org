@@ -38,6 +38,7 @@ export default function App() {
   const contextNoun = !eng.enemySprite ? "周辺"
     : eng.sceneNpcName ? "相手"
     : (eng.enemySprite.identified && eng.enemySprite.name) || "不気味な影";
+  const nounChips = [...new Set([contextNoun, ...eng.introHints, ...eng.revealedEntities])];
 
   // GMペットの位置(ステージに対する%座標、ペット中心基準)。ドラッグで4隅など自由に配置でき、端末に保存される
   const [petPos, setPetPos] = useState(() => {
@@ -314,7 +315,7 @@ export default function App() {
             <span>{eng.sceneInfo.title}</span>
             <span>第{eng.sceneInfo.num}話:{eng.sceneInfo.name}</span>
           </div>
-          <div className="sceneBrief">{eng.sceneInfo.brief}</div>
+          {eng.sceneInfo.brief && <div className="sceneBrief">{eng.sceneInfo.brief}</div>}
           {eng.clues.length > 0 && (
             <>
               <div className="panelTitle">手がかり</div>
@@ -392,10 +393,6 @@ export default function App() {
           </div>
           <div className="panelTitle">デバッグ情報</div>
           <section>
-            <h2>キャラクター状態 <span className="tag">← JSが管理、LLMは書き換え不可</span></h2>
-            <pre>{eng.stateJsonText}</pre>
-          </section>
-          <section>
             <h2>トークン消費(通算) <span className="tag">← このプレイの運用コスト実測</span></h2>
             <pre>{eng.tokenText}</pre>
           </section>
@@ -431,18 +428,11 @@ export default function App() {
         <div id="underPanel" className={eng.underPanelOpen ? "open" : ""}>
           {(eng.introHints.length > 0 || eng.revealedEntities.length > 0 || eng.verbChips.length > 0) && (
             <div id="entityChips">
-              <button className="entityChip" onClick={() => setInput(prev => prev + contextNoun)}>
-                {contextNoun}
-              </button>
-              {/* イントロ専用のヒント。GMが語った名詞なので、開示済み名詞と同じ扱い */}
-              {eng.introHints.map(hint => (
-                <button key={"h" + hint} className="entityChip" onClick={() => setInput(prev => prev + hint)}>
-                  {hint}
-                </button>
-              ))}
-              {/* 名詞(開示済みオブジェクト)→動詞(使用頻度順)の2タップで指示が完成する。
-                  助詞は動詞側が持つ(「扉を調べる」「坑道に進む」)ので、名詞は素のまま入れる */}
-              {eng.revealedEntities.map(name => (
+              {/* 名詞(既定の目的語+イントロのヒント+開示済みオブジェクト)→動詞(使用頻度順)の
+                  2タップで指示が完成する。助詞は動詞側が持つ(「扉を調べる」「坑道に進む」)ので
+                  名詞は素のまま入れる。エンジンも交戦中の敵をrevealedEntitiesの先頭に入れるため、
+                  contextNounと重複しうる。3つを1本の列に均してから重複を落とす */}
+              {nounChips.map(name => (
                 <button key={"n" + name} className="entityChip" onClick={() => setInput(prev => prev + name)}>
                   {name}
                 </button>

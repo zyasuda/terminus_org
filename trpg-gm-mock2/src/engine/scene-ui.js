@@ -9,9 +9,12 @@ export function setSceneInfo(state) {
   } });
 }
 
+// イントロ/エンディングのノードは、同じ文面をGMが吹き出しで語り、左パネルの「GMの語り」に
+// 積まれる(index.jsのshowDialogueNodeが node.brief || node.text を addGm する)。
+// ここでもbriefを出すと左パネル内で同じ文が二重に並ぶため、シーン説明欄は空にする
 export function setDialogueNodeInfo(node, state) {
   setStore({ sceneInfo: {
-    num: state.sceneIndex + 1, total: SCENARIO.scenes.length, brief: node.brief || node.text || "", report: false,
+    num: state.sceneIndex + 1, total: SCENARIO.scenes.length, brief: "", report: false,
     title: SCENARIO.title, name: node.name || ""
   } });
 }
