@@ -307,8 +307,17 @@ async function callOllama(payload) {
     return { status: apiRes.status, body: { error: { type: "ollama_error", message: String(msg) } } };
   }
   const data = JSON.parse(raw);
+  /* timingはOllamaが返す実測値(ナノ秒)。プロンプトの長さを削る判断には、トークン数ではなく
+     「前処理に実際に何秒かかったか」が要る。prompt_eval_countはプレフィックスキャッシュが
+     効いた分を除いた実評価トークン数のはずだが、版によって総数を返すことがあるため、
+     カウントと所要時間の両方を残して後から突き合わせられるようにする */
   return { status: 200, body: { content: [{ type: "text", text: data.message?.content || "" }],
-    usage: { input_tokens: data.prompt_eval_count || 0, output_tokens: data.eval_count || 0 } } };
+    usage: { input_tokens: data.prompt_eval_count || 0, output_tokens: data.eval_count || 0 } },
+    timing: {
+      promptEvalCount: data.prompt_eval_count ?? null, promptEvalNs: data.prompt_eval_duration ?? null,
+      evalCount: data.eval_count ?? null, evalNs: data.eval_duration ?? null,
+      totalNs: data.total_duration ?? null, loadNs: data.load_duration ?? null
+    } };
 }
 
 const server = http.createServer((req, res) => {
@@ -329,6 +338,7 @@ const server = http.createServer((req, res) => {
           BACKEND === "ollama" ? callOllama(payload) :
           ["groq", "openrouter"].includes(BACKEND) ? callOpenAICompatible(payload) :
           callAnthropic(payload);
+        const startedAt = Date.now();
         let result = await call();
         // 無料枠のレート制限(429)は、指示された待ち時間だけ待って1回だけ自動リトライする。
         // プレイヤーには「エラー」ではなく「少し長い待ち」として見せる
@@ -342,6 +352,9 @@ const server = http.createServer((req, res) => {
         logLlmTurn({
           ts: new Date().toISOString(),
           backend: BACKEND, model: MODEL,
+          // durationMsは中継サーバーから見た往復の実測。timingはバックエンドの内訳(Ollamaのみ)
+          durationMs: Date.now() - startedAt,
+          timing: result.timing || null,
           system: payload.system, messages: payload.messages,
           status: result.status, response: result.body
         });

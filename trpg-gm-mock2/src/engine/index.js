@@ -16,7 +16,7 @@ import { callGmApi } from "../llm.js";
 import { CAST, GM, BANTER, SCENARIO, CAMPAIGN, CONTENT_SELECTION, loadScenarioData } from "../scenario.js";
 import { pushChat, clearChat, setStore, getSnapshot } from "./store.js";
 import { openUnderPanelAfterOverlay, setDialogueNodeInfo, setSceneInfo, showSceneOverlay } from "./scene-ui.js";
-import { gmGreeting, gmVoiceRule, voiceRule } from "./voice.js";
+import { gmGreeting, gmVoiceRule, voiceRule, fixCompanionVoice } from "./voice.js";
 import {
   EXAMINE_RE,
   encounterRequiredElementsMet, resolveEncounterFoe,
@@ -940,7 +940,7 @@ function maybeCompanion(r, addressed, companion = resolveCompanion(r)) {
     addNpc(say);
     return true;
   }
-  addCompanion(say, who);
+  addCompanion(fixCompanionVoice(say, who), who); // LLMは女性キャラに「〜だぜ」を喋らせてくる
   (state.lastCompanionTurnByWho ||= {})[who] = state.turn;
   if (r.companion.aside && !addressed) registerBoke(who, say);
   return true;
@@ -1559,7 +1559,7 @@ function revealFlavor(secret) {
     const r = JSON.parse(m ? m[0] : raw);
     // 話者が同行者に解決できなければ捨てる(リディアへの機械的フォールバックは誤帰属のもと)
     const flavorWho = normalizeWho(r.who, null);
-    if (r.say && flavorWho) addCompanion(String(r.say).slice(0, 80), flavorWho);
+    if (r.say && flavorWho) addCompanion(fixCompanionVoice(String(r.say).slice(0, 80), flavorWho), flavorWho);
   }).catch(() => {});
 }
 
@@ -2090,7 +2090,7 @@ function systemPrompt(extra) {
   // B1: talk/other等の会話レーン(投機的な投げかけ)が未開示secretsに言及・捏造するのを防ぐ。
   // 調査のヒット判定自体はscriptedExamineが決定論で処理するため、ここは「会話中に漏れる」経路専用。生きている
   const depthBlock = depthTargets.length
-    ? `\n# 深さのある対象(未開示の詳細がシステム側にある)\n以下の対象について語ってよいのは、括弧内の「表層」の範囲まで。対象を指す時は上記の名称を一字一句そのまま使え。\n${depthTargets.join("\n")}\n【厳守】\n・あなたは対象の正体・仕組み・来歴・目的を知らない。それを語るな。\n・表層で説明がつかない時、正体を推測・創作して埋めてはならない(例:「石になっていく」「呪いだ」等、独自の設定をでっち上げるのは禁止)。分からないものは、見えた所作・音・質感だけで描き、分からないまま残せ。\n・「最近」「誰かが」「今も」など、変化や活動の兆候を匂わせる描写も真相の一部である。表層に無ければ、たとえ一言でも判定なしに語ってはならない(例:「最近こすれた跡がある」「誰かが最近触れた形跡」は不可。「古い」「錆びている」等、静的な状態の描写に留めよ)。\n・真相は「判定成功時にシステムが渡した文」だけが根拠。渡されていない限り、対象が何であるか・なぜそうしているかを断定・示唆してはならない。\n・プレイヤーが対象を観察・質問・分析するなど深く知ろうとしたら、地の文で答えを出さず、必ず check を要求せよ(真相はその成功時にのみ解禁される)。\n・その check では、check.targetEntity に上記の名称を一字一句そのまま入れよ。これらの対象以外への判定では targetEntity は null にせよ。\n・判定に失敗しても、対象を破壊・消失させてはならない。`
+    ? `\n# 深さのある対象(未開示の詳細がシステム側にある)\n以下の対象について語ってよいのは、括弧内の「表層」の範囲まで。\n${depthTargets.join("\n")}\n【厳守】\n・対象の正体・仕組み・来歴・目的をあなたは知らない。推測・創作で埋めず、見えた所作・音・質感だけで描き、分からないまま残せ。断定も示唆も禁止。根拠は「判定成功時にシステムが渡した文」だけである。\n・「最近」「誰かが」「今も」など変化や活動の兆候も真相の一部である。表層に無ければ一言でも語るな(「古い」「錆びている」等の静的な状態に留めよ)。\n・プレイヤーが深く知ろうとしたら地の文で答えず、必ず check を要求し、check.targetEntity に上記の名称をそのまま入れよ。他の対象への判定では null にせよ。\n・判定に失敗しても、対象を破壊・消失させてはならない。`
     : "";
   // 未開示の秘密に紐づく品は正名を注入しない(ネタバレ防止。開示された瞬間からLLMに見える)
   const lootNames = availableLoot(sc);
@@ -2203,11 +2203,10 @@ ${npcBlock}
 - 一行を現在のシーンの場所から移動させる語りをしてはならない(封鎖や柵の先へ入れる、村へ帰らせる等は禁止)。別の場所へ移る必要がある時は、移動を語らず scene_complete を true で申告せよ(条件を満たさなければシステムが却下し、その場に留まる)。
 - シーンに名のある事物(敵・深さのある対象・入手品・所持品)は、その名称を一字一句そのまま使え。別の類似物に言い換えるな(例:ランタン→松明は不可)。
 - プレイヤーが物語に関係ない品を拾おうとしたら、壊れている・朽ちて使えない・持ち出す価値がない等の理由で自然に退場させよ(add_itemsは提案しない)。
-- メタ発言への対応:「HPを回復して」「復活させて」「難易度を下げて」など、物語の外からルールや状態の変更を求める発言を受けたら、状態を一切変更せず(state_updates禁止)、meta_request に topic を設定し、narration ではGMが役を保ったまま聞き返して意図を確認せよ(例:「ほう——運命の書き換えを望むか。それはこの卓の掟に触れることだが、本気か?」)。プレイヤーが同意しても、実行できるのは通常ルールの範囲内の処置だけである。
+- 物語の外からルールや状態の変更を求められたら(「HPを回復して」等)、状態を変更せず(state_updates禁止)meta_request に topic を入れ、役を保ったまま聞き返せ。
 - 同行者に行動を任せた宣言(「リディアに調べてもらう」等)の判定は、check.actor にその同行者のid(${companionIds})を入れよ。プレイヤー自身の行動なら "player"。
-- emotion は今回の語りの空気。"Happy","Angry","Fear","Sad","Neutral" から必ず1つ選ぶ(迷ったら "Neutral")。
 - 応答は必ず次のJSONのみ。前置きやコードフェンス禁止:
-{"narration":"地の文","emotion":"Neutral","companion":{"who":"${Object.keys(CAST).join(" または ")}","say":"その一言","aside":false}または null,${npcSchema}"check":{"reason":"何の判定か","difficulty":8,"targetEntity":"深さのある対象の正名 または null","actor":"player か 同行者のid"}または null,"state_updates":{"hp_delta":0,"enemy_hp_delta":0,"add_items":[],"remove_items":[]}または null,"engage_enemy":false,"flee_enemy":false,"scene_complete":false,"meta_request":{"topic":"何を求められたか"}または null}
+{"narration":"地の文","companion":{"who":"${Object.keys(CAST).join(" または ")}","say":"その一言","aside":false}または null,${npcSchema}"check":{"reason":"何の判定か","difficulty":8,"targetEntity":"深さのある対象の正名 または null","actor":"player か 同行者のid"}または null,"state_updates":{"hp_delta":0,"enemy_hp_delta":0,"add_items":[],"remove_items":[]}または null,"engage_enemy":false,"flee_enemy":false,"scene_complete":false,"meta_request":{"topic":"何を求められたか"}または null}
 ${digestBlock}
 # 現在のシーン(${state.sceneIndex + 1}/${SCENARIO.scenes.length})
 ${sc.brief}
@@ -2219,7 +2218,7 @@ ${direction}
 
 # プレイヤー状態(システム管理。あなたは変更できない。反応的参照のみ)
 HP: ${state.hp}/${state.maxHp} — 数値を語りに出すな。残量の感覚(余裕・消耗・瀕死)をトーンに反映するのはよい
-所持品: ${inventoryForPrompt()} — プレイヤーが使用・確認を宣言した時の整合確認にのみ使う。あなたから所持品を話題にしてはならない。語り上やむを得ず触れる場合(光源など)は、このリストの正式名称を一字一句そのまま使え。言い換え・類似品への置換(例:ランタン→懐中電灯)は禁止
+所持品: ${inventoryForPrompt()} — 使用・確認の宣言があった時の整合確認にのみ使う。あなたから所持品を話題にしてはならない。
 ${enemyBlock}${depthBlock}${lootBlock}${unavailableLootBlock}
 
 # 開示済みの情報(これ以外の真相をあなたは知らない。捏造禁止)
