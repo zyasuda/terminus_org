@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useEngine } from "./hooks/useEngine.js";
 import { setStore } from "./engine/store.js";
+import { joinParticle } from "./engine/index.js";
 import PhaserFx from "./PhaserFx.jsx";
 import { D20Overlay } from "@terminus/d20-overlay";
 
@@ -31,6 +32,12 @@ export default function App() {
   // GMの語りの表示分担: 最新1件=主画面のペットの吹き出し、履歴=左パネル、下パネルは会話(プレイヤー・仲間)専用
   const gmLog = eng.chat.filter(e => e.kind === "msg" && e.cls === "gm");
   const selectedCampaign = eng.contentCatalog.find(c => c.id === eng.selectedCampaignId);
+  // 既定の目的語。「調べる」の対象は場に何もいなければ周辺、人がいれば相手、
+  // 敵は正体が割れるまで「不気味な影」、割れたら敵名。
+  // 開示済み名詞が無い場面でも1タップ目が押せるようにするためのチップ
+  const contextNoun = !eng.enemySprite ? "周辺"
+    : eng.sceneNpcName ? "相手"
+    : (eng.enemySprite.identified && eng.enemySprite.name) || "不気味な影";
 
   // GMペットの位置(ステージに対する%座標、ペット中心基準)。ドラッグで4隅など自由に配置でき、端末に保存される
   const [petPos, setPetPos] = useState(() => {
@@ -179,7 +186,13 @@ export default function App() {
           <div
             id="enemySprite"
             className={eng.enemySprite.identified ? "identified" : ""}
-            style={{ backgroundImage: `url("/images/${eng.enemySprite.src}")`, cursor: eng.sceneNpcName ? "pointer" : "default" }}
+            /* CSSの#enemySpriteはpointer-events:none(敵スプライトがパネルのスワイプを邪魔しないため)。
+               NPC表示の時だけタップを受け取れるように上書きする */
+            style={{
+              backgroundImage: `url("/images/${eng.enemySprite.src}")`,
+              cursor: eng.sceneNpcName ? "pointer" : "default",
+              pointerEvents: eng.sceneNpcName ? "auto" : "none"
+            }}
             onClick={() => {
               if (!eng.sceneNpcName) return;
               eng.replayNpcBubble();
@@ -193,7 +206,7 @@ export default function App() {
             応答の生成中は「…」の考え中表示に差し替える */}
         {eng.thinking.npc ? (
           <div className="npcBubble thinking"><ThinkingDots /></div>
-        ) : eng.npcBubble.text && (
+        ) : eng.npcBubble.text && !eng.npcBubble.hidden && (
           <div key={"npcbub" + eng.npcBubble.seq} className="npcBubble">{eng.npcBubble.text}</div>
         )}
 
@@ -228,7 +241,7 @@ export default function App() {
             return <div key={s.slot + "-think"} className={cls + " thinking"}><ThinkingDots /></div>;
           }
           const b = eng.companionBubbles[s.who];
-          if (!b || !b.text) return null;
+          if (!b || !b.text || b.hidden) return null;
           return (
             <div
               key={s.slot + "-bub" + b.seq}
@@ -271,7 +284,7 @@ export default function App() {
               ? { right: (100 - petPos.x + 5.5) + "%", top: petPos.y + "%" }
               : { left: (petPos.x + 5.5) + "%", top: petPos.y + "%" }}
           ><ThinkingDots /></div>
-        ) : eng.gmBubble.text && (
+        ) : eng.gmBubble.text && !eng.gmBubble.hidden && (
           <div
             id="gmBubble"
             key={"bub" + eng.gmBubble.seq}
@@ -418,20 +431,24 @@ export default function App() {
         <div id="underPanel" className={eng.underPanelOpen ? "open" : ""}>
           {(eng.introHints.length > 0 || eng.revealedEntities.length > 0 || eng.verbChips.length > 0) && (
             <div id="entityChips">
-              {/* イントロ専用のヒント。すでに完成した宣言文なので「を」を足さずそのまま入力欄に入れる */}
+              <button className="entityChip" onClick={() => setInput(prev => prev + contextNoun)}>
+                {contextNoun}
+              </button>
+              {/* イントロ専用のヒント。GMが語った名詞なので、開示済み名詞と同じ扱い */}
               {eng.introHints.map(hint => (
-                <button key={"h" + hint} className="entityChip" onClick={() => setInput(hint)}>
+                <button key={"h" + hint} className="entityChip" onClick={() => setInput(prev => prev + hint)}>
                   {hint}
                 </button>
               ))}
-              {/* 名詞(開示済みオブジェクト)→「〜を」、動詞(使用頻度順)→述語。2タップで指示が完成する */}
+              {/* 名詞(開示済みオブジェクト)→動詞(使用頻度順)の2タップで指示が完成する。
+                  助詞は動詞側が持つ(「扉を調べる」「坑道に進む」)ので、名詞は素のまま入れる */}
               {eng.revealedEntities.map(name => (
-                <button key={"n" + name} className="entityChip" onClick={() => setInput(prev => prev + name + "を")}>
+                <button key={"n" + name} className="entityChip" onClick={() => setInput(prev => prev + name)}>
                   {name}
                 </button>
               ))}
-              {eng.verbChips.map(v => (
-                <button key={"v" + v} className="entityChip verbChip" onClick={() => setInput(prev => prev + v)}>
+              {eng.verbChips.map(({ v, p }) => (
+                <button key={"v" + v} className="entityChip verbChip" onClick={() => setInput(prev => prev + joinParticle(prev, p) + v)}>
                   {v}
                 </button>
               ))}

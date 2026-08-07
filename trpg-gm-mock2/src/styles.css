@@ -95,9 +95,13 @@ body {
   display: flex;
   flex-direction: column;
   gap: 0.35em;
+  pointer-events: none; /* 下の #chat > div で行だけ復活させる(隙間のタップは背後へ通す) */
 }
 /* メッセージが少ない間は下端に寄せる(justify-endだとスクロールが壊れるためスペーサーで押し下げる) */
 #chat::before { content: ""; flex: 1 0 auto; }
+/* ログは画面中央に大きく重なるので、文字の無い隙間のタップは背後(NPC/敵スプライト)へ通す。
+   行だけがイベントを受け、そこから#chatへバブルするのでスクロールは効いたまま */
+#chat > div { pointer-events: auto; }
 #chat::-webkit-scrollbar { width: 4px; }
 #chat::-webkit-scrollbar-thumb { background: var(--panel-border); border-radius: 4px; opacity: .5; }
 
@@ -344,16 +348,16 @@ body {
   border-color: transparent rgba(22, 25, 40, .9) transparent transparent;
 }
 
-/* ---- シーンNPC(依頼人マイラ等)の吹き出し。中央のnpcSprite(#enemySprite: left50%)の
-   真上に、下向きの尻尾でスプライトを指して表示する。以前は主画面のシーン説明(#sceneDesc)
-   と重なって読みにくかったため右上へ逃がしていたが、#sceneDesc自体を廃止したので
-   マイラの立ち位置の真上に戻す ---- */
+/* ---- シーンNPC(依頼人マイラ等)の吹き出し。#enemySprite(left50%/width30%)の頭より
+   右上の空きスペースに置き、尻尾を左下=スプライト側へ向けて誰の発言かを示す。
+   真上に置くと顔にかかるため、左端をスプライト中央より右(58%)から始める。
+   left/rightの両方で幅を決めるのは、文字数で尻尾の位置が動かないようにするため ---- */
 .npcBubble {
   position: absolute;
-  left: 50%;
-  top: 16%;
-  transform: translate(-50%, -100%);
-  max-width: 40%;
+  left: 52%;
+  right: 3%;
+  top: 28.94%; /* 下パネルを閉じている時。スプライトのbottom:10%に対応する高さ */
+  transition: top .2s ease; /* #enemySpriteのbottom遷移と同期 */
   z-index: 24;
   pointer-events: none;
   background: rgba(22, 25, 40, .58);
@@ -368,13 +372,15 @@ body {
   text-shadow: 0 1px 4px rgba(0, 0, 0, .6);
   animation: bubbleIn .25s ease, bubbleOut .6s ease 8s forwards;
 }
-.npcBubble::before { /* 下向き尻尾・縁取り */
+/* 下パネル表示中: スプライトが24.94%上がるので、吹き出しも同じ量だけ上げる */
+#stage.panelUp .npcBubble { top: 4%; }
+
+.npcBubble::before { /* 左下向きの尻尾(スプライト側を指す)・縁取り */
   content: "";
   position: absolute;
-  left: 50%;
-  bottom: -14px;
-  margin-left: -10px;
-  border-width: 15px 10px 0 10px;
+  left: 4%;
+  bottom: -18px;
+  border-width: 19px 22px 0 0;
   border-style: solid;
   border-color: rgba(143, 208, 184, .9) transparent transparent transparent;
   filter: drop-shadow(0 1px 3px rgba(0, 0, 0, .5));
@@ -382,10 +388,9 @@ body {
 .npcBubble::after {
   content: "";
   position: absolute;
-  left: 50%;
-  bottom: -10px;
-  margin-left: -7px;
-  border-width: 10px 7px 0 7px;
+  left: 4.6%;
+  bottom: -13px;
+  border-width: 14px 16px 0 0;
   border-style: solid;
   border-color: rgba(22, 25, 40, .9) transparent transparent transparent;
 }

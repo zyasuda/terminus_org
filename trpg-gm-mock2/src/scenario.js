@@ -47,6 +47,10 @@ const DEFAULT_COMPANION_QUIRKS = [
   { mutter: "気をつけていこう。" }
 ];
 const DEFAULT_BATTLE_MUTTERS = ["油断するなよ。", "まだ終わっていない。", "ここが踏ん張りどころだ。"];
+/* 立ち絵タップの既定応答。TASにまだ入力欄が無いので、作者が書いた一人称から
+   口調を寄せる(「俺」なら短く硬い返し)。idleLineを書けばそちらが優先される */
+const DEFAULT_IDLE_LINE = { "俺": "なんだ?", "オレ": "なんだ?", "僕": "なに?", "私": "何?", "わたし": "何?" };
+const FALLBACK_IDLE_LINE = "…どうした?";
 const DEFAULT_BATTLE_END = {
   win: ["ふぅ、なんとかなったな。"],
   fled: ["ここは退くのが得策だ。"],
@@ -183,7 +187,8 @@ export async function loadScenarioData() {
       quirks: "quirks" in c ? c.quirks : DEFAULT_COMPANION_QUIRKS,
       battleMutters: "battleMutters" in c ? c.battleMutters : DEFAULT_BATTLE_MUTTERS,
       agility: c.agility,
-      battleEnd: "battleEnd" in c ? c.battleEnd : DEFAULT_BATTLE_END };
+      battleEnd: "battleEnd" in c ? c.battleEnd : DEFAULT_BATTLE_END,
+      idleLine: c.idleLine || DEFAULT_IDLE_LINE[c.firstPerson] || FALLBACK_IDLE_LINE };
     (c.banter || []).forEach(b => BANTER.push({ from: c.id, ...b }));
   });
 

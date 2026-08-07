@@ -417,6 +417,23 @@ const VERB_CANON = {
   "話す": "話しかける", "はなしかける": "話しかける", "尋ねる": "話しかける", "聞く": "話しかける", "声をかける": "話しかける", "呼びかける": "話しかける",
   "攻撃": "攻撃する", "殴る": "攻撃する", "斬る": "攻撃する"
 };
+// 動詞ごとに直前の助詞は一意に決まる(「扉を調べる」「坑道に進む」)。名詞チップ側で
+// 「を」を決め打ちすると「坑道を進む」になるので、助詞は動詞チップが補う。
+// 学習した未知の動詞は既定の「を」にする(他動詞の方が多いため)
+const VERB_PARTICLE = {
+  "調べる": "を", "よく見る": "を", "攻撃する": "を", "使う": "を",
+  "話しかける": "に", "進む": "に", "戻る": "に"
+};
+const DEFAULT_PARTICLE = "を";
+function particleFor(v) { return VERB_PARTICLE[v] || DEFAULT_PARTICLE; }
+// 名詞チップ→動詞チップの連結時に挟む助詞を返す。空欄・すでに助詞や句読点で
+// 終わっている場合は何も挟まない(「扉を」+「を調べる」の二重を防ぐ)
+export function joinParticle(prev, particle) {
+  const t = (prev || "").trimEnd();
+  if (!t) return "";
+  if (/[をにへとでがはやもか、。「」\s]$/.test(t)) return "";
+  return particle;
+}
 function canonVerb(v) { return VERB_CANON[v] || v; }
 function loadVerbFreq() {
   // 旧形式 {verb: count} は {verb: {n, t}} へ移行する(tは最終使用時刻。旧データはt=0で「古い」扱い)
@@ -426,9 +443,15 @@ function loadVerbFreq() {
     return raw;
   } catch (e) { return {}; }
 }
-function extractVerb(text) {
+// 既知の動詞(シード+表記ゆれ)。長い方から見て後方一致させる
+const KNOWN_VERBS = [...new Set([...SEED_VERBS, ...Object.keys(VERB_CANON)])].sort((a, b) => b.length - a.length);
+const VERB_MAX_LEN = 5; // 未知語はこの長さまで。助詞なしで名詞と繋がった「見取り図調べる」を弾く
+export function extractVerb(text) {
   const tail = text.replace(/[。!?！？\s]+$/, "").split(/[をにへとで、。]/).pop().trim();
-  if (tail.length < 2 || tail.length > 8) return null; // 短すぎ/長すぎは述語とみなさない
+  // 助詞が無くても「名詞+動詞」を切れるよう、まず既知の動詞で後方一致を試す
+  const known = KNOWN_VERBS.find(v => tail.endsWith(v));
+  if (known) return known;
+  if (tail.length < 2 || tail.length > VERB_MAX_LEN) return null; // 短すぎ/長すぎは述語とみなさない
   if (!/[るすくぐむぶぬうつ]$/.test(tail)) return null; // 動詞の終止形らしい語尾のみ採用
   return tail;
 }
@@ -451,9 +474,10 @@ function pushVerbChips() {
   const now = Date.now();
   const learned = Object.keys(freq)
     .filter(k => now - (freq[k].t || 0) < VERB_RECENT_MS) // 最近使ったものだけ表示(列が伸び続けるのを防ぐ)
+    .filter(k => k.length <= VERB_MAX_LEN || SEED_VERBS.includes(k)) // 旧バージョンが誤学習した「名詞+動詞」を掃除する
     .sort((a, b) => freq[b].n - freq[a].n);
   const all = [...new Set([...learned, ...SEED_VERBS])]; // 学習済みを頻度順で先頭に、シードで穴埋め
-  setStore({ verbChips: all.slice(0, 6) });
+  setStore({ verbChips: all.slice(0, 6).map(v => ({ v, p: particleFor(v) })) });
 }
 
 /* ---------------- UI helpers(store経由) ---------------- */
@@ -506,22 +530,26 @@ const addGm = (t, emotion) => {
   const emo = normalizeEmotion(emotion);
   chron.push({ t: state.turn, ts: Date.now(), kind: "gm", text: t, emotion: emo });
   addMsg("gm", t);
-  setStore(s => ({ gmBubble: { text: t, emotion: emo, seq: s.gmBubble.seq + 1 } }));
+  setStore(s => ({ gmBubble: { text: t, emotion: emo, hidden: false, seq: s.gmBubble.seq + 1 } }));
 };
 // GMペットをタップした時: 最後の発言の吹き出しを出し直す(seqの増分で再マウント→フェードが再スタート)
 export function replayGmBubble() {
-  setStore(s => s.gmBubble.text ? { gmBubble: { ...s.gmBubble, seq: s.gmBubble.seq + 1 } } : {});
+  setStore(s => s.gmBubble.text ? { gmBubble: { ...s.gmBubble, hidden: false, seq: s.gmBubble.seq + 1 } } : {});
 }
-// 同行者の立ち絵をタップした時: その同行者の最後の発言の吹き出しを出し直す
+// 同行者の立ち絵をタップした時: その同行者の最後の発言の吹き出しを出し直す。
+// まだ一度も喋っていない場面では反応が無く「壊れている」ように見えるので、
+// CAST[who].idleLine(scenario.jsが一人称から既定値を用意する)で受け答えする
 export function replayCompanionBubble(who) {
   setStore(s => {
     const b = s.companionBubbles[who];
-    return b && b.text ? { companionBubbles: { ...s.companionBubbles, [who]: { ...b, seq: b.seq + 1 } } } : {};
+    if (b && b.text) return { companionBubbles: { ...s.companionBubbles, [who]: { ...b, hidden: false, seq: b.seq + 1 } } };
+    const idle = (CAST[who] && CAST[who].idleLine) || "…どうした?";
+    return { companionBubbles: { ...s.companionBubbles, [who]: { text: idle, hidden: false, seq: ((b || {}).seq || 0) + 1 } } };
   });
 }
 // NPC(依頼人マイラ等)の立ち絵をタップした時: 最後の発言の吹き出しを出し直す
 export function replayNpcBubble() {
-  setStore(s => s.npcBubble.text ? { npcBubble: { ...s.npcBubble, seq: s.npcBubble.seq + 1 } } : {});
+  setStore(s => s.npcBubble.text ? { npcBubble: { ...s.npcBubble, hidden: false, seq: s.npcBubble.seq + 1 } } : {});
 }
 // AI応答待ちの「考え中(…)」表示。key: "gm" | 同行者id | "npc"
 function setThinking(key, on) {
@@ -570,7 +598,7 @@ const addCompanion = (t, who = Object.keys(CAST)[0]) => {
   addMsg("companion companion-" + who, name + "「" + t + "」");
   // GMペットと同じ形式の吹き出しを、その同行者の立ち絵の脇に出す(約8秒でフェードアウト)
   setStore(s => ({ companionBubbles: { ...s.companionBubbles,
-    [who]: { text: t, seq: ((s.companionBubbles[who] || {}).seq || 0) + 1 } } }));
+    [who]: { text: t, hidden: false, seq: ((s.companionBubbles[who] || {}).seq || 0) + 1 } } }));
   highlightPortrait(who);
 };
 // シーンNPC(依頼人マイラ等)の台詞。話者名はシーン定義から取る(モデルに選ばせない)
@@ -584,7 +612,7 @@ const addNpc = (t, speaker) => {
   chron.push({ t: state.turn, ts: Date.now(), kind: "npc", name: npc.name, text: t });
   addMsg("companion companion-npc", npc.name + "「" + t + "」");
   // GM/同行者と同じ形式の吹き出しを、中央のnpcSprite(#enemySprite)の上に出す
-  setStore(s => ({ npcBubble: { text: t, seq: s.npcBubble.seq + 1 } }));
+  setStore(s => ({ npcBubble: { text: t, hidden: false, seq: s.npcBubble.seq + 1 } }));
   saveGame(); // 非同期(npcAgentReply)でターン確定後に届くため、ここで保存しないとリロードで消える
 };
 /* ---------------- 表示シーケンス ----------------
@@ -600,15 +628,18 @@ const addNpc = (t, speaker) => {
 function readDelayMs(text) {
   return Math.min(4000, Math.max(900, (text || "").length * 60));
 }
+/* 吹き出しを隠すのは hidden フラグで行い、text は最後の発言として残す。
+   text を空にすると立ち絵タップの replay*Bubble() が「何も無い」になってしまうため
+   (シーケンス中に前の話者を消すたび、その話者の発言が復元できなくなっていた) */
 function clearGmBubble() {
-  setStore(s => (s.gmBubble.text ? { gmBubble: { ...s.gmBubble, text: "" } } : {}));
+  setStore(s => (s.gmBubble.hidden ? {} : { gmBubble: { ...s.gmBubble, hidden: true } }));
 }
 function clearNpcBubble() {
-  setStore(s => (s.npcBubble.text ? { npcBubble: { ...s.npcBubble, text: "" } } : {}));
+  setStore(s => (s.npcBubble.hidden ? {} : { npcBubble: { ...s.npcBubble, hidden: true } }));
 }
 function clearCompanionBubble(who) {
-  setStore(s => (s.companionBubbles[who]?.text
-    ? { companionBubbles: { ...s.companionBubbles, [who]: { ...s.companionBubbles[who], text: "" } } }
+  setStore(s => (s.companionBubbles[who] && !s.companionBubbles[who].hidden
+    ? { companionBubbles: { ...s.companionBubbles, [who]: { ...s.companionBubbles[who], hidden: true } } }
     : {}));
 }
 function clearAllBubbles() {
@@ -616,7 +647,7 @@ function clearAllBubbles() {
   clearNpcBubble();
   setStore(s => ({
     companionBubbles: Object.fromEntries(
-      Object.entries(s.companionBubbles).map(([who, b]) => [who, { ...b, text: "" }]))
+      Object.entries(s.companionBubbles).map(([who, b]) => [who, { ...b, hidden: true }]))
   }));
 }
 /* steps: [{ text, speak(), clear() }, ...]。各stepの直前にclear()(省略時はclearAllBubbles)
@@ -768,10 +799,10 @@ function renderDebug() {
     // (タップ時に「マイラに」を入力欄へ差し込むため、UI側は敵かNPCかを区別できる必要がある)
     ...(() => {
       if (state.enemy && state.enemy.sprite) {
-        return { enemySprite: { src: state.enemy.sprite, identified: !!state.enemy.identified }, sceneNpcName: null };
+        return { enemySprite: { src: state.enemy.sprite, identified: !!state.enemy.identified, name: state.enemy.name }, sceneNpcName: null };
       }
       if (curScene.enemy && curScene.enemy.presence && curScene.enemy.sprite && !state.defeated.includes(curScene.enemy.name)) {
-        return { enemySprite: { src: curScene.enemy.sprite, identified: revealed.has(curScene.enemy.identifySecret) }, sceneNpcName: null };
+        return { enemySprite: { src: curScene.enemy.sprite, identified: revealed.has(curScene.enemy.identifySecret), name: curScene.enemy.name }, sceneNpcName: null };
       }
       // intro / ending もシーンNPCと同じスロット・表示ロジックを使う。
       // 章完了後(chapterEnded)もendingのスプライトを維持する。渡す等の出口処理で
