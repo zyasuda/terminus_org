@@ -14,7 +14,6 @@ let snapshot = {
   rightPanelOpen: false,
   underPanelOpen: true,  // 再開(前回の続き)ではすぐ操作できるよう下パネルは開けておく
   popups: [],           // 通知型ポップアップのキュー {kind, title, body, img}[]。先頭を表示、閉じるとshift
-  overlay: { text: "", seq: 0 }, // 主画面に重ねるシーン説明(数秒でフェードアウト)。seqで再トリガー
   sceneInfo: { num: 1, total: 1, brief: "", report: false }, // 左パネルに常時表示する現在シーンの要約。report=依頼人への報告シーン
   clues: [],            // 開示済み手がかり(secretのtext)。左パネルに永続表示
   enemySprite: null,    // {src, identified} 交戦中の敵スプライト。未識別はCSSで黒シルエット→判明時に実体化

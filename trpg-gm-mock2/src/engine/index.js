@@ -116,20 +116,19 @@ function inventoryForPrompt() {
 // シーン説明の表示先(UI_REDESIGN.md: 下パネルは会話専用、主画面は演出専用):
 // ・主画面: フェードアウトするナレーションオーバーレイ(初見の演出)
 // ・左パネル: 同じ内容を消えずに保持(いつでも見返せる記録)
-// シーン切替の演出: 下パネルを閉じてシーン説明をフェードイン表示(#sceneDesc、CSSで
-// 1sイン→約10s表示→1sアウト)し、フェードインが終わったところで下パネルをスライドインさせる
+// シーン切替の演出: 下パネルを閉じ、1秒後にスライドインさせる(この間にGMが語り始める)。
+// シーン説明はGMペットの吹き出しで語るので、主画面に別途フェード表示はしない(文面の重複だった)
 function showDialogueNode(node) {
   // intro.img が未指定の旧データ互換では、従来の導入画像へフォールバックする。
   const backdropNode = state.pendingIntro && !node.img ? { ...node, img: "locked_iron_gate.jpg" } : node;
   setSceneBackdrop(backdropNode);
   setDialogueNodeInfo(node, state);
-  setStore(s => ({
-    overlay: { text: node.brief || node.text || "", seq: s.overlay.seq + 1 },
+  setStore({
     underPanelOpen: false,
     curtain: false,
     companionBubbles: {},
     npcBubble: { text: "", seq: 0 }
-  }));
+  });
   openUnderPanelAfterOverlay();
   const gmText = node.brief || node.text || "";
   // NPCの第一声は作者がnode.greetingを書いた場合のみ。GMの発言に続けて話す
@@ -156,13 +155,13 @@ export function dismissPopup() {
   setStore(s => ({ popups: s.popups.slice(1) }));
   popupResolvers.shift()?.();
   if (cur && cur.kind === "intro") {
-    // 開幕シーケンス: 幕が開く(1.2s) → シーン説明フェードイン(1s) → GM自己紹介+下パネルのスライドイン
+    // 開幕シーケンス: 幕が開く(1.2s) → 1秒後に下パネルがスライドイン+GM自己紹介
     setStore({ curtain: false });
     setTimeout(() => {
       if (state.pendingIntro) {
         showDialogueNode(SCENARIO.intro);
       } else {
-        showSceneOverlay(state); // テキストのフェードイン開始。フェードイン完了時に下パネルが開く(showSceneOverlay内)
+        showSceneOverlay(); // 下パネルのスライドインだけ行う(showSceneOverlay内)
         setTimeout(() => addGm(gmGreeting(), "Happy"), 1000);
       }
     }, 1200);
@@ -387,7 +386,7 @@ export function resetGame() {
   }
   setStore({
     diceLog: [], popups,
-    overlay: { text: "", seq: 0 }, curtain: popups.length > 0,
+    curtain: popups.length > 0,
     leftPanelOpen: false, rightPanelOpen: false, underPanelOpen: false
   });
   setSceneInfo(state);
@@ -1854,9 +1853,9 @@ function advanceScene(targetIndex) {
     const newScene = SCENARIO.scenes[state.sceneIndex];
     const newBrief = newScene.brief;
     setSceneInfo(state);
-    showSceneOverlay(state);
+    showSceneOverlay();
     // GMペットの吹き出し・語り履歴が前のシーンへの回答のまま残らないよう、
-    // シーン説明のフェードイン(1s)が終わったところでGM→NPC(いれば)→同行者の順に語らせる。
+    // 下パネルが開き直す(1s)のを待ってGM→NPC(いれば)→同行者の順に語らせる。
     // 各stepの間隔・前の吹き出しを消すタイミングはrunSpeechSequenceに一本化してある
     const sceneNo = state.sceneIndex + 1;
     const arrivalLine = gmSceneArrivalLine(sceneNo, newScene.name || "");

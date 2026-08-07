@@ -344,12 +344,14 @@ body {
   border-color: transparent rgba(22, 25, 40, .9) transparent transparent;
 }
 
-/* ---- シーンNPC(依頼人マイラ等)の吹き出し。中央のnpcSprite(#enemySprite: bottom10%+height55%
-   → 上端は画面の35%)の真上に置き、下向きの尻尾でスプライトを指す ---- */
+/* ---- シーンNPC(依頼人マイラ等)の吹き出し。中央のnpcSprite(#enemySprite: left50%)の
+   真上に、下向きの尻尾でスプライトを指して表示する。以前は主画面のシーン説明(#sceneDesc)
+   と重なって読みにくかったため右上へ逃がしていたが、#sceneDesc自体を廃止したので
+   マイラの立ち位置の真上に戻す ---- */
 .npcBubble {
   position: absolute;
   left: 50%;
-  top: 30%;
+  top: 16%;
   transform: translate(-50%, -100%);
   max-width: 40%;
   z-index: 24;
@@ -386,31 +388,6 @@ body {
   border-width: 10px 7px 0 7px;
   border-style: solid;
   border-color: rgba(22, 25, 40, .9) transparent transparent transparent;
-}
-
-/* ---- シーン説明(Figma 11:61の位置)。フェードイン(1s)→表示(10s)→フェードアウト(1s) ---- */
-#sceneDesc {
-  position: absolute;
-  left: 16.08%;
-  top: 12.72%;
-  width: 67.49%;
-  max-height: 24.43%;
-  z-index: 8;
-  pointer-events: none;
-  overflow: hidden;
-  color: var(--text);
-  font-size: 1.76vw;
-  line-height: 2.82vw;
-  letter-spacing: 0.035vw;
-  text-shadow: 0 1px 6px rgba(0, 0, 0, .85);
-  opacity: 0;
-  animation: sceneDescKf 12s ease forwards;
-}
-@keyframes sceneDescKf {
-  0% { opacity: 0; }
-  8.33% { opacity: 1; }   /* 1s: フェードイン完了(GMの会話と下パネルのスライドインはここから) */
-  91.67% { opacity: 1; }  /* 11s: 表示10秒 */
-  100% { opacity: 0; }
 }
 
 /* 開発用アセット確認画面 */
