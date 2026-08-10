@@ -1,8 +1,13 @@
 import * as inv from "../inventory.js";
 
-// EXAMINE_REは「調べる」系の汎用動詞の辞書。index.jsのtryScriptedと、テストの検査16が
-// 同じ判定を共有するためここに置く(複製すると本体とテストがずれる)
-export const EXAMINE_RE = /調べ|よく見|見る|見て|読|観察|探|嗅|眺め|確かめ/;
+/* EXAMINE_REは「調べる」系の汎用動詞の辞書。index.jsのtryScriptedと、テストの検査16が
+   同じ判定を共有するためここに置く(複製すると本体とテストがずれる)
+   語幹で照合するので活用は書かない(「調べ」が調べる/調べた/調べて/調べようを拾う)。
+   「触」は触る/触れる/触った/触れてみるを1語でまとめている——作者がsecret.triggerへ
+   「木柵に触れてみる」と書いているのに、動詞辞書側が触れる系を持っておらず
+   「柵を触る」がLLM分類器送りになっていた(実プレイの宣言5件が該当)。
+   語を足す時は npm run test:dictlane で実プレイ545種のレーン変化を確認する */
+export const EXAMINE_RE = /調べ|よく見|見る|見て|読|観察|探|嗅|眺め|確かめ|触/;
 
 // TASの「エンカウンター設定」用の、開示済み要素の判定。
 export function encounterRequiredElementsMet(enc, sc, ctx) {
