@@ -1472,11 +1472,15 @@ export function toggleGmMode() {
   setStore({ gmMode });
 }
 
-const MOVE_RE = /進む|進も|向かう|向かお|入る|入ろ|行く|行こ|降り|登る|渡る/;
-const BACK_RE = /戻る|戻ろ|引き返|退く/;
-const TALK_RE = /話|聞く|聞いて|尋ね|訊|呼びかけ|声をかけ/;
-const TAKE_RE = /拾|取る|取っ|手に入れ|回収|持ち帰|持って(いく|行く)/;
-const SCRIPTED_ATTACK_RE = /攻撃|斬|切りかか|殴|撃つ|叩く|突く|蹴/;
+/* 宣言をどのレーンへ流すかを決める動詞辞書。語幹で照合するので活用は考えなくてよい
+   (「調べ」が調べる/調べた/調べて/調べようを全部拾う)。語を増やす時はdictLane.test.mjsの
+   ゴールデンを必ず確認する——特にMOVE_REは一致するとscriptedMoveForwardがシーンを進めるため、
+   機械的に語を足すと意図しない遷移が起きる(EXAMINE_RE等は外しても定型文が出るだけで済む) */
+export const MOVE_RE = /進む|進も|向かう|向かお|入る|入ろ|行く|行こ|降り|登る|渡る/;
+export const BACK_RE = /戻る|戻ろ|引き返|退く/;
+export const TALK_RE = /話|聞く|聞いて|尋ね|訊|呼びかけ|声をかけ/;
+export const TAKE_RE = /拾|取る|取っ|手に入れ|回収|持ち帰|持って(いく|行く)/;
+export const SCRIPTED_ATTACK_RE = /攻撃|斬|切りかか|殴|撃つ|叩く|突く|蹴/;
 
 /* 回復薬: 汎用のuse/give intent(未実装)を待たず、この品名にだけ効く決定論アクション。
    「使う/飲む」+品名の一致だけで判定する。戦闘中はclassifyCombatActionが同じ判定を使い、
@@ -1487,7 +1491,7 @@ const DEFAULT_ITEM_ON_DEFEAT_COUNT = 1;
 const USE_HEAL_RE = /使う|使っ|飲む|飲ん|服用/;
 // 「回復薬を飲む」という宣言かどうか(在庫は見ない)。在庫が無い時にここで拾わずLLMへ
 // 流すと、持っていない品でLLMが勝手に回復させてしまう(2026-08-07のプレイで発生)
-function mentionsHealPotionUse(text) {
+export function mentionsHealPotionUse(text) {
   return USE_HEAL_RE.test(text) && text.includes(HEAL_POTION_NAME);
 }
 function canUseHealPotion(text) {
