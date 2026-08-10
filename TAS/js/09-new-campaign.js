@@ -69,11 +69,16 @@ renderRightPanel=function(){
   if(target&&!["world","cast","monsters","items","rules","export"].includes(activeTab))target.textContent=`${currentFreshChapterLabel()} / ${scene().type==="scene"?`シーン${scene().id}「${scene().name}」`:scene().name}`;
 };
 
-/* 出力の段: 新規キャンペーンのときだけ章と同行者を作り直す。段の並びは js/43-output-pipeline.js */
+/* 出力の段: 新規キャンペーンのときだけ章と同行者を作り直す。段の並びは js/43-output-pipeline.js
+   freshCampaign=true は作者が「新しいキャンペーンで置き換える」を選んだ状態(createNewCampaignの確認ダイアログ)。
+   この時点の payload.campaign には前段(outputBaseChapter)経由で土台JSON(TAS/data、既存の見本キャンペーン)の
+   cast/gm/gmSprite/player がまだ乗っている。新規作成はその見本を置き換える操作なので、
+   ここでこれらを保持すると見本のNPC・GM画像が新しいキャンペーンへ紛れ込む。保持してはならない */
 function outputFreshCampaign(payload){
-  
+
   if(!freshCampaign)return payload;
   const chapterInfo=CHAPTERS[activeChapter]||{name:currentFreshChapterLabel(),file:`CHAPTER_${String(chapterOrder.indexOf(activeChapter)+1).padStart(2,"0")}`};
   const entities=[...monsters.map(m=>m.name),...items.map(i=>i.name)].filter(Boolean).map(ja=>({ja,note:"TAS台帳から登録"}));
-  return {...payload,campaign:{meta:{title:campaignName},style:{...(payload.campaign?.style||{}),world:campaignWorld,theme:campaignTheme,terms:campaignTerms},entities},chapter:{...payload.chapter,title:currentFreshChapterLabel(),scenes:payload.chapter?.scenes||[]},chapterFile:`${chapterInfo.file.toLowerCase()}.json`};
+  const baseCampaign=payload.campaign||{};
+  return {...payload,campaign:{meta:{title:campaignName},style:{...(baseCampaign.style||{}),world:campaignWorld,theme:campaignTheme,terms:campaignTerms},entities},chapter:{...payload.chapter,title:currentFreshChapterLabel(),scenes:payload.chapter?.scenes||[]},chapterFile:`${chapterInfo.file.toLowerCase()}.json`};
 };

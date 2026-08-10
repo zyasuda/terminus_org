@@ -12,7 +12,8 @@ function runtimeChapterId(key){if(!tasChapterIds[key]){const n=Math.max(1,chapte
 function runtimeImageName(value){const raw=String(value||"");if(!raw||raw.startsWith("data:"))return "";return raw.replace(/^.*[\\/]/,"")}
 function runtimeAssetId(file){return stableId(String(file).replace(/\\.[^.]+$/,""),"asset")}
 
-function splitCampaignStyle(value){return String(value||"").split(/[\n、,]/).map(x=>x.trim()).filter(Boolean)}
+function splitCampaignStyleLines(value){return String(value||"").split(/\r?\n/).map(x=>x.trim()).filter(Boolean)}
+function splitCampaignStyleWords(value){return String(value||"").split(/[\n、,]/).map(x=>x.trim()).filter(Boolean)}
 /* 出力の段: 安定ID・style・素材台帳(assets)を付ける。段の並びは js/43-output-pipeline.js */
 function outputStableIds(payload){
   
@@ -26,10 +27,10 @@ function outputStableIds(payload){
     readingLevel:campaignStyle?.readingLevel||baseStyle.readingLevel||"平易な日本語を使う。",
     goodExample:campaignStyle?.goodExample||baseStyle.goodExample||"",
     badExample:campaignStyle?.badExample||baseStyle.badExample||"",
-    extra:splitCampaignStyle(campaignStyle?.extra).length?splitCampaignStyle(campaignStyle.extra):(baseStyle.extra||[]),
-    forbiddenWords:splitCampaignStyle(campaignStyle?.forbiddenWords).length?splitCampaignStyle(campaignStyle.forbiddenWords):(baseStyle.forbiddenWords||[]),
+    extra:splitCampaignStyleLines(campaignStyle?.extra).length?splitCampaignStyleLines(campaignStyle.extra):(baseStyle.extra||[]),
+    forbiddenWords:splitCampaignStyleWords(campaignStyle?.forbiddenWords).length?splitCampaignStyleWords(campaignStyle.forbiddenWords):(baseStyle.forbiddenWords||[]),
     rollReaction:{critical:campaignStyle?.rollReactionCritical||"",fumble:campaignStyle?.rollReactionFumble||""},
-    emptyHanded:splitCampaignStyle(campaignStyle?.emptyHanded),
+    emptyHanded:splitCampaignStyleLines(campaignStyle?.emptyHanded),
     unknownTarget:campaignStyle?.unknownTarget||"",
     world:campaignWorld,
     theme:campaignTheme,

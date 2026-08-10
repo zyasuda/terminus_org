@@ -513,6 +513,84 @@ async function runBlankFieldCheck(browser) {
   }
 }
 
+/* --------------------------------- 作者が消した値が旧JSONから復活しない（削除の伝播） */
+/* 隣の runBlankFieldCheck は「元が無い新規の要素で空欄が埋まらないか」を見る。
+   こちらは逆向き——「元がある既存の要素で、作者が消した値が復活しないか」を見る。
+   この2つは別の経路で、後者だけが抜けていた。
+
+   2026-08-10の実測: 作者が別名を追加した4件はすべて出力に届いたのに、
+   きっかけ語句(trigger)を空にした5件は1件も届かず、章データに古い値が残り続けていた。
+   新規に作った秘密だけが空になっていたことから、復活元は前回出力したJSONだと確認できた。
+   `js/01i-output.js` の merged.secrets が `d.trigger||old.trigger||""` のように `||` で
+   繋いでおり、空文字と空配列が偽になるため必ず旧値へ落ちる。`old` の出どころは
+   baseChapter(前回の出力)なので、一度書いた値は二度と消せず、壊れた値は自己増殖する。
+   出口の `to` も `Number.isFinite(Number(""))` が true になるため、未選択が
+   存在しないシーン0番として出力され、実プレイで章を完走できなくなった。
+
+   直す場所は tests ではなく `js/01i-output.js` である。 */
+async function runClearedFieldCheck(browser) {
+  section("作者が消した値が復活しない（削除の伝播）");
+  const { page, pageErrors } = await openPage(browser, null);
+  try {
+    const seed = await page.evaluate(async () => {
+      const ctx = await (await fetch("/api/context")).json();
+      const key = Object.keys(ctx.dataFiles).find(k => /chapter_/.test(k));
+      const chapter = JSON.parse(ctx.dataFiles[key]);
+      const d = gamePayloadToWorkspaceDraft({
+        campaign: JSON.parse(ctx.dataFiles["campaign.json"]), chapter });
+      const sc = chapter.scenes[0];
+      /* 章データに値が入っている既存の要素を選ぶ。値が無い要素では「復活」が起きず検査が空振りする */
+      const target = (sc.secrets || []).find(x => x.trigger && (x.aliases || []).length && x.text);
+      if (!target) return { skipped: true };
+      const discoveries = (sc.secrets || []).map((x, i) => {
+        const norm = normalizeDiscoveryFor(sc, x, i);
+        // 作者が入力欄を空にした状態を作る
+        return x.id === target.id ? { ...norm, trigger: "", aliases: [], fact: "" } : norm;
+      });
+      /* 出口の移動先を未選択にした状態も同時に作る */
+      const exits = [{ id: "cleared_target_probe", match: ["検査用の出口"], to: "", requires: { text: "" } }];
+      d.sceneOverrides["ch1:scene:0"] = { ...(d.sceneOverrides["ch1:scene:0"] || {}), discoveries, exits };
+      return { skipped: false, id: target.id, entity: target.entity,
+        was: { trigger: target.trigger, aliases: target.aliases, text: target.text }, draft: d };
+    });
+    ok(!seed.skipped, "きっかけ語句・別名・確定事実がそろった既存要素が章データにある",
+      "TAS/data/chapter_01.json に値の入った要素が無く、この検査は空振りします");
+    if (seed.skipped) return;
+
+    await page.evaluate(([k, v]) => localStorage.setItem(k, v), [DRAFT_KEY, JSON.stringify(seed.draft)]);
+    await page.reload({ waitUntil: "domcontentloaded" });
+    await page.waitForFunction(() => {
+      try { return typeof mockCampaignPayload === "function" } catch { return false }
+    }, null, { timeout: 15000 });
+    const payload = await capturePayload(page);
+    const scenes = payload.chapter.scenes || [];
+    const probe = scenes.flatMap(s => s.secrets || []).find(x => x.id === seed.id);
+    ok(Boolean(probe), `要素「${seed.entity}」が出力に含まれる`, "下書きの投入経路が変わっています");
+    if (probe) {
+      ok(probe.trigger === "", "空にしたきっかけ語句が空のまま出る",
+        `${JSON.stringify(probe.trigger)} が出ました。章データの旧値 ` +
+        `${JSON.stringify(seed.was.trigger)} が復活しています。作者は一度書いた値を消せません`);
+      ok(Array.isArray(probe.aliases) && probe.aliases.length === 0, "全消しした別名が空配列で出る",
+        `${JSON.stringify(probe.aliases)} が出ました。旧値 ${JSON.stringify(seed.was.aliases)} の復活です`);
+      ok(probe.text === "", "空にした確定事実が空のまま出る",
+        `${JSON.stringify((probe.text || "").slice(0, 30))} が出ました。旧値の復活です`);
+      /* surface に trigger を流し込む既定値があり、表層説明へ開示方法の文章が混入していた */
+      ok(probe.surface !== seed.was.trigger, "表層説明にきっかけ語句が流れ込まない",
+        `surface に ${JSON.stringify(probe.surface)} が入りました。trigger を既定値にしています`);
+    }
+    const exit = scenes.flatMap(s => s.exits || []).find(x => x.id === "cleared_target_probe");
+    ok(Boolean(exit), "検査用の出口が出力に含まれる", "出口の投入経路が変わっています");
+    if (exit) {
+      ok(exit.to === null, "移動先が未選択なら行き止まり(null)として出る",
+        `to に ${JSON.stringify(exit.to)} が入りました。0 はシーン0番として解釈され、` +
+        `実プレイで「行き先が見つからない(データ不整合)」になり章を完走できません`);
+    }
+    ok(pageErrors.length === 0, "画面実行エラーが出ない", pageErrors.join(" / "));
+  } finally {
+    await page.close();
+  }
+}
+
 /* ------------------------------------------- 取り込み時の下書き生成（読込） */
 // gamePayloadToWorkspaceDraft はキャンペーンJSONを読み込んだときに下書きを作る。
 // イントロだけを下書きへ入れてアウトロを入れておらず、アウトロは画面の入力が常に
@@ -535,10 +613,13 @@ async function runImportCheck(browser) {
       "イントロの背景が下書きへ入る", String(backgrounds["ch1:opening:opening"]));
     ok(backgrounds["ch1:ending:ending"] === "/images/s4_myra_room.jpg",
       "アウトロの背景が下書きへ入る", String(backgrounds["ch1:ending:ending"]));
-    ok(backgrounds["ch1:scene:0"] === "/images/mine_entrance.png",
-      "シーンの背景は今までどおり下書きへ入る", String(backgrounds["ch1:scene:0"]));
-    ok(overrides["ch1:scene:0"]?.parallaxSky === "/images/s1_sky_parallax.png" || overrides["ch1:scene:0"]?.sky === "/images/s1_sky_parallax.png",
-      "シーンのパララックス空も下書きへ入る", JSON.stringify(overrides["ch1:scene:0"]));
+    /* キーはscene.id基準(1起点)。2026-08-10まで配列添字(0起点)で作っていたため
+       画面が読むキー(nodeKeyはscene.id基準)とずれ、背景・パララックスが1シーンずれるか
+       無視されていた。フィクスチャのシーンidは1なので、期待キーは ch1:scene:1 */
+    ok(backgrounds["ch1:scene:1"] === "/images/mine_entrance.png",
+      "シーンの背景は今までどおり下書きへ入る", String(backgrounds["ch1:scene:1"]));
+    ok(overrides["ch1:scene:1"]?.parallaxSky === "/images/s1_sky_parallax.png" || overrides["ch1:scene:1"]?.sky === "/images/s1_sky_parallax.png",
+      "シーンのパララックス空も下書きへ入る", JSON.stringify(overrides["ch1:scene:1"]));
 
     // 文字列イントロ（旧形式）でも落ちないこと
     const stringIntro = await page.evaluate(value => {
@@ -714,6 +795,7 @@ try {
     else {
       if (wants("snapshot")) await runSnapshot(browser, flag("update"));
       if (wants("import")) await runBlankFieldCheck(browser);
+      if (wants("import")) await runClearedFieldCheck(browser);
       if (wants("import")) await runImportCheck(browser);
       if (wants("export")) await runExport(browser, tempMock2);
     }
