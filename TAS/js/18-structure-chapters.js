@@ -35,6 +35,15 @@ function migrateSceneOverrideKeys(){
        newKeyが次の反復のoldKeyと重なり、データが連鎖的に後ろのシーンへ
        押し流される（実測で発見・修正済み。id=index+1のときnewKey(i)===oldKey(i+1)になるため）。 */
     [sceneOverrides,sceneBackgrounds].forEach(map=>{
+      /* 移行済みの下書きへ二度目の移行をかけてはならない。
+         キーの数字は「配列の添字(旧)」か「scene.id(現行)」のどちらかだが、キー単体では区別できない。
+         id=index+1 が普通なので、移行済みのキー`scene:1`を旧キーと誤認すると全体が1つ後ろへずれ、
+         最後のシーンの内容は既存キーに阻まれて捨てられる。作者のシーン3の出口がシーン2のものに
+         なっていた原因はこれだった(2026-08-10に実測で特定)。
+         判定にはシーンidが1から始まる事実を使う。`scene:0`があれば添字キー、無ければ移行済みとみなす。
+         誤って移行を飛ばした場合の影響は「古い画像参照が移らない」だけで、
+         誤って移行した場合の「作者の入力が1シーンずれて1件消える」より軽い。 */
+      if(!Object.hasOwn(map,`${chapterKey}:scene:0`))return;
       const moves=scenes.map((scene,index)=>({oldKey:`${chapterKey}:scene:${index}`,newKey:`${chapterKey}:scene:${scene.id}`}))
         .filter(({oldKey,newKey})=>oldKey!==newKey)
         .map(({oldKey,newKey})=>({oldKey,newKey,data:map[oldKey]}));

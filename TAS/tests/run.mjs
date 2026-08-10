@@ -591,6 +591,48 @@ async function runClearedFieldCheck(browser) {
   }
 }
 
+/* ------------------------------- 移行済みの下書きへ二度目のキー移行をかけない（シーンのずれ） */
+/* migrateSceneOverrideKeys(js/18-structure-chapters.js)は、配列の添字で作られた古いキー
+   `ch1:scene:0`… を `ch1:scene:<scene.id>` へ移す。しかし id=index+1 が普通なので、
+   移行済みのキー`scene:1`を旧キー(添字1=2番目のシーン)と誤認すると、全体が1つ後ろへずれ、
+   最後のシーンの内容は既存キーに阻まれて捨てられる。
+
+   2026-08-10の実測: 作者の保存ファイルは正しく scene:1〜4 だったのに、読み込むと
+   メモリ上で scene:1 が消え、scene:2 に1番目の内容、scene:3 に2番目の内容が入り、
+   3番目(機械人形・心石・心石の欠片)が失われた。この状態で編集して保存すると永続化する。
+   作者のシーン3の出口がシーン2のもの(id=to_scean03、右/木柵の照合語)になっていた原因はこれである。
+
+   localStorageは無傷でメモリ上だけがずれるため、保存し直すまで気づけない。 */
+async function runSceneKeyMigrationCheck(browser) {
+  section("移行済みの下書きへ二度目のキー移行をかけない");
+  /* シーンidが1起点で、上書きも既に scene.id で付けられている下書き(=移行済み)を作る */
+  const draft = {
+    campaignName: "キー移行の検査", freshCampaign: false,
+    sceneOverrides: {
+      "ch1:scene:1": { discoveries: [{ id: "probe_s1", label: "1番目の要素", aliases: ["いち"] }] },
+      "ch1:scene:2": { discoveries: [{ id: "probe_s2", label: "2番目の要素", aliases: ["に"] }] },
+      "ch1:scene:3": { discoveries: [{ id: "probe_s3", label: "3番目の要素", aliases: ["さん"] }] },
+    },
+  };
+  const { page, pageErrors } = await openPage(browser, draft);
+  try {
+    const seen = await page.evaluate(() => {
+      const rows = chapterNodes().filter(n => n.type === "scene").slice(0, 3)
+        .map(n => [nodeKey(n), (sceneOverrides[nodeKey(n)]?.discoveries || []).map(d => d.label)]);
+      return { rows, keys: Object.keys(sceneOverrides) };
+    });
+    const label = n => (seen.rows.find(([k]) => k === `ch1:scene:${n}`) || [, []])[1][0];
+    ok(label(1) === "1番目の要素", "1番目のシーンの上書きがそのまま残る",
+      `ch1:scene:1 に ${JSON.stringify(label(1))} が入りました。キー移行が二度かかり内容が後ろへずれています`);
+    ok(label(2) === "2番目の要素", "2番目のシーンの上書きがそのまま残る", JSON.stringify(label(2)));
+    ok(label(3) === "3番目の要素", "3番目のシーンの上書きが失われない",
+      `ch1:scene:3 に ${JSON.stringify(label(3))} が入りました。ずれの結果、最後の内容が捨てられています`);
+    ok(pageErrors.length === 0, "画面実行エラーが出ない", pageErrors.join(" / "));
+  } finally {
+    await page.close();
+  }
+}
+
 /* ------------------------------------------- 取り込み時の下書き生成（読込） */
 // gamePayloadToWorkspaceDraft はキャンペーンJSONを読み込んだときに下書きを作る。
 // イントロだけを下書きへ入れてアウトロを入れておらず、アウトロは画面の入力が常に
@@ -796,6 +838,7 @@ try {
       if (wants("snapshot")) await runSnapshot(browser, flag("update"));
       if (wants("import")) await runBlankFieldCheck(browser);
       if (wants("import")) await runClearedFieldCheck(browser);
+      if (wants("import")) await runSceneKeyMigrationCheck(browser);
       if (wants("import")) await runImportCheck(browser);
       if (wants("export")) await runExport(browser, tempMock2);
     }
