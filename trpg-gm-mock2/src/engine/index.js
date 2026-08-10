@@ -249,7 +249,7 @@ export function restoreGame(saved) {
   // 既定値の0のまま)にリロードすると、背景だけシーン1に見えるのに他の表示(NPCスプライト等)
   // はイントロのままという食い違いが起きていた
   setSceneBackdrop(currentBackdropNode());
-  busy = false;
+  setBusy(false);
   clearChat();
   setStore({ diceLog: [] });
   chron.forEach(renderChronEntry);
@@ -272,6 +272,13 @@ export function restoreGame(saved) {
   setSceneInfo(state);
   renderDebug();
 }
+
+/* busyはモジュール変数(エンジンの再入防止)とstore(UIの活殺)の2箇所に持つ。
+   片方だけ更新すると「エンジンは受け付けるのにボタンが押せない」状態になり、
+   handleSendがeng.busyで弾くため入力欄も消えない。必ず両方を同時に動かす。
+   2026-08-10: resetGame/restoreGameがモジュール変数しか戻しておらず、
+   「続きから/最初から」を選んだ後に行動ボタンが永久に無効化されていた */
+function setBusy(v) { busy = v; setStore({ busy: v }); }
 
 // 起動時に既存セーブが見つかった場合の「続きから/最初から」選択待ち。resumeSavedGame/startNewGameが消費する
 let pendingResumeSave = null;
@@ -362,7 +369,7 @@ export function resetGame() {
   history = [];
   revealed = new Set();
   chron = [];
-  busy = false;
+  setBusy(false);
   const intro = SCENARIO.intro;
   const introIsObject = intro && typeof intro === "object";
   state.pendingIntro = introIsObject; // currentBackdropNode()より先に立てる(この状態を見て背景を選ぶ)
@@ -579,6 +586,27 @@ function highlightPortrait(who) {
 // 「A」「B」,」のような複数文連結は最初の一文だけ残す(2026-07-17(9) T25-32)。
 // さらに、スキーマ語彙の漏れ込み(say内に"gareth"等の話者idやJSONキーが混入する。ローカルSLMで観測)を落とす。
 // 台詞は日本語なので、生の英字id・キー名が台詞に現れることは正当にはない
+/* ローカルSLMが出すJSONの定型的な崩れを直してから解析する。
+   2026-08-10の実プレイ(Qwen3.5)では68件中8件が破損し、うち7件で同行者の台詞が失われた。
+   破損の形は2種類しか観測されていない:
+   ・オブジェクトを閉じた直後に新しい { を開く   …"npc":{"say":"…"},{"check":null,…
+   ・閉じ引用符が全角になる                   …"だぜ。”}
+   実ログの破損8件すべてがこの2つの置換で復元できることを確認済み。
+   モデルを変えても同種の崩れは出るので、モデル固有の対処にはしない */
+function repairLlmJson(text) {
+  return String(text).replace(/\},\s*\{(?=\s*")/g, "},").replace(/”\s*\}/g, '"}');
+}
+export function parseLlmJson(text) {
+  const cleaned = String(text).replace(/```json|```/g, "").trim();
+  const body = cleaned.match(/\{[\s\S]*\}/);
+  const candidates = [cleaned, body ? body[0] : null, repairLlmJson(cleaned), body ? repairLlmJson(body[0]) : null];
+  for (const c of candidates) {
+    if (!c) continue;
+    try { return JSON.parse(c); } catch (e) { /* 次の候補へ */ }
+  }
+  throw new Error("JSONとして解析できない");
+}
+
 function sanitizeSay(t) {
   const ids = [...Object.keys(CAST), ...SCENARIO.scenes.map(s => s.npc && s.npc.id).filter(Boolean)];
   // スキーマ語彙(キー名・話者id・JSONリテラル)を含む英字トークンは、アンダースコア連結
@@ -984,8 +1012,7 @@ function npcAgentReply(playerText, revealGate) {
     maxTokens: 80
   }).then(async data => {
     const raw = ((data && data.content) || []).map(b => b.text || "").join("");
-    const m = raw.match(/\{[\s\S]*\}/);
-    const r = JSON.parse(m ? m[0] : raw);
+    const r = parseLlmJson(raw);
     const say = sanitizeSay(String(r.say || "").slice(0, 120));
     if (revealGate && await revealGate) await sleep(SHORT_PACING_MS);
     // 前回と同じ一言は表示しない(固定化の再発防止。沈黙の方が壊れて見えない)
@@ -1022,8 +1049,7 @@ function dialogueNodeReply(node, playerText) {
     maxTokens: 80
   }).then(data => {
     const raw = ((data && data.content) || []).map(b => b.text || "").join("");
-    const m = raw.match(/\{[\s\S]*\}/);
-    const say = sanitizeSay(String(JSON.parse(m ? m[0] : raw).say || "").slice(0, 120));
+    const say = sanitizeSay(String(parseLlmJson(raw).say || "").slice(0, 120));
     if (!say || say === state.lastNpcLine) { dialogueNodeFallback(node, accept); return; }
     state.lastNpcLine = say;
     // 話者を必ず渡す。導入ノードはシーン配列の外なので、渡さないとaddNpcが
@@ -1555,8 +1581,7 @@ function revealFlavor(secret) {
     maxTokens: 80
   }).then(data => {
     const raw = ((data && data.content) || []).map(b => b.text || "").join("");
-    const m = raw.match(/\{[\s\S]*\}/);
-    const r = JSON.parse(m ? m[0] : raw);
+    const r = parseLlmJson(raw);
     // 話者が同行者に解決できなければ捨てる(リディアへの機械的フォールバックは誤帰属のもと)
     const flavorWho = normalizeWho(r.who, null);
     if (r.say && flavorWho) addCompanion(fixCompanionVoice(String(r.say).slice(0, 80), flavorWho), flavorWho);
@@ -1774,8 +1799,7 @@ targetの規則(厳守):
   try {
     const data = await callGmApi({ system, messages: [{ role: "user", content: rest }], maxTokens: 80 });
     const raw = data.content && data.content[0] && data.content[0].text || "";
-    const m = raw.match(/\{[\s\S]*\}/);
-    const parsed = JSON.parse(m ? m[0] : raw);
+    const parsed = parseLlmJson(raw);
     const intent = ["investigate", "move", "back", "talk", "talk_gm", "take", "other"].includes(parsed.intent)
       ? parsed.intent : "other";
     const target = targets.includes(parsed.target) ? targetAlias.get(parsed.target) : null;
@@ -2148,10 +2172,14 @@ function systemPrompt(extra) {
   // B10: シーンNPC(依頼人等)の台詞は専用チャネルnpc.sayへ。companion枠に混ざると
   // normalizeWhoの解決失敗→誤帰属(マイラの台詞がリディア名義になる等)が起きるため、出口を分ける
   const npc = sc.npc;
+  /* 2026-08-10: 以前は npc.say を「受け皿」としてスキーマに置いていたが、値は捨てており
+     (実際の台詞は npcAgentReply が別途生成する)、Qwen3.5では npc の直後で JSON 構造が
+     壊れる事故が実プレイ68件中6件起きた。フィールドを外し、「◯◯の台詞は書かない」という
+     指示だけを残す(companion枠への流れ込みを防ぐ目的はこの指示が担う) */
   const npcBlock = npc
-    ? `\n# シーンの人物(同行者ではない)\nこのシーンには${npc.name}がいる。あなたが演じてよいが、${npc.name}の台詞は必ず npc.say に入れよ。companion は同行者(${companionIds})専用であり、${npc.name}の台詞を入れてはならない。\nこのシーンの対話の主役は${npc.name}とプレイヤーである。同行者はプレイヤーに直接話しかけられた時だけ返答し、それ以外は companion を null にせよ。\n`
+    ? `\n# シーンの人物(同行者ではない)\nこのシーンには${npc.name}がいる。${npc.name}の台詞はあなたは書かない(別の仕組みが生成する)。companion は同行者(${companionIds})専用であり、${npc.name}の台詞を入れてはならない。\nこのシーンの対話の主役は${npc.name}とプレイヤーである。同行者はプレイヤーに直接話しかけられた時だけ返答し、それ以外は companion を null にせよ。\n`
     : "";
-  const npcSchema = npc ? `"npc":{"say":"${npc.name}の一言"}または null,` : "";
+  const npcSchema = "";
   // B11: これまでの経緯。シーンごとの確定事実の記録(履歴24件切れ対策。特に終盤の報告シーンで章全体を参照できる)
   const log = state.sceneLog || [];
   const digestLines = SCENARIO.scenes.slice(0, state.sceneIndex + 1).map((s, i) => {
@@ -2247,12 +2275,12 @@ async function callGm(userContent, extraSystem) {
   if (history.length > 24) history = history.slice(-24);
   const cleaned = text.replace(/```json|```/g, "").trim();
   try {
-    return JSON.parse(cleaned);
+    return parseLlmJson(cleaned);
   } catch (e) {
     // LLMが文字列内に生の改行を入れるとJSONとして不正になる(sonnetで観測)。
     // 改行を空白に潰して再試行(構造上の改行が空白になっても解析結果は変わらない)
     try {
-      return JSON.parse(cleaned.replace(/\r?\n/g, " "));
+      return parseLlmJson(cleaned.replace(/\r?\n/g, " "));
     } catch (e2) {
       // 完全な破損(閉じ括弧の欠落・生成の途中切れ等)でもnarrationの値部分だけは正規表現で救出を試みる。
       // 救出できないからといって生のJSON断片({"narration":"...等)をそのままプレイヤーに見せない(2026-07-21実害)
@@ -2278,7 +2306,7 @@ async function callGm(userContent, extraSystem) {
    sendActionのtryブロックより手前で走るので、後始末(busy解除・renderDebug)は
    finallyを通らない——finish()で自前に行う。trueなら呼び出し側はそのままreturnする */
 function turnDialogueNodes(text) {
-  const finish = () => { busy = false; setStore({ busy: false }); renderDebug(); return true; };
+  const finish = () => { setBusy(false); renderDebug(); return true; };
 
   // 導入受諾後は、参加者ごとの応答が揃うまでシーンへ進めない。
   if (state.pendingCompanionConsents) {
@@ -2338,8 +2366,7 @@ function turnRepeatGuard(normalizedText, fp) {
   if (!(prev && prev.text === normalizedText && prev.fingerprint === fp && !prev.hadCheck)) return false;
   addNote("🔁 同じ状況で同じ行動を繰り返した。判定の余地もなく、結論は変わらない(APIは呼んでいない) — 別の行動を試すか、先へ進もう");
   renderDebug();
-  busy = false;
-  setStore({ busy: false });
+  setBusy(false);
   return true;
 }
 
@@ -2497,8 +2524,7 @@ export async function sendAction(text) {
   // 終幕後も入力を受け付けてしまうと、最終シーン(報告等)の仕組みがそのまま動き続け、
   // マイラが際限なく聞き返すループになる(クロニクル2026-07-20 T27-30)。終幕後はここで止める
   if (state.chapterEnded) { addNote("物語は決着している。「最初から」で別の選択を試せる。"); return; }
-  busy = true;
-  setStore({ busy: true });
+  setBusy(true);
   state.turn++;
   addPlayer(text);
   recordVerb(text); // 述語を頻度辞書へ記録(動詞チップの学習)
@@ -2717,8 +2743,7 @@ export async function sendAction(text) {
     // 「考え中」の掃除(通信エラー等で消し漏れた分)。NPC分は非同期のnpcAgentReplyが
     // ターン終了後も生成中のことがあるため、ここでは消さない(あちらのfinallyが消す)
     setStore(s => ({ thinking: s.thinking.npc ? { npc: true } : {} }));
-    busy = false;
-    setStore({ busy: false });
+    setBusy(false);
   }
 }
 
