@@ -15,7 +15,7 @@ ${JSON.stringify(s,null,2)}
  "name": "シーン名",
  "brief": "開始時の説明",
  "goal": "このシーンの目的",
- "discoveries": [{"label":"要素名","category":"main|place|image|sense|object|foreshadow|npc","importance":"major|support|flavor","surface":"プレイヤーが見聞きする情報","trigger":"開示方法","fact":"ゲームが保持する確定事実","tags":["発見済み名"],"aliases":["プレイヤー入力のトリガー語句。短い別名"],"dc":"0|8|12|15|18（調べる判定の難易度。0は判定なしで即開示）"}],
+ "discoveries": [{"label":"要素名","category":"main|place|image|sense|object|foreshadow|npc","importance":"major|support|flavor","surface":"プレイヤーが見聞きする情報","trigger":"開示のきっかけ語句。カンマ区切り。プレイヤー入力への部分一致で照合するので語幹で短く書く（例: 意識を集中）。文章で書かない。「調べる」「見る」のような汎用動詞は他の要素を横取りするので書かない","fact":"ゲームが保持する確定事実","tags":["発見済み名"],"aliases":["プレイヤー入力のトリガー語句。短い別名"],"dc":"0|8|12|15|18（調べる判定の難易度。0は判定なしで即開示）"}],
  "exits": [{"id":"出口ID","match":["プレイヤーの行動のトリガー語句"],"to":"下記の移動先のいずれか","requires":{"text":"必要な調査対象名（AND / OR 可。不要なら空文字）"},"blockedText":"条件未達時の説明","text":"行き止まり／到達時の説明"}],
  "dialogueRules": [{"speaker":"gm|member|npc|system","condition":"発火条件（flag:発見済み名 / discovery:項目キー。常時なら空文字）","priority":"high|medium|low","line":"発言内容","eventType":"空文字|flag_add|item_grant|npc_join|scene_unlock|battle_start|discovery_reveal","targetId":"イベント対象","eventNotes":"補足","once":true,"hiddenUntilTriggered":false}],
  "gmSceneNotes": "GM向け補足メモ"

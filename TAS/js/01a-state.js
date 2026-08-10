@@ -29,12 +29,12 @@ const sceneTargets=()=>chapterNodes().filter(n=>sceneRef(n)!==sceneRef(scene()))
 const DISCOVERY_CATEGORIES=[["main","メイン進行"],["place","場所・背景"],["image","画像内要素"],["sense","音・匂い・感覚"],["object","調査対象"],["foreshadow","伏線・世界設定"],["npc","人物・痕跡"]];
 const DISCOVERY_IMPORTANCE=[["major","主線"],["support","補助"],["flavor","演出"]];
 const DISCOVERY_TEMPLATE_SETS=[
-  {category:"main",importance:"major",label:"進行に関わる要素",surface:"プレイヤーが必ず認識する導線や障害。",trigger:"最初の確認動作",fact:"このシーンの進行に必要な事実を記録する。",tags:["主線確認"]},
-  {category:"place",importance:"support",label:"場所の違和感",surface:"地形や配置、使われ方の不自然さ。",trigger:"周囲を見る",fact:"場所に関する確定事実を記録する。",tags:["背景観察"]},
-  {category:"image",importance:"support",label:"画像で目に入るもの",surface:"立ち絵や背景画像で視認できる要素。",trigger:"画像を確認する",fact:"視覚情報から分かる確定事実を記録する。",tags:["視認済み"]},
-  {category:"sense",importance:"flavor",label:"匂い・音・気配",surface:"音、匂い、温度、違和感など。",trigger:"耳を澄ます / 匂いを確かめる",fact:"感覚的に把握できる確定事実を記録する。",tags:["感覚手掛かり"]},
-  {category:"object",importance:"support",label:"補助的な調査対象",surface:"本筋でなくても触れられる小物や痕跡。",trigger:"個別に調べる",fact:"寄り道で得られる追加情報を記録する。",tags:["寄り道"]},
-  {category:"foreshadow",importance:"flavor",label:"伏線・世界設定",surface:"今は意味が分からないが後で効く要素。",trigger:"違和感として拾う",fact:"後続シーンで参照したい伏線を記録する。",tags:["伏線"]}
+  {category:"main",importance:"major",label:"進行に関わる要素",surface:"プレイヤーが必ず認識する導線や障害。",trigger:"",fact:"このシーンの進行に必要な事実を記録する。",tags:["主線確認"]},
+  {category:"place",importance:"support",label:"場所の違和感",surface:"地形や配置、使われ方の不自然さ。",trigger:"",fact:"場所に関する確定事実を記録する。",tags:["背景観察"]},
+  {category:"image",importance:"support",label:"画像で目に入るもの",surface:"立ち絵や背景画像で視認できる要素。",trigger:"",fact:"視覚情報から分かる確定事実を記録する。",tags:["視認済み"]},
+  {category:"sense",importance:"flavor",label:"匂い・音・気配",surface:"音、匂い、温度、違和感など。",trigger:"耳を澄ま, 匂いを確かめ",fact:"感覚的に把握できる確定事実を記録する。",tags:["感覚手掛かり"]},
+  {category:"object",importance:"support",label:"補助的な調査対象",surface:"本筋でなくても触れられる小物や痕跡。",trigger:"",fact:"寄り道で得られる追加情報を記録する。",tags:["寄り道"]},
+  {category:"foreshadow",importance:"flavor",label:"伏線・世界設定",surface:"今は意味が分からないが後で効く要素。",trigger:"",fact:"後続シーンで参照したい伏線を記録する。",tags:["伏線"]}
 ];
 const DIALOGUE_SPEAKERS=[["gm","GM"],["member","メンバー"],["npc","NPC"],["system","システム"]];
 const CAST_GENDERS=[["unspecified","未設定"],["male","男性"],["female","女性"],["nonbinary","ノンバイナリー"],["other","その他"]];
