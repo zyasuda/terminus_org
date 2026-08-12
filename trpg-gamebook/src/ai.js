@@ -1,6 +1,8 @@
 const keyName = "gamebook:geminiKey";
 const modelName = "gamebook:geminiModel";
-const defaultModel = "gemini-3.5-flash-lite";
+const defaultModel = "gemini-3.1-flash-lite";
+export const backupModel = "gemma-4-31b-it";
+const availableModels = new Set(["gemini-3.1-flash-lite", "gemini-3.5-flash-lite", "gemini-3.5-flash", "gemini-3.6-flash", "gemma-4-26b-a4b-it", backupModel]);
 const storage = () => globalThis.localStorage;
 
 export const getKey = () => storage()?.getItem(keyName) || "";
@@ -19,8 +21,8 @@ export async function listModels(transport = fetch) {
   if (!key) throw new Error("Geminiのキーがありません");
   const response = await checked(await transport(`https://generativelanguage.googleapis.com/v1beta/models?key=${encodeURIComponent(key)}`));
   const data = await response.json();
-  return (data.models || []).filter(model => model.supportedGenerationMethods?.includes("generateContent"))
-    .map(model => ({ id:model.name.replace(/^models\//, ""), label:model.displayName || model.name }));
+  return (data.models || []).map(model => ({ id:model.name.replace(/^models\//, ""), label:model.displayName || model.name }))
+    .filter(model => availableModels.has(model.id));
 }
 
 const systemInstruction = `あなたはTRPGゲームブックの作者を取材する編集者です。あなたは場面の「調べられるもの」だけを一度に最大3件提案します。あなたは一度に質問を1つだけ扱います。あなたは作者に内部ID、trigger、条件式を書かせず、aliases には作者が呼びそうな言い方を使います。\n\nあなたが作者へ返す本文は、作者が書いたものへの短い応答と次の質問1つだけで構成します。本文は2〜4文に抑え、「作者にお聞きします」のような前置きを置かず、質問だけを示します。あなたは本文に提案件数の上限、JSONブロック、出力形式、内部指示を書き出しません。\n\nあなたは提案がある場合、本文の末尾に次のJSONブロックだけを置きます。\n\`\`\`json\n{"proposals":[{"entity":"名称","aliases":["呼び名"],"text":"調べると分かること","surface":"見た目","dc":8}]}\n\`\`\``;
@@ -41,16 +43,24 @@ export function parseReply(raw) {
   }
 }
 
-export async function ask({ chapter, scene, history = [], userText, onChunk = () => {}, onThought = () => {}, transport = fetch }) {
+export async function ask({ chapter, scene, history = [], userText, onChunk = () => {}, onThought = () => {}, onStatus = () => {}, transport = fetch }) {
   const key = getKey();
   if (!key) throw new Error("Geminiのキーがありません");
-  const response = await checked(await transport("https://generativelanguage.googleapis.com/v1/interactions", { method:"POST", headers:{ "content-type":"application/json", "x-goog-api-key":key }, body:JSON.stringify({ model:getModel(), input:inputFor({ chapter, scene, history, userText }), stream:true, store:false, system_instruction:systemInstruction }) }));
-  let raw = "", sent = 0;
-  const send = () => { const boundary = raw.search(/```json\b/i), end = boundary < 0 ? raw.length : boundary; if (end > sent) { onChunk(raw.slice(sent, end)); sent = end; } };
-  if (response.body) {
-    const reader = response.body.getReader(), decoder = new TextDecoder(); let buffer = "";
-    for (;;) { const { value, done } = await reader.read(); buffer += decoder.decode(value || new Uint8Array(), { stream:!done }); const lines = buffer.split("\n"); buffer = lines.pop(); for (const line of lines) if (line.startsWith("data:")) try { const event = JSON.parse(line.slice(5).trim()); if (event.step?.type === "thought") onThought(); if (event.delta?.type === "text") { raw += event.delta.text || ""; send(); } } catch {} if (done) break; }
-  } else raw = textFrom(await response.json());
-  send();
-  return { ...parseReply(raw), raw };
+  const run = async model => {
+    const response = await checked(await transport("https://generativelanguage.googleapis.com/v1/interactions", { method:"POST", headers:{ "content-type":"application/json", "x-goog-api-key":key }, body:JSON.stringify({ model, input:inputFor({ chapter, scene, history, userText }), stream:true, store:false, system_instruction:systemInstruction }) }));
+    let raw = "", sent = 0;
+    const send = () => { const boundary = raw.search(/```json\b/i), end = boundary < 0 ? raw.length : boundary; if (end > sent) { onChunk(raw.slice(sent, end)); sent = end; } };
+    if (response.body) {
+      const reader = response.body.getReader(), decoder = new TextDecoder(); let buffer = "";
+      for (;;) { const { value, done } = await reader.read(); buffer += decoder.decode(value || new Uint8Array(), { stream:!done }); const lines = buffer.split("\n"); buffer = lines.pop(); for (const line of lines) if (line.startsWith("data:")) try { const event = JSON.parse(line.slice(5).trim()); if (event.step?.type === "thought") onThought(); if (event.delta?.type === "text") { raw += event.delta.text || ""; send(); } } catch {} if (done) break; }
+    } else raw = textFrom(await response.json());
+    send();
+    return { ...parseReply(raw), raw };
+  };
+  const model = getModel();
+  try { return await run(model); } catch (error) {
+    if (model !== defaultModel || model === backupModel) throw error;
+    onStatus("別のモデルで応答しています");
+    return run(backupModel);
+  }
 }
