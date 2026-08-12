@@ -1,7 +1,7 @@
 
 /* 管理画面UX Phase 1-3: 入力時検証、シーン折りたたみ、mock2確認導線。 */
 let adminUxSectionFoldState={};
-let mock2PreviewBaseUrl=localStorage.getItem('tas_mock2_preview_base_url_v1')||'http://localhost:5173/';
+let mock2PreviewBaseUrl=localStorage.getItem('tas_mock2_preview_base_url_v1')||'https://localhost:5173/';
 
 function adminUxSceneKey(){return sceneKey()}
 function adminUxFoldStateForScene(){const key=adminUxSceneKey();return adminUxSectionFoldState[key]||{}}
@@ -116,9 +116,9 @@ function adminUxMock2PreviewUrl(){
   }catch(error){return mock2PreviewBaseUrl}
 }
 function adminUxMock2PreviewLabel(){const node=scene();return node&&node.type==='scene'?`mock2で「${escapeHtml(node.name||`シーン${node.id}`)}」から開く`:'mock2で章の最初から開く'}
-function adminUxPreviewMarkup(){return `<div class="card mock2-preview-card"><h3>mock2で確認</h3><p class="hint">選択中のシーンからmock2を開きます(新規プレイのみ有効。保存済みの続きがある場合は「続きから/最初から」の選択を優先します)。</p><div class="field"><label>mock2のURL</label><input id="mock2PreviewBaseUrl" value="${escapeHtml(mock2PreviewBaseUrl)}" placeholder="http://localhost:5173/"></div><div class="mock2-preview-actions"><a id="openMock2Preview" href="${escapeHtml(adminUxMock2PreviewUrl())}" target="_blank" rel="noopener">${adminUxMock2PreviewLabel()}</a></div></div>`}
+function adminUxPreviewMarkup(){return `<div class="card mock2-preview-card"><h3>mock2で確認</h3><p class="hint">選択中のシーンからmock2を開きます(新規プレイのみ有効。保存済みの続きがある場合は「続きから/最初から」の選択を優先します)。</p><div class="field"><label>mock2のURL</label><input id="mock2PreviewBaseUrl" value="${escapeHtml(mock2PreviewBaseUrl)}" placeholder="https://localhost:5173/"></div><div class="mock2-preview-actions"><a id="openMock2Preview" href="${escapeHtml(adminUxMock2PreviewUrl())}" target="_blank" rel="noopener">${adminUxMock2PreviewLabel()}</a></div></div>`}
 var baseRenderExportForAdminUx=renderExport;
 renderExport=function(){const holder=document.createElement('div');holder.innerHTML=baseRenderExportForAdminUx();holder.append(document.createRange().createContextualFragment(adminUxPreviewMarkup()));return holder.innerHTML};
 var baseBindExportForAdminUx=bindExport;
-bindExport=function(){baseBindExportForAdminUx();const input=$('mock2PreviewBaseUrl');const link=$('openMock2Preview');if(input)input.oninput=event=>{mock2PreviewBaseUrl=event.target.value.trim()||'http://localhost:5173/';localStorage.setItem('tas_mock2_preview_base_url_v1',mock2PreviewBaseUrl);saveWorkspaceDraft(true);if(link)link.href=adminUxMock2PreviewUrl()}};
+bindExport=function(){baseBindExportForAdminUx();const input=$('mock2PreviewBaseUrl');const link=$('openMock2Preview');if(input)input.oninput=event=>{mock2PreviewBaseUrl=event.target.value.trim()||'https://localhost:5173/';localStorage.setItem('tas_mock2_preview_base_url_v1',mock2PreviewBaseUrl);saveWorkspaceDraft(true);if(link)link.href=adminUxMock2PreviewUrl()}};
 renderAll();
