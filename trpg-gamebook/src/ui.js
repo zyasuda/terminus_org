@@ -10,6 +10,7 @@ const log = $("logInner");
 
 let chapter = null;
 let state = null;
+let usingDraft = false;
 
 /* ── 描画 ───────────────────────────────────── */
 
@@ -101,7 +102,7 @@ function placeName() {
 
 function paintRail() {
   $("place").textContent = placeName();
-  $("chapter").textContent = chapter.title || "";
+  $("chapter").textContent = `${chapter.title || ""}${usingDraft ? "（下書き）" : ""}`;
 
   const max = state.maxHp || 10;
   $("hp").innerHTML = Array.from({ length: max },
@@ -187,11 +188,18 @@ function start() {
 
 $("restart").addEventListener("click", start);
 
-const res = await fetch("./data/chapter_01.json");
-if (!res.ok) {
-  log.innerHTML = `<p class="prose blocked">章データを読み込めなかった（${res.status}）。` +
-    `ローカルサーバー経由で開く必要がある。</p>`;
-} else {
-  chapter = await res.json();
+const draft = localStorage.getItem("gamebook:draft");
+if (draft) {
+  chapter = JSON.parse(draft);
+  usingDraft = true;
   start();
+} else {
+  const res = await fetch("./data/chapter_01.json");
+  if (!res.ok) {
+    log.innerHTML = `<p class="prose blocked">章データを読み込めなかった（${res.status}）。` +
+      `ローカルサーバー経由で開く必要がある。</p>`;
+  } else {
+    chapter = await res.json();
+    start();
+  }
 }
