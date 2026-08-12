@@ -1,1 +1,1 @@
-{"type":"module","scripts":{"test":"node test/playthrough.test.mjs && node test/validate.test.mjs"}}
+{"type":"module","scripts":{"test":"node test/playthrough.test.mjs && node test/validate.test.mjs && node test/ai.test.mjs"}}
