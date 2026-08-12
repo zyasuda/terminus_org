@@ -1,0 +1,196 @@
+import * as inv from "./inventory.js";
+import {
+  actionCandidates,
+  approachLevel,
+  availableEncounters,
+  examineDifficulty,
+  exitTargetIndexIn,
+  pickExamineSecret,
+  requiresMet,
+  resolveExit
+} from "./progression.js";
+
+const defaultRng = globalThis.Math.random.bind(globalThis.Math);
+
+function currentNode(state) {
+  if (state.node === "intro") return state.chapter.intro;
+  if (state.node === "ending") return state.chapter.ending;
+  return state.chapter.scenes[state.sceneIndex];
+}
+
+function die(state, sides) {
+  return Math.floor(Math.min(0.9999999999999999, Math.max(0, state.rng())) * sides) + 1;
+}
+
+function weaknessFor(state) {
+  const sceneFoe = currentNode(state)?.enemy;
+  return state.enemy?.weakness || (sceneFoe && sceneFoe.name === state.enemy?.name ? sceneFoe.weakness : undefined);
+}
+
+function item(events, state, name, count, add) {
+  let changed = 0;
+  for (let index = 0; index < count; index += 1) {
+    if ((add ? inv.give : inv.take)(state.inventory, name)) changed += 1;
+  }
+  if (changed) events.push({ type: "item", text: `${name}${add ? "を入手した" : "を消費した"}`, name, count: changed });
+}
+
+function finishCombat(events, state, outcome) {
+  const foe = state.enemy;
+  if (foe.revealOnDefeat) {
+    const secret = currentNode(state).secrets?.find(({ id }) => id === foe.revealOnDefeat);
+    state.revealed.add(foe.revealOnDefeat);
+    events.push({ type: "reveal", text: secret?.text || foe.revealOnDefeat, entity: secret?.entity || foe.revealOnDefeat });
+  }
+  if (foe.itemOnDefeat) item(events, state, foe.itemOnDefeat, foe.itemOnDefeatCount || 1, true);
+  state[outcome].push(foe.name);
+  state.enemy = null;
+}
+
+function counterattack(events, state) {
+  const foe = state.enemy;
+  let damage = (foe.atk || 1) + (foe.openingDanger || 0);
+  if (state.guard) damage = Math.max(0, damage - 1);
+  state.guard = false;
+  foe.openingDanger = 0;
+  state.hp -= damage;
+  events.push({ type: "combat", text: `${foe.name}の反撃。${damage}ダメージ` });
+  if (state.hp <= 0) {
+    state.node = "done";
+    events.push({ type: "end", text: "力尽きた" });
+  }
+}
+
+function transition(events, state, exit) {
+  for (const name of exit.addItems || []) item(events, state, name, 1, true);
+  for (const name of exit.removeItems || []) item(events, state, name, 1, false);
+  const to = exit.to;
+  if (to === "end") {
+    state.node = "done";
+    events.push({ type: "end", text: exit.arrivalText || exit.text || "章の終わり" });
+    return true;
+  }
+  if (to === "ending") state.node = "ending";
+  else {
+    const sceneIndex = exitTargetIndexIn(state.chapter.scenes, to);
+    if (sceneIndex < 0) {
+      events.push({ type: "blocked", text: exit.blockedText || "移動先を解決できない" });
+      return false;
+    }
+    state.node = "scene";
+    state.sceneIndex = sceneIndex;
+  }
+  state.sceneEnteredTurn = state.turn;
+  events.push({ type: "move", text: exit.arrivalText || exit.text, to });
+  events.push({ type: "narrate", text: currentNode(state).brief });
+  return true;
+}
+
+export function newGame(chapter, opts = {}) {
+  return {
+    chapter,
+    node: "intro",
+    sceneIndex: 0,
+    turn: 0,
+    sceneEnteredTurn: 0,
+    revealed: new Set(),
+    inventory: inv.startingInventory({ chapterStarting: chapter.startingInventory?.player ? { player: chapter.startingInventory.player } : chapter.startingInventory, fallback: ["ランタン", "ナイフ"] }),
+    hp: 10,
+    maxHp: 10,
+    enemy: null,
+    defeated: [],
+    fled: [],
+    encounterCounts: {},
+    failures: {},
+    flags: {},
+    guard: false,
+    rng: opts.rng || defaultRng
+  };
+}
+
+export function candidates(state) {
+  const node = currentNode(state);
+  const decision = node.decision;
+  if (decision && !state.flags[`decision:${decision.id}`]) return decision.choices.map(({ id, label, input }) => ({ id, label, input }));
+  const choices = actionCandidates(node, state, node.authoring?.actionCandidateLabels || {});
+  const weakness = weaknessFor(state);
+  if (state.enemy && weakness?.triggers?.some(trigger => inv.held(state.inventory).some(name => name.includes(trigger)))) {
+    const trigger = weakness.triggers.find(term => inv.held(state.inventory).some(name => name.includes(term)));
+    /* ボタンの文言は、押したら何が起きるかそのものにする。weakness.hintは
+       「こいつ、光を嫌がってる——ランタンで照らせ!」という叫びで、
+       操作の名前ではない。この候補は「その品を持っていて、相手がそれを嫌う」
+       ときにしか出てこないので、出ていること自体が助言になっている */
+    choices.push({ id: "combat:weakness", label: `${trigger}で照らす`, input: `${trigger}で照らす` });
+  }
+  return choices;
+}
+
+export function act(state, originalInput) {
+  const events = [];
+  const node = currentNode(state);
+  let input = originalInput;
+  const decision = node.decision;
+  if (decision && !state.flags[`decision:${decision.id}`]) {
+    const choice = decision.choices.find(choice => choice.input === input);
+    if (!choice) return [{ type: "unknown", text: input }];
+    state.flags[`decision:${decision.id}`] = choice.id;
+    input = choice.input;
+  }
+
+  if (state.enemy) {
+    const weakness = weaknessFor(state);
+    if (weakness?.triggers?.some(trigger => input.includes(trigger) && inv.held(state.inventory).some(name => name.includes(trigger)))) {
+      events.push({ type: "combat", text: weakness.text });
+      if (weakness.effect === "flee") finishCombat(events, state, "fled");
+    } else if (input.includes("攻撃")) {
+      const roll = die(state, 20);
+      if (roll >= (state.enemy.defenseDc || 12)) state.enemy.hp -= die(state, 6);
+      events.push({ type: "combat", text: `${state.enemy.name}を攻撃した` });
+      if (state.enemy.hp <= 0) finishCombat(events, state, "defeated");
+      else counterattack(events, state);
+    } else if (input.includes("防御")) {
+      state.guard = true;
+      counterattack(events, state);
+    } else if (input.includes("逃げ")) {
+      const roll = die(state, 20);
+      if (roll >= (state.enemy.fleeDc || 10)) {
+        events.push({ type: "combat", text: `${state.enemy.name}から逃げ切った` });
+        finishCombat(events, state, "fled");
+      } else counterattack(events, state);
+    } else return [{ type: "unknown", text: input }];
+    state.turn += 1;
+    return events;
+  }
+
+  const encounter = availableEncounters(node, state).find(({ enc }) => enc.triggerTerms?.some(term => input.includes(term)));
+  if (encounter) {
+    const { enc, foe } = encounter;
+    state.enemy = { ...foe, hp: foe.hp ?? foe.maxHp ?? 6, openingDanger: approachLevel(state.turn, state.sceneEnteredTurn) };
+    state.sceneEnteredTurn = state.turn;
+    state.encounterCounts[enc.id] = (state.encounterCounts[enc.id] || 0) + 1;
+    events.push({ type: "combat", text: enc.onsetText });
+  } else {
+    const { secret } = pickExamineSecret(node, input, input, state);
+    if (secret) {
+      const dc = examineDifficulty(secret, state.failures[secret.id] || 0);
+      const roll = die(state, 20);
+      const ok = roll === 20 || (roll !== 1 && roll >= dc);
+      events.push({ type: "roll", label: `${secret.entity}を調べる`, roll, dc, ok });
+      if (ok) {
+        state.revealed.add(secret.id);
+        events.push({ type: "reveal", text: secret.text, entity: secret.entity });
+        for (const loot of node.loot || []) if (loot.requires === secret.id) item(events, state, loot.name, 1, true);
+      } else {
+        state.failures[secret.id] = (state.failures[secret.id] || 0) + 1;
+        events.push({ type: "narrate", text: `${secret.entity}のことはまだ分からない` });
+      }
+    } else {
+      const exit = resolveExit(node, input);
+      if (!exit) return [{ type: "unknown", text: input }];
+      if (!requiresMet(exit.requires, state)) return [{ type: "blocked", text: exit.blockedText || node.blockedText }];
+      if (!transition(events, state, exit)) return events;
+    }
+  }
+  state.turn += 1;
+  return events;
+}
