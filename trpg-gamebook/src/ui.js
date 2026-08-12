@@ -7,15 +7,19 @@ import { held } from "./inventory.js";
 
 const $ = id => document.getElementById(id);
 const log = $("logInner");
+// この章の開示本文は中央値42字・最長94字なので、中央値1.4秒・最長3.1秒に収まる。
+const REVEAL_CHAR_DELAY_MS = 1000 / 30;
 
 let chapter = null;
 let state = null;
 let usingDraft = false;
+let finishReveal = null;
+let choiceVersion = 0;
 
 /* ── 描画 ───────────────────────────────────── */
 
 function line(cls, text, extra) {
-  if (!text) return;
+  if (!text && !extra) return null;
   const p = document.createElement("p");
   p.className = `in ${cls}`;
   if (extra) {
@@ -26,6 +30,7 @@ function line(cls, text, extra) {
   }
   p.appendChild(document.createTextNode(text));
   log.appendChild(p);
+  return p;
 }
 
 function tick(cls, html) {
@@ -44,11 +49,50 @@ function seam(label) {
 
 /* イベントの型ごとに描き分ける。知らない型が来ても黙って落とさず地の文で出す
    （エンジン側が型を足したときに、画面から消えるより見えている方がよい） */
-function render(events) {
+function followLog() {
+  requestAnimationFrame(() => $("log").scrollTo({ top: log.scrollHeight }));
+}
+
+function reveal(e) {
+  const p = line("prose reveal", "", e.entity);
+  const body = document.createTextNode("");
+  p.appendChild(body);
+  const text = e.text || "";
+
+  if (getComputedStyle(document.documentElement).getPropertyValue("--reveal-char-delay").trim() === "0ms") {
+    body.data = text;
+    followLog();
+    return Promise.resolve();
+  }
+
+  return new Promise(resolve => {
+    let index = 0;
+    let timer = null;
+    const finish = () => {
+      clearTimeout(timer);
+      body.data = text;
+      $("log").removeEventListener("click", finish);
+      if (finishReveal === finish) finishReveal = null;
+      followLog();
+      resolve();
+    };
+    const next = () => {
+      body.data += text[index++] || "";
+      followLog();
+      if (index < text.length) timer = setTimeout(next, REVEAL_CHAR_DELAY_MS);
+      else finish();
+    };
+    finishReveal = finish;
+    $("log").addEventListener("click", finish);
+    if (text) next(); else finish();
+  });
+}
+
+async function render(events) {
   for (const e of events || []) {
     switch (e.type) {
       case "reveal":
-        line("prose reveal", e.text, e.entity); break;
+        await reveal(e); break;
       case "roll":
         tick(e.ok ? "ok" : "ng",
           `${esc(e.label || "判定")} — d20 <b>${e.roll}</b> / 難度 ${e.dc} · <b>${e.ok ? "成功" : "失敗"}</b>`);
@@ -73,7 +117,7 @@ function render(events) {
         line("prose", e.text);
     }
   }
-  requestAnimationFrame(() => $("log").scrollTo({ top: log.scrollHeight }));
+  followLog();
 }
 
 const esc = s => String(s ?? "").replace(/[&<>]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]));
@@ -163,8 +207,13 @@ function paintChoices() {
   }
 }
 
-function choose(c) {
-  render(act(state, c.input));
+async function choose(c) {
+  const version = ++choiceVersion;
+  const box = $("choicesInner");
+  box.innerHTML = "";
+  box.className = "";
+  await render(act(state, c.input));
+  if (version !== choiceVersion) return;
   paintRail();
   paintLantern();
   paintChoices();
@@ -173,6 +222,8 @@ function choose(c) {
 /* ── 起動 ───────────────────────────────────── */
 
 function start() {
+  choiceVersion++;
+  finishReveal?.();
   state = newGame(chapter);
   log.innerHTML = "";
   seam(placeName());

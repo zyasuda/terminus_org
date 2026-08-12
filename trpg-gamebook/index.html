@@ -27,6 +27,7 @@
 
   --col: 32em;         /* 全角32文字前後。小説の一行に近い */
   --approach: 0;
+  --reveal-char-delay: 33.333ms;
 }
 
 @property --pool { syntax: '<percentage>'; inherits: true; initial-value: 0%; }
@@ -232,6 +233,7 @@ body {
 
 @media (prefers-reduced-motion: reduce) {
   #log .in { animation: none; }
+  :root { --reveal-char-delay: 0ms; }
   #lantern, #lantern::after { transition: none; }
   #log { scroll-behavior: auto; }
 }
