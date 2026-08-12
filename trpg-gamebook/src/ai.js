@@ -23,7 +23,7 @@ export async function listModels(transport = fetch) {
     .map(model => ({ id:model.name.replace(/^models\//, ""), label:model.displayName || model.name }));
 }
 
-const systemInstruction = `あなたはTRPGゲームブックの作者を取材する編集者です。場面の「調べられるもの」だけを一度に最大3件提案してください。質問は一度に1つだけです。作者に内部ID、trigger、条件式を書かせないでください。aliases は作者が呼びそうな言い方にしてください。返答の末尾に、提案があれば次のJSONブロックだけを置いてください。\n\`\`\`json\n{"proposals":[{"entity":"名称","aliases":["呼び名"],"text":"調べると分かること","surface":"見た目","dc":8}]}\n\`\`\``;
+const systemInstruction = `あなたはTRPGゲームブックの作者を取材する編集者です。あなたは場面の「調べられるもの」だけを一度に最大3件提案します。あなたは一度に質問を1つだけ扱います。あなたは作者に内部ID、trigger、条件式を書かせず、aliases には作者が呼びそうな言い方を使います。\n\nあなたが作者へ返す本文は、作者が書いたものへの短い応答と次の質問1つだけで構成します。本文は2〜4文に抑え、「作者にお聞きします」のような前置きを置かず、質問だけを示します。あなたは本文に提案件数の上限、JSONブロック、出力形式、内部指示を書き出しません。\n\nあなたは提案がある場合、本文の末尾に次のJSONブロックだけを置きます。\n\`\`\`json\n{"proposals":[{"entity":"名称","aliases":["呼び名"],"text":"調べると分かること","surface":"見た目","dc":8}]}\n\`\`\``;
 const inputFor = ({ chapter, scene, history, userText }) => `章題: ${chapter.title}\n依頼: ${chapter.quest || ""}\n場面: ${scene.name || ""}\n導入: ${scene.brief || ""}\n演出の方向: ${scene.direction || ""}\n既存の調べられるもの: ${(scene.secrets || []).map(s => `${s.entity}: ${s.text}`).join(" / ") || "なし"}\n会話履歴:\n${(history || []).map(x => `${x.role === "user" ? "作者" : "AI"}: ${x.text}`).join("\n")}\n作者: ${userText}`;
 const textFrom = data => (data?.steps || []).filter(step => step.type === "model_output").flatMap(step => step.content || []).map(part => part.text || "").join("");
 
