@@ -18,6 +18,90 @@ const nodes = chapter => [
 
 const issue = (level, where, message) => ({ level, where, message });
 
+const quotedTerms = brief => [...String(brief || "").matchAll(/「([^」]*)」|『([^』]*)』/g)]
+  .map(match => match[1] ?? match[2]).filter(Boolean);
+
+const reactsTo = (shown, reaction) => shown === reaction || shown.includes(reaction) || reaction.includes(shown);
+
+const sceneLabel = where => where === "intro" ? "イントロ" : where === "ending" ? "エンディング" : where.replace(/^scene /, "シーン");
+
+function vocabularyFor(chapter) {
+  const structure = [];
+  for (const [where, node] of nodes(chapter)) {
+    const shown = [];
+    for (const term of quotedTerms(node?.brief)) if (!shown.some(item => item.term === term)) shown.push({ term, source: "導入文" });
+    for (const term of node?.hintChips || []) if (term && !shown.some(item => item.term === term)) shown.push({ term, source: "hintChips" });
+    const reactions = [
+      ...(node?.secrets || []).flatMap(secret => [secret.entity, ...(secret.aliases || []), secret.trigger]),
+      ...(node?.exits || []).flatMap(exit => exit.match || []),
+      ...(node?.encounters || []).flatMap(encounter => encounter.triggerTerms || [])
+    ].filter(Boolean).map(String);
+    for (const { term, source } of shown) {
+      if (!reactions.some(reaction => reactsTo(term, reaction))) {
+        structure.push(issue("warn", `${sceneLabel(where)} / ${source}`, `${source}の「${term}」に反応するものが無い`));
+      }
+    }
+  }
+
+  const spellings = [];
+  const normalize = value => String(value).replace(/[のがをにはへと\s・-]/g, "");
+  for (const [where, node] of nodes(chapter)) {
+    for (const secret of node?.secrets || []) {
+      if (typeof secret.entity !== "string" || !secret.entity) continue;
+      spellings.push({ entity:secret.entity, where, normalized:normalize(secret.entity) });
+    }
+  }
+  for (let left = 0; left < spellings.length; left += 1) {
+    for (let right = left + 1; right < spellings.length; right += 1) {
+      const a = spellings[left], b = spellings[right];
+      if (a.where === b.where || !a.normalized || a.entity === b.entity || a.normalized !== b.normalized) continue;
+      structure.push(issue("warn", `${sceneLabel(a.where)} / ${sceneLabel(b.where)}`, `「${a.entity}」（${sceneLabel(a.where)}）と「${b.entity}」（${sceneLabel(b.where)}）は同じものですか`));
+    }
+  }
+  return structure;
+}
+
+function itemVocabularyFor(chapter) {
+  const obtainable = new Map();
+  const used = [];
+  const addObtainable = (name, where) => {
+    if (typeof name === "string" && name && !obtainable.has(name)) obtainable.set(name, where);
+  };
+  const addUsed = name => {
+    if (typeof name === "string" && name) used.push(name);
+  };
+
+  if (Array.isArray(chapter.startingInventory)) {
+    for (const item of chapter.startingInventory) addObtainable(typeof item === "string" ? item : item?.name, "開始時の持ち物");
+  } else if (chapter.startingInventory && typeof chapter.startingInventory === "object") {
+    for (const owner of Object.keys(chapter.startingInventory)) addObtainable(owner, "開始時の持ち物");
+  }
+
+  for (const [where, node] of nodes(chapter)) {
+    for (const exit of node?.exits || []) {
+      // 章の終わりでもらう報酬は、この章では使えなくて当然。消せない警告を出さない
+      if (exit.to !== "end") for (const name of exit.addItems || []) addObtainable(name, sceneLabel(where));
+      // 章の終わりで渡す・消費するのも立派な使い道(「心石の欠片」がこれに当たる)
+      for (const name of exit.removeItems || []) addUsed(name);
+      for (const key of ["itemsAny", "itemsAll"]) for (const name of exit.requires?.[key] || []) addUsed(name);
+    }
+    for (const loot of node?.loot || []) addObtainable(loot?.name, sceneLabel(where));
+    const enemies = [node?.enemy, ...(node?.encounters || []).map(encounter => encounter.enemy)];
+    for (const enemy of enemies.filter(Boolean)) {
+      addObtainable(enemy.itemOnDefeat, sceneLabel(where));
+      for (const trigger of enemy.weakness?.triggers || []) addUsed(trigger);
+    }
+  }
+
+  const structure = [];
+  for (const [name, where] of obtainable) {
+    if (!used.some(reference => reference === name || name.includes(reference))) {
+      structure.push(issue("warn", where, `「${name}」は入手できるが、使う手段が無い`));
+    }
+  }
+  return structure;
+}
+
 function structureFor(chapter) {
   const structure = [];
   const allSecrets = new Map();
@@ -84,11 +168,28 @@ function structureFor(chapter) {
       structure.push(issue("warn", where, `必要条件の秘密「${id}」を調査または他の経路で開示できない`));
     }
   }
-  return structure;
+  return structure.concat(vocabularyFor(chapter), itemVocabularyFor(chapter));
+}
+
+function collectOutcomes(result, state, chapter) {
+  const labels = new Map();
+  const count = label => labels.set(label, (labels.get(label) || 0) + 1);
+  const decisions = new Map(nodes(chapter).flatMap(([, node]) => node?.decision ? [[node.decision.id, node.decision]] : []));
+  for (const [key, value] of Object.entries(state.flags)) {
+    if (!key.startsWith("decision:")) continue;
+    const decision = decisions.get(key.slice("decision:".length));
+    const choice = decision?.choices?.find(item => item.id === value);
+    if (choice?.label) count(`${choice.label} を選んだ`);
+  }
+  for (const name of state.defeated || []) count(`${name}を倒した`);
+  for (const name of state.fled || []) count(`${name}を逃がした`);
+  if (state.hp <= 0) count("死亡した");
+  for (const [label, value] of labels) result.outcomeCounts.set(label, (result.outcomeCounts.get(label) || 0) + value);
 }
 
 function play(chapter) {
-  const result = { runs: 50, cleared: 0, died: 0, stuck: 0, ranOut: 0, stuckAt: [], medianTurns: 0 };
+  const result = { runs: 50, cleared: 0, died: 0, stuck: 0, ranOut: 0, stuckAt: [], medianTurns: 0, outcomes: [] };
+  result.outcomeCounts = new Map();
   const stuckAt = new Map();
   const turns = [];
   for (let seed = 1; seed <= result.runs; seed += 1) {
@@ -100,6 +201,7 @@ function play(chapter) {
       if (!choices.length) break;
       act(state, choices[Math.floor(rng() * choices.length)].input);
     }
+    collectOutcomes(result, state, chapter);
     turns.push(state.turn);
     if (state.node === "done") {
       if (state.hp <= 0) result.died += 1;
@@ -114,6 +216,10 @@ function play(chapter) {
   result.stuckAt = [...stuckAt].map(([place, count]) => ({ place, count })).sort((a, b) => b.count - a.count);
   turns.sort((a, b) => a - b);
   result.medianTurns = (turns[24] + turns[25]) / 2;
+  result.outcomes = [...result.outcomeCounts]
+    .map(([label, count]) => ({ label, count }))
+    .sort((a, b) => b.count - a.count);
+  delete result.outcomeCounts;
   return result;
 }
 

@@ -26,7 +26,16 @@ function later() { clearTimeout(timer); timer = setTimeout(paintInspection, 400)
 function touch() { save(); later(); }
 const field = (label, key, value, type = "text") => `<label>${label}<input data-field="${key}" type="${type}" value="${esc(value)}"></label>`;
 const text = (label, key, value) => `<label>${label}<textarea data-field="${key}">${esc(value)}</textarea></label>`;
-const list = (items, kind, key) => `<div>${items.map((item, index) => `<div class="row"><span>${esc(item.entity || item.label || item.id || "名称なし")}</span><button type="button" data-select="${kind}:${index}">編集</button><button type="button" class="remove" data-remove="${key}:${index}">削除</button></div>`).join("")}</div>`;
+function displayName(item, kind) {
+  if (kind === "exit") {
+    if (item.to === "ending") return chapter.ending?.name || "行き先が未設定";
+    const id = String(item.to ?? "").replace(/^scene:/, "");
+    return chapter.scenes.find(scene => String(scene.id) === id)?.name || "行き先が未設定";
+  }
+  if (kind === "encounter") return item.enemy?.name || "名前のない遭遇";
+  return item.entity || "名称なし";
+}
+const list = (items, kind, key) => `<div>${items.map((item, index) => `<div class="row"><span>${esc(displayName(item, kind))}</span><button type="button" data-select="${kind}:${index}">編集</button><button type="button" class="remove" data-remove="${key}:${index}">削除</button></div>`).join("")}</div>`;
 const kindFor = category => category === "secrets" ? "secret" : category === "decision" ? "decision" : category.slice(0, -1);
 const pendingFor = category => pendingProposal?.category === category ? pendingProposal.data : null;
 const join = value => Array.isArray(value) ? value.join("、") : "";
@@ -101,7 +110,7 @@ function encounterEditor(node, index) {
   return `<h2>遭遇</h2>${field("起きるきっかけの言葉（読点区切り）", "triggerTerms", (enc.triggerTerms || []).join("、"))}${choice("requiredElements", enc.requiredElements || [])}${text("始まりの文", "onsetText", enc.onsetText)}${field("相手", "enemy.name", enc.enemy?.name)}${field("相手のHP", "enemy.hp", enc.enemy?.hp ?? 6, "number")}${choice("revealOnDefeat", enc.enemy?.revealOnDefeat)}<div class="actions"><button data-back type="button">場面へ戻る</button></div>`;
 }
 function renderEditor() { const node = nodeFor(); let html = nodeEditor(node); if (selected.kind === "secret") html = secretEditor(node, selected.index); if (selected.kind === "exit") html = exitEditor(node, selected.index); if (selected.kind === "decision") html = decisionEditor(node); if (selected.kind === "encounter") html = encounterEditor(node, selected.index); $("editor").innerHTML = html; }
-function paintInspection() { const result = inspect(chapter), errors = result.structure.filter(x => x.level === "error").length; $("result").innerHTML = `<h2>検査</h2><div id="summary" class="${errors ? "error" : "ok"}">${errors ? `不整合 ${errors}件` : "問題なし"}</div><h3>自動プレイ</h3><div class="metric"><span>完走</span><b>${result.play.cleared} / ${result.play.runs}</b></div><div class="metric"><span>死亡</span><b>${result.play.died}</b></div><div class="metric ${result.play.stuck > 0 ? "error" : ""}"><span>手詰まり</span><b>${result.play.stuck}</b></div><div class="metric"><span>上限到達</span><b>${result.play.ranOut}</b></div>${result.play.cleared === 0 && result.play.stuckAt[0] ? `<p class="error">最も多く止まった場所: ${esc(result.play.stuckAt[0].place)}</p>` : ""}<h3>構造</h3>${result.structure.length ? result.structure.map(x => `<div class="issue ${x.level}">${esc(x.message)}<small>${esc(x.where)}</small></div>`).join("") : "<p class=\"ok\">エラー・警告はありません。</p>"}`; }
+function paintInspection() { const result = inspect(chapter), errors = result.structure.filter(x => x.level === "error").length, branches = result.play.outcomes.length ? `<h3>分岐</h3>${result.play.outcomes.map(item => `<div class="metric"><span>${esc(item.label)}</span><b>${item.count}</b></div>`).join("")}` : ""; $("result").innerHTML = `<h2>検査</h2><div id="summary" class="${errors ? "error" : "ok"}">${errors ? `不整合 ${errors}件` : "問題なし"}</div><h3>自動プレイ</h3><div class="metric"><span>完走</span><b>${result.play.cleared} / ${result.play.runs}</b></div><div class="metric"><span>死亡</span><b>${result.play.died}</b></div><div class="metric ${result.play.stuck > 0 ? "error" : ""}"><span>手詰まり</span><b>${result.play.stuck}</b></div><div class="metric"><span>上限到達</span><b>${result.play.ranOut}</b></div>${result.play.cleared === 0 && result.play.stuckAt[0] ? `<p class="error">最も多く止まった場所: ${esc(result.play.stuckAt[0].place)}</p>` : ""}${branches}<h3>構造</h3>${result.structure.length ? result.structure.map(x => `<div class="issue ${x.level}">${esc(x.message)}<small>${esc(x.where)}</small></div>`).join("") : "<p class=\"ok\">エラー・警告はありません。</p>"}`; }
 function secretId(node) { const prefix = selected.node.startsWith("scene:") ? `sc${sceneNumber()}_` : `${selected.node}_`; return newId(prefix, node.secrets || []); }
 function inspectProposal(proposal) { const result = inspect(chapter), errors = result.structure.filter(x => x.level === "error").length; proposal.inspection = { error:errors > 0 || result.play.stuck > 0, text:errors ? `不整合 ${errors}件。採用を取り消せます。` : result.play.stuck ? `手詰まり ${result.play.stuck}件。採用を取り消せます。` : `検査済み: 完走 ${result.play.cleared}/${result.play.runs}` }; paintInspection(); }
 function adoptProposal(category, proposal, data = proposalData(category, proposal, contextFor(category))) {
