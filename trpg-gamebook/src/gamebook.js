@@ -121,7 +121,9 @@ export function candidates(state) {
     if (!choice.id.startsWith("secret:")) return true;
     const secret = node.secrets?.find(({ id }) => id === choice.id.slice("secret:".length));
     return secret && requiresMet(secret.requires, state);
-  });
+  // 同じ言葉を送るボタンが2つ出ないようにする。遭遇のきっかけと出口のmatchが同じ言葉だと
+  // 「左へ進む」と「左の坑道へ入る」が並び、押し分けられるように見えてしまう(実際は同じ)
+  }).filter((choice, index, all) => all.findIndex(other => other.input === choice.input) === index);
   const weakness = weaknessFor(state);
   if (state.enemy && weakness?.triggers?.some(trigger => inv.held(state.inventory).some(name => name.includes(trigger)))) {
     const trigger = weakness.triggers.find(term => inv.held(state.inventory).some(name => name.includes(term)));
