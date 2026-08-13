@@ -113,6 +113,11 @@ export function candidates(state) {
   const decision = node.decision;
   if (decision && !state.flags[`decision:${decision.id}`]) return decision.choices.map(({ id, label, input }) => ({ id, label, input }));
   const choices = actionCandidates(node, state, node.authoring?.actionCandidateLabels || {});
+  const availableChoices = choices.filter(choice => {
+    if (!choice.id.startsWith("secret:")) return true;
+    const secret = node.secrets?.find(({ id }) => id === choice.id.slice("secret:".length));
+    return secret && requiresMet(secret.requires, state);
+  });
   const weakness = weaknessFor(state);
   if (state.enemy && weakness?.triggers?.some(trigger => inv.held(state.inventory).some(name => name.includes(trigger)))) {
     const trigger = weakness.triggers.find(term => inv.held(state.inventory).some(name => name.includes(term)));
@@ -120,9 +125,9 @@ export function candidates(state) {
        「こいつ、光を嫌がってる——ランタンで照らせ!」という叫びで、
        操作の名前ではない。この候補は「その品を持っていて、相手がそれを嫌う」
        ときにしか出てこないので、出ていること自体が助言になっている */
-    choices.push({ id: "combat:weakness", label: `${trigger}で照らす`, input: `${trigger}で照らす` });
+    availableChoices.push({ id: "combat:weakness", label: `${trigger}で照らす`, input: `${trigger}で照らす` });
   }
-  return choices;
+  return availableChoices;
 }
 
 export function act(state, originalInput) {
@@ -170,7 +175,8 @@ export function act(state, originalInput) {
     state.encounterCounts[enc.id] = (state.encounterCounts[enc.id] || 0) + 1;
     events.push({ type: "combat", text: enc.onsetText });
   } else {
-    const { secret } = pickExamineSecret(node, input, input, state);
+    const picked = pickExamineSecret(node, input, input, state).secret;
+    const secret = picked && requiresMet(picked.requires, state) ? picked : null;
     if (secret) {
       const dc = examineDifficulty(secret, state.failures[secret.id] || 0);
       const roll = die(state, 20);

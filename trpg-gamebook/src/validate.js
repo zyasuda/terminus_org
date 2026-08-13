@@ -147,6 +147,12 @@ function structureFor(chapter) {
         if (!allSecrets.has(id)) structure.push(issue("error", exitWhere, "必要な発見が存在しない"));
       }
     }
+    for (const secret of node.secrets || []) {
+      for (const key of ["secretsAll", "secretsAny"]) for (const id of secret.requires?.[key] || []) {
+        usedSecrets.add(id);
+        if (!allSecrets.has(id)) structure.push(issue("error", sceneLabel(where), "必要な発見が存在しない"));
+      }
+    }
     if (node.decision) {
       const decisionWhere = `${sceneLabel(where)} / 決断`;
       if (!decisionInputResolves(node, node.decision.choices?.[0]?.input || "")) {
@@ -199,7 +205,7 @@ function collectOutcomes(result, state, chapter) {
 }
 
 function play(chapter) {
-  const result = { runs: 50, cleared: 0, died: 0, stuck: 0, ranOut: 0, stuckAt: [], medianTurns: 0, outcomes: [] };
+  const result = { runs: 50, cleared: 0, died: 0, stuck: 0, ranOut: 0, stuckAt: [], medianTurns: 0, outcomes: [], reveals: {} };
   result.outcomeCounts = new Map();
   const stuckAt = new Map();
   const turns = [];
@@ -213,6 +219,7 @@ function play(chapter) {
       act(state, choices[Math.floor(rng() * choices.length)].input);
     }
     collectOutcomes(result, state, chapter);
+    for (const id of state.revealed) result.reveals[id] = (result.reveals[id] || 0) + 1;
     turns.push(state.turn);
     if (state.node === "done") {
       if (state.hp <= 0) result.died += 1;

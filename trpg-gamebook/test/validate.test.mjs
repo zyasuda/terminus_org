@@ -116,3 +116,19 @@ console.log("ok 12 - 場面への出口を追加すると到達不能警告が�
   assert.ok(result.structure.some(({ message }) => message === "どこからも来られない場面がある"));
 }
 console.log("ok 13 - 到達不能場面の検査はerrorを増やさない");
+
+{
+  const broken = copy();
+  broken.scenes[0].secrets[0].requires = { secretsAny:["missing_secret"] };
+  const issue = inspect(broken).structure.find(({ message }) => message === "必要な発見が存在しない");
+  assert.equal(issue.level, "error");
+  assert.equal(issue.where, "シーン1");
+}
+console.log("ok 14 - 秘密の前提に存在しない発見があるとerrorになる");
+
+{
+  const result = inspect(copy());
+  assert.ok(result.play.reveals.s2a >= 1);
+  assert.equal(typeof result.play.reveals.s2a, "number");
+}
+console.log("ok 15 - 自動プレイの開示回数を集計する");

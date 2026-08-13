@@ -9,6 +9,16 @@ function seeded(seed) {
 }
 
 const labels = [];
+function conditionedChapter() {
+  const copy = structuredClone(chapter), scene = copy.scenes[0];
+  scene.secrets.push(
+    { id:"s_a", entity:"試験の前提", aliases:["前提"], text:"前提を確認した。", trigger:"" },
+    { id:"s_b", entity:"試験の秘密", aliases:["秘密"], requires:{ secretsAll:["s_a"] }, text:"秘密が現れた。", trigger:"" }
+  );
+  scene.loot.push({ name:"試験の薬", requires:"s_b" });
+  return copy;
+}
+function enterScene1(state) { act(state, candidates(state)[0].input); }
 {
   const state = newGame(chapter, { rng: seeded(7) });
   for (let turn = 0; turn < 200 && state.node !== "done"; turn += 1) {
@@ -53,3 +63,34 @@ console.log("ok 2 - 弱点で撃退しても抜け道が開く");
   assert.equal(state.sceneIndex, before.sceneIndex);
 }
 console.log("ok 3 - 未解決入力は状態を変えない");
+
+{
+  const state = newGame(conditionedChapter(), { rng:() => 0.7 });
+  enterScene1(state);
+  assert.equal(candidates(state).some(option => option.id === "secret:s_b"), false);
+}
+console.log("ok 4 - 前提未達の秘密は候補に出さない");
+
+{
+  const state = newGame(conditionedChapter(), { rng:() => 0.7 });
+  enterScene1(state);
+  assert.deepEqual(act(state, "試験の秘密を調べる"), [{ type:"unknown", text:"試験の秘密を調べる" }]);
+}
+console.log("ok 5 - 前提未達の秘密は調べても開かない");
+
+{
+  const state = newGame(conditionedChapter(), { rng:() => 0.7 });
+  enterScene1(state);
+  while (!state.revealed.has("s_a")) act(state, candidates(state).find(option => option.id === "secret:s_a").input);
+  assert.ok(candidates(state).some(option => option.id === "secret:s_b"));
+}
+console.log("ok 6 - 前提を満たすと秘密の候補が現れる");
+
+{
+  const state = newGame(conditionedChapter(), { rng:() => 0.7 });
+  enterScene1(state);
+  while (!state.revealed.has("s_a")) act(state, candidates(state).find(option => option.id === "secret:s_a").input);
+  act(state, candidates(state).find(option => option.id === "secret:s_b").input);
+  assert.ok(state.inventory.player.includes("試験の薬"));
+}
+console.log("ok 7 - 前提を満たして秘密を開くと物が手に入る");
