@@ -142,6 +142,10 @@ function structureFor(chapter) {
       if (exit.to !== "ending" && exit.to !== "end" && exitTargetIndexIn(chapter.scenes || [], exit.to) < 0) {
         structure.push(issue("error", exitWhere, "出口が実在しない場面を指している"));
       }
+      const match = exit.match?.[0], labels = node.authoring?.actionCandidateLabels || {};
+      if (match && ["進む", "戻る", "引き返す"].some(word => match.includes(word)) && !labels[`exit:${exit.id}`]) {
+        structure.push(issue("warn", sceneLabel(where), `選択肢の文言が「${match}へ進む」になる`));
+      }
       for (const key of ["secretsAll", "secretsAny"]) for (const id of exit.requires?.[key] || []) {
         usedSecrets.add(id);
         if (!allSecrets.has(id)) structure.push(issue("error", exitWhere, "必要な発見が存在しない"));

@@ -135,3 +135,30 @@ console.log("ok 14 - 秘密の前提に存在しない発見があるとerrorに
   assert.equal(typeof result.play.reveals.s2a, "number");
 }
 console.log("ok 15 - 自動プレイの開示回数を集計する");
+
+{
+  const broken = copy();
+  broken.scenes[0].exits[0].match[0] = "奥へ進む";
+  const issue = inspect(broken).structure.find(({ message }) => message === "選択肢の文言が「奥へ進むへ進む」になる");
+  assert.equal(issue.level, "warn");
+  assert.equal(issue.where, "シーン1");
+}
+console.log("ok 16 - 重なる行き先文言をwarnで検出する");
+
+{
+  const fixed = copy();
+  fixed.scenes[0].exits[0].match[0] = "奥へ進む";
+  fixed.scenes[0].authoring ||= {};
+  fixed.scenes[0].authoring.actionCandidateLabels ||= {};
+  fixed.scenes[0].authoring.actionCandidateLabels[`exit:${fixed.scenes[0].exits[0].id}`] = "奥へ進む";
+  assert.equal(inspect(fixed).structure.some(({ message }) => message === "選択肢の文言が「奥へ進むへ進む」になる"), false);
+}
+console.log("ok 17 - 行き先文言を上書きすると警告が消える");
+
+{
+  const broken = copy();
+  broken.scenes[0].exits[0].match[0] = "奥へ進む";
+  const result = inspect(broken);
+  assert.equal(result.structure.filter(({ level }) => level === "error").length, 0);
+}
+console.log("ok 18 - 行き先文言の検査はerrorを増やさない");

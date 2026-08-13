@@ -9,12 +9,15 @@ const $ = id => document.getElementById(id);
 const log = $("logInner");
 // この章の開示本文は中央値42字・最長94字なので、中央値1.4秒・最長3.1秒に収まる。
 const REVEAL_CHAR_DELAY_MS = 1000 / 30;
+const PLAYLOG_KEY = "gamebook:playlog";
+const PLAYLOG_LIMIT = 200 * 1024;
 
 let chapter = null;
 let state = null;
 let usingDraft = false;
 let finishReveal = null;
 let choiceVersion = 0;
+let playlogVersion = 0;
 
 /* ── 描画 ───────────────────────────────────── */
 
@@ -38,6 +41,7 @@ function tick(cls, html) {
   p.className = `in tick ${cls}`;
   p.innerHTML = html;
   log.appendChild(p);
+  return p;
 }
 
 function seam(label) {
@@ -45,6 +49,20 @@ function seam(label) {
   d.className = "in seam";
   d.textContent = label || "";
   log.appendChild(d);
+  return d;
+}
+
+function recordPlaylog(element) {
+  const text = element?.textContent?.replace(/\s+/g, " ").trim();
+  if (!text) return;
+  const lines = (localStorage.getItem(PLAYLOG_KEY) || "").split("\n").filter(Boolean);
+  lines.push(text);
+  while (new Blob([lines.join("\n")]).size > PLAYLOG_LIMIT) lines.shift();
+  localStorage.setItem(PLAYLOG_KEY, lines.join("\n"));
+}
+
+function clearPlaylog() {
+  localStorage.removeItem(PLAYLOG_KEY);
 }
 
 /* イベントの型ごとに描き分ける。知らない型が来ても黙って落とさず地の文で出す
@@ -62,7 +80,7 @@ function reveal(e) {
   if (getComputedStyle(document.documentElement).getPropertyValue("--reveal-char-delay").trim() === "0ms") {
     body.data = text;
     followLog();
-    return Promise.resolve();
+    return Promise.resolve(p);
   }
 
   return new Promise(resolve => {
@@ -74,7 +92,7 @@ function reveal(e) {
       $("log").removeEventListener("click", finish);
       if (finishReveal === finish) finishReveal = null;
       followLog();
-      resolve();
+      resolve(p);
     };
     const next = () => {
       body.data += text[index++] || "";
@@ -89,33 +107,37 @@ function reveal(e) {
 }
 
 async function render(events) {
+  const version = playlogVersion;
   for (const e of events || []) {
+    if (version !== playlogVersion) break;
+    let rendered;
     switch (e.type) {
       case "reveal":
-        await reveal(e); break;
+        rendered = await reveal(e); break;
       case "roll":
-        tick(e.ok ? "ok" : "ng",
+        rendered = tick(e.ok ? "ok" : "ng",
           `${esc(e.label || "判定")} — d20 <b>${e.roll}</b> / 難度 ${e.dc} · <b>${e.ok ? "成功" : "失敗"}</b>`);
         break;
       case "item":
-        tick("gain", `<b>${esc(e.name || "")}</b>${e.count > 1 ? ` ×${e.count}` : ""} ${esc(stripName(e.text, e.name))}`);
+        rendered = tick("gain", `<b>${esc(e.name || "")}</b>${e.count > 1 ? ` ×${e.count}` : ""} ${esc(stripName(e.text, e.name))}`);
         break;
       case "combat":
-        line("prose combat", e.text); break;
+        rendered = line("prose combat", e.text); break;
       case "blocked":
-        line("prose blocked", e.text); break;
+        rendered = line("prose blocked", e.text); break;
       case "move":
-        seam(placeName()); line("prose", e.text); break;
+        seam(placeName()); rendered = line("prose", e.text); break;
       case "end":
         // 区切り自体が「章の終わり」なので、同じ文言をもう一度本文に出さない
-        seam("章の終わり");
-        if (e.text && e.text !== "章の終わり") line("prose finish", e.text);
+        rendered = seam("章の終わり");
+        if (e.text && e.text !== "章の終わり") rendered = line("prose finish", e.text);
         break;
       case "unknown":
-        line("prose blocked", e.text || "それはこの場では試せない。"); break;
+        rendered = line("prose blocked", e.text || "それはこの場では試せない。"); break;
       default:
-        line("prose", e.text);
+        rendered = line("prose", e.text);
     }
+    if (version === playlogVersion) recordPlaylog(rendered);
   }
   followLog();
 }
@@ -221,23 +243,36 @@ async function choose(c) {
 
 /* ── 起動 ───────────────────────────────────── */
 
-function start() {
+function start(clearLog = false) {
   choiceVersion++;
   finishReveal?.();
   state = newGame(chapter);
+  if (clearLog) { playlogVersion++; clearPlaylog(); }
   log.innerHTML = "";
   seam(placeName());
   const n = node();
   if (n) {
-    if (n.brief) line("prose", n.brief);
-    if (n.greeting) line("prose", n.greeting);
+    if (n.brief) recordPlaylog(line("prose", n.brief));
+    if (n.greeting) recordPlaylog(line("prose", n.greeting));
   }
   paintRail();
   paintLantern();
   paintChoices();
 }
 
-$("restart").addEventListener("click", start);
+$("restart").addEventListener("click", () => start(true));
+/* 記録を作者の手元へ渡すための書き出し。自動保存は別に効いているので、押し忘れても消えない。
+   気づいたことをこのファイルへ直接書き込んでもらう前提なので、書き込む余白を空けておく */
+$("playlog").addEventListener("click", () => {
+  const body = localStorage.getItem(PLAYLOG_KEY) || "";
+  if (!body) { alert("まだ記録がありません。少し遊んでから押してください。"); return; }
+  const head = `# ${chapter?.title || "章"} のプレイ記録\n\n気づいたことは、その場所へそのまま書き込んでください。\n\n---\n\n`;
+  const link = document.createElement("a");
+  link.href = URL.createObjectURL(new Blob([head + body.split("\n").join("\n\n")], { type:"text/markdown" }));
+  link.download = "playlog.md";
+  link.click();
+  URL.revokeObjectURL(link.href);
+});
 
 const draft = localStorage.getItem("gamebook:draft");
 if (draft) {
