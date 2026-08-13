@@ -19,7 +19,7 @@ label { display:block; margin:.75rem 0 .2rem; color:var(--dim); font-size:12px }
 </head>
 <body>
 <header><h1>廃坑の灯　編集</h1><span id="draft"></span><button id="export" type="button">.jsonを書き出す</button><button id="discard" type="button">下書きを捨てる</button></header>
-<details id="ai-settings" class="ai-settings"><summary>Gemini設定</summary><label>Gemini APIキー<input id="gemini-key" type="password" autocomplete="off"></label><p class="hint">入力した原稿はGoogleへ送られます</p><label>モデル<select id="gemini-model"><option value="">モデルを読み込みます</option></select></label><p id="gemini-status" class="hint"></p><button id="gemini-save" type="button">キーを保存してモデル一覧を更新</button></details>
+<details id="ai-settings" class="ai-settings"><summary>AI設定</summary><label>Gemini APIキー<input id="gemini-key" type="password" autocomplete="off"></label><p class="hint">入力した原稿はGoogleへ送られます</p><label>モデル<select id="gemini-model"><option value="">モデルを読み込みます</option></select></label><p id="gemini-status" class="hint"></p><button id="gemini-save" type="button">キーを保存してモデル一覧を更新</button></details>
 <div id="app"><nav id="toc" aria-label="場面"></nav><main id="editor"></main><aside><div id="result" aria-live="polite"></div></aside></div>
 <script type="module" src="./src/editor.js"></script>
 </body>
