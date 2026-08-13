@@ -65,7 +65,7 @@ function cards(category, proposal) {
 function aiPanel(node) {
   const category = categoryFor(), talk = talkFor(category), hasDecision = category === "decision" && node.decision;
   // ここは状態を伝えるだけ。操作は持たせない(設定はAI設定パネルの担当)
-  const message = !hasKey() || !getModel() ? `<p class="hint">まずAI設定を行ってください</p>` : "";
+  const message = `<p class="hint">${!hasKey() || !getModel() ? "まずAI設定を行ってください" : "シーンに必要な要素について質問します"}</p>`;
   const tabs = categories.map(item => `<button type="button" role="tab" aria-selected="${category === item}" data-ai-category="${item}">${categoryLabels[item]}</button>`).join("");
   const existing = hasDecision ? `<p class="hint">この場面には既に決断があります。既存の決断を確認してください。</p><button type="button" data-select="decision">決断を編集</button>` : `<form data-ai-form><textarea name="message" aria-label="シナリオ補完への入力" placeholder="ここに書く"></textarea><button ${hasKey() ? "" : "disabled"}>送る</button></form>`;
   return `<section class="ai-panel"><h2>シナリオ補完</h2><div class="ai-tabs" role="tablist">${tabs}</div>${message}<div class="conversation">${talk.map((item, talkIndex) => `<div class="talk ${item.role}" data-talk="${talkIndex}"><b>${item.role === "user" ? "作者" : "AI"}</b>${item.status ? `<p class="hint">${esc(item.status)}</p>` : ""}${item.thinking ? `<p class="hint">考えています</p>` : ""}<p>${esc(item.text)}</p>${item.role === "ai" ? cards(category, item) : ""}</div>`).join("")}</div>${existing}</section>`;
