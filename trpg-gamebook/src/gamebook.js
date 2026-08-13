@@ -57,7 +57,8 @@ function counterattack(events, state) {
   state.guard = false;
   foe.openingDanger = 0;
   state.hp -= damage;
-  events.push({ type: "combat", text: `${foe.name}の反撃。${damage}ダメージ` });
+  // 0ダメージを「反撃。0ダメージ」と出すと、何も起きていないのに1行増える
+  events.push({ type: "combat", text: damage > 0 ? `${foe.name}の反撃。${damage}ダメージ` : `${foe.name}の一撃を受け止めた` });
   if (state.hp <= 0) {
     state.node = "done";
     events.push({ type: "end", text: "力尽きた" });
@@ -169,6 +170,8 @@ export function act(state, originalInput) {
       else counterattack(events, state);
     } else if (input.includes("防御")) {
       state.guard = true;
+      // 押した手番に何も出ないと、防御したことが記録にも画面にも残らない
+      events.push({ type: "combat", text: `${state.enemy.name}の動きを見て、身構えた` });
       counterattack(events, state);
     } else if (input.includes("逃げ")) {
       const roll = die(state, 20);
