@@ -1,0 +1,464 @@
+{
+  "id": 2,
+  "title": "廃坑の灯",
+  "quest": "十年前の事故と灯りの主のつながりを確かめ、心石の秘密をマイラへ報告する(依頼人:村の顔役マイラ・ヴェイン)",
+  "flagsOut": [],
+  "intro": {
+    "id": "ch2_intro",
+    "name": "マイラの部屋",
+    "brief": "夜の村。マイラは受け取った心石の欠片を布の上に置き、灯りを落としている。",
+    "img": "s4_myra_room.jpg",
+    "npcSprite": "s4_myra_full_transparent.png",
+    "npc": {
+      "id": "npc_1",
+      "name": "マイラ"
+    },
+    "greeting": "あの欠片を調べてみたの。でも、分かったのは古い記録の場所だけだったわ。十年前の事故に関わるものが、まだ坑道の中に残っている。もう一度、手を貸してくれないかしら？",
+    "secrets": [
+      {
+        "id": "ch2_intro_shard",
+        "entity": "心石の欠片",
+        "aliases": [
+          "欠片",
+          "心石"
+        ],
+        "dc": 4,
+        "surface": "布の上に置かれた心石の欠片。灯りを近づけると、表面に細い線が見える。",
+        "text": "線は文字ではない。坑道の奥で見た心石の並びと、同じ間隔で刻まれている。",
+        "trigger": "心石の欠片を調べる",
+        "category": "object",
+        "importance": "support",
+        "usage": "inspect"
+      },
+      {
+        "id": "ch2_intro_letter",
+        "entity": "古い封筒",
+        "aliases": [
+          "封筒",
+          "手紙"
+        ],
+        "dc": 4,
+        "surface": "机の端に、封の切られた古い封筒がある。宛名は消されている。",
+        "text": "封筒の中には、村の記録庫で閲覧できる帳面の名が書かれている。マイラはそれを隠していたらしい。",
+        "trigger": "古い封筒を調べる",
+        "category": "object",
+        "importance": "support",
+        "usage": "inspect"
+      }
+    ],
+    "exits": [
+      {
+        "id": "to_ch2_scene01",
+        "match": [
+          "記録庫",
+          "引き受け",
+          "承知",
+          "分かった",
+          "行く"
+        ],
+        "to": "scene:1",
+        "npcSay": "記録係には話を通してあるわ。急がなくていい。でも、帳面を見たら、戻ってきて。"
+      }
+    ],
+    "authoring": {
+      "actionCandidateLabels": {
+        "exit:to_ch2_scene01": "村の記録庫へ向かう",
+        "secret:ch2_intro_shard": "心石の欠片を見る",
+        "secret:ch2_intro_letter": "古い封筒を調べる"
+      }
+    }
+  },
+  "flagRules": {},
+  "reference": {
+    "genre": "ミステリ / ロー・ファンタジー",
+    "themes": [
+      "孤独",
+      "継承",
+      "記憶"
+    ],
+    "mood": "静かで神秘的、少し切ない",
+    "palette": [
+      "ランタンの琥珀色",
+      "坑道の闇",
+      "錆の赤"
+    ]
+  },
+  "scenes": [
+    {
+      "id": 1,
+      "name": "村の記録庫",
+      "brief": "村はずれの石造りの建物。棚の奥に、坑道の帳面が並んでいる。",
+      "goal": "十年前の事故の記録を受け取る",
+      "direction": "記録庫は乾いた空気と紙の匂いだけで描け。何かを隠す人がいることを、鍵や棚の並びで示せ。",
+      "img": "s4_village_square.jpg",
+      "npc": {
+        "id": "npc_2",
+        "name": "記録係"
+      },
+      "greeting": "帳面を見たいのかい。マイラから話は聞いている。代わりに、保管庫の鍵を預けてもらうよ。",
+      "secrets": [
+        {
+          "id": "ch2_s1_door",
+          "entity": "保管庫の扉",
+          "aliases": [
+            "扉",
+            "保管庫",
+            "鍵"
+          ],
+          "dc": 5,
+          "surface": "奥の棚の前に、細い鉄の扉がある。鍵穴だけが新しい。",
+          "text": "扉は最近も開けられている。鍵穴の周りに、黒い油が残っている。",
+          "trigger": "保管庫の扉を調べる",
+          "category": "object",
+          "importance": "support",
+          "usage": "inspect"
+        },
+        {
+          "id": "ch2_s1_ledger",
+          "entity": "事故の帳面",
+          "aliases": [
+            "帳面",
+            "記録",
+            "事故"
+          ],
+          "dc": 5,
+          "surface": "棚から出された、表紙のない帳面。十年前の頁だけが開かれている。",
+          "text": "事故の頁には、帰還しなかった作業員の名前が並んでいる。最後の欄は黒く塗られ、別の帳面を参照する印がある。",
+          "trigger": "事故の帳面を調べる",
+          "category": "object",
+          "importance": "major",
+          "usage": "inspect"
+        }
+      ],
+      "exits": [
+        {
+          "id": "to_ch2_scene02",
+          "match": [
+            "記録庫の奥",
+            "保管庫"
+          ],
+          "to": 2,
+          "requires": {
+            "itemsAll": [
+              "30ゴールド"
+            ]
+          },
+          "removeItems": [
+            "30ゴールド"
+          ],
+          "addItems": [
+            "事故記録"
+          ],
+          "text": "受け取った金を記録係へ渡し、保管庫の奥へ入った。",
+          "blockedText": "記録係は首を横に振った。鍵を預けるものが必要らしい。"
+        }
+      ],
+      "authoring": {
+        "actionCandidateLabels": {
+          "exit:to_ch2_scene02": "記録庫の奥へ入る",
+          "secret:ch2_s1_door": "保管庫の扉を調べる",
+          "secret:ch2_s1_ledger": "事故の帳面を調べる"
+        }
+      }
+    },
+    {
+      "id": 2,
+      "name": "崩落の裏側",
+      "brief": "記録庫の帳面にあった坑道の裏口。崩落した岩の向こうに、狭い作業通路が続いている。",
+      "goal": "記録に残らなかったものを見つけ、封印の扉を開く",
+      "direction": "崩落は動かされたものとして置く。十年前の死者と、今も動くものを同じ場所に重ねる。説明は断定しない。",
+      "img": "mine_entrance.png",
+      "secrets": [
+        {
+          "id": "ch2_s2_soot",
+          "entity": "煤の跡",
+          "aliases": [
+            "煤",
+            "黒い跡",
+            "跡"
+          ],
+          "dc": 6,
+          "surface": "崩落した岩の低いところに、煤の跡が細く続いている。人が通るには狭い。",
+          "text": "煤は岩の向こうから運ばれている。事故の記録が閉じられたあとも、誰かがこの通路を使っていた。跡は鉄の箱の前で止まっている。",
+          "trigger": "煤の跡を調べる",
+          "category": "object",
+          "importance": "major",
+          "usage": "inspect"
+        },
+        {
+          "id": "ch2_s2_box",
+          "entity": "鉄の箱",
+          "aliases": [
+            "箱",
+            "鉄箱"
+          ],
+          "dc": 6,
+          "surface": "崩落の陰に、鉄の箱が半分埋まっている。蓋にはヴェインの姓が刻まれている。",
+          "text": "箱の中には、薄い布に包まれた心石の欠片がある。傍らの紙片には、欠片を奥の台座へ戻すよう書かれている。",
+          "trigger": "鉄の箱を調べる",
+          "category": "object",
+          "importance": "major",
+          "usage": "inspect",
+          "requires": {
+            "secretsAll": [
+              "ch2_s2_soot"
+            ]
+          }
+        }
+      ],
+      "loot": [
+        {
+          "name": "心石の欠片",
+          "requires": "ch2_s2_box"
+        }
+      ],
+      "encounters": [
+        {
+          "id": "ch2_encounter_leecher",
+          "type": "conditional",
+          "monsterId": "ch2_monster_leecher",
+          "monsterName": "鉱脈の蛭",
+          "triggerTerms": [
+            "煤の跡をたどる"
+          ],
+          "requiredElements": [
+            "煤の跡"
+          ],
+          "requiredOperator": "all",
+          "probability": null,
+          "timing": "player_action",
+          "maxOccurrences": 1,
+          "blockedBy": [],
+          "onsetText": "煤の跡をたどると、岩の隙間から濡れた音が返ってきた。黒いものが這い出してくる。",
+          "notes": "",
+          "enemy": {
+            "name": "鉱脈の蛭",
+            "unknownName": "黒いもの",
+            "surface": "腕ほどの長さがある黒い蛭。岩の割れ目に身を隠している。",
+            "trait": "鉱石の粉を吸って生きる。光を当てられると、岩の隙間へ戻る。",
+            "hp": 4,
+            "maxHp": 4,
+            "atk": 1,
+            "defenseDc": 8,
+            "fleeDc": 6,
+            "weakness": {
+              "triggers": [
+                "ランタン"
+              ],
+              "effect": "flee",
+              "text": "ランタンの光を浴びた鉱脈の蛭は身を縮め、岩の奥へ戻っていった。",
+              "hint": "ランタンで照らせば、隙間へ戻りそうだ。"
+            }
+          }
+        }
+      ],
+      "exits": [
+        {
+          "id": "to_ch2_scene03",
+          "match": [
+            "封印の扉",
+            "扉"
+          ],
+          "to": 3,
+          "requires": {
+            "secretsAll": [
+              "ch2_s2_box"
+            ],
+            "itemsAll": [
+              "事故記録",
+              "心石の欠片",
+              "ナイフ"
+            ]
+          },
+          "text": "事故記録の印と心石の欠片を重ね、ナイフで古い封を切った。封印の扉が開く。",
+          "blockedText": "岩の向こうに、封印の扉がある。何かを確かめるには、まだ足りない。"
+        }
+      ],
+      "authoring": {
+        "actionCandidateLabels": {
+          "encounter:ch2_encounter_leecher": "煤の跡をたどる",
+          "exit:to_ch2_scene03": "封印の扉を開く",
+          "secret:ch2_s2_soot": "煤の跡を調べる",
+          "secret:ch2_s2_box": "鉄の箱を調べる"
+        }
+      }
+    },
+    {
+      "id": 3,
+      "name": "記録機の部屋",
+      "brief": "封印の先に、古い記録機が残されている。銅板の名簿と、空の受け皿が並んでいる。",
+      "goal": "番人が残した記録を読み、奥の保管室へ進む",
+      "direction": "記録は一度に全部読めない。名簿の欠落と、機械の継ぎ手を順に置く。ヴェインの名をマイラ本人と決めつけない。",
+      "img": "mine_entrance.png",
+      "secrets": [
+        {
+          "id": "ch2_s3_ledger",
+          "entity": "銅板の名簿",
+          "aliases": [
+            "名簿",
+            "銅板"
+          ],
+          "dc": 6,
+          "surface": "壁に固定された銅板。十年前の作業員の名が、浅い線で刻まれている。",
+          "text": "事故の欄に、エドガー・ヴェインの名がある。作業員を坑道の外へ誘導したあと、戻らなかったと記されている。灯りの柄にあった姓は、この名とつながっているのかもしれない。",
+          "trigger": "銅板の名簿を調べる",
+          "category": "object",
+          "importance": "major",
+          "usage": "inspect"
+        },
+        {
+          "id": "ch2_s3_joint",
+          "entity": "機械の継ぎ手",
+          "aliases": [
+            "継ぎ手",
+            "継手",
+            "機械"
+          ],
+          "dc": 6,
+          "surface": "記録機の脚に、後から足された金具がある。金具の内側に細い溝が続いている。",
+          "text": "溝は心石の欠片を受ける形になっている。記録機は文字だけでなく、欠片の光も読み取っていたらしい。金具の先は奥の保管室へ向いている。",
+          "trigger": "機械の継ぎ手を調べる",
+          "category": "object",
+          "importance": "support",
+          "usage": "inspect",
+          "requires": {
+            "secretsAll": [
+              "ch2_s3_ledger"
+            ]
+          }
+        }
+      ],
+      "exits": [
+        {
+          "id": "to_ch2_scene04",
+          "match": [
+            "保管室",
+            "奥の部屋"
+          ],
+          "to": 4,
+          "requires": {
+            "secretsAll": [
+              "ch2_s3_ledger",
+              "ch2_s3_joint"
+            ]
+          },
+          "text": "記録機の金具をたどり、奥の保管室へ入った。",
+          "blockedText": "記録機はまだ沈黙している。名簿の続きか、機械の継ぎ手を確かめる必要がある。"
+        }
+      ],
+      "authoring": {
+        "actionCandidateLabels": {
+          "exit:to_ch2_scene04": "奥の保管室へ入る",
+          "secret:ch2_s3_ledger": "銅板の名簿を調べる",
+          "secret:ch2_s3_joint": "機械の継ぎ手を調べる"
+        }
+      }
+    },
+    {
+      "id": 4,
+      "name": "心石の保管室",
+      "brief": "狭い保管室の中央に、浅い台座がある。壁際には地上へ戻る扉が見える。",
+      "goal": "欠片をどう扱うか決め、マイラのもとへ戻る",
+      "direction": "答えを急がない。台座は命令せず、欠片を待っているように置く。戻る選択にも、記録を持ち帰る理由を残す。",
+      "img": "mine_entrance.png",
+      "decision": {
+        "id": "ch2_final_choice",
+        "prompt": "台座の溝は、持ってきた欠片の形に合っている。ここで光を返すか、欠片を持って戻るか。",
+        "choices": [
+          {
+            "id": "touch_pedestal",
+            "label": "心石の欠片を台座にかざし、反応を見る",
+            "input": "台座に心石の欠片をかざす"
+          },
+          {
+            "id": "return_to_village",
+            "label": "欠片を持ったまま、扉へ戻る",
+            "input": "扉へ戻る"
+          }
+        ]
+      },
+      "exits": [
+        {
+          "id": "to_ch2_ending_touch",
+          "match": [
+            "台座"
+          ],
+          "to": "ending",
+          "requires": {
+            "itemsAll": [
+              "心石の欠片"
+            ]
+          },
+          "text": "欠片を台座にかざすと、保管室の壁に細い光が走った。記録はまだ終わっていない。",
+          "blockedText": "台座の溝に合うものを、まだ持っていない。"
+        },
+        {
+          "id": "to_ch2_ending_return",
+          "match": [
+            "扉"
+          ],
+          "to": "ending",
+          "requires": {
+            "itemsAll": [
+              "心石の欠片"
+            ]
+          },
+          "text": "欠片を布に包み、地上へ戻る扉を開いた。",
+          "blockedText": "マイラへ持ち帰るものが、まだ足りない。"
+        }
+      ],
+      "authoring": {
+        "actionCandidateLabels": {
+          "exit:to_ch2_ending_touch": "台座の光を確かめる",
+          "exit:to_ch2_ending_return": "地上へ戻る扉を開く"
+        }
+      }
+    }
+  ],
+  "ending": {
+    "id": "ch2_ending",
+    "name": "ふたたびの報告",
+    "brief": "夜明け前のマイラの部屋。マイラは記録と心石の欠片を見て、長く黙っている。",
+    "img": "s4_myra_room.jpg",
+    "npcSprite": "s4_myra_full_transparent.png",
+    "npc": {
+      "id": "npc_1",
+      "name": "マイラ"
+    },
+    "blockedText": "まだ見せていないものがある。",
+    "exits": [
+      {
+        "id": "ch2_hand_over",
+        "match": [
+          "渡す",
+          "手渡す",
+          "報告"
+        ],
+        "to": "end",
+        "requires": {
+          "itemsAll": [
+            "心石の欠片"
+          ]
+        },
+        "removeItems": [
+          "心石の欠片"
+        ],
+        "npcSay": "エドガー……その名前を、あなたも見たのね。欠片は預かるわ。まだ、あの人が何を守っていたのか分からない。次は、灯りの番人に残された記録を探しましょう。",
+        "text": "心石の欠片をマイラへ渡し、記録の続きを探す約束をした。"
+      }
+    ],
+    "authoring": {
+      "actionCandidateLabels": {
+        "exit:ch2_hand_over": "心石の欠片をマイラへ渡す"
+      }
+    }
+  },
+  "startingInventory": {
+    "player": [
+      "ランタン",
+      "ナイフ",
+      "30ゴールド"
+    ]
+  },
+  "revision": "ch2 codex 2026-08-13"
+}
