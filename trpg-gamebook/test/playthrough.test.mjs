@@ -19,6 +19,18 @@ function conditionedChapter() {
   return copy;
 }
 function enterScene1(state) { act(state, candidates(state)[0].input); }
+function enterRustEater(state) {
+  enterScene1(state);
+  act(state, candidates(state).find(option => option.id === "secret:s1a").input);
+  act(state, candidates(state).find(option => option.id === "exit:to_scean02").input);
+  act(state, candidates(state).find(option => option.id === "inspect_barrier").input);
+  if (!state.revealed.has("s2a")) act(state, candidates(state).find(option => option.id === "secret:s2a").input);
+  act(state, candidates(state).find(option => option.id === "encounter:encounter_1").input);
+}
+function sequence(values) {
+  let index = 0;
+  return () => values[index++] ?? 0;
+}
 {
   const state = newGame(chapter, { rng: seeded(7) });
   for (let turn = 0; turn < 200 && state.node !== "done"; turn += 1) {
@@ -94,3 +106,27 @@ console.log("ok 6 - 前提を満たすと秘密の候補が現れる");
   assert.ok(state.inventory.player.includes("試験の薬"));
 }
 console.log("ok 7 - 前提を満たして秘密を開くと物が手に入る");
+
+{
+  const state = newGame(chapter, { rng: sequence([0.7, 0.7, 0]) });
+  enterRustEater(state);
+  const events = act(state, "攻撃する");
+  assert.ok(events.some(event => event.type === "combat" && event.text.includes("空を切った")));
+}
+console.log("ok 8 - 攻撃を外すと空を切ったと記録する");
+
+{
+  const state = newGame(chapter, { rng: sequence([0.7, 0.7, 0.6, 0]) });
+  enterRustEater(state);
+  const events = act(state, "攻撃する");
+  assert.ok(events.some(event => event.type === "combat" && /に \d+ のダメージ/.test(event.text)));
+}
+console.log("ok 9 - 攻撃が当たるとダメージを記録する");
+
+{
+  const state = newGame(chapter, { rng: sequence([0.7, 0.7, 0.6, 0.9, 0]) });
+  enterRustEater(state);
+  const events = act(state, "攻撃する");
+  assert.ok(events.some(event => event.type === "combat" && event.text.includes("弱っている")));
+}
+console.log("ok 10 - 敵の残りHPが閾値以下なら弱りを記録する");

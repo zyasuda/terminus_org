@@ -37,6 +37,8 @@ function item(events, state, name, count, add) {
 
 function finishCombat(events, state, outcome) {
   const foe = state.enemy;
+  // 戦いが終わったことを言わずに次の描写へ移ると、倒せたのか逃げられたのか分からない
+  if (outcome === "defeated") events.push({ type: "combat", text: foe.defeatText || `${foe.name}は動かなくなった` });
   if (foe.revealOnDefeat) {
     const secret = currentNode(state).secrets?.find(({ id }) => id === foe.revealOnDefeat);
     state.revealed.add(foe.revealOnDefeat);
@@ -149,8 +151,16 @@ export function act(state, originalInput) {
       if (weakness.effect === "flee") finishCombat(events, state, "fled");
     } else if (input.includes("攻撃")) {
       const roll = die(state, 20);
-      if (roll >= (state.enemy.defenseDc || 12)) state.enemy.hp -= die(state, 6);
-      events.push({ type: "combat", text: `${state.enemy.name}を攻撃した` });
+      let damage;
+      if (roll >= (state.enemy.defenseDc || 12)) {
+        damage = die(state, 6);
+        state.enemy.hp -= damage;
+      }
+      events.push({ type: "combat", text: damage ? `${state.enemy.name}に ${damage} のダメージ` : `${state.enemy.name}への攻撃は空を切った` });
+      // 倒しきったときは「弱っている」ではなく撃破の文だけを出す
+      if (damage && state.enemy.hp > 0 && state.enemy.maxHp != null && state.enemy.hp <= state.enemy.maxHp / 3) {
+        events.push({ type: "combat", text: `${state.enemy.name}は目に見えて弱っている` });
+      }
       if (state.enemy.hp <= 0) finishCombat(events, state, "defeated");
       else counterattack(events, state);
     } else if (input.includes("防御")) {

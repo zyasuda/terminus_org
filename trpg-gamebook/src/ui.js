@@ -53,7 +53,9 @@ function seam(label) {
 }
 
 function recordPlaylog(element) {
-  const text = element?.textContent?.replace(/\s+/g, " ").trim();
+  const what = element?.querySelector?.(".what");
+  const parts = what ? [what.textContent, what.nextSibling?.textContent] : [element?.textContent];
+  const text = parts.map(part => part?.replace(/\s+/g, " ").trim()).filter(Boolean).join("\n");
   if (!text) return;
   const lines = (localStorage.getItem(PLAYLOG_KEY) || "").split("\n").filter(Boolean);
   lines.push(text);
