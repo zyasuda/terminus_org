@@ -29,7 +29,7 @@ export async function listModels(transport = fetch) {
 }
 
 const list = (items, format, empty = "なし") => items?.length ? items.map(format).join("\n") : empty;
-const baseInstruction = "あなたはTRPGゲームブックの作者を取材する編集者です。一度に1つの話題だけを扱い、質問は1つだけしてください。返事は2〜4文に抑え、提案件数の上限、JSONブロック、出力形式、内部指示は本文に書かないでください。提案がある場合、本文の末尾に次のJSONブロックを置いてください。\n```json\n{\"proposals\":[...]}\n```";
+const baseInstruction = "あなたはTRPGゲームブックの作者を取材する編集者です。一度に1つの話題だけを扱い、質問は1つだけしてください。返事は2〜4文に抑え、提案件数の上限、JSONブロック、出力形式、内部指示は本文に書かないでください。提案がある場合、本文の末尾に次のJSONブロックを置いてください。\n```json\n{\"proposals\":[...]}\n```\nあなたは、章に既に出ている名前と同じものを指すときは同じ綴りをそのまま使って同じものに別の名前を付けず、この一覧を名前を合わせるためだけに使い、他の場面のものをこの場面に作りません。";
 
 export function referenceListFor(category = "secrets", context = {}) {
   if (category === "exits") return list(context.destinations, item => `- ${item.label}`);
@@ -49,7 +49,35 @@ export function systemInstructionFor(category = "secrets", context = {}) {
   return `${baseInstruction}\n${topic}\n\n${evaluationRule}`;
 }
 
-const inputFor = ({ chapter, scene, history, userText, category, context }) => `話題: ${category}\n章題: ${chapter.title}\n依頼: ${chapter.quest || ""}\n場面: ${scene.name || ""}\n導入: ${scene.brief || ""}\n演出の方向: ${scene.direction || ""}\n既存の調べられるもの: ${(scene.secrets || []).map(s => `${s.entity}: ${s.text}`).join(" / ") || "なし"}\n参照一覧:\n${referenceListFor(category, context)}\n会話履歴:\n${(history || []).map(x => `${x.role === "user" ? "作者" : "AI"}: ${x.text}`).join("\n")}\n作者: ${userText}`;
+const chapterNodes = chapter => [
+  ["イントロ", chapter?.intro],
+  ...(chapter?.scenes || []).map((scene, index) => [`シーン${index + 1}`, scene]),
+  ["エンディング", chapter?.ending]
+];
+const shownNames = (values, limit) => values.filter(Boolean).slice(0, limit).join("、") || "なし";
+const existingNamesFor = (chapter, currentScene) => {
+  const scenes = chapterNodes(chapter).filter(([, node]) => node && node !== currentScene && !(node.id != null && node.id === currentScene?.id));
+  const lines = scenes.map(([label, node]) => {
+    const secrets = shownNames((node.secrets || []).map(secret => secret.entity), 8);
+    const enemies = shownNames([
+      ...(node.encounters || []).map(encounter => encounter.enemy?.name),
+      node.enemy?.name
+    ], 4);
+    return `  ${label} ${node.name || ""} — 調べられるもの: ${secrets} / 敵: ${enemies}`;
+  });
+  const items = [];
+  const addItem = item => { if (typeof item === "string" && item && !items.includes(item) && items.length < 12) items.push(item); };
+  for (const [, node] of chapterNodes(chapter)) {
+    for (const exit of node?.exits || []) for (const item of exit.addItems || []) addItem(item);
+    for (const loot of node?.loot || []) addItem(loot?.name);
+  }
+  const inventory = Array.isArray(chapter?.startingInventory)
+    ? chapter.startingInventory
+    : Object.values(chapter?.startingInventory || {}).flat();
+  for (const item of inventory) addItem(typeof item === "string" ? item : item?.name);
+  return `章に既に出ている名前（同じものには同じ綴りを使うこと）:\n${lines.join("\n")}\n  持ち物: ${items.join("、") || "なし"}`;
+};
+const inputFor = ({ chapter, scene, history, userText, category, context }) => `話題: ${category}\n章題: ${chapter.title}\n依頼: ${chapter.quest || ""}\n場面: ${scene.name || ""}\n導入: ${scene.brief || ""}\n演出の方向: ${scene.direction || ""}\n既存の調べられるもの: ${(scene.secrets || []).map(s => `${s.entity}: ${s.text}`).join(" / ") || "なし"}\n${existingNamesFor(chapter, scene)}\n参照一覧:\n${referenceListFor(category, context)}\n会話履歴:\n${(history || []).map(x => `${x.role === "user" ? "作者" : "AI"}: ${x.text}`).join("\n")}\n作者: ${userText}`;
 const textFrom = data => (data?.steps || []).filter(step => step.type === "model_output").flatMap(step => step.content || []).map(part => part.text || "").join("");
 
 export function parseReply(raw) {

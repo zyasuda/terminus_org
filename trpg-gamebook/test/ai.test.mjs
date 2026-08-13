@@ -85,3 +85,26 @@ console.log("ok 7 - 解決不能な決断は章データへ書き込まない");
   assert.ok(inspected.play.cleared > 0);
 }
 console.log("ok 8 - 解決可能な決断を採用するとinspectを通る");
+
+{
+  const copy = structuredClone(chapter), scene = copy.scenes[1]; let body;
+  await ask({ chapter:copy, scene, userText:"別の場面の名前も確認する", transport:async (url, options) => { body = JSON.parse(options.body); return new Response(""); } });
+  assert.match(body.input, /章に既に出ている名前（同じものには同じ綴りを使うこと）:[\s\S]*木の札/);
+}
+console.log("ok 9 - 他の場面の秘密のentityを入力へ渡せる");
+
+{
+  const copy = structuredClone(chapter), scene = copy.scenes[1]; let body;
+  await ask({ chapter:copy, scene, userText:"現在の場面を確認する", transport:async (url, options) => { body = JSON.parse(options.body); return new Response(""); } });
+  const section = body.input.match(/章に既に出ている名前（同じものには同じ綴りを使うこと）:\n([\s\S]*?)\n参照一覧:/)?.[1] || "";
+  assert.doesNotMatch(section, /分かれ道/);
+}
+console.log("ok 10 - 編集中の場面名を既存名一覧へ重複させない");
+
+{
+  const copy = structuredClone(chapter), scene = copy.scenes[1]; let body;
+  await ask({ chapter:copy, scene, userText:"説明文ではなく名前を確認する", transport:async (url, options) => { body = JSON.parse(options.body); return new Response(""); } });
+  const section = body.input.match(/章に既に出ている名前（同じものには同じ綴りを使うこと）:\n([\s\S]*?)\n参照一覧:/)?.[1] || "";
+  assert.equal(section.includes(copy.scenes[0].secrets[0].text), false);
+}
+console.log("ok 11 - 秘密のtextを既存名一覧へ渡さない");
