@@ -1,0 +1,775 @@
+{
+  "id": "drought_ch1",
+  "title": "渇きの底",
+  "revision": "rev1 2026-08-13",
+  "quest": "三十年ぶりに水から現れた村へ入り、鐘楼の鐘を鳴らす(依頼人:宇津木トメ)",
+  "flagsOut": [],
+  "flagRules": {},
+  "reference": {
+    "genre": "ミステリ / 静かな怪異",
+    "themes": [
+      "約束",
+      "不在",
+      "水位"
+    ],
+    "mood": "乾いて明るく、少しずつ息苦しい",
+    "palette": [
+      "白く灼けた泥",
+      "水気を失った木",
+      "真昼の白光"
+    ]
+  },
+  "startingInventory": {
+    "player": []
+  },
+  "intro": {
+    "id": "drought_intro",
+    "name": "トメの小屋",
+    "brief": "湖畔の掘っ立て小屋。宇津木トメは開け放した戸口から、干上がっていく「湖」を見ている。三十年ぶりに「尖塔」が水面へ出た。トメは「鐘」の話をする。",
+    "greeting": "わたしはあの村の生まれでね。今年の渇きで、教会の屋根が出たと聞いたの。……あそこの鐘を、鳴らしてきてくれないかしら。理由は、着けば分かるわ。",
+    "npc": {
+      "id": "npc_tome",
+      "name": "トメ"
+    },
+    "hintChips": [
+      "尖塔",
+      "鐘"
+    ],
+    "secrets": [
+      {
+        "id": "in_face",
+        "entity": "トメの表情",
+        "aliases": [
+          "表情",
+          "顔",
+          "トメ",
+          "様子"
+        ],
+        "dc": 2,
+        "surface": "トメは膝の上で指を組み直した。話しながら、一度も湖から目を離さない。",
+        "text": "「怖い話じゃないの。ただ、鳴らないままなのが、ずっと」",
+        "trigger": "",
+        "category": "object",
+        "importance": "support",
+        "usage": "inspect"
+      },
+      {
+        "id": "in_lake",
+        "entity": "湖",
+        "aliases": [
+          "湖",
+          "水",
+          "ダム",
+          "水位"
+        ],
+        "dc": 2,
+        "surface": "戸口の先、白い泥の岸が沖へ向かって広がっている。",
+        "text": "「三十年前、村ごと沈めたの。国の仕事でね。みんな、期日までに出ていったわ」",
+        "trigger": "",
+        "category": "object",
+        "importance": "support",
+        "usage": "inspect"
+      },
+      {
+        "id": "in_bell",
+        "entity": "鐘",
+        "aliases": [
+          "鐘",
+          "鐘楼",
+          "かね"
+        ],
+        "dc": 2,
+        "surface": "トメは自分の手のひらを、鐘を撫でるように動かした。",
+        "text": "「最後の一人が村を出るとき、鐘を鳴らす決まりだったの。全員が出たという合図。……あの日、鐘は鳴らなかった」",
+        "trigger": "",
+        "category": "object",
+        "importance": "support",
+        "usage": "inspect"
+      },
+      {
+        "id": "in_spire",
+        "entity": "尖塔",
+        "aliases": [
+          "尖塔",
+          "教会",
+          "屋根"
+        ],
+        "dc": 2,
+        "surface": "沖の水面に、黒い三角が突き出している。",
+        "text": "「教会よ。あの高さまで水が引いたということは、村の道まで歩いて行けるはず」",
+        "trigger": "",
+        "category": "object",
+        "importance": "support",
+        "usage": "inspect"
+      }
+    ],
+    "authoring": {
+      "actionCandidateLabels": {
+        "secret:in_face": "トメの表情を見る",
+        "secret:in_lake": "湖について尋ねる",
+        "secret:in_bell": "鐘について尋ねる",
+        "secret:in_spire": "尖塔を見る",
+        "exit:to_bed": "泥の岸へ降りる"
+      }
+    },
+    "exits": [
+      {
+        "id": "to_bed",
+        "match": [
+          "降り",
+          "行く",
+          "引き受け",
+          "承知",
+          "分かった",
+          "湖底"
+        ],
+        "to": 1,
+        "addItems": [
+          "油紙のマッチ"
+        ],
+        "npcSay": "これを持って行って。あそこは湿るから、濡らさないように。……日が落ちるまでには戻ってね。",
+        "text": "",
+        "blockedText": ""
+      }
+    ]
+  },
+  "scenes": [
+    {
+      "id": 1,
+      "name": "干上がった湖底",
+      "goal": "村までの道を見つける",
+      "brief": "白く灼けた泥がひび割れて、地平まで続いている。足を置くたび、乾いた皮が割れる音がする。風はない。",
+      "direction": "明るいのに息が詰まる、という感じを、暑さと無音だけで作れ。恐怖の語を使うな。",
+      "blockedText": "泥が深い。ここから先へは踏み込めない。",
+      "secrets": [
+        {
+          "id": "s1_road",
+          "entity": "泥に埋もれた道",
+          "aliases": [
+            "道",
+            "轍",
+            "石畳",
+            "わだち"
+          ],
+          "dc": 8,
+          "surface": "泥の下に、平らな石の面がのぞいている。",
+          "text": "三十年、水の底で誰にも踏まれずにいた道だ。村へまっすぐ続いている。",
+          "trigger": "泥に埋もれた道を調べる",
+          "category": "object",
+          "importance": "support",
+          "usage": "inspect"
+        },
+        {
+          "id": "s1_post",
+          "entity": "傾いた道標",
+          "aliases": [
+            "道標",
+            "柱",
+            "標識",
+            "看板"
+          ],
+          "dc": 8,
+          "surface": "腐りかけの木の柱が、泥から斜めに突き出している。",
+          "text": "文字はほとんど流れているが、矢印だけが残っている。指しているのは、尖塔とは違う方角だ。",
+          "trigger": "傾いた道標を調べる",
+          "category": "object",
+          "importance": "support",
+          "usage": "inspect"
+        },
+        {
+          "id": "s1_shoe",
+          "entity": "小さな長靴",
+          "aliases": [
+            "長靴",
+            "靴",
+            "ゴム"
+          ],
+          "dc": 8,
+          "surface": "子供の長靴が片方だけ、泥に半分沈んでいる。",
+          "text": "子供のものだ。中まで泥が詰まっている。持ち主が脱いだのか、脱がされたのかは分からない。",
+          "trigger": "小さな長靴を調べる",
+          "category": "object",
+          "importance": "support",
+          "usage": "inspect"
+        }
+      ],
+      "loot": [],
+      "encounters": [],
+      "authoring": {
+        "actionCandidateLabels": {
+          "exit:to_village": "村へ歩く"
+        }
+      },
+      "exits": [
+        {
+          "id": "to_village",
+          "match": [
+            "村",
+            "進む",
+            "歩く",
+            "まっすぐ"
+          ],
+          "to": 2,
+          "requires": {
+            "secretsAll": [
+              "s1_road"
+            ]
+          },
+          "blockedText": "どこを歩いても同じ泥だ。まっすぐ進める足場を、まだ見つけていない。",
+          "text": "石畳をたどって歩くうち、泥の色が変わり、家の形をした影が並びはじめた。"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "name": "村の入口",
+      "goal": "教会へたどり着く",
+      "brief": "家の輪郭だけが残っている。屋根は無く、壁は腰の高さで途切れている。左手に「学校」の平屋、正面の奥に「教会」の尖塔。",
+      "direction": "廃墟を悲惨に書くな。ただ、片付いていない生活の形をそのまま残せ。",
+      "blockedText": "瓦礫が積まれていて、そちらへは行けない。",
+      "secrets": [
+        {
+          "id": "s2_house",
+          "entity": "壁だけの家",
+          "aliases": [
+            "家",
+            "壁",
+            "家並み",
+            "民家"
+          ],
+          "dc": 8,
+          "surface": "腰までの高さで途切れた壁が並んでいる。",
+          "text": "台所らしい場所に、伏せた茶碗が三つ、並んだままになっている。片付けて出て行った家だ。",
+          "trigger": "壁だけの家を調べる",
+          "category": "object",
+          "importance": "support",
+          "usage": "inspect"
+        },
+        {
+          "id": "s2_line",
+          "entity": "水の跡",
+          "aliases": [
+            "水の跡",
+            "跡",
+            "線",
+            "汚れ"
+          ],
+          "dc": 8,
+          "surface": "壁のある高さに、白い横線がまっすぐ引かれている。",
+          "text": "水位の跡だ。三十年、この線の上に水があった。線は今も、頭より高いところにある。",
+          "trigger": "水の跡を調べる",
+          "category": "object",
+          "importance": "support",
+          "usage": "inspect"
+        }
+      ],
+      "loot": [],
+      "encounters": [],
+      "authoring": {
+        "actionCandidateLabels": {
+          "exit:to_school": "学校へ寄る",
+          "exit:to_church": "教会へ向かう"
+        }
+      },
+      "exits": [
+        {
+          "id": "to_school",
+          "match": [
+            "学校",
+            "左",
+            "平屋"
+          ],
+          "to": 3,
+          "text": "割れた窓枠をまたいで、平屋の中へ入った。",
+          "blockedText": ""
+        },
+        {
+          "id": "to_church",
+          "match": [
+            "教会",
+            "正面",
+            "奥",
+            "尖塔"
+          ],
+          "to": 4,
+          "text": "泥をかき分けて広場を横切り、教会の扉の前に立った。",
+          "blockedText": ""
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "name": "水没した学校",
+      "goal": "高いところへ登る手だてを見つける",
+      "brief": "教室がひとつだけの平屋。机が壁際に寄せてある。天井から下がった縄跳びの縄が、風もないのに揺れている。",
+      "direction": "揺れている理由を書くな。書かないことで持たせろ。",
+      "blockedText": "泥が腰まである。奥へは進めない。",
+      "secrets": [
+        {
+          "id": "s3_roll",
+          "entity": "出席簿",
+          "aliases": [
+            "出席簿",
+            "名簿",
+            "帳面",
+            "簿"
+          ],
+          "dc": 8,
+          "surface": "教壇に、膨れて固まった帳面が伏せてある。",
+          "text": "紙は貼り付いて開かないが、表紙に児童数が書いてある。十一。最後の日付は、水が入る三日前だ。",
+          "trigger": "出席簿を調べる",
+          "category": "object",
+          "importance": "support",
+          "usage": "inspect"
+        },
+        {
+          "id": "s3_rope",
+          "entity": "下がった縄",
+          "aliases": [
+            "縄",
+            "縄跳び",
+            "ロープ",
+            "ひも"
+          ],
+          "dc": 8,
+          "surface": "天井の梁から、太い縄が一本垂れている。",
+          "text": "縄跳びの縄だ。梁に結んだのは大人の結び方で、床までは届いていない。誰かが、高いところへ登るために使った。",
+          "trigger": "下がった縄を調べる",
+          "category": "object",
+          "importance": "support",
+          "usage": "inspect"
+        }
+      ],
+      "loot": [
+        {
+          "name": "太い縄",
+          "requires": "s3_rope"
+        }
+      ],
+      "encounters": [
+        {
+          "id": "enc_silt",
+          "type": "conditional",
+          "triggerTerms": [
+            "机",
+            "寄せた机",
+            "机を動かす",
+            "奥"
+          ],
+          "requiredElements": [
+            "出席簿"
+          ],
+          "requiredOperator": "all",
+          "timing": "player_action",
+          "onsetText": "寄せた机の裏で、泥が持ち上がった。人の形にはならないまま、こちらへ傾いてくる。",
+          "enemy": {
+            "name": "淀み",
+            "unknownName": "泥の盛り上がり",
+            "hp": 7,
+            "maxHp": 7,
+            "surface": "三十年ぶんの泥が、水を失って動きを覚えたもの。",
+            "atk": 1,
+            "defenseDc": 11,
+            "fleeDc": 10,
+            "weakness": {
+              "triggers": [
+                "マッチ",
+                "火",
+                "灯"
+              ],
+              "effect": "flee",
+              "text": "擦ったマッチの火をかざすと、淀みは音もなく崩れ、ただの泥に戻った。",
+              "hint": "乾いたものが苦手だ——火を見せろ!"
+            }
+          }
+        }
+      ],
+      "authoring": {
+        "actionCandidateLabels": {
+          "exit:back_to_village": "村の入口へ戻る",
+          "encounter:enc_silt": "寄せた机を動かす"
+        }
+      },
+      "exits": [
+        {
+          "id": "back_to_village",
+          "match": [
+            "戻る",
+            "出る",
+            "入口"
+          ],
+          "to": 2,
+          "text": "窓枠をまたいで、外の光の下へ出た。",
+          "blockedText": ""
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "name": "教会",
+      "goal": "鐘楼へ登る",
+      "brief": "扉は無く、内側まで泥が入っている。長椅子は流されて壁際に折り重なり、正面の壁に、鐘楼へ上がる木の梯子が掛かっている。",
+      "direction": "信仰の話をするな。ここは村の集会所だったという顔だけを見せろ。",
+      "blockedText": "泥に埋まっていて、そちらへは行けない。",
+      "secrets": [
+        {
+          "id": "s4_ladder",
+          "entity": "木の梯子",
+          "aliases": [
+            "梯子",
+            "はしご",
+            "段"
+          ],
+          "dc": 8,
+          "surface": "壁に掛かった梯子は、下から三段目までが無くなっている。",
+          "text": "折れたのではない。水を吸って腐り落ちたのだ。手が届く高さに横木は無く、縄でもなければ取り付けない。",
+          "trigger": "木の梯子を調べる",
+          "category": "object",
+          "importance": "support",
+          "usage": "inspect"
+        },
+        {
+          "id": "s4_bench",
+          "entity": "折り重なった長椅子",
+          "aliases": [
+            "長椅子",
+            "椅子",
+            "ベンチ"
+          ],
+          "dc": 8,
+          "surface": "壁際に長椅子が積み上がっている。",
+          "text": "背もたれに名前が彫ってある。ひとつではない。何十年ぶんも、子供の背丈の高さに並んでいる。",
+          "trigger": "折り重なった長椅子を調べる",
+          "category": "object",
+          "importance": "support",
+          "usage": "inspect"
+        },
+        {
+          "id": "s4_back",
+          "entity": "裏口",
+          "aliases": [
+            "裏口",
+            "裏",
+            "戸",
+            "奥の戸"
+          ],
+          "dc": 8,
+          "surface": "祭壇の脇に、外へ抜ける低い戸がある。",
+          "text": "戸の下から、乾ききっていない泥が舌のように流れ込んでいる。裏はまだ湿っているらしい。",
+          "trigger": "裏口を調べる",
+          "category": "object",
+          "importance": "support",
+          "usage": "inspect"
+        }
+      ],
+      "loot": [],
+      "encounters": [],
+      "authoring": {
+        "actionCandidateLabels": {
+          "exit:to_mud": "裏の泥だまりへ出る",
+          "exit:to_belfry": "梯子を登る",
+          "exit:back_to_village2": "村の入口へ戻る"
+        }
+      },
+      "exits": [
+        {
+          "id": "to_mud",
+          "match": [
+            "裏",
+            "泥だまり",
+            "裏口",
+            "外へ"
+          ],
+          "to": 5,
+          "requires": {
+            "secretsAll": [
+              "s4_back"
+            ]
+          },
+          "blockedText": "祭壇の脇は暗い。抜けられる場所があるかどうか、まだ確かめていない。",
+          "text": "低い戸をくぐると、日ざかりの裏庭に出た。足が沈む。"
+        },
+        {
+          "id": "to_belfry",
+          "match": [
+            "登る",
+            "梯子",
+            "上",
+            "鐘楼"
+          ],
+          "to": 6,
+          "requires": {
+            "secretsAll": [
+              "s4_ladder"
+            ],
+            "itemsAll": [
+              "太い縄"
+            ]
+          },
+          "removeItems": [
+            "太い縄"
+          ],
+          "blockedText": "下の三段が無い。掴むものが無いままでは、体を持ち上げられない。",
+          "text": "縄を上の横木へ投げ、体を引き上げた。埃の匂いが下りてくる。"
+        },
+        {
+          "id": "back_to_village2",
+          "match": [
+            "戻る",
+            "入口",
+            "広場"
+          ],
+          "to": 2,
+          "text": "泥を踏んで広場へ戻った。",
+          "blockedText": ""
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "name": "裏の泥だまり",
+      "goal": "泥の中のものを確かめる",
+      "brief": "日陰にならない裏庭に、乾ききらない泥がたまっている。表面だけが白く、踏むと下から黒いものが上がってくる。",
+      "direction": "見つかるものを段階的に出せ。最後まで「誰か」とは書くな。",
+      "blockedText": "泥が深い。これ以上は入れない。",
+      "secrets": [
+        {
+          "id": "s5_boot",
+          "entity": "泥に立つ長靴",
+          "aliases": [
+            "長靴",
+            "靴",
+            "ゴム長"
+          ],
+          "dc": 8,
+          "surface": "泥の面から、大人の長靴の口が二つ、並んで出ている。",
+          "text": "並び方が、脱ぎ捨てたものではない。立ったまま埋まっている。",
+          "trigger": "泥に立つ長靴を調べる",
+          "category": "object",
+          "importance": "support",
+          "usage": "inspect"
+        },
+        {
+          "id": "s5_hand",
+          "entity": "伸びた腕",
+          "aliases": [
+            "腕",
+            "手",
+            "骨"
+          ],
+          "dc": 8,
+          "surface": "長靴の脇の泥が、ひとところだけ盛り上がっている。",
+          "text": "掘ると、腕が出た。骨だけになっている。上へ——教会の壁のほうへ、まっすぐ伸ばされている。",
+          "trigger": "伸びた腕を掘る",
+          "category": "object",
+          "importance": "support",
+          "usage": "inspect",
+          "requires": {
+            "secretsAll": [
+              "s5_boot"
+            ]
+          }
+        },
+        {
+          "id": "s5_clapper",
+          "entity": "握られたもの",
+          "aliases": [
+            "握",
+            "もの",
+            "舌",
+            "金物"
+          ],
+          "dc": 8,
+          "surface": "骨の指が、何かを握り込んだまま固まっている。",
+          "text": "鉄の棒だ。片端が丸く膨らんでいる。鐘の舌——鐘の内側に吊るして、打ち鳴らすための部品だ。誰かが鐘から外し、ここまで持って出た。",
+          "trigger": "握られたものを調べる",
+          "category": "object",
+          "importance": "support",
+          "usage": "inspect",
+          "requires": {
+            "secretsAll": [
+              "s5_hand"
+            ]
+          }
+        }
+      ],
+      "loot": [
+        {
+          "name": "鐘の舌",
+          "requires": "s5_clapper"
+        }
+      ],
+      "encounters": [],
+      "authoring": {
+        "actionCandidateLabels": {
+          "exit:back_to_church": "教会の中へ戻る"
+        }
+      },
+      "exits": [
+        {
+          "id": "back_to_church",
+          "match": [
+            "戻る",
+            "教会",
+            "中へ"
+          ],
+          "to": 4,
+          "text": "低い戸をくぐって、堂の中へ戻った。",
+          "blockedText": ""
+        }
+      ]
+    },
+    {
+      "id": 6,
+      "name": "鐘楼",
+      "goal": "鐘を鳴らすかどうかを決める",
+      "brief": "床板の隙間から、白い湖底が見下ろせる。梁に吊るされた鐘は、思ったより小さい。内側は空だ。",
+      "direction": "鳴らす/鳴らさないのどちらにも寄るな。事実だけを置け。",
+      "blockedText": "ここから先は無い。",
+      "secrets": [
+        {
+          "id": "s6_bell",
+          "entity": "小さな鐘",
+          "aliases": [
+            "鐘",
+            "かね",
+            "内側"
+          ],
+          "dc": 8,
+          "surface": "手が届く高さに、青く曇った鐘が吊るされている。",
+          "text": "内側に舌が無い。吊るすための鉤だけが残っている。外した跡は新しくない。三十年前に外されたままだ。",
+          "trigger": "小さな鐘を調べる",
+          "category": "object",
+          "importance": "support",
+          "usage": "inspect"
+        },
+        {
+          "id": "s6_view",
+          "entity": "床から見える湖底",
+          "aliases": [
+            "床",
+            "隙間",
+            "湖底",
+            "下"
+          ],
+          "dc": 8,
+          "surface": "床板の隙間から下が見える。",
+          "text": "白い泥の上に、村の形がそのまま残っている。道も、家の並びも、上から見れば十一の屋根が数えられる。",
+          "trigger": "床から見える湖底を調べる",
+          "category": "object",
+          "importance": "support",
+          "usage": "inspect"
+        }
+      ],
+      "loot": [],
+      "encounters": [],
+      "authoring": {
+        "actionCandidateLabels": {
+          "exit:ring": "鐘の舌を吊るして、鳴らす",
+          "exit:leave": "鳴らさずに降りる"
+        }
+      },
+      "exits": [
+        {
+          "id": "ring",
+          "match": [
+            "鳴らす",
+            "吊る",
+            "鐘を鳴らす",
+            "打つ"
+          ],
+          "to": "ending",
+          "requires": {
+            "itemsAll": [
+              "鐘の舌"
+            ]
+          },
+          "removeItems": [
+            "鐘の舌"
+          ],
+          "blockedText": "鐘の内側は空だ。打つものが無ければ、押しても揺れるだけで音は出ない。",
+          "text": "鉤に舌を吊るし、鐘を押した。乾いた空気を、音が横へ横へと渡っていく。湖の岸まで届くだけの、小さな音だった。"
+        },
+        {
+          "id": "leave",
+          "match": [
+            "降りる",
+            "戻る",
+            "やめる",
+            "帰る"
+          ],
+          "to": "ending",
+          "text": "鐘に触れずに縄を伝って降り、来た道を戻った。",
+          "blockedText": ""
+        }
+      ]
+    }
+  ],
+  "ending": {
+    "id": "drought_ending",
+    "name": "湖畔",
+    "brief": "日が傾いている。トメは戸口に立ったまま、来たときと同じ姿勢でこちらを見ている。",
+    "npc": {
+      "id": "npc_tome",
+      "name": "トメ"
+    },
+    "greeting": "おかえりなさい。……座って。何があったか、あなたの口から聞かせて。",
+    "decision": {
+      "id": "tell_or_not",
+      "prompt": "トメは、鐘のことも、泥の中のことも、まだ何も聞いていない。",
+      "choices": [
+        {
+          "id": "c_tell",
+          "label": "見たものを、全部話す",
+          "input": "話す"
+        },
+        {
+          "id": "c_hide",
+          "label": "鐘のことだけを伝える",
+          "input": "伝える"
+        }
+      ]
+    },
+    "secrets": [],
+    "loot": [],
+    "encounters": [],
+    "authoring": {
+      "actionCandidateLabels": {
+        "exit:tell": "見たものを、全部話す",
+        "exit:hide": "鐘のことだけを伝える"
+      }
+    },
+    "exits": [
+      {
+        "id": "tell",
+        "match": [
+          "話す",
+          "全部",
+          "正直"
+        ],
+        "to": "end",
+        "addItems": [
+          "トメの古い写真"
+        ],
+        "npcSay": "……そう。あの人、最後まで残ってたのね。鐘の舌を持って出たのは、誰にも鳴らさせないためだわ。全員が出たことにしないために。……ありがとう。三十年、それだけが分からなかったの。",
+        "text": "",
+        "blockedText": ""
+      },
+      {
+        "id": "hide",
+        "match": [
+          "伝える",
+          "鐘だけ",
+          "黙"
+        ],
+        "to": "end",
+        "addItems": [
+          "トメの古い写真"
+        ],
+        "npcSay": "鳴ったのね。……それでいいわ。それだけ聞ければ。",
+        "text": "",
+        "blockedText": ""
+      }
+    ]
+  }
+}
