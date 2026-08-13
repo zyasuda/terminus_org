@@ -117,7 +117,8 @@ export function candidates(state) {
   const node = currentNode(state);
   const decision = node.decision;
   if (decision && !state.flags[`decision:${decision.id}`]) return decision.choices.map(({ id, label, input }) => ({ id, label, input }));
-  const choices = actionCandidates(node, state, node.authoring?.actionCandidateLabels || {});
+  const labels = node.authoring?.actionCandidateLabels || {};
+  const choices = actionCandidates(state.enemy ? { ...node, secrets: [], encounters: [], exits: [] } : node, state, labels);
   const availableChoices = choices.filter(choice => {
     if (!choice.id.startsWith("secret:")) return true;
     const secret = node.secrets?.find(({ id }) => id === choice.id.slice("secret:".length));
@@ -134,6 +135,12 @@ export function candidates(state) {
        ときにしか出てこないので、出ていること自体が助言になっている */
     availableChoices.push({ id: "combat:weakness", label: `${trigger}で照らす`, input: `${trigger}で照らす` });
   }
+  for (const healing of state.chapter.healing || []) {
+    if (state.hp < state.maxHp && inv.has(state.inventory, healing.name)) {
+      const id = `heal:${healing.name}`;
+      availableChoices.push({ id, label: labels[id] || `${healing.name}を飲む`, input: `${healing.name}を飲む` });
+    }
+  }
   return availableChoices;
 }
 
@@ -147,6 +154,22 @@ export function act(state, originalInput) {
     if (!choice) return [{ type: "unknown", text: input }];
     state.flags[`decision:${decision.id}`] = choice.id;
     input = choice.input;
+  }
+
+  const healing = (state.chapter.healing || []).find(({ name }) =>
+    input.includes(name) && (input.includes("飲む") || input.includes("使う")) && inv.has(state.inventory, name)
+  );
+  // 傷が無いのに飲むと、品だけ消えて何も起きない。候補には出していないが、直に打てば通ってしまう
+  if (healing && state.hp >= state.maxHp) {
+    return [{ type: "narrate", text: `いまは傷が無い。${healing.name}を使うときではない` }];
+  }
+  if (healing) {
+    item(events, state, healing.name, 1, false);
+    state.hp = Math.min(state.maxHp, state.hp + healing.amount);
+    events.push({ type: "narrate", text: healing.text ?? `${healing.name}を飲んだ` });
+    if (state.enemy) counterattack(events, state);
+    state.turn += 1;
+    return events;
   }
 
   if (state.enemy) {

@@ -1,5 +1,7 @@
 import assert from "node:assert/strict";
 import chapter from "../data/chapter_01.json" with { type: "json" };
+import drought from "../drafts/drought_ch1.json" with { type: "json" };
+import lanternhill from "../drafts/lanternhill_ch1.json" with { type: "json" };
 import { candidates, newGame, act } from "../src/gamebook.js";
 import { requiresMet } from "../src/progression.js";
 
@@ -31,6 +33,61 @@ function sequence(values) {
   let index = 0;
   return () => values[index++] ?? 0;
 }
+function healingChapter() {
+  const copy = structuredClone(chapter);
+  copy.healing = [{ name:"回復薬", amount:4, text:"封を切って一息にあおった。傷の熱が引いていく。" }];
+  copy.startingInventory.player.push("回復薬");
+  return copy;
+}
+
+{
+  const state = newGame(healingChapter(), { rng:() => 0.7 });
+  assert.equal(candidates(state).some(option => option.id === "heal:回復薬"), false);
+}
+console.log("ok 13 - HP満タンでは回復候補を出さない");
+
+{
+  const state = newGame(healingChapter(), { rng:() => 0.7 });
+  state.hp = 6;
+  assert.deepEqual(candidates(state).find(option => option.id === "heal:回復薬"), {
+    id:"heal:回復薬", label:"回復薬を飲む", input:"回復薬を飲む"
+  });
+}
+console.log("ok 14 - ダメージ中で回復薬を持っていれば候補を出す");
+
+{
+  const state = newGame(healingChapter(), { rng:() => 0.7 });
+  state.hp = 6;
+  act(state, "回復薬を飲む");
+  assert.equal(state.hp, 10);
+  assert.equal(state.inventory.player.includes("回復薬"), false);
+  assert.equal(candidates(state).some(option => option.id === "heal:回復薬"), false);
+}
+console.log("ok 15 - 回復するとHPが戻り、回復薬を消費する");
+
+{
+  const state = newGame(healingChapter(), { rng:() => 0.7 });
+  enterRustEater(state);
+  state.hp = 5;
+  for (const id of ["combat:attack", "combat:defend", "combat:flee", "heal:回復薬"]) {
+    assert.ok(candidates(state).some(option => option.id === id), id);
+  }
+  const events = act(state, "回復薬を飲む");
+  assert.deepEqual(events, [
+    { type:"item", text:"回復薬を消費した", name:"回復薬", count:1 },
+    { type:"narrate", text:"封を切って一息にあおった。傷の熱が引いていく。" },
+    { type:"combat", text:"錆喰いの反撃。1ダメージ" }
+  ]);
+  assert.equal(state.hp, 8);
+}
+console.log("ok 16 - 交戦中の回復は同じ手番に敵の反撃を受ける");
+
+{
+  const state = newGame(drought, { rng:() => 0.7 });
+  state.hp = 6;
+  assert.equal(candidates(state).some(option => option.id.startsWith("heal:")), false);
+}
+console.log("ok 17 - healingのない章では回復候補を出さない");
 
 {
   const state = newGame(chapter, { rng:() => 0.7 });
@@ -154,3 +211,14 @@ console.log("ok 9 - 攻撃が当たるとダメージを記録する");
   assert.ok(events.some(event => event.type === "combat" && event.text.includes("弱っている")));
 }
 console.log("ok 10 - 敵の残りHPが閾値以下なら弱りを記録する");
+
+{
+  const state = newGame(lanternhill, { rng: seeded(3) });
+  state.inventory.player.push("回復薬");
+  const before = state.inventory.player.length;
+  const events = act(state, "回復薬を飲む");
+  assert.equal(state.hp, state.maxHp);
+  assert.equal(state.inventory.player.length, before, "満タンで飲んでも品が減らない");
+  assert.ok(events.some(({ text }) => String(text).includes("傷が無い")));
+}
+console.log("ok 17 - 傷が無いときは回復薬を消費しない");
