@@ -53,9 +53,13 @@ function seam(label) {
 }
 
 function recordPlaylog(element) {
-  const what = element?.querySelector?.(".what");
-  const parts = what ? [what.textContent, what.nextSibling?.textContent] : [element?.textContent];
-  const text = parts.map(part => part?.replace(/\s+/g, " ").trim()).filter(Boolean).join("\n");
+  // 本文は文字送りで後から入るので、DOMの並び(nextSibling)に頼ると空を拾う。
+  // 全文の頭から見出しを切り落とす形にして、どんな組み立てでも本文を落とさない
+  const flat = value => value?.replace(/\s+/g, " ").trim() || "";
+  const full = flat(element?.textContent);
+  const head = flat(element?.querySelector?.(".what")?.textContent);
+  const body = head && full.startsWith(head) ? full.slice(head.length).trim() : full;
+  const text = head && body ? `${head}\n${body}` : head || body;
   if (!text) return;
   const lines = (localStorage.getItem(PLAYLOG_KEY) || "").split("\n").filter(Boolean);
   lines.push(text);
