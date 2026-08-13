@@ -22,7 +22,7 @@
 `data/chapter_01.json` を `fetch` で読む。ビルド無し・依存パッケージ無しのESM。`file://` では読めないので、必ずローカルサーバー経由で開く。
 
 ```
-python3 -m http.server 8123   # → http://localhost:8123/
+npm run serve                 # → http://localhost:8123/（キャッシュ無効。http.serverは使わない）
 ```
 
 出典はmock2 spike（`codex/mock2-candidate-spike`）の `chapter_01.json`。**mock2側のJSONは正本ではない**（main側はシーン3の出口が壊れ、spike側はシーン4の出口が欠落していた。`data/` のコピーだけが両方を満たす）。mock2側のJSONを編集・上書きしない。
@@ -57,7 +57,7 @@ python3 -m http.server 8123   # → http://localhost:8123/
 
 ```
 npm test                      # 完走・弱点で詰まない・未解決入力で状態が変わらない の3件
-python3 -m http.server 8123   # 実ブラウザで実際にクリックして確かめる
+npm run serve                 # 実ブラウザで実際にクリックして確かめる
 ```
 
 `npm test` が緑でも画面が動く保証にはならない。UIを変えたら必ず実ブラウザで章を通し、スクリーンショットを見る。

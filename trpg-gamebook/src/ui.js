@@ -276,7 +276,7 @@ $("restart").addEventListener("click", () => start(true));
 $("playlog").addEventListener("click", () => {
   const body = localStorage.getItem(PLAYLOG_KEY) || "";
   if (!body) { alert("まだ記録がありません。少し遊んでから押してください。"); return; }
-  const head = `# ${chapter?.title || "章"} のプレイ記録\n\n気づいたことは、その場所へそのまま書き込んでください。\n\n---\n\n`;
+  const head = `# ${chapter?.title || "章"} のプレイ記録${chapter?.revision ? `（${chapter.revision}）` : ""}\n\n気づいたことは、その場所へそのまま書き込んでください。\n\n---\n\n`;
   // Safariはtext/markdownと、文書に載っていないaタグからの保存を無視することがある
   const link = document.createElement("a");
   link.href = URL.createObjectURL(new Blob([head + body.split("\n").join("\n\n")], { type:"text/plain;charset=utf-8" }));
