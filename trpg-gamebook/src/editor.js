@@ -33,7 +33,9 @@ const join = value => Array.isArray(value) ? value.join("、") : "";
 
 function suggestionGroups(node) {
   return [["調べる", (node.secrets || []).map(s => `${s.entity}を調べる`)], ["遭遇", (node.encounters || []).flatMap(e => e.triggerTerms || [])], ["行き先", (node.exits || []).flatMap(e => e.match || [])]]
-    .map(([label, values]) => [label, [...new Set(values)].filter(Boolean).slice(0, 6)]);
+    // エンジン自身に「その言葉で本当に何か起きるか」を聞く。呼び名の無い秘密は
+    // 調べても開かないので、候補に出すと押しても赤いままになる
+    .map(([label, values]) => [label, [...new Set(values)].filter(Boolean).filter(value => decisionInputResolves(node, value)).slice(0, 6)]);
 }
 function contextFor(category, node = nodeFor()) {
   return {
@@ -80,7 +82,9 @@ function nodeEditor(node) {
 }
 function secretEditor(node, index) {
   const secret = pendingFor("secrets") || node.secrets[index];
-  return `<h2>調べられるもの</h2>${field("要素名", "entity", secret.entity)}${field("呼び名（読点区切り）", "aliases", (secret.aliases || []).join("、"))}${text("調べたときに分かること", "text", secret.text)}${text("見た目の説明", "surface", secret.surface)}${field("調べにくさ", "dc", secret.dc ?? 8, "number")}<p class="hint">${pendingFor("secrets") ? "採用するまで章データには書き込みません。" : "IDと既存の trigger は保持します。"}</p><div class="actions">${pendingFor("secrets") ? `<button data-ai-adopt-pending type="button">採用</button>` : ""}<button data-back type="button">場面へ戻る</button></div>`;
+  // 呼び名も trigger も無い秘密は pickExamineSecret が拾わない。作者に黙って作らせない
+  const unreachable = !secret.trigger && !(secret.aliases || []).length;
+  return `<h2>調べられるもの</h2>${field("要素名", "entity", secret.entity)}${field("呼び名（読点区切り）", "aliases", (secret.aliases || []).join("、"))}${unreachable ? `<p class="hint error">呼び名が空のあいだ、これは調べられません。</p>` : ""}${text("調べたときに分かること", "text", secret.text)}${text("見た目の説明", "surface", secret.surface)}${field("調べにくさ", "dc", secret.dc ?? 8, "number")}<p class="hint">${pendingFor("secrets") ? "採用するまで章データには書き込みません。" : "IDと既存の trigger は保持します。"}</p><div class="actions">${pendingFor("secrets") ? `<button data-ai-adopt-pending type="button">採用</button>` : ""}<button data-back type="button">場面へ戻る</button></div>`;
 }
 function exitEditor(node, index) {
   const exit = pendingFor("exits") || node.exits[index], options = nodes().filter(([id]) => id !== selected.node && id !== "intro").map(([id, n]) => `<option value="${id === "ending" ? "ending" : n.id}" ${String(exit.to).replace("scene:", "") === String(n.id) || exit.to === "ending" && id === "ending" ? "selected" : ""}>${esc(n.name)}</option>`).join("");
