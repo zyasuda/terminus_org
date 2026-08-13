@@ -56,6 +56,9 @@ console.log("ok 6 - aliasesで本文の語への警告が消える");
   broken.intro.exits[0].addItems.push("使い道なし");
   const messages = inspect(broken).structure.map(({ message }) => message);
   assert.ok(messages.some(message => message === "「使い道なし」は入手できるが、使う手段が無い"));
+  // 開始時の持ち物は、持ち主ごとの入れ物。持ち主の名前を持ち物として数えない
+  for (const owner of ["player", "member_2"]) assert.equal(messages.some(message => message.includes(`「${owner}」`)), false);
+  assert.ok(messages.some(message => message.includes("「ロープ」")), "開始時の持ち物そのものは見ている");
   // 終端の出口で渡して消えるものは、使い道がある(誤検出を出さない)
   assert.equal(messages.some(message => message.includes("「心石の欠片」")), false);
   // 終端の出口でもらう報酬は、この章では使えなくて当然
@@ -85,7 +88,7 @@ console.log("ok 9 - 自動プレイの分岐を人間向けの言葉で集計す
 {
   const result = inspect(copy());
   assert.equal(result.structure.filter(({ level }) => level === "error").length, 0);
-  for (const name of ["回復薬", "player", "member_2"]) {
+  for (const name of ["回復薬"]) {
     assert.ok(result.structure.some(({ message }) => message.includes(`「${name}」は入手できるが`)), name);
   }
   assert.ok(result.structure.filter(({ message }) => message.includes("入手できるが") || message.includes("反応するものが無い") || message.includes("同じものですか")).every(({ level }) => level === "warn"));

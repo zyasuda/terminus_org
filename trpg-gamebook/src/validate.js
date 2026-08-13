@@ -74,7 +74,7 @@ function itemVocabularyFor(chapter) {
   if (Array.isArray(chapter.startingInventory)) {
     for (const item of chapter.startingInventory) addObtainable(typeof item === "string" ? item : item?.name, "開始時の持ち物");
   } else if (chapter.startingInventory && typeof chapter.startingInventory === "object") {
-    for (const owner of Object.keys(chapter.startingInventory)) addObtainable(owner, "開始時の持ち物");
+    for (const items of Object.values(chapter.startingInventory)) for (const item of items || []) addObtainable(typeof item === "string" ? item : item?.name, "開始時の持ち物");
   }
 
   for (const [where, node] of nodes(chapter)) {
