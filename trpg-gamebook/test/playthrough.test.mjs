@@ -31,6 +31,30 @@ function sequence(values) {
   let index = 0;
   return () => values[index++] ?? 0;
 }
+
+{
+  const state = newGame(chapter, { rng:() => 0.7 });
+  const exit = chapter.intro.exits[0];
+  const events = act(state, candidates(state).find(option => option.id === "exit:to_scean01").input);
+  assert.equal(events.find(event => event.type === "say").text, exit.npcSay);
+  assert.equal(events.find(event => event.type === "say").who, chapter.intro.npc.name);
+  assert.ok(events.findIndex(event => event.type === "say") < events.findIndex(event => event.type === "item"));
+  assert.ok(events.findIndex(event => event.type === "item") < events.findIndex(event => event.type === "move"));
+}
+console.log("ok 11 - イントロの出口でNPC発言を報酬より先に記録する");
+
+{
+  const state = newGame(chapter, { rng:() => 0.99 });
+  enterScene1(state);
+  act(state, candidates(state).find(option => option.id === "secret:s1a").input);
+  act(state, candidates(state).find(option => option.id === "exit:to_scean02").input);
+  act(state, "崩れた坑道を調べる");
+  act(state, candidates(state).find(option => option.id === "encounter:encounter_2").input);
+  const events = act(state, "攻撃する");
+  assert.ok(events.some(event => event.type === "narrate" && event.text === "回復薬は、もう持っている"));
+}
+console.log("ok 12 - 既に持っているアイテムの追加をナレーションする");
+
 {
   const state = newGame(chapter, { rng: seeded(7) });
   for (let turn = 0; turn < 200 && state.node !== "done"; turn += 1) {

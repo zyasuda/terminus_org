@@ -33,6 +33,7 @@ function item(events, state, name, count, add) {
     if ((add ? inv.give : inv.take)(state.inventory, name)) changed += 1;
   }
   if (changed) events.push({ type: "item", text: `${name}${add ? "を入手した" : "を消費した"}`, name, count: changed });
+  else if (add) events.push({ type: "narrate", text: `${name}は、もう持っている` });
 }
 
 function finishCombat(events, state, outcome) {
@@ -64,6 +65,7 @@ function counterattack(events, state) {
 }
 
 function transition(events, state, exit) {
+  if (exit.npcSay) events.push({ type: "say", text: exit.npcSay, who: currentNode(state).npc?.name });
   for (const name of exit.addItems || []) item(events, state, name, 1, true);
   for (const name of exit.removeItems || []) item(events, state, name, 1, false);
   const to = exit.to;
@@ -191,7 +193,9 @@ export function act(state, originalInput) {
       const dc = examineDifficulty(secret, state.failures[secret.id] || 0);
       const roll = die(state, 20);
       const ok = roll === 20 || (roll !== 1 && roll >= dc);
-      events.push({ type: "roll", label: `${secret.entity}を調べる`, roll, dc, ok });
+      // ボタンに「坑道について尋ねる」と出しておいて判定が「坑道を調べる」では、言い方が二重になる
+      const rollLabel = node.authoring?.actionCandidateLabels?.[`secret:${secret.id}`] || `${secret.entity}を調べる`;
+      events.push({ type: "roll", label: rollLabel, roll, dc, ok });
       if (ok) {
         state.revealed.add(secret.id);
         events.push({ type: "reveal", text: secret.text, entity: secret.entity });

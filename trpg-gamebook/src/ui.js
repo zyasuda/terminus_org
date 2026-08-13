@@ -125,6 +125,8 @@ async function render(events) {
         break;
       case "combat":
         rendered = line("prose combat", e.text); break;
+      case "say":
+        rendered = line("prose say", e.text, e.who); break;
       case "blocked":
         rendered = line("prose blocked", e.text); break;
       case "move":
