@@ -248,6 +248,8 @@ function start(clearLog = false) {
   finishReveal?.();
   state = newGame(chapter);
   if (clearLog) { playlogVersion++; clearPlaylog(); }
+  // 読み込み直しでも記録は消さない。ただし区切りを入れて、何回目の分か分かるようにする
+  else if (localStorage.getItem(PLAYLOG_KEY)) recordPlaylog({ textContent:"── ここから遊び直し ──" });
   log.innerHTML = "";
   seam(placeName());
   const n = node();
