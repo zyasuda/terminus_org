@@ -107,6 +107,7 @@ function structureFor(chapter) {
   const allSecrets = new Map();
   const duplicateSecrets = new Set();
   const reveals = new Set();
+  const incomingScenes = new Set();
 
   for (const [where, node] of nodes(chapter)) {
     for (const secret of node?.secrets || []) {
@@ -120,24 +121,34 @@ function structureFor(chapter) {
   }
   for (const id of duplicateSecrets) structure.push(issue("error", "secrets", `秘密の id「${id}」が章内で重複している`));
 
+  for (const [, node] of nodes(chapter)) for (const exit of node?.exits || []) {
+    if (exit.to !== "ending" && exit.to !== "end") {
+      const index = exitTargetIndexIn(chapter.scenes || [], exit.to);
+      if (index >= 0) incomingScenes.add(index);
+    }
+  }
+  for (const [index, scene] of (chapter.scenes || []).entries()) {
+    if (!incomingScenes.has(index)) structure.push(issue("warn", sceneLabel(`scene ${scene.id ?? index + 1}`), "どこからも来られない場面がある"));
+  }
+
   const usedSecrets = new Set();
   for (const [where, node] of nodes(chapter)) {
     if (!node) continue;
     if (where !== "ending" && !(node.exits || []).length) {
-      structure.push(issue("error", where, "出口を持たない場面がある"));
+      structure.push(issue("error", sceneLabel(where), "出口を持たない場面がある"));
     }
     for (const exit of node.exits || []) {
-      const exitWhere = `${where} / exit ${exit.id || "?"}`;
+      const exitWhere = `${sceneLabel(where)} / 行き先${exit.match?.[0] ? `「${exit.match[0]}」` : ""}`;
       if (exit.to !== "ending" && exit.to !== "end" && exitTargetIndexIn(chapter.scenes || [], exit.to) < 0) {
         structure.push(issue("error", exitWhere, "出口が実在しない場面を指している"));
       }
       for (const key of ["secretsAll", "secretsAny"]) for (const id of exit.requires?.[key] || []) {
         usedSecrets.add(id);
-        if (!allSecrets.has(id)) structure.push(issue("error", exitWhere, `必要な発見「${id}」が存在しない`));
+        if (!allSecrets.has(id)) structure.push(issue("error", exitWhere, "必要な発見が存在しない"));
       }
     }
     if (node.decision) {
-      const decisionWhere = `${where} / decision ${node.decision.id || "?"}`;
+      const decisionWhere = `${sceneLabel(where)} / 決断`;
       if (!decisionInputResolves(node, node.decision.choices?.[0]?.input || "")) {
         // choices are checked below; this branch only keeps empty choices visible.
       }
@@ -151,21 +162,21 @@ function structureFor(chapter) {
       const labels = new Set((node.secrets || []).flatMap(secret => [secret.entity, ...(secret.aliases || [])]));
       const ctx = { revealed: new Set((node.secrets || []).map(secret => secret.id)) };
       if (!encounterRequiredElementsMet(encounter, node, ctx) || (encounter.requiredElements || []).some(label => !labels.has(label))) {
-        structure.push(issue("error", `${where} / encounter ${encounter.id || "?"}`, "遭遇に必要な発見が同じ場面の秘密に存在しない"));
+        structure.push(issue("error", `${sceneLabel(where)} / 遭遇${encounter.enemy?.name ? `「${encounter.enemy.name}」` : ""}`, "遭遇に必要な発見が同じ場面の秘密に存在しない"));
       }
       const reveal = encounter.enemy?.revealOnDefeat;
-      if (reveal && !allSecrets.has(reveal)) structure.push(issue("error", `${where} / encounter ${encounter.id || "?"}`, `撃破後に開示する秘密「${reveal}」が存在しない`));
+      if (reveal && !allSecrets.has(reveal)) structure.push(issue("error", `${sceneLabel(where)} / 遭遇${encounter.enemy?.name ? `「${encounter.enemy.name}」` : ""}`, `撃破後に開示する秘密「${reveal}」が存在しない`));
     }
   }
 
   const decisions = new Set();
   for (const [where, node] of nodes(chapter)) if (node?.decision?.id) {
-    if (decisions.has(node.decision.id)) structure.push(issue("error", where, `決断の id「${node.decision.id}」が章内で重複している`));
+    if (decisions.has(node.decision.id)) structure.push(issue("error", sceneLabel(where), "同じ決断が章内で2つある"));
     decisions.add(node.decision.id);
   }
   for (const [id, { where, secret }] of allSecrets) {
     if (usedSecrets.has(id) && !secret.trigger && !(secret.aliases || []).length && !reveals.has(id)) {
-      structure.push(issue("warn", where, `必要条件の秘密「${id}」を調査または他の経路で開示できない`));
+      structure.push(issue("warn", sceneLabel(where), `「${secret.entity}」は必要とされているのに、調べる手段も他の開示経路も無い`));
     }
   }
   return structure.concat(vocabularyFor(chapter), itemVocabularyFor(chapter));

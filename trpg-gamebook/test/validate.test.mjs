@@ -91,3 +91,28 @@ console.log("ok 9 - 自動プレイの分岐を人間向けの言葉で集計す
   assert.ok(result.structure.filter(({ message }) => message.includes("入手できるが") || message.includes("反応するものが無い") || message.includes("同じものですか")).every(({ level }) => level === "warn"));
 }
 console.log("ok 10 - 追加の検査項目はerrorを増やさない");
+
+{
+  const expanded = copy();
+  expanded.scenes.push({ id:99, name:"", brief:"", blockedText:"", secrets:[], exits:[{ to:"ending" }], encounters:[] });
+  const result = inspect(expanded);
+  assert.ok(result.structure.some(({ level, message }) => level === "warn" && message === "どこからも来られない場面がある"));
+}
+console.log("ok 11 - どこからも来られない場面をwarnで検出する");
+
+{
+  const expanded = copy();
+  expanded.scenes.push({ id:99, name:"", brief:"", blockedText:"", secrets:[], exits:[{ to:"ending" }], encounters:[] });
+  expanded.intro.exits.push({ to:99 });
+  assert.equal(inspect(expanded).structure.some(({ message }) => message === "どこからも来られない場面がある"), false);
+}
+console.log("ok 12 - 場面への出口を追加すると到達不能警告が消える");
+
+{
+  const expanded = copy();
+  expanded.scenes.push({ id:99, name:"", brief:"", blockedText:"", secrets:[], exits:[{ to:"ending" }], encounters:[] });
+  const result = inspect(expanded);
+  assert.equal(result.structure.filter(({ level }) => level === "error").length, 0);
+  assert.ok(result.structure.some(({ message }) => message === "どこからも来られない場面がある"));
+}
+console.log("ok 13 - 到達不能場面の検査はerrorを増やさない");
