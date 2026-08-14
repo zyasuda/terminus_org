@@ -1,0 +1,226 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>D案の調整 — 倒し込みと拡大</title>
+<style>
+  :root { --stone: #0F1418; --ash: #C9C3B7; --flame: #E4B064; --heart: #93C6D6; --dim: #6E7580; }
+  * { box-sizing: border-box; }
+  body { margin: 0; height: 100dvh; overflow: hidden; background: var(--stone); color: var(--ash); font-family: system-ui, sans-serif; }
+  main { height: 100dvh; display: grid; grid-template-rows: auto minmax(0, 1fr) auto auto; max-width: 780px; margin: auto; }
+  #rail { padding: 10px 16px; border-bottom: 1px solid #1B2229; display: flex; justify-content: space-between; font-size: 13px; }
+  #rail em { font-style: normal; color: var(--dim); font-size: 11px; }
+
+  /* 舞台は3つの層。傾けるのは床だけで、文字の層は傾けない。
+     作者の指摘「部屋名が潰れるのは回避したい。文字がスプライトならできる」への答え。
+     床の中に見えない目印を置き、それが画面のどこへ落ちたかを測って、
+     傾いていない層に文字を置く。＝ビルボード。 */
+  #stage { position: relative; min-height: 0; overflow: hidden; perspective: var(--depth); perspective-origin: 50% 34%; }
+  #floor { position: absolute; inset: 0; transform: rotateX(var(--tilt)); transform-origin: 50% 58%; }
+  svg { width: 100%; height: 100%; display: block; }
+  #labels { position: absolute; inset: 0; pointer-events: none; }
+  .label { position: absolute; transform: translate(-50%, -100%); font-size: 12px; letter-spacing: .06em;
+           color: var(--ash); text-shadow: 0 1px 3px #000, 0 0 8px #000; white-space: nowrap; }
+
+  .floor { fill: #454F5A; stroke: #454F5A; stroke-width: .14; }
+  .floor-memory { opacity: .30; }
+  .floor-light { fill: var(--flame); stroke: var(--flame); opacity: .16; mix-blend-mode: screen; }
+  .lamp-glow { mix-blend-mode: screen; }
+  .player { fill: var(--heart); stroke: var(--ash); stroke-width: .05; }
+
+  #knobs { padding: 10px 16px; border-top: 1px solid #1B2229; display: grid; gap: 7px; }
+  .knob { display: grid; grid-template-columns: 92px 1fr 58px; align-items: center; gap: 10px; font-size: 11.5px; color: var(--dim); }
+  .knob output { color: var(--flame); font-variant-numeric: tabular-nums; text-align: right; }
+  input[type=range] { width: 100%; accent-color: var(--flame); }
+  #knobs label.check { grid-template-columns: 92px 1fr; }
+  #controls { min-height: 64px; display: flex; border-top: 1px solid #1B2229; }
+  #controls button { flex: 1; border: 0; border-left: 1px solid #1B222933; background: transparent; color: var(--flame); font-size: 22px; cursor: pointer; }
+  #controls button span { display: block; color: var(--dim); font-size: 9px; }
+</style>
+</head>
+<body><main>
+  <header id="rail"><span id="place"></span><em id="hint">数値が決まったら教えてください</em></header>
+  <section id="stage"><div id="floor"></div><div id="labels"></div></section>
+  <div id="knobs">
+    <label class="knob">倒し込み<input type="range" id="tilt" min="0" max="55" step="1" value="26"><output id="tilt-v"></output></label>
+    <label class="knob">遠近の強さ<input type="range" id="depth" min="500" max="2600" step="50" value="1500"><output id="depth-v"></output></label>
+    <label class="knob">拡大<input type="range" id="zoom" min="9" max="34" step="1" value="18"><output id="zoom-v"></output></label>
+    <label class="knob check">壁の厚み<span><input type="checkbox" id="carve" checked> 灯りに近い側が影、遠い側に照り返し</span></label>
+  </div>
+  <nav id="controls"></nav>
+</main>
+
+<script type="module">
+import { generateWithRetry } from "../src/mapgen.js";
+import { lit, run, start, step } from "../src/expedition.js";
+import { corridorShapes, roomShapes } from "../src/draw.js";
+
+const chapter = await fetch("../data/lanternhill_ch1.json", { cache: "no-store" }).then((r) => r.json());
+const { map } = generateWithRetry(chapter, 1);
+const state = start(map);
+const keyOf = (cell) => `${cell.x},${cell.y}`;
+
+/* 開いた瞬間に判断できるよう、3部屋ぶん先に歩かせておく。
+   部屋が1つしか見えない状態では、倒し込みの強さを決めようがない。
+   ずるはせず、実際に1マスずつ歩かせる（seenが道なりに溜まる）。 */
+const DELTAS = [["north", 0, -1], ["east", 1, 0], ["south", 0, 1], ["west", -1, 0]];
+function walkTo(target) {
+  const from = new Map([[keyOf(state.pos), null]]);
+  const queue = [state.pos];
+  for (let i = 0; i < queue.length; i += 1) for (const [dir, dx, dy] of DELTAS) {
+    const next = { x: queue[i].x + dx, y: queue[i].y + dy };
+    if (!map.cells.has(keyOf(next)) || from.has(keyOf(next))) continue;
+    from.set(keyOf(next), { cell: queue[i], dir });
+    queue.push(next);
+  }
+  const route = [];
+  for (let item = from.get(keyOf(target)); item; item = from.get(keyOf(item.cell))) route.push(item.dir);
+  for (const dir of route.reverse()) step(state, map, dir);
+}
+for (const id of [2, 6, 3]) if (map.rooms.has(id)) {
+  const room = map.rooms.get(id);
+  walkTo({ x: room.x + Math.floor(room.w / 2), y: room.y + Math.floor(room.h / 2) });
+}
+
+const stage = document.querySelector("#stage");
+const floorLayer = document.querySelector("#floor");
+const labelLayer = document.querySelector("#labels");
+const placeEl = document.querySelector("#place");
+const knobs = { tilt: document.querySelector("#tilt"), depth: document.querySelector("#depth"), zoom: document.querySelector("#zoom"), carve: document.querySelector("#carve") };
+
+const roughOnly = (id) => `<filter id="${id}" x="-20%" y="-20%" width="140%" height="140%">
+  <feTurbulence type="fractalNoise" baseFrequency="0.42" numOctaves="3" seed="11" result="n"/>
+  <feDisplacementMap in="SourceGraphic" in2="n" scale="0.30" xChannelSelector="R" yChannelSelector="G"/>
+</filter>`;
+
+/* 厚みは地形なので、覚えているだけの場所にも常にある。
+   暖色の照り返しは灯りが届いている時だけ（記憶の層は冷たい灰色の縁）。 */
+function carved(id, center, lamp, warm) {
+  const dx = center.x - lamp.x, dy = center.y - lamp.y;
+  const len = Math.hypot(dx, dy) || 1;
+  const ox = (dx / len) * .5, oy = (dy / len) * .5;
+  const rim = warm ? { color: "#F0C078", opacity: .75 } : { color: "#8894A3", opacity: .5 };
+  return `<filter id="${id}" x="-30%" y="-30%" width="160%" height="160%">
+    <feTurbulence type="fractalNoise" baseFrequency="0.42" numOctaves="3" seed="11" result="n"/>
+    <feDisplacementMap in="SourceGraphic" in2="n" scale="0.30" xChannelSelector="R" yChannelSelector="G" result="rock"/>
+    <feOffset in="rock" dx="${ox.toFixed(3)}" dy="${oy.toFixed(3)}" result="away"/>
+    <feGaussianBlur in="away" stdDeviation=".16" result="awayBlur"/>
+    <feComposite in="rock" in2="awayBlur" operator="out" result="nearWall"/>
+    <feFlood flood-color="#04070A" flood-opacity=".95" result="darkInk"/>
+    <feComposite in="darkInk" in2="nearWall" operator="in" result="shadow"/>
+    <feOffset in="rock" dx="${(-ox).toFixed(3)}" dy="${(-oy).toFixed(3)}" result="toward"/>
+    <feGaussianBlur in="toward" stdDeviation=".11" result="towardBlur"/>
+    <feComposite in="rock" in2="towardBlur" operator="out" result="farWall"/>
+    <feFlood flood-color="${rim.color}" flood-opacity="${rim.opacity}" result="lightInk"/>
+    <feComposite in="lightInk" in2="farWall" operator="in" result="rimShape"/>
+    <feMerge><feMergeNode in="rock"/><feMergeNode in="rimShape"/><feMergeNode in="shadow"/></feMerge>
+  </filter>`;
+}
+
+function render() {
+  const carve = knobs.carve.checked;
+  const visible = lit(state, map);
+  const seenCell = (cell) => state.seen.has(keyOf(cell));
+  const litCell = (cell) => visible.has(keyOf(cell));
+  const roomIsSeen = (room) => {
+    for (let y = room.y; y < room.y + room.h; y += 1) for (let x = room.x; x < room.x + room.w; x += 1) {
+      if (state.seen.has(`${x},${y}`)) return true;
+    }
+    return false;
+  };
+  const lamp = { x: state.pos.x + .5, y: state.pos.y + .5 };
+
+  const pieces = [
+    ...[...map.rooms.values()].filter(roomIsSeen).map((room) => ({
+      center: { x: room.x + room.w / 2, y: room.y + room.h / 2 },
+      memory: roomShapes(map.rooms, (r) => r.id === room.id),
+      light: roomShapes(map.rooms, (r) => r.id === room.id),
+    })),
+    ...map.corridors.filter((c) => c.path.some(seenCell)).map((corridor) => {
+      const mid = corridor.path[Math.floor(corridor.path.length / 2)];
+      return {
+        center: { x: mid.x + .5, y: mid.y + .5 },
+        memory: corridorShapes(map.corridors, map.rooms, (c) => c === corridor, seenCell),
+        light: corridorShapes(map.corridors, map.rooms, (c) => c === corridor, litCell),
+      };
+    }),
+  ];
+
+  const rect = stage.getBoundingClientRect();
+  const vw = Number(knobs.zoom.value);
+  const vh = vw * (rect.height || 1) / (rect.width || 1);
+  const left = lamp.x - vw / 2, top = lamp.y - vh / 2;
+  const glowR = vw / 2.6;
+
+  const filters = carve
+    ? pieces.map((p, i) => carved(`m${i}`, p.center, lamp, false) + carved(`l${i}`, p.center, lamp, true)).join("")
+    : roughOnly("flat");
+  const layer = (kind, cls) => pieces.map((p, i) =>
+    `<g class="floor ${cls}" filter="url(#${carve ? (kind === "light" ? "l" : "m") + i : "flat"})">${p[kind]}</g>`).join("");
+
+  /* 文字そのものは描かない。見えない目印だけ置いて、あとで画面座標を測る */
+  const anchors = [...map.rooms.values()].filter((r) => state.visited.has(r.id))
+    .map((r) => `<circle class="anchor" data-name="${r.name}" cx="${r.x + r.w / 2}" cy="${r.y - .35}" r=".02" fill="none"/>`).join("");
+
+  floorLayer.innerHTML = `<svg viewBox="${left} ${top} ${vw} ${vh}" xmlns="http://www.w3.org/2000/svg">
+    <defs>${filters}
+      <radialGradient id="glow" gradientUnits="userSpaceOnUse" cx="${lamp.x}" cy="${lamp.y}" r="${glowR}">
+        <stop stop-color="var(--flame)" stop-opacity=".42"/><stop offset=".5" stop-color="var(--flame)" stop-opacity=".14"/><stop offset="1" stop-color="var(--flame)" stop-opacity="0"/>
+      </radialGradient>
+      <radialGradient id="torch" gradientUnits="userSpaceOnUse" cx="${lamp.x}" cy="${lamp.y}" r="${glowR * .86}">
+        <stop stop-color="white" stop-opacity=".96"/><stop offset=".55" stop-color="white" stop-opacity=".38"/><stop offset="1" stop-color="black" stop-opacity="0"/>
+      </radialGradient>
+      <mask id="torch-mask" maskUnits="userSpaceOnUse" x="${left}" y="${top}" width="${vw}" height="${vh}">
+        <rect x="${left}" y="${top}" width="${vw}" height="${vh}" fill="url(#torch)"/>
+      </mask>
+    </defs>
+    ${layer("memory", "floor-memory")}
+    <g mask="url(#torch-mask)">${layer("light", "floor-light")}</g>
+    ${anchors}
+    <circle class="lamp-glow" cx="${lamp.x}" cy="${lamp.y}" r="${glowR}" fill="url(#glow)"/>
+    <circle class="player" cx="${lamp.x}" cy="${lamp.y}" r=".2"/>
+  </svg>`;
+
+  /* 目印が画面のどこへ落ちたかを測る。getBoundingClientRect は3D変換を通した
+     実際の画面座標を返すので、傾きの計算を自分でやらなくてよい */
+  labelLayer.innerHTML = "";
+  for (const anchor of floorLayer.querySelectorAll(".anchor")) {
+    const box = anchor.getBoundingClientRect();
+    if (!box.width && !box.height) continue;
+    const x = box.left + box.width / 2 - rect.left;
+    const y = box.top + box.height / 2 - rect.top;
+    if (x < -80 || x > rect.width + 80 || y < -40 || y > rect.height + 40) continue;
+    const el = document.createElement("div");
+    el.className = "label";
+    el.textContent = anchor.dataset.name;
+    el.style.left = `${x}px`;
+    el.style.top = `${y}px`;
+    labelLayer.append(el);
+  }
+  placeEl.textContent = map.rooms.get(state.at)?.name || "通路";
+}
+
+function applyKnobs() {
+  stage.style.setProperty("--tilt", `${knobs.tilt.value}deg`);
+  stage.style.setProperty("--depth", `${knobs.depth.value}px`);
+  document.querySelector("#tilt-v").textContent = `${knobs.tilt.value}°`;
+  document.querySelector("#depth-v").textContent = `${knobs.depth.value}px`;
+  document.querySelector("#zoom-v").textContent = `${knobs.zoom.value}マス`;
+  render();
+}
+for (const knob of Object.values(knobs)) knob.addEventListener("input", applyKnobs);
+
+const labels = { north: ["↑", "北"], east: ["→", "東"], south: ["↓", "南"], west: ["←", "西"] };
+document.querySelector("#controls").innerHTML = Object.entries(labels)
+  .map(([dir, [arrow, name]]) => `<button type="button" data-dir="${dir}">${arrow}<span>${name}</span></button>`).join("");
+document.querySelector("#controls").addEventListener("click", (event) => {
+  const button = event.target.closest("button[data-dir]");
+  if (button && run(state, map, button.dataset.dir)) render();
+});
+
+new ResizeObserver(() => render()).observe(stage);
+applyKnobs();
+</script>
+</body>
+</html>

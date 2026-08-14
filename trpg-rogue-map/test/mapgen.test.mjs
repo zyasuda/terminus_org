@@ -11,6 +11,15 @@ const touchingRooms = (cell, rooms) => [...rooms.values()].filter((room) => (
   ((cell.x === room.x - 1 || cell.x === room.x + room.w) && cell.y >= room.y && cell.y < room.y + room.h) ||
   ((cell.y === room.y - 1 || cell.y === room.y + room.h) && cell.x >= room.x && cell.x < room.x + room.w)
 ));
+const corridorAdjacencies = (map) => {
+  let count = 0;
+  for (let i = 0; i < map.corridors.length; i += 1) for (let j = i + 1; j < map.corridors.length; j += 1) {
+    for (const left of map.corridors[i].path) for (const right of map.corridors[j].path) {
+      if (Math.abs(left.x - right.x) + Math.abs(left.y - right.y) === 1) count += 1;
+    }
+  }
+  return count;
+};
 
 function distances(map) {
   const result = { [map.entrance]: 0 };
@@ -54,6 +63,7 @@ for (const map of maps) {
     assert.ok(touchingRooms(corridor.path[0], map.rooms).some((room) => room.id === corridor.a), "8. 通路の始点はaの出入口に接する");
     assert.ok(touchingRooms(corridor.path.at(-1), map.rooms).some((room) => room.id === corridor.b), "8. 通路の終点はbの出入口に接する");
   }
+  assert.equal(corridorAdjacencies(map), 0, "9. 通路は無関係な通路に隣接しない");
   assert.deepEqual(new Set(map.corridors.map(({ a, b }) => linkKey(a, b))), new Set(linksOf(chapter).map(({ a, b }) => linkKey(a, b)), "4. 全接続を通路にする"));
   assert.equal(Object.keys(distances(map)).length, chapter.scenes.length, "5. 入口から全部屋へ到達できる");
   const actualDepths = distances(map);
@@ -116,7 +126,7 @@ for (const item of exitsFrom(start(first), first)) for (const cell of item.corri
 const direct = Array.from({ length: 100 }, (_, seed) => generate(chapter, seed)).filter(Boolean).length;
 const maxRetry = Math.max(...generated.map(({ start: initial, seed }) => seed - initial));
 assert.ok(maxRetry < 30, "生成は数十seed以内の再試行で成功する");
-console.log(`緑: ${maps.length} seed × 生成器8条件、step、方向、距離の霧`);
+console.log(`緑: ${maps.length} seed × 生成器9条件、step、方向、距離の霧`);
 console.log(`生成成功率: 直接 ${direct}/100、100開始seedの最大再試行 ${maxRetry} 回`);
 
 // 縦持ち制約は残すが、既定では適用しない。
@@ -135,3 +145,45 @@ console.log(`縦持ち: aspect明示 ${portrait.length}/120 件、既定で範�
   const ratio = (map.bounds.maxX - map.bounds.minX + 1) / (map.bounds.maxY - map.bounds.minY + 1);
   return ratio < 0.35 || ratio > 1.0;
 }).length}/${free.length} 件`);
+
+// run(): 部屋の中は1マスだけ。通路へ出た瞬間、壁か部屋に着くまで自動で走る(作者の要望)。
+{
+  const { run } = await import("../src/expedition.js");
+  const seenRoom = start(first);
+  assert.equal(first.cells.get(`${seenRoom.pos.x},${seenRoom.pos.y}`)?.kind, "room", "前提: 入口は部屋である");
+
+  const roomExit = exitsFrom(seenRoom, first)[0];
+  const DX = { east: 1, west: -1, north: 0, south: 0 };
+  const DY = { south: 1, north: -1, east: 0, west: 0 };
+  // 部屋の奥行きは可変(roomW/roomH)なので、通路へ出るまでは各回1マスのはず。
+  // 出口方向へ運び続け、通路へ踏み出す1回(=部屋の中の1マス移動ではなくなる回)を見つける。
+  // 短い通路だと、その1回で対岸の部屋まで一気に着くこともあるため、
+  // 「移動元も移動先も部屋、かつ1マスだけ」の間は部屋の中の移動として扱う。
+  let guard = 0;
+  let crossing = null;
+  while (guard++ < 20) {
+    const before = { ...seenRoom.pos };
+    const beforeKind = first.cells.get(`${before.x},${before.y}`)?.kind;
+    const moved = run(seenRoom, first, roomExit.dir);
+    assert.ok(moved, "v5: runが進まない");
+    const afterKind = first.cells.get(`${seenRoom.pos.x},${seenRoom.pos.y}`)?.kind;
+    const dist = Math.abs(seenRoom.pos.x - before.x) + Math.abs(seenRoom.pos.y - before.y);
+    if (beforeKind === "room" && afterKind === "room" && dist === 1) continue;
+    crossing = { before, afterKind, dist };
+    break;
+  }
+  assert.ok(crossing, "通路まで到達できた");
+
+  // 部屋を出た1回のrunは、通路の途中で止まらず、壁か次の部屋まで進んでいるはず。
+  const ahead = { x: seenRoom.pos.x + DX[roomExit.dir], y: seenRoom.pos.y + DY[roomExit.dir] };
+  assert.ok(crossing.afterKind !== "corridor" || !first.cells.has(`${ahead.x},${ahead.y}`),
+    "v5: 通路へ出たrunは、途中で止まらず壁か部屋まで進む");
+
+  // 壁の方向はrunでもfalseで状態を変えない(既存のstep検査と同じ角の座標を使う)
+  const wallState2 = start(first);
+  wallState2.pos = { x: entrance.x, y: entrance.y };
+  const beforeWall = { x: wallState2.pos.x, y: wallState2.pos.y };
+  assert.equal(run(wallState2, first, "north"), false, "v5: 壁へrunしても進まない");
+  assert.deepEqual(wallState2.pos, beforeWall, "v5: 壁へrunしても状態を変えない");
+  console.log("run(): 部屋1マス／通路へ出た瞬間に壁か部屋まで自動移動／壁で停止 を確認");
+}

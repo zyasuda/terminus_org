@@ -53,6 +53,19 @@ export function step(state, map, dir) {
   return true;
 }
 
+// 部屋の中は1マスずつ、通路に出た瞬間から壁か部屋へ着くまで自動で進む。
+// 「部屋を出る時、前方に壁がなければ即座に壁まで移動したい」という要望への対応。
+// まず1マスstepし、その結果が通路ならそのまま走り続ける。部屋のまま/壁で止まる
+// 場合は1マスだけで終わるので、部屋の中の1マス移動もこの1本の実装でまかなえる。
+// stepは1マスの純粋な判定として残す(既存の検査・呼び出し元が依存しているため変えない)。
+export function run(state, map, dir) {
+  if (!step(state, map, dir)) return false;
+  while (map.cells.get(keyOf(state.pos))?.kind === "corridor") {
+    if (!step(state, map, dir)) break;
+  }
+  return true;
+}
+
 export function lit(state, map) {
   const visible = new Set([keyOf(state.pos)]);
   const distance = new Map([[keyOf(state.pos), 0]]);

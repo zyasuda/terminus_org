@@ -1,0 +1,186 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<title>地図の見た目 — 4案の比較</title>
+<style>
+  :root { --stone: #0F1418; --ash: #C9C3B7; --flame: #E4B064; --heart: #93C6D6; --dim: #6E7580; }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: #07090B; color: var(--ash); font-family: system-ui, sans-serif; padding: 22px; }
+  h1 { font-size: 15px; font-weight: 400; letter-spacing: .1em; color: var(--dim); margin: 0 0 18px; }
+  #grid { display: grid; grid-template-columns: repeat(2, 840px); gap: 20px 20px; }
+  figure { margin: 0; }
+  figcaption { font-size: 13px; letter-spacing: .05em; margin-bottom: 7px; }
+  figcaption b { font-weight: 500; }
+  figcaption span { color: var(--dim); font-size: 11.5px; margin-left: 10px; }
+  .stage { position: relative; width: 840px; height: 512px; background: var(--stone); border: 1px solid #1B2229; overflow: hidden; }
+  /* 倒し込み。上辺が縮んで、床を斜め上から見た形になる。three.jsは要らない */
+  .stage.tilt { perspective: 900px; perspective-origin: 50% 34%; }
+  .stage.tilt svg { transform: rotateX(44deg) scale(1.05); transform-origin: 50% 56%; }
+  svg { width: 100%; height: 100%; display: block; }
+  .floor { fill: #454F5A; stroke: #454F5A; stroke-width: .14; }
+  .floor-memory { opacity: .30; }
+  .floor-light { fill: var(--flame); stroke: var(--flame); opacity: .16; mix-blend-mode: screen; }
+  .lamp-glow { mix-blend-mode: screen; }
+  .room-name { fill: var(--ash); font-size: .52px; }
+  .player { fill: var(--heart); stroke: var(--ash); stroke-width: .05; }
+</style>
+</head>
+<body>
+<h1>廃坑の灯 — 同じ地図（seed 1・同じ探索状態）を4通りで描く</h1>
+<div id="grid"></div>
+
+<script type="module">
+import { generateWithRetry } from "../src/mapgen.js";
+import { lit, start, step } from "../src/expedition.js";
+import { corridorShapes, roomShapes } from "../src/draw.js";
+
+const chapter = await fetch("../data/lanternhill_ch1.json", { cache: "no-store" }).then((r) => r.json());
+const { map } = generateWithRetry(chapter, 1);
+const keyOf = (cell) => `${cell.x},${cell.y}`;
+
+/* 探索を進めてから撮る。霧（覚えている範囲／いま見えている範囲）が両方写らないと、
+   この比較で一番大事な「読めるかどうか」が判定できない。
+   部屋を3つ回るまで、実際に1マスずつ歩かせる（seenが道なりに溜まる）。 */
+const state = start(map);
+const DELTAS = [["north", 0, -1], ["east", 1, 0], ["south", 0, 1], ["west", -1, 0]];
+function walkTo(target) {
+  const from = new Map([[keyOf(state.pos), null]]);
+  const queue = [state.pos];
+  for (let i = 0; i < queue.length; i += 1) for (const [dir, dx, dy] of DELTAS) {
+    const next = { x: queue[i].x + dx, y: queue[i].y + dy };
+    if (!map.cells.has(keyOf(next)) || from.has(keyOf(next))) continue;
+    from.set(keyOf(next), { cell: queue[i], dir });
+    queue.push(next);
+  }
+  const route = [];
+  for (let item = from.get(keyOf(target)); item; item = from.get(keyOf(item.cell))) route.push(item.dir);
+  for (const dir of route.reverse()) step(state, map, dir);
+}
+const centerOf = (room) => ({ x: room.x + Math.floor(room.w / 2), y: room.y + Math.floor(room.h / 2) });
+for (const id of [2, 6, 3]) if (map.rooms.has(id)) walkTo(centerOf(map.rooms.get(id)));
+
+const visible = lit(state, map);
+const seenCell = (cell) => state.seen.has(keyOf(cell));
+const litCell = (cell) => visible.has(keyOf(cell));
+const roomIsSeen = (room) => {
+  for (let y = room.y; y < room.y + room.h; y += 1) for (let x = room.x; x < room.x + room.w; x += 1) {
+    if (state.seen.has(`${x},${y}`)) return true;
+  }
+  return false;
+};
+const lamp = { x: state.pos.x + .5, y: state.pos.y + .5 };
+
+/* 見えている範囲だけに寄せ、枠と同じ縦横比まで広げる（余白で letterbox させない） */
+const seenPoints = [...state.seen].map((k) => k.split(",").map(Number));
+const pad = 2;
+let minX = Math.min(...seenPoints.map(([x]) => x)) - pad, maxX = Math.max(...seenPoints.map(([x]) => x)) + 1 + pad;
+let minY = Math.min(...seenPoints.map(([, y]) => y)) - pad, maxY = Math.max(...seenPoints.map(([, y]) => y)) + 1 + pad;
+const stageAspect = 840 / 512;
+let w = maxX - minX, h = maxY - minY;
+if (w / h < stageAspect) { const grow = h * stageAspect - w; minX -= grow / 2; w += grow; }
+else { const grow = w / stageAspect - h; minY -= grow / 2; h += grow; }
+const view = `${minX} ${minY} ${w} ${h}`;
+const glowR = Math.max(w, h) / 3.4;
+
+/* 1図形ずつ取り出す。本番と同じ draw.js を通すので、形が比較用にずれない */
+const pieces = [
+  ...[...map.rooms.values()].filter(roomIsSeen).map((room) => ({
+    center: { x: room.x + room.w / 2, y: room.y + room.h / 2 },
+    memory: roomShapes(map.rooms, (r) => r.id === room.id),
+    light: roomShapes(map.rooms, (r) => r.id === room.id),
+  })),
+  ...map.corridors.filter((c) => c.path.some(seenCell)).map((corridor) => {
+    const mid = corridor.path[Math.floor(corridor.path.length / 2)];
+    return {
+      center: { x: mid.x + .5, y: mid.y + .5 },
+      memory: corridorShapes(map.corridors, map.rooms, (c) => c === corridor, seenCell),
+      light: corridorShapes(map.corridors, map.rooms, (c) => c === corridor, litCell),
+    };
+  }),
+];
+
+/* 岩肌の歪みだけ（現状と同じ） */
+const roughOnly = (id) => `<filter id="${id}" x="-20%" y="-20%" width="140%" height="140%">
+  <feTurbulence type="fractalNoise" baseFrequency="0.42" numOctaves="3" seed="11" result="n"/>
+  <feDisplacementMap in="SourceGraphic" in2="n" scale="0.30" xChannelSelector="R" yChannelSelector="G"/>
+</filter>`;
+
+/* 岩肌の歪み＋壁の厚み。灯りに近い側の壁の内面は影になり、遠い側の内面には光が当たる。
+   持っている灯りが光源なので、太陽のような固定方向にはしない（図形ごとに向きを出す）。
+
+   厚みは地形なので、覚えているだけの場所にも常にある。
+   ただし【暖色の照り返しは灯りが届いている時だけ】。記憶の層は冷たい灰色の縁にする
+   （最初の試作では記憶の層にも暖色を乗せてしまい、消えた灯りが残って見えた）。 */
+function carved(id, center, warm) {
+  const dx = center.x - lamp.x;
+  const dy = center.y - lamp.y;
+  const len = Math.hypot(dx, dy) || 1;
+  const depth = .5;
+  const ox = (dx / len) * depth;
+  const oy = (dy / len) * depth;
+  const rim = warm ? { color: "#F0C078", opacity: .75 } : { color: "#8894A3", opacity: .5 };
+  return `<filter id="${id}" x="-30%" y="-30%" width="160%" height="160%">
+    <feTurbulence type="fractalNoise" baseFrequency="0.42" numOctaves="3" seed="11" result="n"/>
+    <feDisplacementMap in="SourceGraphic" in2="n" scale="0.30" xChannelSelector="R" yChannelSelector="G" result="rock"/>
+    <feOffset in="rock" dx="${ox.toFixed(3)}" dy="${oy.toFixed(3)}" result="away"/>
+    <feGaussianBlur in="away" stdDeviation=".16" result="awayBlur"/>
+    <feComposite in="rock" in2="awayBlur" operator="out" result="nearWall"/>
+    <feFlood flood-color="#04070A" flood-opacity=".95" result="darkInk"/>
+    <feComposite in="darkInk" in2="nearWall" operator="in" result="shadow"/>
+    <feOffset in="rock" dx="${(-ox).toFixed(3)}" dy="${(-oy).toFixed(3)}" result="toward"/>
+    <feGaussianBlur in="toward" stdDeviation=".11" result="towardBlur"/>
+    <feComposite in="rock" in2="towardBlur" operator="out" result="farWall"/>
+    <feFlood flood-color="${rim.color}" flood-opacity="${rim.opacity}" result="lightInk"/>
+    <feComposite in="lightInk" in2="farWall" operator="in" result="rimShape"/>
+    <feMerge><feMergeNode in="rock"/><feMergeNode in="rimShape"/><feMergeNode in="shadow"/></feMerge>
+  </filter>`;
+}
+
+function svgFor(depth, tag) {
+  const filters = depth
+    ? pieces.map((piece, i) => carved(`${tag}m${i}`, piece.center, false) + carved(`${tag}l${i}`, piece.center, true)).join("")
+    : roughOnly(`flat-${tag}`);
+  const layer = (kind, cls) => pieces.map((piece, i) => {
+    const id = depth ? `${tag}${kind === "light" ? "l" : "m"}${i}` : `flat-${tag}`;
+    return `<g class="floor ${cls}" filter="url(#${id})">${piece[kind]}</g>`;
+  }).join("");
+  const names = [...map.rooms.values()].filter((r) => state.visited.has(r.id))
+    .map((r) => `<text class="room-name" x="${r.x + r.w / 2}" y="${r.y - .5}" text-anchor="middle">${r.name}</text>`).join("");
+  return `<svg viewBox="${view}" xmlns="http://www.w3.org/2000/svg">
+    <defs>${filters}
+      <radialGradient id="glow-${tag}" gradientUnits="userSpaceOnUse" cx="${lamp.x}" cy="${lamp.y}" r="${glowR}">
+        <stop stop-color="var(--flame)" stop-opacity=".42"/>
+        <stop offset=".5" stop-color="var(--flame)" stop-opacity=".14"/>
+        <stop offset="1" stop-color="var(--flame)" stop-opacity="0"/>
+      </radialGradient>
+      <radialGradient id="torch-${tag}" gradientUnits="userSpaceOnUse" cx="${lamp.x}" cy="${lamp.y}" r="${glowR * .86}">
+        <stop stop-color="white" stop-opacity=".96"/>
+        <stop offset=".55" stop-color="white" stop-opacity=".38"/>
+        <stop offset="1" stop-color="black" stop-opacity="0"/>
+      </radialGradient>
+      <mask id="mask-${tag}" maskUnits="userSpaceOnUse" x="${minX}" y="${minY}" width="${w}" height="${h}">
+        <rect x="${minX}" y="${minY}" width="${w}" height="${h}" fill="url(#torch-${tag})"/>
+      </mask>
+    </defs>
+    ${layer("memory", "floor-memory")}
+    <g mask="url(#mask-${tag})">${layer("light", "floor-light")}</g>
+    ${names}
+    <circle class="lamp-glow" cx="${lamp.x}" cy="${lamp.y}" r="${glowR}" fill="url(#glow-${tag})"/>
+    <circle class="player" cx="${lamp.x}" cy="${lamp.y}" r=".22"/>
+  </svg>`;
+}
+
+const cases = [
+  { tag: "a", title: "A 現状", note: "俯瞰・床は平ら", tilt: false, depth: false },
+  { tag: "b", title: "B 厚みと落ち影", note: "俯瞰のまま。灯りに近い側の壁が影、遠い側に光が当たる", tilt: false, depth: true },
+  { tag: "c", title: "C 倒し込み", note: "上辺を縮める。床は平ら", tilt: true, depth: false },
+  { tag: "d", title: "D B＋C", note: "倒し込み＋壁の厚み", tilt: true, depth: true },
+];
+document.querySelector("#grid").innerHTML = cases.map((item) => `<figure>
+  <figcaption><b>${item.title}</b><span>${item.note}</span></figcaption>
+  <div class="stage${item.tilt ? " tilt" : ""}">${svgFor(item.depth, item.tag)}</div>
+</figure>`).join("");
+</script>
+</body>
+</html>

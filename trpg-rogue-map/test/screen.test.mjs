@@ -27,11 +27,27 @@ for (const [width, height, name] of SIZES) {
   const scroll = await page.evaluate(() => document.documentElement.scrollHeight - window.innerHeight);
   assert.ok(scroll <= 1, `${name}: ページが縦に ${scroll}px はみ出している`);
   assert.equal(await page.locator("#controls button").count(), 4, `${name}: 4方向の移動ボタンが無い`);
-  assert.ok(await page.locator(".room-name").count() >= 1, `${name}: 部屋名が地図の上に無い`);
+  const roomNames = page.locator("#labels .label");
+  assert.ok(await roomNames.count() >= 1, `${name}: 部屋名が画面に無い`);
+  const mapBox = await page.locator("#map").boundingBox();
+  const nameBoxes = await roomNames.evaluateAll((elements) => elements.map((element) => {
+    const box = element.getBoundingClientRect();
+    return { left: box.left, top: box.top, right: box.right, bottom: box.bottom };
+  }));
+  assert.ok(mapBox && nameBoxes.some((box) => box.right >= mapBox.x && box.left <= mapBox.x + mapBox.width
+    && box.bottom >= mapBox.y && box.top <= mapBox.y + mapBox.height), `${name}: 部屋名が画面外にある`);
   const svg = page.locator("#map svg");
+  assert.equal(await page.locator("#map").evaluate((node) => getComputedStyle(node).perspective), "2600px",
+    `${name}: 遠近の強さが2600pxでない`);
+  assert.notEqual(await page.locator("#floor").evaluate((node) => getComputedStyle(node).transform), "none",
+    `${name}: 床が倒し込まれていない`);
+  assert.ok(await roomNames.first().evaluate((node) => getComputedStyle(node).transform.startsWith("matrix(1, 0, 0, 1,")),
+    `${name}: 部屋名がビルボードのままでない`);
   const floorShapes = await svg.locator(".floor rect, .floor polyline").count();
   const floorCount = Number(await svg.getAttribute("data-floor-count"));
   const cellCount = Number(await svg.getAttribute("data-cell-count"));
+  assert.equal(await svg.locator("defs > filter").count(), floorCount * 2,
+    `${name}: 床ごとの厚みフィルタが2層そろっていない`);
   assert.ok(floorShapes <= floorCount * 2, `${name}: 床が部屋数＋通路数より細かく描かれている (${floorShapes})`);
   assert.ok(floorShapes * 3 < cellCount, `${name}: 床がマス単位の図形になっている (${floorShapes}/${cellCount})`);
 
@@ -77,7 +93,7 @@ await reduced.emulateMedia({ reducedMotion: "reduce" });
 await reduced.goto("http://localhost:8123/", { waitUntil: "networkidle" });
 assert.equal(await reduced.locator(".torch-mask").evaluate((node) => getComputedStyle(node).animationName), "none",
   "prefers-reduced-motionで灯りの揺らぎが止まらない");
-assert.equal(await reduced.locator(".floor-light").evaluate((node) => getComputedStyle(node).animationName), "none",
+assert.equal(await reduced.locator(".floor-light").first().evaluate((node) => getComputedStyle(node).animationName), "none",
   "prefers-reduced-motionで灯りの明るさの揺らぎが止まらない");
 await reduced.close();
 await browser.close();

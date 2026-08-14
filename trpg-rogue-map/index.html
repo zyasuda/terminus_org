@@ -14,7 +14,9 @@
     main { height: 100dvh; display: grid; grid-template-rows: auto minmax(0, 1fr) auto; max-width: 640px; margin: auto; }
     #rail { padding: max(12px, env(safe-area-inset-top)) 16px 12px; border-bottom: 1px solid color-mix(in srgb, var(--ash) 12%, transparent); display: flex; align-items: center; justify-content: space-between; gap: 12px; }
     #place { font-size: 14px; letter-spacing: .12em; } #chapter { color: var(--dim); font-size: 11px; white-space: nowrap; }
-    #map { position: relative; min-height: 0; overflow: hidden; }
+    #map { position: relative; min-height: 0; overflow: hidden; perspective: var(--depth); perspective-origin: 50% 34%; }
+    #floor { position: absolute; inset: 0; transform: rotateX(var(--tilt)); transform-origin: 50% 58%; }
+    #labels { position: absolute; inset: 0; pointer-events: none; }
     svg { width: 100%; height: 100%; display: block; touch-action: none; } .floor { fill: #454F5A; stroke: #454F5A; stroke-width: .14; }
     /* 記憶層は岩寄りの灰色（灯りが無い）。灯り層は炎色を重ねて、実際に照らしている感を出す。
        前回の実装はopacityだけで明暗を作っており、暖色が一切乗っていなかった（実機で確認して気づいた）。 */
@@ -22,8 +24,15 @@
     .floor-light { fill: var(--flame); stroke: var(--flame); opacity: .16; mix-blend-mode: screen; animation: torch-brightness 6.1s ease-in-out infinite; }
     /* 床の形なりの塗りだけだと角ばって見えるため、独立した放射グラデーションを重ねる。
        これが空間へ光が回り込んでいる感を作る（実機で確認: 床の塗りだけでは角ばった塊に見えた）。 */
-    .lamp-glow { mix-blend-mode: screen; pointer-events: none; animation: torch-brightness 6.1s ease-in-out infinite; } .torch-mask { transform-box: fill-box; transform-origin: center; animation: torch-flicker 4.7s ease-in-out infinite; }
-    .room-name { fill: var(--ash); font-size: .45px; pointer-events: none; } .player { fill: var(--heart); stroke: var(--ash); stroke-width: .05; }
+    /* 位置の揺らぎは常時のアニメーションではなく、移動した時だけ動かす(作者の指摘: 「位置の変化は常時は
+       不要、移動した時だけ光源の位置が変化してほしい」)。ui.jsが移動のたびに新しいtranslateをSVGの
+       transform属性へ直接書く。ここではCSSの明滅(torch-brightness/torch-flicker)だけを揺らす。 */
+    .lamp-glow { mix-blend-mode: screen; pointer-events: none; animation: torch-brightness 6.1s ease-in-out infinite; }
+    /* transform-box/originが無いと、scale()がSVGビューポート起点で伸縮し、静止中でも
+       常時ゆらゆら位置がずれて見える(実機バグ: 「壁で止まっても光源の位置揺らぎが
+       稼働している」)。fill-box+centerで、拡縮の中心をこの矩形自身の中心に固定する。 */
+    .torch-mask { transform-box: fill-box; transform-origin: center; animation: torch-flicker 4.7s ease-in-out infinite; }
+    .label { position: absolute; transform: translate(-50%, -100%); color: var(--ash); font-size: 12px; letter-spacing: .06em; text-shadow: 0 1px 3px #000, 0 0 8px #000; white-space: nowrap; } .player { fill: var(--heart); stroke: var(--ash); stroke-width: .05; }
     #reset-view { position: absolute; z-index: 1; top: 12px; right: 12px; border: 1px solid color-mix(in srgb, var(--ash) 24%, transparent); border-radius: 999px; padding: 7px 12px; background: color-mix(in srgb, var(--stone) 82%, transparent); color: var(--ash); font-size: 12px; }
     @keyframes torch-flicker { 0%, 100% { opacity: .92; transform: scale(1); } 17% { opacity: .83; transform: scale(.96); } 43% { opacity: 1; transform: scale(1.04); } 71% { opacity: .88; transform: scale(.98); } }
     @keyframes torch-brightness { 0%, 100% { opacity: .92; } 29% { opacity: .81; } 58% { opacity: .98; } 84% { opacity: .86; } }

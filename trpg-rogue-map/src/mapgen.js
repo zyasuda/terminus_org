@@ -100,13 +100,17 @@ const hasOnlyDoors = (path, rooms, a, b) => {
   return [...touches].every(([id, count]) => (id === a || id === b ? count === 1 : count === 0));
 };
 
-function routeBetween(start, end, rooms, rng) {
+function routeBetween(start, end, rooms, corridors, rng) {
   const allRooms = [...rooms.values()];
   const minX = Math.min(start.x, end.x, ...allRooms.map((room) => room.x)) - 10;
   const maxX = Math.max(start.x, end.x, ...allRooms.map((room) => room.x + room.w - 1)) + 10;
   const minY = Math.min(start.y, end.y, ...allRooms.map((room) => room.y)) - 10;
   const maxY = Math.max(start.y, end.y, ...allRooms.map((room) => room.y + room.h - 1)) + 10;
   const blocked = new Set(allRooms.flatMap(roomCells).map(({ x, y }) => keyOf(x, y)));
+  for (const corridor of corridors) for (const cell of corridor.path) {
+    blocked.add(keyOf(cell.x, cell.y));
+    for (const direction of DIRECTIONS) blocked.add(keyOf(cell.x + direction.x, cell.y + direction.y));
+  }
   const doors = new Set([keyOf(start.x, start.y), keyOf(end.x, end.y)]);
   const directions = shuffled(DIRECTIONS, rng);
   const from = new Map([[keyOf(start.x, start.y), null]]);
@@ -166,7 +170,7 @@ export function generate(chapter, seed, options = {}) {
         const child = treeCandidate(parent, sizes.get(childId), direction.name, randomInt(rng, settings.gap), rng);
         if ([...rooms.values()].some((room) => tooClose(child, room))) continue;
         const candidateRooms = new Map(rooms).set(childId, child);
-        const path = routeBetween(portal(parent, direction.name), portal(child, opposite(direction.name)), candidateRooms, rng);
+        const path = routeBetween(portal(parent, direction.name), portal(child, opposite(direction.name)), candidateRooms, corridors, rng);
         if (!path || !hasOnlyDoors(path, candidateRooms, parentId, childId)) continue;
         rooms.set(childId, child);
         corridors.push({ a: parentId, b: childId, path });
@@ -187,7 +191,7 @@ export function generate(chapter, seed, options = {}) {
     let connected = false;
     for (const pair of pairs) {
       if (usedPorts.get(link.a).has(pair.from) || usedPorts.get(link.b).has(pair.to)) continue;
-      const path = routeBetween(portal(rooms.get(link.a), pair.from), portal(rooms.get(link.b), pair.to), rooms, rng);
+      const path = routeBetween(portal(rooms.get(link.a), pair.from), portal(rooms.get(link.b), pair.to), rooms, corridors, rng);
       if (!path || !hasOnlyDoors(path, rooms, link.a, link.b)) continue;
       corridors.push({ ...link, path });
       usedPorts.get(link.a).add(pair.from);
