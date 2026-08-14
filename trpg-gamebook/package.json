@@ -1,1 +1,1 @@
-{"type": "module", "scripts": {"test": "node test/playthrough.test.mjs && node test/validate.test.mjs && node test/ai.test.mjs", "serve": "python3 serve.py 8123"}}
+{"type": "module", "scripts": {"test": "node test/playthrough.test.mjs && node test/validate.test.mjs && node test/ai.test.mjs && node test/playlog.test.mjs", "serve": "python3 serve.py 8123"}}

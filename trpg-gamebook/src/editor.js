@@ -1,6 +1,7 @@
 import { inspect } from "./validate.js";
 import { decisionInputResolves } from "./progression.js";
-import { getKey, setKey, getModel, setModel, hasKey, listModels, ask, backupModel, newId, proposalData, decisionProposalResolves, applyProposal } from "./ai.js";
+import { getKey, setKey, getModel, setModel, hasKey, listModels, ask, reviewPlaylog, backupModel, newId, proposalData, decisionProposalResolves, applyProposal } from "./ai.js";
+import { revisionOf, locate, currentText, applyFix } from "./playlog.js";
 
 const $ = id => document.getElementById(id);
 const esc = value => String(value ?? "").replace(/[&<>\"]/g, char => ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;" }[char]));
@@ -13,7 +14,7 @@ const opening = {
   decision:"この場面で、プレイヤーは何かを選ばなければなりませんか。"
 };
 const TALKS_KEY = "gamebook:talks";
-let chapter, selected = { kind:"node", node:"intro", aiCategory:"secrets" }, timer, pendingProposal, latestInspection;
+let chapter, selected = { kind:"node", node:"intro", aiCategory:"secrets" }, timer, pendingProposal, latestInspection, playlogReview;
 const talks = new Map();
 const categoryFor = () => selected.aiCategory || "secrets";
 const talkKey = category => `${selected.node}:${category}`;
@@ -168,6 +169,35 @@ function paintInspection(result = inspect(chapter)) { latestInspection = result;
 function paintChain() { const mount = $("chain"); if (!mount || selected.kind !== "node" || pendingProposal) return; mount.outerHTML = chainPanel(nodeFor()); }
 function secretId(node) { const prefix = selected.node.startsWith("scene:") ? `sc${sceneNumber()}_` : `${selected.node}_`; return newId(prefix, node.secrets || []); }
 function inspectProposal(proposal, before, after) { const beforeErrors = before.structure.filter(x => x.level === "error").length, afterErrors = after.structure.filter(x => x.level === "error").length, errorsIncreased = afterErrors > beforeErrors, stuckIncreased = after.play.stuck > before.play.stuck, newError = after.structure.find(item => item.level === "error" && !before.structure.some(previous => previous.level === item.level && previous.where === item.where && previous.message === item.message)); proposal.inspection = { error:errorsIncreased || stuckIncreased, text:errorsIncreased ? `採用したことで、次の問題が起きました: ${newError?.message || "不整合"}` : stuckIncreased ? `採用したことで、手詰まりが ${after.play.stuck - before.play.stuck} 件増えました` : `採用しました（完走 ${after.play.cleared}/${after.play.runs}）` }; paintInspection(after); }
+const playlogFieldLabels = { name:"場面名", brief:"導入文", blockedText:"進めないときの文", greeting:"あいさつ", text:"本文", surface:"見た目の説明", npcSay:"話す文", arrivalText:"到着時の文", onsetText:"始まりの文", prompt:"問いかけ" };
+function addedErrors(before, after) { return after.structure.filter(item => item.level === "error" && !before.structure.some(previous => previous.level === item.level && previous.where === item.where && previous.message === item.message)); }
+function renderPlaylogReview() {
+  const review = playlogReview, dialog = $("playlog-review");
+  if (!review) return;
+  const warning = review.revision && review.revision !== (chapter.revision || "") ? `<p class="hint warn">この記録は「${esc(review.revision)}」の版です。いま開いているのは「${esc(chapter.revision || "")}」の版です。直す場所がずれているかもしれません。</p>` : "";
+  const cards = (review.fixes || []).filter(fix => fix.kind === "data").map((fix, index) => {
+    const found = locate(chapter, fix), label = found ? `${found.label}の「${playlogFieldLabels[fix.field] || fix.field}」` : "見つからない場所";
+    const before = fix.before ?? currentText(chapter, fix), status = fix.error ? `<p class="hint error">${esc(fix.error)}</p>` : fix.adopted ? `<p class="hint ${fix.errors?.length ? "error" : "ok"}">${fix.errors?.length ? `増えたエラー: ${esc(fix.errors.map(item => item.message).join(" / "))}` : "採用しました"}</p><button data-playlog-undo="${index}" type="button">採用を取り消す</button>` : `<div><button data-playlog-adopt="${index}" type="button">採用</button><button data-playlog-drop="${index}" type="button">捨てる</button></div>`;
+    return `<div class="proposal"><b>${esc(label)}</b><span>今:　${esc(before)}</span><span>案:　${esc(fix.after)}</span><span>理由: ${esc(fix.why || "")}</span>${status}</div>`;
+  }).join("");
+  const engines = (review.fixes || []).filter(fix => fix.kind === "engine");
+  dialog.innerHTML = `<h2>遊んだ記録の見直し</h2>${warning}${review.pending ? `<p class="hint">${esc(review.status || "記録を読んでいます")}</p>` : ""}${review.error ? `<p class="hint error">${esc(review.error)}</p>` : ""}${review.reply ? `<p>${esc(review.reply)}</p>` : ""}${cards || (!review.pending && !review.error ? "<p class=\"hint\">書き換える提案はありません。</p>" : "")}${engines.length ? `<section><h3>ここから先はプログラム側の問題です。データでは直せません。</h3>${engines.map(fix => `<p>・${esc(fix.why || "")}${fix.where ? `（${esc(fix.where)}）` : ""}</p>`).join("")}</section>` : ""}<button id="playlog-close" type="button">閉じる</button>`;
+}
+function adoptPlaylogFix(index) {
+  const fix = playlogReview?.fixes?.filter(item => item.kind === "data")[index];
+  if (!fix) return;
+  const before = inspect(chapter), original = currentText(chapter, fix);
+  if (!applyFix(chapter, fix)) { fix.error = "この案は適用できませんでした"; renderPlaylogReview(); return; }
+  // 既存の警告を採用のせいにしないため、増えた error だけを残す
+  const after = inspect(chapter); fix.before = original; fix.errors = addedErrors(before, after); fix.adopted = true; delete fix.error;
+  save(); paintInspection(after); renderEditor(); renderPlaylogReview();
+}
+function undoPlaylogFix(index) {
+  const fix = playlogReview?.fixes?.filter(item => item.kind === "data")[index], found = fix && locate(chapter, fix);
+  if (!found || typeof fix.before !== "string") return;
+  found.holder[fix.field] = fix.before; fix.adopted = false; delete fix.errors;
+  const after = inspect(chapter); save(); paintInspection(after); renderEditor(); renderPlaylogReview();
+}
 function adoptProposal(category, proposal, data = proposalData(category, proposal, contextFor(category))) {
   const before = inspect(chapter);
   const node = nodeFor();
@@ -199,6 +229,10 @@ $("ai-open").addEventListener("click", openSettings);
 $("gemini-close").addEventListener("click", () => $("ai-settings").close());
 $("export").addEventListener("click", () => { const link = document.createElement("a"); link.href = URL.createObjectURL(new Blob([JSON.stringify(chapter, null, 2)], { type:"application/json" })); link.download = "chapter_01.json"; link.click(); URL.revokeObjectURL(link.href); });
 $("import").addEventListener("click", () => $("import-file").click());
+$("playlog").addEventListener("click", () => { if (!hasKey()) { openSettings(); return; } $("playlog-file").click(); });
+$("playlog-file").addEventListener("change", async event => { const input = event.target, file = input.files[0]; try { if (!file) return; const playlog = await file.text(); playlogReview = { revision:revisionOf(playlog), fixes:[], pending:true }; renderPlaylogReview(); $("playlog-review").showModal(); try { const result = await reviewPlaylog({ chapter, playlog, onStatus:status => { playlogReview.status = status; renderPlaylogReview(); } }); // 今と案が同じ案が返ってくる(実測4件中3件)。押しても何も変わらないカードは出さない
+playlogReview = { ...playlogReview, reply:result.reply, fixes:result.fixes.filter(fix => fix.kind !== "data" || fix.after !== currentText(chapter, fix)), pending:false }; } catch (error) { playlogReview = { ...playlogReview, pending:false, error:error.status === 404 ? "このモデルは今使えません。別のモデルを選んでください" : "つながりませんでした。もう一度試してください" }; } renderPlaylogReview(); } finally { input.value = ""; } });
+$("playlog-review").addEventListener("click", event => { const button = event.target.closest("button"); if (!button) return; if (button.id === "playlog-close") { $("playlog-review").close(); return; } const index = Number(button.dataset.playlogAdopt ?? button.dataset.playlogUndo ?? button.dataset.playlogDrop); if (button.dataset.playlogAdopt !== undefined) adoptPlaylogFix(index); else if (button.dataset.playlogUndo !== undefined) undoPlaylogFix(index); else if (button.dataset.playlogDrop !== undefined) { const fixes = playlogReview?.fixes?.filter(item => item.kind === "data"), fix = fixes?.[index], at = playlogReview?.fixes?.indexOf(fix); if (at >= 0) playlogReview.fixes.splice(at, 1); renderPlaylogReview(); } });
 $("import-file").addEventListener("change", async event => { const input = event.target; try { if (!confirm("いま編集中の内容を捨てて、選んだファイルを読み込みますか？")) return; const file = input.files[0]; if (!file) return; let imported; try { imported = JSON.parse(await file.text()); } catch { alert("このファイルはJSONとして読めませんでした。編集中の内容はそのままです。"); return; } if (!imported || !imported.intro || typeof imported.intro !== "object" || Array.isArray(imported.intro) || !Array.isArray(imported.scenes) || !imported.ending || typeof imported.ending !== "object" || Array.isArray(imported.ending)) { alert("章のデータではないようです（intro / scenes / ending が要ります）。編集中の内容はそのままです。"); return; } chapter = imported; talks.clear(); pendingProposal = null; selected = { kind:"node", node:"intro", aiCategory:"secrets" }; save(); renderToc(); renderEditor(); paintInspection(); } finally { input.value = ""; } });
 $("discard").addEventListener("click", async () => { if (!confirm("下書きを捨てて、元の章データへ戻しますか？")) return; localStorage.removeItem("gamebook:draft"); localStorage.removeItem(TALKS_KEY); talks.clear(); const response = await fetch("./data/chapter_01.json"); chapter = await response.json(); pendingProposal = null; selected = { ...selected, kind:"node", node:"intro" }; $("draft").textContent = ""; renderToc(); renderEditor(); paintInspection(); });
 

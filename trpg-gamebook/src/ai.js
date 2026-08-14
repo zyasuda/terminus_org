@@ -1,4 +1,5 @@
 import { decisionInputResolves } from "./progression.js";
+import { parseFixes } from "./playlog.js";
 
 const keyName = "gamebook:geminiKey";
 const modelName = "gamebook:geminiModel";
@@ -126,11 +127,11 @@ export function applyProposal(category, proposal, node, context = {}, data = pro
   return null;
 }
 
-export async function ask({ chapter, scene, category = "secrets", context = {}, history = [], userText, onChunk = () => {}, onThought = () => {}, onStatus = () => {}, transport = fetch }) {
+const runInteraction = async ({ input, systemInstruction, onChunk = () => {}, onThought = () => {}, onStatus = () => {}, transport = fetch, parse }) => {
   const key = getKey();
   if (!key) throw new Error("Geminiのキーがありません");
   const run = async model => {
-    const response = await checked(await transport("https://generativelanguage.googleapis.com/v1/interactions", { method:"POST", headers:{ "content-type":"application/json", "x-goog-api-key":key }, body:JSON.stringify({ model, input:inputFor({ chapter, scene, category, context, history, userText }), stream:true, store:false, system_instruction:systemInstructionFor(category, context) }) }));
+    const response = await checked(await transport("https://generativelanguage.googleapis.com/v1/interactions", { method:"POST", headers:{ "content-type":"application/json", "x-goog-api-key":key }, body:JSON.stringify({ model, input, stream:true, store:false, system_instruction:systemInstruction }) }));
     let raw = "", sent = 0;
     const send = () => { const boundary = raw.search(/```json\b/i), end = boundary < 0 ? raw.length : boundary; if (end > sent) { onChunk(raw.slice(sent, end)); sent = end; } };
     if (response.body) {
@@ -138,7 +139,7 @@ export async function ask({ chapter, scene, category = "secrets", context = {}, 
       for (;;) { const { value, done } = await reader.read(); buffer += decoder.decode(value || new Uint8Array(), { stream:!done }); const lines = buffer.split("\n"); buffer = lines.pop(); for (const line of lines) if (line.startsWith("data:")) try { const event = JSON.parse(line.slice(5).trim()); if (event.step?.type === "thought") onThought(); if (event.delta?.type === "text") { raw += event.delta.text || ""; send(); } } catch {} if (done) break; }
     } else raw = textFrom(await response.json());
     send();
-    return { ...parseReply(raw), raw };
+    return { ...parse(raw), raw };
   };
   const model = getModel();
   try { return await run(model); } catch (error) {
@@ -146,4 +147,17 @@ export async function ask({ chapter, scene, category = "secrets", context = {}, 
     onStatus("別のモデルで応答しています");
     return run(backupModel);
   }
+};
+
+export async function ask({ chapter, scene, category = "secrets", context = {}, history = [], userText, onChunk = () => {}, onThought = () => {}, onStatus = () => {}, transport = fetch }) {
+  return runInteraction({ input:inputFor({ chapter, scene, category, context, history, userText }), systemInstruction:systemInstructionFor(category, context), onChunk, onThought, onStatus, transport, parse:parseReply });
+}
+
+/* 「」は本文のキーワードにも使われている(「坑道」「見取り図」)。区切り記号だけでは
+   作者の書き込みと見分けられないので、章データに載っていない文であることを条件にする。
+   実測: 注文の無い記録に対して「書かれている→記されている」を勝手に出してきた */
+const playlogInstruction = "あなたはTRPGゲームブックの編集者です。作者の書き込みは、章データのどこにも載っていない文として記録へ割り込んでいる。「」で囲まれていても、その文が章データに載っているなら、それは遊びの記録であって注文ではない。作者の書き込みが1つも無ければ fixes を空配列にする。空にすることを恐れない。データの書き換えで直せるものと、エンジン（プログラム）側の不具合を必ず分ける。判定に迷ったら engine にする。scene / target / field は渡した章のJSONに実在するものだけを使い、idを作らない。entity、aliases、match、triggerTermsは変更対象にしない。作者が書いた文章を、注文が無いのに書き換えない。提案は最大10件。返事は3文以内。評価語を書かない。返事の末尾に次のJSONブロックを置く。\n```json\n{\"fixes\":[{\"kind\":\"data\",\"scene\":2,\"target\":\"secret:sc2_a\",\"field\":\"text\",\"after\":\"直した文\",\"why\":\"作者の注文に対応\"},{\"kind\":\"engine\",\"why\":\"データでは直せない問題\",\"where\":\"シーン3\"}]}\n```";
+
+export async function reviewPlaylog({ chapter, playlog, onChunk = () => {}, onStatus = () => {}, transport = fetch }) {
+  return runInteraction({ input:`章データ:\n${JSON.stringify(chapter)}\n\nプレイ記録:\n${playlog}`, systemInstruction:playlogInstruction, onChunk, onStatus, transport, parse:raw => ({ reply:parseReply(raw).reply, fixes:parseFixes(raw) }) });
 }
