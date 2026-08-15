@@ -8,7 +8,7 @@ import {
   createGrid, isWalkable, inBounds, cellAt,
   isAdjacent, movePointsFor, reachableCells,
   surroundMultiplier, adjacentAllies, turnOrder, resolveMelee,
-  chooseEnemyAction, makeRng, scatterObstacles, occupiedBy, pathTo,
+  chooseEnemyAction, chooseMoveToward, makeRng, scatterObstacles, occupiedBy, pathTo,
   elevationAt, heightSteps, scatterWater, moveCostAt, findDodgeCell, resolveSweep, resolveShove,
   carveShape, resolveRanged
 } from "./core.js";
@@ -712,6 +712,10 @@ function pathReaches(grid, from, to) {
   const act = chooseEnemyAction(g, foe, [foe, farHero]);
   assert.equal(act.type, "move");
   assert.ok(act.to.x > foe.x, "相手の方向へ寄る");
+  assert.equal(act.targetId, "gareth", "移動時も接近する目標を返す");
+  const nearerMage = { id: "lydia", side: "party", hp: 10, agility: 5, x: 3, y: 1 };
+  assert.equal(chooseEnemyAction(g, foe, [foe, farHero, nearerMage]).targetId, "lydia", "最も近い相手のIDを移動ログへ渡す");
+  assert.equal(chooseMoveToward(g, hero, farHero, [hero, farHero]).type, "move", "相棒も指定した目標へ移動できる");
 
   // 相手が全滅していれば待機
   assert.deepEqual(

@@ -1,34 +1,30 @@
 import React, { useEffect, useRef, useState } from "react";
 import { createBattleScene } from "../battle/view3d.js";
-import { createGrid, chooseEnemyAction, isAdjacent, isWalkable, movePointsFor, occupiedBy, reachableCells, resolveMelee, resolveRanged, turnOrder } from "../battle/core.js";
+import { chooseEnemyAction, chooseMoveToward, isAdjacent, movePointsFor, occupiedBy, reachableCells, resolveMelee, resolveRanged, turnOrder } from "../battle/core.js";
 import { ITEMS } from "./core.js";
+import { createExpeditionBattleLayout, EXPEDITION_MODEL_FACING_OFFSET, facingToward } from "./battleState.js";
 
 const roll = () => 1 + Math.floor(Math.random() * 20);
-const GUARDIAN_ROWS = ["########", "#......#", "#......#", "#......#", "#......#", "#......#", "#......#", "########"];
-// 通路遭遇は横7×縦3の一車線。前衛が通路を塞ぎ、リディアは後方から援護する。
-const CORRIDOR_ROWS = ["#######", "#.....#", "#######"];
 const stats = (baseAtk, baseHp, gear = {}) => ({ atk: baseAtk + [gear.weapon, gear.charm].reduce((n, id) => n + (id && ITEMS[id]?.stat === "atk" ? ITEMS[id].power : 0), 0), hp: baseHp + (gear.armor && ITEMS[gear.armor]?.stat === "hp" ? ITEMS[gear.armor].power : 0) });
-const makeState = (guardian, equipment = {}, party = {}) => {
+const makeState = (guardian, equipment = {}, party = {}, seed = 0) => {
   const hero = stats(3, 16, equipment.hero), mage = stats(2, 12, equipment.mage);
-  const grid = createGrid(guardian ? GUARDIAN_ROWS : CORRIDOR_ROWS);
+  const { grid, starts } = createExpeditionBattleLayout(guardian, seed);
   const units = [
-    { id: "hero", name: "あなた", side: "party", x: guardian ? 1 : 2, y: guardian ? 3 : 1, hp: Math.min(hero.hp, party.hero ?? hero.hp), maxHp: hero.hp, atk: hero.atk, agility: 7, height: 1.6, modelId: "gareth" },
-    { id: "mage", name: "リディア", side: "party", x: 1, y: guardian ? 4 : 1, hp: Math.min(mage.hp, party.mage ?? mage.hp), maxHp: mage.hp, atk: mage.atk, agility: 5, height: 1.6, modelId: "lydia" },
-    { id: "enemy", name: guardian ? "宝箱守護者" : "坑道の獣", side: "enemy", x: guardian ? 6 : 5, y: guardian ? 3 : 1, hp: guardian ? 18 : 8, maxHp: guardian ? 18 : 8, atk: guardian ? 3 : 2, agility: 4, height: .9, modelId: "rust-eater" }
+    { id: "hero", name: "あなた", side: "party", ...starts.hero, facing: facingToward(starts.hero, starts.enemy), modelFacingOffset: EXPEDITION_MODEL_FACING_OFFSET.party, hp: Math.min(hero.hp, party.hero ?? hero.hp), maxHp: hero.hp, atk: hero.atk, agility: 7, height: 1.6, modelId: "gareth" },
+    { id: "mage", name: "リディア", side: "party", ...starts.mage, facing: facingToward(starts.mage, starts.enemy), modelFacingOffset: EXPEDITION_MODEL_FACING_OFFSET.party, hp: Math.min(mage.hp, party.mage ?? mage.hp), maxHp: mage.hp, atk: mage.atk, agility: 5, height: 1.6, modelId: "lydia" },
+    { id: "enemy", name: guardian ? "宝箱守護者" : "坑道の獣", side: "enemy", ...starts.enemy, facing: facingToward(starts.enemy, starts.hero), modelFacingOffset: EXPEDITION_MODEL_FACING_OFFSET.enemy, hp: guardian ? 18 : 8, maxHp: guardian ? 18 : 8, atk: guardian ? 3 : 2, agility: 4, height: .9, modelId: "rust-eater" }
   ];
   return { grid, units, order: turnOrder(units).map(u => u.id), turn: 0, log: [guardian ? "守護者が宝箱を守っている。" : "坑道の獣が狭い通路を塞いだ。"] };
 };
 const alive = (units, side) => units.some(u => u.side === side && u.hp > 0);
-
-const freeCell = (grid, units, id, wanted) => {
-  const taken = new Set(units.filter(u => u.id !== id && u.hp > 0).map(u => `${u.x},${u.y}`));
-  for (const p of wanted) if (isWalkable(grid, p.x, p.y) && !taken.has(`${p.x},${p.y}`)) return p;
-  return null;
-};
-export default function ExpeditionBattle({ guardian, order, equipment = {}, party = {}, tonics = 0, onUseTonic, onFinish }) {
-  const mount = useRef(null), scene = useRef(null), [state, setState] = useState(() => makeState(guardian, equipment, party));
+const nearest = (unit, units) => units.filter(u => u.hp > 0).reduce((best, u) => !best || Math.max(Math.abs(u.x - unit.x), Math.abs(u.y - unit.y)) < Math.max(Math.abs(best.x - unit.x), Math.abs(best.y - unit.y)) ? u : best, null);
+const AI_THINK_MS = 650;
+const MOVE_SETTLE_MS = 800;
+const ATTACK_SETTLE_MS = 1000;
+export default function ExpeditionBattle({ guardian, order, equipment = {}, party = {}, seed = 0, tonics = 0, onUseTonic, onFinish }) {
+  const mount = useRef(null), scene = useRef(null), [state, setState] = useState(() => makeState(guardian, equipment, party, seed));
   const turnTimer = useRef(null);
-  const [command, setCommand] = useState(order), [moved, setMoved] = useState(false), [busy, setBusy] = useState(false), [combatShot, setCombatShot] = useState(false);
+  const [command, setCommand] = useState(order), [moved, setMoved] = useState(false), [moveMode, setMoveMode] = useState(false), [busy, setBusy] = useState(false), [combatShot, setCombatShot] = useState(false), [viewDirection, setViewDirection] = useState(0);
   const active = state.units.find(u => u.id === state.order[state.turn] && u.hp > 0);
   const partyAlive = alive(state.units, "party"), enemyAlive = alive(state.units, "enemy");
   const playerTurn = active?.id === "hero" && partyAlive && enemyAlive;
@@ -36,7 +32,7 @@ export default function ExpeditionBattle({ guardian, order, equipment = {}, part
     clearTimeout(turnTimer.current);
     setBusy(true);
     turnTimer.current = setTimeout(() => {
-      setMoved(false);
+      setMoved(false); setMoveMode(false);
       setState(s => {
         if (s.turn !== expectedTurn) return s;
         for (let i = 1; i <= s.order.length; i++) {
@@ -51,18 +47,25 @@ export default function ExpeditionBattle({ guardian, order, equipment = {}, part
   useEffect(() => () => clearTimeout(turnTimer.current), []);
   const damage = (attacker, target, ranged = false) => {
     const result = ranged ? resolveRanged({ attacker, target, units: state.units, grid: state.grid, roll }) : resolveMelee({ attacker, target, units: state.units, grid: state.grid, roll });
-    if (!result.ok) return;
+    if (!result.ok) return false;
+    if (ranged) scene.current?.playRanged(attacker.x, attacker.y, target.x, target.y);
     scene.current?.setCombatCamera(attacker, target); setCombatShot(true);
-    setTimeout(() => { scene.current?.setCameraFocus(null); setCombatShot(false); }, 420);
+    setTimeout(() => { scene.current?.setCameraFocus(null); setCombatShot(false); }, 700);
     scene.current?.[result.hit ? "playHit" : "playMiss"](target.x, target.y, { damage: result.damage, unitId: target.id });
-    setState(s => ({ ...s, units: s.units.map(u => u.id === target.id ? { ...u, hp: Math.max(0, u.hp - (result.hit ? result.damage : 0)) } : u), log: [...s.log, result.hit ? `${attacker.name}の攻撃。${result.damage}ダメージ。` : `${attacker.name}の攻撃は外れた。`] }));
+    setState(s => ({ ...s, units: s.units.map(u => u.id === target.id ? { ...u, hp: Math.max(0, u.hp - (result.hit ? result.damage : 0)) } : u.id === attacker.id ? { ...u, facing: facingToward(attacker, target, u.facing) } : u), log: [...s.log, ...(ranged ? [`${attacker.name}は魔法を放った。`] : []), result.hit ? `${attacker.name}の攻撃。${result.damage}ダメージ。` : `${attacker.name}の攻撃は外れた。`] }));
+    return true;
+  };
+  const moveUnit = (unit, to, line) => {
+    scene.current?.playMove(unit.x, unit.y, to.x, to.y);
+    setState(s => ({ ...s, units: s.units.map(u => u.id === unit.id ? { ...u, ...to, facing: facingToward(unit, to, u.facing) } : u), log: [...s.log, line] }));
   };
   const heroAdvance = () => {
     if (!playerTurn) return;
+    setMoveMode(false);
     const act = chooseEnemyAction(state.grid, active, state.units);
     if (act.type === "attack") damage(active, state.units.find(u => u.id === act.targetId));
-    else if (act.type === "move") setState(s => ({ ...s, units: s.units.map(u => u.id === active.id ? { ...u, x: act.to.x, y: act.to.y } : u), log: [...s.log, "あなたは敵へ接近した。"] }));
-    scheduleNextTurn(state.turn, 350);
+    else if (act.type === "move") moveUnit(active, act.to, "あなたは敵へ接近した。");
+    scheduleNextTurn(state.turn, act.type === "move" ? MOVE_SETTLE_MS : ATTACK_SETTLE_MS);
   };
   useEffect(() => {
     const grid = state.grid; const s = createBattleScene(mount.current, grid); scene.current = s; s.setWallsEnabled(true); s.setEnemiesVisible(true);
@@ -76,8 +79,8 @@ export default function ExpeditionBattle({ guardian, order, equipment = {}, part
     s.setPickHandler(data => {
       if (!playerTurn) return;
       const t = state.units.find(u => u.id === data.id);
-      if (t && targets.some(x => x.id === t.id) && !busy) { damage(active, t); scheduleNextTurn(state.turn, 500); }
-      else if (data.kind === "cell" && !moved && reach.some(p => p.x === data.x && p.y === data.y)) { setState(q => ({ ...q, units: q.units.map(u => u.id === active.id ? { ...u, x: data.x, y: data.y } : u) })); setMoved(true); }
+      if (t && !moveMode && targets.some(x => x.id === t.id) && !busy) { setMoveMode(false); damage(active, t); scheduleNextTurn(state.turn, ATTACK_SETTLE_MS); }
+      else if (data.kind === "cell" && !moved && reach.some(p => p.x === data.x && p.y === data.y)) { moveUnit(active, data, "あなたは戦術移動した。"); setMoved(true); setMoveMode(false); }
     });
   }, [state, active?.id, playerTurn, moved, busy]);
   useEffect(() => {
@@ -87,28 +90,43 @@ export default function ExpeditionBattle({ guardian, order, equipment = {}, part
     setBusy(true);
     const t = setTimeout(() => {
       if (active.id === "mage") {
-        const enemy = state.units.find(u => u.side === "enemy" && u.hp > 0);
+        const enemy = nearest(active, state.units.filter(u => u.side === "enemy"));
+        const canCast = enemy && resolveRanged({ attacker: active, target: enemy, units: state.units, grid: state.grid, roll: () => 20 }).ok;
+        let actionDelay = MOVE_SETTLE_MS;
         if (command === "retreat") {
-          const to = freeCell(state.grid, state.units, "mage", [{ x: active.x - 1, y: active.y }, { x: active.x, y: active.y - 1 }, { x: active.x, y: active.y + 1 }]);
-          setState(s => ({ ...s, units: to ? s.units.map(u => u.id === "mage" ? { ...u, ...to } : u) : s.units, log: [...s.log, to ? "リディアは入口側へ退却した。" : "リディアは退却路を探している。"] }));
+          const to = chooseMoveToward(state.grid, active, { x: 0, y: active.y }, state.units);
+          if (to.type === "move") moveUnit(active, to.to, "リディアは入口側へ退却した。");
+          else setState(s => ({ ...s, log: [...s.log, "リディアは退却路を探している。"] }));
         } else if (command === "guard") {
           const hero = state.units.find(u => u.id === "hero");
-          const to = freeCell(state.grid, state.units, "mage", [{ x: hero.x - 1, y: hero.y }, { x: hero.x, y: hero.y + 1 }, { x: hero.x, y: hero.y - 1 }]);
-          setState(s => ({ ...s, units: to ? s.units.map(u => u.id === "mage" ? { ...u, ...to } : u) : s.units, log: [...s.log, "リディアは前衛の背後を守った。"] }));
-        } else if (enemy) damage(active, enemy, true);
+          if (canCast) { damage(active, enemy, true); actionDelay = ATTACK_SETTLE_MS; }
+          else {
+            const to = chooseMoveToward(state.grid, active, hero, state.units);
+            if (to.type === "move") moveUnit(active, to.to, "リディアは前衛を護衛する位置へ移動した。");
+            else setState(s => ({ ...s, log: [...s.log, "リディアは前衛のそばで護衛している。"] }));
+          }
+        } else if (canCast) { damage(active, enemy, true); actionDelay = ATTACK_SETTLE_MS; }
+        else if (enemy) {
+          const to = chooseMoveToward(state.grid, active, enemy, state.units);
+          if (to.type === "move") moveUnit(active, to.to, "リディアは魔法の射程へ移動した。");
+          else setState(s => ({ ...s, log: [...s.log, "リディアは魔法の射程を探している。"] }));
+        }
+        scheduleNextTurn(expectedTurn, actionDelay);
       } else {
         const act = chooseEnemyAction(state.grid, active, state.units);
         if (act.type === "attack") { const t = state.units.find(u => u.id === act.targetId); if (t) damage(active, t); }
-        if (act.type === "move") setState(s => ({ ...s, units: s.units.map(u => u.id === active.id ? { ...u, x: act.to.x, y: act.to.y } : u) }));
+        if (act.type === "move") moveUnit(active, act.to, `${active.name}は${state.units.find(u => u.id === act.targetId)?.name || "あなた"}へ接近した。`);
+        if (act.type === "wait") setState(s => ({ ...s, log: [...s.log, `${active.name}は進路を探している。`] }));
+        scheduleNextTurn(expectedTurn, act.type === "move" ? MOVE_SETTLE_MS : ATTACK_SETTLE_MS);
       }
-      scheduleNextTurn(expectedTurn, 350);
-    }, 450); return () => clearTimeout(t);
+    }, AI_THINK_MS); return () => clearTimeout(t);
   }, [active?.id, state.turn, partyAlive, enemyAlive]);
-  return <div style={S.page} data-battle-layout={guardian ? "arena-8x8" : "corridor-3x7"}><div ref={mount} style={S.canvas} data-camera={combatShot ? "combat" : "iso"}/><div style={S.hud}>
+  const obstacleCount = state.grid.cells.filter(cell => cell.obstacle).length;
+  return <div style={S.page} data-battle-layout={guardian ? "arena-8x8" : "corridor-3x7"} data-obstacle-count={obstacleCount} data-active-unit={active?.id || ""}><div ref={mount} style={S.canvas} data-camera={combatShot ? "combat" : "iso"} data-view-direction={viewDirection}/><div style={S.hud}>
     <b>{!partyAlive ? "敗北" : !enemyAlive ? "勝利" : `${active?.name}の手番`}</b>
     <div style={S.row}>{state.units.map(u => <span key={u.id} style={S.chip}>{u.name} {u.hp}/{u.maxHp}</span>)}</div>
-    <div style={S.row}><span>相棒指示:</span>{[["attack","攻撃"],["guard","護衛"],["retreat","退却"]].map(([id,label]) => <button key={id} disabled={busy} style={{...S.btn, ...(command === id ? S.active : {})}} onClick={() => setCommand(id)}>{label}</button>)}<button style={S.btn} onClick={() => scene.current?.rotate(1)}>視点</button>{playerTurn && <button disabled={busy} style={S.btn} onClick={heroAdvance}>接近／攻撃</button>}{playerTurn && <button disabled={busy} style={S.btn} onClick={() => scheduleNextTurn(state.turn, 0)}>ターン終了</button>}{playerTurn && <button disabled={!tonics || busy} style={S.btn} onClick={() => { if (onUseTonic?.()) setState(s => ({ ...s, units: s.units.map(u => u.id === "hero" ? { ...u, hp: Math.min(u.maxHp, u.hp + ITEMS.tonic.power) } : u), log: [...s.log, "回復薬を使った。"] })); }}>回復薬 ({tonics})</button>}{busy && <span>行動中…</span>}</div>
-    <div style={S.hint}>青いマスへ移動、赤い敵を選んで攻撃します。攻撃時は対面カメラになります。</div><div style={S.log}>{state.log.slice(-3).map((x,i) => <div key={i}>{x}</div>)}</div>
+    <div style={S.row}><span>相棒指示:</span>{[["attack","攻撃"],["guard","護衛"],["retreat","退却"]].map(([id,label]) => <button key={id} disabled={busy} style={{...S.btn, ...(command === id ? S.active : {})}} onClick={() => setCommand(id)}>{label}</button>)}<button style={S.btn} onClick={() => { scene.current?.rotate(1); setViewDirection(direction => (direction + 1) % 4); }}>視点を回す</button>{playerTurn && <button disabled={busy} style={S.btn} onClick={heroAdvance}>接近／攻撃</button>}{playerTurn && <button disabled={busy || moved} style={{...S.btn, ...(moveMode ? S.active : {})}} onClick={() => { setMoveMode(true); setState(s => ({ ...s, log: [...s.log, "移動先の青いマスを選ぶ。"] })); }}>戦術移動</button>}{playerTurn && <button disabled={busy} style={S.btn} onClick={() => scheduleNextTurn(state.turn, 0)}>ターン終了</button>}{playerTurn && <button disabled={!tonics || busy} style={S.btn} onClick={() => { if (onUseTonic?.()) setState(s => ({ ...s, units: s.units.map(u => u.id === "hero" ? { ...u, hp: Math.min(u.maxHp, u.hp + ITEMS.tonic.power) } : u), log: [...s.log, "回復薬を使った。"] })); }}>回復薬 ({tonics})</button>}{busy && <span>行動中…</span>}</div>
+    <div style={S.hint}>{moveMode ? "青いマスを選んで移動します。敵に隣接していても移動できます。" : "青いマスへ移動、赤い敵を選んで攻撃します。攻撃時は対面カメラになります。"}</div><div style={S.log}>{state.log.slice(-4).map((x,i) => <div key={i}>{x}</div>)}</div>
   </div></div>;
 }
 const S = { page:{position:"fixed",inset:0,background:"#161a22",color:"#e6e8ee",font:"13px/1.6 system-ui",display:"flex",flexDirection:"column"},canvas:{flex:1,minHeight:0},hud:{padding:"10px 14px",background:"rgba(20,24,32,.94)",borderTop:"1px solid #2b303c"},row:{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap",marginTop:6},chip:{border:"1px solid #59647a",borderRadius:999,padding:"1px 8px"},btn:{background:"#2b303c",color:"#e6e8ee",border:"1px solid #3c4354",borderRadius:6,padding:"5px 11px"},active:{background:"#3d7fb5"},hint:{color:"#9ca8bd",marginTop:5},log:{marginTop:5,color:"#d8c98c"} };

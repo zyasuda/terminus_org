@@ -10,7 +10,13 @@ page.on("pageerror", error => errors.push(error.message));
 const text = () => page.locator("body").innerText();
 const saved = () => page.evaluate(() => JSON.parse(localStorage.getItem("ai_companion_expedition_b1")));
 const keyFor = dir => ({ north: "ArrowUp", east: "ArrowRight", south: "ArrowDown", west: "ArrowLeft" })[dir];
-const waitForHero = () => page.getByRole("button", { name: "接近／攻撃" }).waitFor({ state: "visible", timeout: 5000 });
+const waitForHero = () => page.waitForFunction(() => {
+  if (!document.querySelector("canvas")) return true;
+  const battle = document.querySelector('[data-active-unit="hero"]');
+  const button = [...(battle?.querySelectorAll("button") || [])].find(item => item.textContent === "接近／攻撃");
+  return !!button && !button.disabled;
+}, null, { timeout: 8000 });
+const heroAction = () => page.locator('[data-active-unit="hero"] button', { hasText: "接近／攻撃" });
 
 // 実際のThree.jsメッシュで、アイソメトリックの対象選択と攻撃カメラの両方を確認する。
 // data属性はレンダラー内部の材質をDOMから検査するための読み取り専用観測点。
@@ -64,9 +70,9 @@ async function travelTo(roomId) {
 async function win() {
   for (let i = 0; i < 12; i += 1) {
     if ((await page.locator("canvas").count()) === 0) return;
-    await page.waitForFunction(() => !document.querySelector("canvas") || [...document.querySelectorAll("button")].some(button => button.textContent === "接近／攻撃"), null, { timeout: 5000 });
+    await waitForHero();
     if ((await page.locator("canvas").count()) === 0) return;
-    await page.getByRole("button", { name: "接近／攻撃" }).click();
+    await heroAction().click();
     await page.waitForTimeout(1050);
   }
   throw new Error("戦闘が勝利で終わらない");
@@ -74,9 +80,9 @@ async function win() {
 
 await page.goto(URL, { waitUntil: "networkidle" });
 await checkOccluderFade();
-await page.evaluate(() => { localStorage.removeItem("ai_companion_expedition_b1"); Math.random = () => .9; });
+await page.evaluate(() => { localStorage.removeItem("ai_companion_expedition_b1"); Math.random = () => .9; Date.now = () => 777; });
 await page.reload({ waitUntil: "networkidle" });
-await page.evaluate(() => { Math.random = () => .9; });
+await page.evaluate(() => { Math.random = () => .9; Date.now = () => 777; });
 await page.getByRole("button", { name: "坑道の剣 12G" }).click();
 await page.getByRole("button", { name: "装備" }).nth(1).click();
 await page.getByRole("button", { name: "地下1階へ遠征" }).click();
@@ -88,17 +94,51 @@ assert.equal(await page.locator(".rogue-floor polyline").count() >= 1, true, "�
 await travelTo("fight-0");
 await page.locator("[data-battle-layout='corridor-3x7']").waitFor();
 assert.equal(await page.locator("[data-battle-layout='corridor-3x7']").count(), 1, "通常遭遇は3x7通路盤面");
+const corridor = page.locator("[data-battle-layout='corridor-3x7']");
+const blockCount = Number(await corridor.getAttribute("data-obstacle-count"));
+assert.ok(blockCount >= 1 && blockCount <= 6, `通路のブロック数が1〜6ではない: ${blockCount}`);
+const view = corridor.locator("[data-camera]");
+const near = (actual, expected) => Math.abs(actual - expected) < 0.001;
+const facings = () => view.getAttribute("data-unit-facings").then(JSON.parse);
+const positions = () => view.getAttribute("data-unit-positions").then(JSON.parse);
+assert.equal(await view.getAttribute("data-view-direction"), "0", "初期視点は0方向");
+assert.deepEqual(JSON.parse(await view.getAttribute("data-model-facing-offsets")), { hero: 0, mage: 0, enemy: 0 }, "GLBの向きはrootのfacingだけで決める");
+const initialPositions = await positions();
+const initialFacing = await facings();
+assert.ok(
+  near(initialFacing.hero, Math.atan2(initialPositions.enemy.x - initialPositions.hero.x, initialPositions.enemy.y - initialPositions.hero.y)) &&
+  near(initialFacing.mage, Math.atan2(initialPositions.enemy.x - initialPositions.mage.x, initialPositions.enemy.y - initialPositions.mage.y)) &&
+  near(initialFacing.enemy, Math.atan2(initialPositions.hero.x - initialPositions.enemy.x, initialPositions.hero.y - initialPositions.enemy.y)),
+  "通路端で横並びの味方と敵が正面から対峙する"
+);
+for (const direction of ["1", "2", "3", "0"]) {
+  await page.getByRole("button", { name: "視点を回す" }).click();
+  await page.waitForTimeout(400);
+  assert.equal(await view.getAttribute("data-view-direction"), direction, `視点を${direction}方向へ回転できる`);
+}
+await page.screenshot({ path: "/tmp/expedition-corridor-open.png" });
+await page.screenshot({ path: "/tmp/expedition-facing-start.png" });
 
-// 初手の前衛移動の後、リディアは一度だけ遠隔攻撃して敵手番へ渡す。
-await page.getByRole("button", { name: "接近／攻撃" }).click();
-await page.getByText("リディアの手番").waitFor({ timeout: 3000 });
-await page.waitForTimeout(1150);
-assert.equal(((await text()).match(/リディアの攻撃/g) || []).length, 1, "リディアの自動手番が重複しない");
+// 初手の前衛移動の後、リディアは射程へ移動し、敵は接近してから次手番へ渡す。
 await waitForHero();
-await page.getByRole("button", { name: "接近／攻撃" }).click();
+await heroAction().click();
+await page.getByText("リディアの手番").waitFor({ timeout: 3000 });
+await page.getByText("リディアは魔法の射程へ移動した。").waitFor({ timeout: 3000 });
+const magePosition = (await positions()).mage;
+assert.ok(near((await facings()).mage, Math.atan2(magePosition.x - initialPositions.mage.x, magePosition.y - initialPositions.mage.y)), "リディアは移動先の方向を向く");
+await page.getByText("坑道の獣はあなたへ接近した。").waitFor({ timeout: 5000 });
+const enemyPosition = (await positions()).enemy;
+assert.ok(near((await facings()).enemy, Math.atan2(enemyPosition.x - 6, enemyPosition.y - 1)), "敵は移動先の方向を向く");
+await waitForHero();
+await page.getByRole("button", { name: "戦術移動" }).click();
+assert.ok((await text()).includes("敵に隣接していても移動できます"), "主人公は隣接時にも戦術移動を選べる");
+await waitForHero();
+await heroAction().click();
+await page.getByText("リディアは魔法を放った。").waitFor({ timeout: 5000 });
+assert.equal(((await text()).match(/リディアの攻撃/g) || []).length, 1, "リディアの自動手番が重複しない");
 await page.locator("[data-camera='combat']").waitFor({ timeout: 1200 });
 await page.screenshot({ path: "/tmp/expedition-combat-camera.png" });
-await page.waitForTimeout(500);
+await page.locator("[data-camera='iso']").waitFor({ timeout: 2000 });
 assert.equal(await page.locator("[data-camera='iso']").count(), 1, "攻撃演出後はアイソメトリックへ戻る");
 await win();
 

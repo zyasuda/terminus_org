@@ -492,6 +492,7 @@ export function createBattleScene(container, grid) {
         const model = template.clone(true);
         model.scale.set(...scale);
         model.position.y = y;
+        model.rotation.y = unit.modelFacingOffset ?? 0;
         model.traverse(obj => {
           if (!obj.isMesh) return;
           const source = Array.isArray(obj.material) ? obj.material : [obj.material];
@@ -595,6 +596,9 @@ export function createBattleScene(container, grid) {
   // coins: [{id, x, y}] 倒れた駒の跡
   function sync({ units, highlights = [], activeId = null, targetIds = [], coins = [] }) {
     marker.visible = false;
+    const unitFacings = {};
+    const unitPositions = {};
+    const modelFacingOffsets = {};
     for (const [, m] of tiles) m.material.color.setHex(COLOR.floor);
     for (const h of highlights) {
       const t = tiles.get(h.x + "," + h.y);
@@ -607,12 +611,14 @@ export function createBattleScene(container, grid) {
       if (u.hp <= 0 || u.id === firstPersonUnitId) { g.visible = false; continue; }
 
       const [wx, wz] = worldOf(u.x, u.y);
+      unitPositions[u.id] = { x: u.x, y: u.y };
       const h = u.height ?? 2;
       // 瓦礫のマスでは、その上に立つ(足元の高さぶん持ち上げる)。
       // 0固定にしていた頃は瓦礫の箱にめり込んで見えていた
       const e = elevationAt(grid, u.x, u.y);
       g.position.set(wx, e, wz);
-      if (u.facing !== undefined) g.rotation.y = u.facing;
+      if (u.facing !== undefined) { g.rotation.y = u.facing; unitFacings[u.id] = u.facing; }
+      if (u.modelFacingOffset !== undefined) modelFacingOffsets[u.id] = u.modelFacingOffset;
       // 攻撃できる相手は自身を光らせる。足元のマスを塗っても本体に隠れて見えないため
       const glow = targetIds.includes(u.id) ? COLOR.target : 0x000000;
       for (const mat of g.userData.mats) {
@@ -637,6 +643,9 @@ export function createBattleScene(container, grid) {
       if (lanternIndex >= 0) lanterns.splice(lanternIndex, 1);
     }
     if (!activeId) marker.visible = false;
+    container.dataset.unitFacings = JSON.stringify(unitFacings);
+    container.dataset.unitPositions = JSON.stringify(unitPositions);
+    container.dataset.modelFacingOffsets = JSON.stringify(modelFacingOffsets);
 
     syncCoins(coins);
     // 通常のアイソメトリック表示では、現在選べる敵を対象として遮蔽を確認する。
@@ -795,6 +804,22 @@ export function createBattleScene(container, grid) {
     const [wx, wz] = worldOf(x, y);
     const e = elevationAt(grid, x, y);
     spawnRing(wx, wz, 0xbfe0ea, 0.45, false, e);
+  }
+
+  // 移動はstate同期で位置を確定する前に、出発点→到着点の軌跡と足元のパフを出す。
+  // 盤面の結果を持たない描画層なので、経路・移動可否はcore.js側の確定値だけを受け取る。
+  function playMove(fromX, fromY, toX, toY) {
+    const [fx, fz] = worldOf(fromX, fromY), [tx, tz] = worldOf(toX, toY);
+    spawnPuff(fx, fz, 0xd6d9de, 0.24, 0.8, elevationAt(grid, fromX, fromY));
+    spawnStreak(fx, fz, tx, tz, 0xd6d9de, 0.32, elevationAt(grid, fromX, fromY));
+    spawnPuff(tx, tz, 0xd6d9de, 0.3, 0.95, elevationAt(grid, toX, toY));
+  }
+
+  // リディアの遠隔攻撃用。近接の衝撃輪と区別できる青い弾道を出す。
+  function playRanged(fromX, fromY, toX, toY) {
+    const [fx, fz] = worldOf(fromX, fromY), [tx, tz] = worldOf(toX, toY);
+    spawnStreak(fx, fz, tx, tz, 0x74d8ff, 0.38, elevationAt(grid, fromX, fromY));
+    spawnPuff(tx, tz, 0x74d8ff, 0.34, 1.05, elevationAt(grid, toX, toY));
   }
 
   function stepEffects(dt) {
@@ -992,6 +1017,8 @@ export function createBattleScene(container, grid) {
     playCounter,
     playShove,
     playSweep,
+    playMove,
+    playRanged,
     rotate(delta) { dirIndex += delta; },
     // 戦闘専用。会話用の一人称(setCameraFocus)とは違い、攻撃者を画面手前に残す。
     // 背後から相手を見るため、狭い通路でも「手前の味方／奥の敵」の対面構図になる。

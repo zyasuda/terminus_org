@@ -186,7 +186,7 @@ export function carveShape(grid, rng, { keepClear = [] } = {}) {
 // keepClear(開始位置)には置かない。置いた結果keepClear全員が互いに行き来
 // できなくなる(誰か1人だけ孤立する場合も含む)柱は取り消すので、
 // 通り抜けられない盤面や、出られない孤島にはならない
-export function scatterObstacles(grid, rng, { pillars = 5, rubble = 6, keepClear = [] } = {}) {
+export function scatterObstacles(grid, rng, { pillars = 5, rubble = 6, keepClear = [], count = null } = {}) {
   const clear = new Set(keepClear.map(p => key(p.x, p.y)));
   const open = [];
   for (let y = 0; y < grid.h; y++) {
@@ -199,8 +199,29 @@ export function scatterObstacles(grid, rng, { pillars = 5, rubble = 6, keepClear
     [open[i], open[j]] = [open[j], open[i]];
   }
 
-  let idx = 0, count = 0;
-  while (idx < open.length && count < pillars) {
+  // 遠征の小規模盤面では「柱を何本、瓦礫を何個」と別々に指定するより、
+  // 合計だけを決めて4段階の高さから混ぜる方が読みやすい。既存ステージは
+  // pillars/rubble 指定のままなので、従来の配置規則を変えない。
+  if (count !== null) {
+    let placed = 0;
+    for (const p of open) {
+      if (placed >= count) break;
+      const c = cellAt(grid, p.x, p.y);
+      const height = [...LOW_HEIGHTS, 1][Math.floor(rng() * 4)];
+      c.obstacle = { height };
+      if (height === 1) c.walkable = false;
+      if (!allConnected(grid, keepClear)) {
+        c.obstacle = null;
+        c.walkable = true;
+        continue;
+      }
+      placed++;
+    }
+    return grid;
+  }
+
+  let idx = 0, placed = 0;
+  while (idx < open.length && placed < pillars) {
     const p = open[idx++];
     const c = cellAt(grid, p.x, p.y);
     c.obstacle = { height: 1 };
@@ -209,16 +230,16 @@ export function scatterObstacles(grid, rng, { pillars = 5, rubble = 6, keepClear
       c.obstacle = null;                                // 行き来を断つ柱は置かない
       c.walkable = true;
     } else {
-      count++;
+      placed++;
     }
   }
-  count = 0;
-  while (idx < open.length && count < rubble) {
+  placed = 0;
+  while (idx < open.length && placed < rubble) {
     const p = open[idx++];
     const c = cellAt(grid, p.x, p.y);
     if (c.obstacle) continue;
     c.obstacle = { height: LOW_HEIGHTS[Math.floor(rng() * LOW_HEIGHTS.length)] };
-    count++;
+    placed++;
   }
   return grid;
 }
@@ -541,6 +562,20 @@ export function resolveShove({ attacker, target, units = [], roll, grid = null, 
 // チェビシェフ距離(8方向1コストの移動と一致する)
 const dist = (a, b) => Math.max(Math.abs(a.x - b.x), Math.abs(a.y - b.y));
 
+// 指定した目標へ近づく最良の到達マスを選ぶ。敵AI・相棒の護衛/退却で同じ
+// 「通れる範囲から距離が縮むマスを選ぶ」規則を使うため、盤面規則はここだけにする。
+export function chooseMoveToward(grid, unit, target, units) {
+  const cells = reachableCells(grid, unit, movePointsFor(unit.agility), occupiedBy(units, unit.id));
+
+  let bestCell = null, bestDist = dist(unit, target);
+  for (const c of cells) {
+    const d = dist(c, target);
+    if (d < bestDist) { bestDist = d; bestCell = c; }
+  }
+  if (!bestCell) return { type: "wait" };
+  return { type: "move", to: { x: bestCell.x, y: bestCell.y }, path: pathTo(cells, bestCell) };
+}
+
 // ponytail: 最も近い相手へ寄り、隣接していれば殴るだけの素朴なAI。
 // 遮蔽・退避・狙い分け・包囲の意図は持たない。手触り確認用の仮置きで、
 // Phase 4で tune-enemy-ai を使って本設計に置き換える
@@ -552,13 +587,6 @@ export function chooseEnemyAction(grid, unit, units) {
   if (inReach) return { type: "attack", targetId: inReach.id };
 
   const nearest = foes.reduce((best, f) => (dist(unit, f) < dist(unit, best) ? f : best));
-  const cells = reachableCells(grid, unit, movePointsFor(unit.agility), occupiedBy(units, unit.id));
-
-  let bestCell = null, bestDist = dist(unit, nearest);
-  for (const c of cells) {
-    const d = dist(c, nearest);
-    if (d < bestDist) { bestDist = d; bestCell = c; }
-  }
-  if (!bestCell) return { type: "wait" };
-  return { type: "move", to: { x: bestCell.x, y: bestCell.y }, path: pathTo(cells, bestCell) };
+  const move = chooseMoveToward(grid, unit, nearest, units);
+  return move.type === "move" ? { ...move, targetId: nearest.id } : move;
 }
