@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { chromium } from "playwright";
 import { createFloor, newVillage, route } from "./core.js";
+import { EXPEDITION_BATTLE_CONFIG } from "./battleConfig.js";
 
 const URL = process.env.SMOKE_URL || "https://127.0.0.1:5174/expedition";
 const browser = await chromium.launch();
@@ -96,13 +97,17 @@ await page.locator("[data-battle-layout='corridor-3x7']").waitFor();
 assert.equal(await page.locator("[data-battle-layout='corridor-3x7']").count(), 1, "通常遭遇は3x7通路盤面");
 const corridor = page.locator("[data-battle-layout='corridor-3x7']");
 const blockCount = Number(await corridor.getAttribute("data-obstacle-count"));
-assert.ok(blockCount >= 1 && blockCount <= 6, `通路のブロック数が1〜6ではない: ${blockCount}`);
+assert.ok(blockCount >= EXPEDITION_BATTLE_CONFIG.board.obstacles.min && blockCount <= EXPEDITION_BATTLE_CONFIG.board.obstacles.max, `通路のブロック数がConfig範囲ではない: ${blockCount}`);
 const view = corridor.locator("[data-camera]");
 const near = (actual, expected) => Math.abs(actual - expected) < 0.001;
 const facings = () => view.getAttribute("data-unit-facings").then(JSON.parse);
 const positions = () => view.getAttribute("data-unit-positions").then(JSON.parse);
 assert.equal(await view.getAttribute("data-view-direction"), "0", "初期視点は0方向");
-assert.deepEqual(JSON.parse(await view.getAttribute("data-model-facing-offsets")), { hero: 0, mage: 0, enemy: 0 }, "GLBの向きはrootのfacingだけで決める");
+assert.deepEqual(JSON.parse(await view.getAttribute("data-model-facing-offsets")), {
+  hero: EXPEDITION_BATTLE_CONFIG.presentation.modelFacingOffset.party,
+  mage: EXPEDITION_BATTLE_CONFIG.presentation.modelFacingOffset.party,
+  enemy: EXPEDITION_BATTLE_CONFIG.presentation.modelFacingOffset.enemy,
+}, "GLBの向きはConfigのroot offsetだけで決める");
 const initialPositions = await positions();
 const initialFacing = await facings();
 assert.ok(

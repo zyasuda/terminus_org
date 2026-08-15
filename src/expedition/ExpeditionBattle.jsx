@@ -2,25 +2,26 @@ import React, { useEffect, useRef, useState } from "react";
 import { createBattleScene } from "../battle/view3d.js";
 import { chooseEnemyAction, chooseMoveToward, isAdjacent, movePointsFor, occupiedBy, reachableCells, resolveMelee, resolveRanged, turnOrder } from "../battle/core.js";
 import { ITEMS } from "./core.js";
-import { createExpeditionBattleLayout, EXPEDITION_MODEL_FACING_OFFSET, facingToward } from "./battleState.js";
+import { EXPEDITION_BATTLE_CONFIG } from "./battleConfig.js";
+import { createExpeditionBattleLayout, facingToward } from "./battleState.js";
 
 const roll = () => 1 + Math.floor(Math.random() * 20);
 const stats = (baseAtk, baseHp, gear = {}) => ({ atk: baseAtk + [gear.weapon, gear.charm].reduce((n, id) => n + (id && ITEMS[id]?.stat === "atk" ? ITEMS[id].power : 0), 0), hp: baseHp + (gear.armor && ITEMS[gear.armor]?.stat === "hp" ? ITEMS[gear.armor].power : 0) });
 const makeState = (guardian, equipment = {}, party = {}, seed = 0) => {
-  const hero = stats(3, 16, equipment.hero), mage = stats(2, 12, equipment.mage);
+  const { hero: heroConfig, mage: mageConfig, enemy: enemyConfig, guardian: guardianConfig } = EXPEDITION_BATTLE_CONFIG.units;
+  const foeConfig = guardian ? guardianConfig : enemyConfig;
+  const { modelFacingOffset } = EXPEDITION_BATTLE_CONFIG.presentation;
+  const hero = stats(heroConfig.atk, heroConfig.hp, equipment.hero), mage = stats(mageConfig.atk, mageConfig.hp, equipment.mage);
   const { grid, starts } = createExpeditionBattleLayout(guardian, seed);
   const units = [
-    { id: "hero", name: "あなた", side: "party", ...starts.hero, facing: facingToward(starts.hero, starts.enemy), modelFacingOffset: EXPEDITION_MODEL_FACING_OFFSET.party, hp: Math.min(hero.hp, party.hero ?? hero.hp), maxHp: hero.hp, atk: hero.atk, agility: 7, height: 1.6, modelId: "gareth" },
-    { id: "mage", name: "リディア", side: "party", ...starts.mage, facing: facingToward(starts.mage, starts.enemy), modelFacingOffset: EXPEDITION_MODEL_FACING_OFFSET.party, hp: Math.min(mage.hp, party.mage ?? mage.hp), maxHp: mage.hp, atk: mage.atk, agility: 5, height: 1.6, modelId: "lydia" },
-    { id: "enemy", name: guardian ? "宝箱守護者" : "坑道の獣", side: "enemy", ...starts.enemy, facing: facingToward(starts.enemy, starts.hero), modelFacingOffset: EXPEDITION_MODEL_FACING_OFFSET.enemy, hp: guardian ? 18 : 8, maxHp: guardian ? 18 : 8, atk: guardian ? 3 : 2, agility: 4, height: .9, modelId: "rust-eater" }
+    { id: "hero", name: heroConfig.name, side: "party", ...starts.hero, facing: facingToward(starts.hero, starts.enemy), modelFacingOffset: modelFacingOffset.party, hp: Math.min(hero.hp, party.hero ?? hero.hp), maxHp: hero.hp, atk: hero.atk, agility: heroConfig.agility, height: heroConfig.height, modelId: heroConfig.modelId },
+    { id: "mage", name: mageConfig.name, side: "party", ...starts.mage, facing: facingToward(starts.mage, starts.enemy), modelFacingOffset: modelFacingOffset.party, hp: Math.min(mage.hp, party.mage ?? mage.hp), maxHp: mage.hp, atk: mage.atk, agility: mageConfig.agility, height: mageConfig.height, modelId: mageConfig.modelId },
+    { id: "enemy", name: foeConfig.name, side: "enemy", ...starts.enemy, facing: facingToward(starts.enemy, starts.hero), modelFacingOffset: modelFacingOffset.enemy, hp: foeConfig.hp, maxHp: foeConfig.hp, atk: foeConfig.atk, agility: foeConfig.agility, height: foeConfig.height, modelId: foeConfig.modelId }
   ];
   return { grid, units, order: turnOrder(units).map(u => u.id), turn: 0, log: [guardian ? "守護者が宝箱を守っている。" : "坑道の獣が狭い通路を塞いだ。"] };
 };
 const alive = (units, side) => units.some(u => u.side === side && u.hp > 0);
 const nearest = (unit, units) => units.filter(u => u.hp > 0).reduce((best, u) => !best || Math.max(Math.abs(u.x - unit.x), Math.abs(u.y - unit.y)) < Math.max(Math.abs(best.x - unit.x), Math.abs(best.y - unit.y)) ? u : best, null);
-const AI_THINK_MS = 650;
-const MOVE_SETTLE_MS = 800;
-const ATTACK_SETTLE_MS = 1000;
 export default function ExpeditionBattle({ guardian, order, equipment = {}, party = {}, seed = 0, tonics = 0, onUseTonic, onFinish }) {
   const mount = useRef(null), scene = useRef(null), [state, setState] = useState(() => makeState(guardian, equipment, party, seed));
   const turnTimer = useRef(null);
@@ -28,7 +29,7 @@ export default function ExpeditionBattle({ guardian, order, equipment = {}, part
   const active = state.units.find(u => u.id === state.order[state.turn] && u.hp > 0);
   const partyAlive = alive(state.units, "party"), enemyAlive = alive(state.units, "enemy");
   const playerTurn = active?.id === "hero" && partyAlive && enemyAlive;
-  const scheduleNextTurn = (expectedTurn, delay = 350) => {
+  const scheduleNextTurn = (expectedTurn, delay = EXPEDITION_BATTLE_CONFIG.timing.turnTransitionMs) => {
     clearTimeout(turnTimer.current);
     setBusy(true);
     turnTimer.current = setTimeout(() => {
@@ -50,7 +51,7 @@ export default function ExpeditionBattle({ guardian, order, equipment = {}, part
     if (!result.ok) return false;
     if (ranged) scene.current?.playRanged(attacker.x, attacker.y, target.x, target.y);
     scene.current?.setCombatCamera(attacker, target); setCombatShot(true);
-    setTimeout(() => { scene.current?.setCameraFocus(null); setCombatShot(false); }, 700);
+    setTimeout(() => { scene.current?.setCameraFocus(null); setCombatShot(false); }, EXPEDITION_BATTLE_CONFIG.timing.attackCameraMs);
     scene.current?.[result.hit ? "playHit" : "playMiss"](target.x, target.y, { damage: result.damage, unitId: target.id });
     setState(s => ({ ...s, units: s.units.map(u => u.id === target.id ? { ...u, hp: Math.max(0, u.hp - (result.hit ? result.damage : 0)) } : u.id === attacker.id ? { ...u, facing: facingToward(attacker, target, u.facing) } : u), log: [...s.log, ...(ranged ? [`${attacker.name}は魔法を放った。`] : []), result.hit ? `${attacker.name}の攻撃。${result.damage}ダメージ。` : `${attacker.name}の攻撃は外れた。`] }));
     return true;
@@ -65,10 +66,10 @@ export default function ExpeditionBattle({ guardian, order, equipment = {}, part
     const act = chooseEnemyAction(state.grid, active, state.units);
     if (act.type === "attack") damage(active, state.units.find(u => u.id === act.targetId));
     else if (act.type === "move") moveUnit(active, act.to, "あなたは敵へ接近した。");
-    scheduleNextTurn(state.turn, act.type === "move" ? MOVE_SETTLE_MS : ATTACK_SETTLE_MS);
+    scheduleNextTurn(state.turn, act.type === "move" ? EXPEDITION_BATTLE_CONFIG.timing.moveSettleMs : EXPEDITION_BATTLE_CONFIG.timing.attackSettleMs);
   };
   useEffect(() => {
-    const grid = state.grid; const s = createBattleScene(mount.current, grid); scene.current = s; s.setWallsEnabled(true); s.setEnemiesVisible(true);
+    const grid = state.grid; const s = createBattleScene(mount.current, grid); scene.current = s; s.setWallsEnabled(EXPEDITION_BATTLE_CONFIG.presentation.showBackdropWalls); s.setEnemiesVisible(true);
     return () => s.dispose();
   }, []);
   useEffect(() => {
@@ -79,7 +80,7 @@ export default function ExpeditionBattle({ guardian, order, equipment = {}, part
     s.setPickHandler(data => {
       if (!playerTurn) return;
       const t = state.units.find(u => u.id === data.id);
-      if (t && !moveMode && targets.some(x => x.id === t.id) && !busy) { setMoveMode(false); damage(active, t); scheduleNextTurn(state.turn, ATTACK_SETTLE_MS); }
+      if (t && !moveMode && targets.some(x => x.id === t.id) && !busy) { setMoveMode(false); damage(active, t); scheduleNextTurn(state.turn, EXPEDITION_BATTLE_CONFIG.timing.attackSettleMs); }
       else if (data.kind === "cell" && !moved && reach.some(p => p.x === data.x && p.y === data.y)) { moveUnit(active, data, "あなたは戦術移動した。"); setMoved(true); setMoveMode(false); }
     });
   }, [state, active?.id, playerTurn, moved, busy]);
@@ -92,20 +93,20 @@ export default function ExpeditionBattle({ guardian, order, equipment = {}, part
       if (active.id === "mage") {
         const enemy = nearest(active, state.units.filter(u => u.side === "enemy"));
         const canCast = enemy && resolveRanged({ attacker: active, target: enemy, units: state.units, grid: state.grid, roll: () => 20 }).ok;
-        let actionDelay = MOVE_SETTLE_MS;
+        let actionDelay = EXPEDITION_BATTLE_CONFIG.timing.moveSettleMs;
         if (command === "retreat") {
           const to = chooseMoveToward(state.grid, active, { x: 0, y: active.y }, state.units);
           if (to.type === "move") moveUnit(active, to.to, "リディアは入口側へ退却した。");
           else setState(s => ({ ...s, log: [...s.log, "リディアは退却路を探している。"] }));
         } else if (command === "guard") {
           const hero = state.units.find(u => u.id === "hero");
-          if (canCast) { damage(active, enemy, true); actionDelay = ATTACK_SETTLE_MS; }
+          if (canCast) { damage(active, enemy, true); actionDelay = EXPEDITION_BATTLE_CONFIG.timing.attackSettleMs; }
           else {
             const to = chooseMoveToward(state.grid, active, hero, state.units);
             if (to.type === "move") moveUnit(active, to.to, "リディアは前衛を護衛する位置へ移動した。");
             else setState(s => ({ ...s, log: [...s.log, "リディアは前衛のそばで護衛している。"] }));
           }
-        } else if (canCast) { damage(active, enemy, true); actionDelay = ATTACK_SETTLE_MS; }
+        } else if (canCast) { damage(active, enemy, true); actionDelay = EXPEDITION_BATTLE_CONFIG.timing.attackSettleMs; }
         else if (enemy) {
           const to = chooseMoveToward(state.grid, active, enemy, state.units);
           if (to.type === "move") moveUnit(active, to.to, "リディアは魔法の射程へ移動した。");
@@ -117,9 +118,9 @@ export default function ExpeditionBattle({ guardian, order, equipment = {}, part
         if (act.type === "attack") { const t = state.units.find(u => u.id === act.targetId); if (t) damage(active, t); }
         if (act.type === "move") moveUnit(active, act.to, `${active.name}は${state.units.find(u => u.id === act.targetId)?.name || "あなた"}へ接近した。`);
         if (act.type === "wait") setState(s => ({ ...s, log: [...s.log, `${active.name}は進路を探している。`] }));
-        scheduleNextTurn(expectedTurn, act.type === "move" ? MOVE_SETTLE_MS : ATTACK_SETTLE_MS);
+        scheduleNextTurn(expectedTurn, act.type === "move" ? EXPEDITION_BATTLE_CONFIG.timing.moveSettleMs : EXPEDITION_BATTLE_CONFIG.timing.attackSettleMs);
       }
-    }, AI_THINK_MS); return () => clearTimeout(t);
+    }, EXPEDITION_BATTLE_CONFIG.timing.aiThinkMs); return () => clearTimeout(t);
   }, [active?.id, state.turn, partyAlive, enemyAlive]);
   const obstacleCount = state.grid.cells.filter(cell => cell.obstacle).length;
   return <div style={S.page} data-battle-layout={guardian ? "arena-8x8" : "corridor-3x7"} data-obstacle-count={obstacleCount} data-active-unit={active?.id || ""}><div ref={mount} style={S.canvas} data-camera={combatShot ? "combat" : "iso"} data-view-direction={viewDirection}/><div style={S.hud}>
