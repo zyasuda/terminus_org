@@ -49,9 +49,13 @@ async function clickGridPoint(grid, x, y, height = 0) {
 }
 const battleSeed = async () => {
   const game = await saved();
+  if (!game?.floor || !game.battleId) return null;
   return (game.floor.seed + [...game.battleId].reduce((n, char) => n + char.charCodeAt(0), 0)) >>> 0;
 };
-const battleLayout = async guardian => createExpeditionBattleLayout(guardian, await battleSeed()).grid;
+const battleLayout = async guardian => {
+  const seed = await battleSeed();
+  return seed === null ? null : createExpeditionBattleLayout(guardian, seed).grid;
+};
 async function selectMove(grid, to) {
   await heroButton("移動").click();
   await page.locator('[data-hero-action="move"]').waitFor();
@@ -68,6 +72,8 @@ async function selectAttack(grid, target, height) {
 }
 async function finishBattle(guardian) {
   const grid = await battleLayout(guardian);
+  // 直前の攻撃で戦闘が終わった場合、古いbattleIdで盤面を再計算しない。
+  if (!grid) { await page.locator("canvas").waitFor({ state: "detached" }); return; }
   const enemyHeight = (guardian ? EXPEDITION_BATTLE_CONFIG.units.guardian : EXPEDITION_BATTLE_CONFIG.units.enemy).height;
   for (let i = 0; i < 24; i += 1) {
     if ((await page.locator("canvas").count()) === 0) return;
@@ -145,12 +151,26 @@ await page.evaluate(() => { localStorage.removeItem("ai_companion_expedition_b1"
 await page.reload({ waitUntil: "networkidle" });
 await page.evaluate(() => { Math.random = () => .9; Date.now = () => 777; });
 await page.getByRole("button", { name: "坑道の剣 12G" }).click();
-await page.getByRole("button", { name: "装備" }).nth(1).click();
 await page.getByRole("button", { name: "地下1階へ遠征" }).click();
 await page.locator("svg[aria-label='探索地図']").waitFor();
 await page.screenshot({ path: "/tmp/expedition-rogue-map.png" });
 assert.equal(await page.locator(".rogue-floor rect").count() >= 1, true, "部屋をSVGの面として描画する");
 assert.equal(await page.locator(".rogue-floor polyline").count() >= 1, true, "通路をSVGの線として描画する");
+
+// 戦闘外でも、実際のボタン操作で所持品を使い、スタッシュの装備を付け替える。
+await page.evaluate(() => {
+  const game = JSON.parse(localStorage.getItem("ai_companion_expedition_b1"));
+  game.floor.party.hero = 10;
+  localStorage.setItem("ai_companion_expedition_b1", JSON.stringify(game));
+});
+await page.reload({ waitUntil: "networkidle" });
+await page.evaluate(() => { Math.random = () => .9; });
+await page.locator("svg[aria-label='探索地図']").waitFor();
+await page.getByRole("button", { name: "回復薬 (1)" }).first().click();
+assert.ok((await text()).includes("あなたは回復薬を使った。HP 10 → 16/16。"), "地図移動中に回復薬を使い、HPを上限まで回復できる");
+assert.equal((await saved()).village.stash.includes("tonic"), false, "地図中の回復薬使用はスタッシュの個数も減らす");
+await page.getByRole("button", { name: "装備", exact: true }).click();
+assert.equal((await saved()).village.equipment.hero.weapon, "sword", "地図移動中にスタッシュの装備を付け替えられる");
 
 await travelTo("fight-0");
 await page.locator("[data-battle-layout='corridor-3x7']").waitFor();

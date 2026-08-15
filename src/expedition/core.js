@@ -1,4 +1,5 @@
 import { makeRng } from "../battle/core.js";
+import { EXPEDITION_BATTLE_CONFIG } from "./battleConfig.js";
 import { generateWithRetry } from "./mapgen.js";
 import { run, start } from "./mapwalk.js";
 
@@ -35,6 +36,51 @@ export function newVillage(saved = {}) {
   return { gold: saved.gold ?? 20, stash: saved.stash ?? ["tonic"], equipment: {
     hero: { ...slots, ...(old || saved.equipment?.hero) }, mage: { ...slots, ...(saved.equipment?.mage) }
   } };
+}
+
+// 装備中の鎧を含めた遠征中の最大HP。戦闘側も同じ unit HP を正本としている。
+export function partyMaxHp(owner, equipment = {}) {
+  const unit = EXPEDITION_BATTLE_CONFIG.units[owner];
+  if (!unit) return 0;
+  const armor = ITEMS[equipment[owner]?.armor];
+  return unit.hp + (armor?.stat === "hp" ? armor.power : 0);
+}
+
+// スタッシュから指定キャラクターへ装備する。外した装備は同じスタッシュへ戻す。
+export function equipFromStash(village, owner, index) {
+  const id = village.stash[index], item = ITEMS[id];
+  if (!item || item.slot === "consumable" || !village.equipment[owner]) return village;
+  const old = village.equipment[owner][item.slot];
+  return {
+    ...village,
+    stash: [...village.stash.filter((_, i) => i !== index), ...(old ? [old] : [])],
+    equipment: { ...village.equipment, [owner]: { ...village.equipment[owner], [item.slot]: id } },
+  };
+}
+
+// 遠征中の装備変更。最大HPが下がる装備へ替えた場合も、現在HPを新しい上限へ収める。
+export function equipInField(village, floor, owner, index) {
+  const nextVillage = equipFromStash(village, owner, index);
+  if (nextVillage === village || !floor?.party) return { village: nextVillage, floor };
+  const maxHp = partyMaxHp(owner, nextVillage.equipment);
+  return {
+    village: nextVillage,
+    floor: { ...floor, party: { ...floor.party, [owner]: Math.min(floor.party[owner] ?? maxHp, maxHp) } },
+  };
+}
+
+// 遠征中の回復薬使用。所持品とHPの正本をそれぞれ village.stash / floor.party のまま更新する。
+export function useFieldTonic(village, floor, owner) {
+  const index = village.stash.indexOf("tonic");
+  if (index < 0 || !floor?.party || !partyMaxHp(owner, village.equipment)) return null;
+  const maxHp = partyMaxHp(owner, village.equipment);
+  const before = floor.party[owner] ?? maxHp;
+  const hp = Math.min(maxHp, before + ITEMS.tonic.power);
+  return {
+    village: { ...village, stash: village.stash.filter((_, i) => i !== index) },
+    floor: { ...floor, party: { ...floor.party, [owner]: hp } },
+    before, hp, maxHp,
+  };
 }
 
 export function createFloor(seed = Date.now()) {
