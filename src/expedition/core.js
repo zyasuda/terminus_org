@@ -1,6 +1,27 @@
 import { makeRng } from "../battle/core.js";
+import { generateWithRetry } from "./mapgen.js";
+import { run, start } from "./mapwalk.js";
 
-const K = (x, y) => `${x},${y}`;
+const EXPEDITION_CHAPTER = { scenes: [
+  { id: "entrance", name: "入口", exits: [{ to: "fight-0" }] },
+  { id: "fight-0", name: "崩落跡", exits: [{ to: "entrance" }, { to: "fight-1" }, { to: "store" }] },
+  { id: "fight-1", name: "古い通路", exits: [{ to: "fight-0" }, { to: "guardian" }] },
+  { id: "store", name: "空の貯蔵室", exits: [{ to: "fight-0" }] },
+  { id: "guardian", name: "封印庫", exits: [{ to: "fight-1" }] },
+] };
+
+export const mapForFloor = floor => generateWithRetry(EXPEDITION_CHAPTER, floor.seed).map;
+const restoreMapState = (floor, map) => {
+  const initial = start(map);
+  return {
+    ...initial,
+    pos: floor.pos || initial.pos,
+    at: floor.at === undefined ? initial.at : floor.at,
+    visited: new Set(floor.visited || initial.visited),
+    walked: new Set(floor.walked || initial.walked),
+    seen: new Set(floor.seen || initial.seen),
+  };
+};
 export const ITEMS = {
   sword: { id: "sword", name: "坑道の剣", slot: "weapon", stat: "atk", price: 12, power: 1 },
   mail: { id: "mail", name: "革鎧", slot: "armor", stat: "hp", price: 12, power: 3 },
@@ -16,45 +37,35 @@ export function newVillage(saved = {}) {
   } };
 }
 
-function room(rng, rooms) {
-  for (let tries = 0; tries < 80; tries++) {
-    const w = 4 + Math.floor(rng() * 3), h = 3 + Math.floor(rng() * 3);
-    const x = 1 + Math.floor(rng() * (29 - w)), y = 1 + Math.floor(rng() * (17 - h));
-    const next = { x, y, w, h, cx: x + Math.floor(w / 2), cy: y + Math.floor(h / 2) };
-    if (rooms.every(r => next.x + next.w + 1 < r.x || r.x + r.w + 1 < next.x || next.y + next.h + 1 < r.y || r.y + r.h + 1 < next.y)) return next;
-  }
-  return null;
-}
-
 export function createFloor(seed = Date.now()) {
-  const rng = makeRng(seed); const w = 31, h = 19;
-  const tiles = Array.from({ length: h }, () => Array(w).fill("#"));
-  const rooms = [];
-  while (rooms.length < 5 + Math.floor(rng() * 3)) { const r = room(rng, rooms); if (!r) break; rooms.push(r); }
-  for (const r of rooms) for (let y = r.y; y < r.y + r.h; y++) for (let x = r.x; x < r.x + r.w; x++) tiles[y][x] = ".";
-  for (let i = 1; i < rooms.length; i++) {
-    const a = rooms[i - 1], b = rooms[i];
-    for (let x = Math.min(a.cx, b.cx); x <= Math.max(a.cx, b.cx); x++) tiles[a.cy][x] = ".";
-    for (let y = Math.min(a.cy, b.cy); y <= Math.max(a.cy, b.cy); y++) tiles[y][b.cx] = ".";
-  }
-  const entrance = { x: rooms[0].cx, y: rooms[0].cy };
-  const targets = rooms.slice(1);
-  const normal = targets.slice(0, 2).map((r, i) => ({ id: `fight-${i}`, x: r.cx, y: r.cy, kind: "fight", done: false }));
-  const last = targets[targets.length - 1] || rooms[0];
-  const guardian = { id: "guardian", x: last.cx, y: last.cy, kind: "guardian", done: false };
-  return { seed, w, h, tiles, rooms, entrance, player: { ...entrance }, party: { hero: 16, mage: 12 }, events: [...normal, guardian], chest: { ...last, opened: false }, explored: [K(entrance.x, entrance.y)], log: ["地下1階へ降りた。出口まで歩いて帰還できる。"] };
+  const generated = generateWithRetry(EXPEDITION_CHAPTER, seed);
+  const state = start(generated.map);
+  return {
+    seed: generated.seed,
+    pos: state.pos,
+    at: state.at,
+    visited: [...state.visited], walked: [...state.walked], seen: [...state.seen],
+    party: { hero: 16, mage: 12 },
+    events: [
+      { id: "fight-0", roomId: "fight-0", kind: "fight", done: false },
+      { id: "fight-1", roomId: "fight-1", kind: "fight", done: false },
+      { id: "guardian", roomId: "guardian", kind: "guardian", done: false },
+    ],
+    chest: { roomId: "guardian", opened: false },
+    log: ["地下1階へ降りた。灯りを頼りに、入口まで歩いて帰還できる。"],
+  };
 }
 
-export function walk(floor, dx, dy) {
-  const x = floor.player.x + dx, y = floor.player.y + dy;
-  if (floor.tiles[y]?.[x] !== ".") return floor;
-  const explored = new Set(floor.explored); explored.add(K(x, y));
-  return { ...floor, player: { x, y }, explored: [...explored] };
+export function walk(floor, direction) {
+  const map = mapForFloor(floor);
+  const state = restoreMapState(floor, map);
+  if (!run(state, map, direction)) return floor;
+  return { ...floor, pos: state.pos, at: state.at, visited: [...state.visited], walked: [...state.walked], seen: [...state.seen] };
 }
 
-export function eventAt(floor) { return floor.events.find(e => !e.done && e.x === floor.player.x && e.y === floor.player.y) || null; }
-export function canOpenChest(floor) { return floor.chest.x === floor.player.x && floor.chest.y === floor.player.y && !floor.chest.opened && floor.events.every(e => e.done); }
-export function isEntrance(floor) { return floor.player.x === floor.entrance.x && floor.player.y === floor.entrance.y; }
+export function eventAt(floor) { return floor.events.find(event => !event.done && event.roomId === floor.at) || null; }
+export function canOpenChest(floor) { return floor.chest.roomId === floor.at && !floor.chest.opened && floor.events.every(event => event.done); }
+export function isEntrance(floor) { return floor.at === "entrance"; }
 
 export function rewardFor(floor) {
   const ids = ["sword", "mail", "charm", "tonic"];
@@ -69,12 +80,18 @@ export function keepAfterDefeat(items, seed) {
 }
 
 export function route(floor, from, to) {
-  const queue = [{ ...from, path: [] }], seen = new Set([K(from.x, from.y)]);
+  const map = mapForFloor(floor);
+  const targetRoom = to.roomId || to.id || to;
+  const room = map.rooms.get(targetRoom);
+  if (!room) return null;
+  const target = { x: room.x + Math.floor(room.w / 2), y: room.y + Math.floor(room.h / 2) };
+  const origin = from.pos || floor.pos;
+  const queue = [{ ...origin, path: [] }], seen = new Set([`${origin.x},${origin.y}`]);
   for (let i = 0; i < queue.length; i++) {
-    const node = queue[i]; if (node.x === to.x && node.y === to.y) return node.path;
-    for (const [dx, dy] of [[0,-1],[0,1],[-1,0],[1,0]]) {
-      const x = node.x + dx, y = node.y + dy, k = K(x, y);
-      if (!seen.has(k) && floor.tiles[y]?.[x] === ".") { seen.add(k); queue.push({ x, y, path: [...node.path, { dx, dy }] }); }
+    const node = queue[i]; if (node.x === target.x && node.y === target.y) return node.path;
+    for (const [dir, dx, dy] of [["north",0,-1],["south",0,1],["west",-1,0],["east",1,0]]) {
+      const x = node.x + dx, y = node.y + dy, k = `${x},${y}`;
+      if (!seen.has(k) && map.cells.has(k)) { seen.add(k); queue.push({ x, y, path: [...node.path, { dir, dx, dy }] }); }
     }
   }
   return null;

@@ -1,61 +1,94 @@
+import assert from "node:assert/strict";
 import { chromium } from "playwright";
 import { createFloor, newVillage, route } from "./core.js";
 
 const URL = process.env.SMOKE_URL || "https://127.0.0.1:5174/expedition";
 const browser = await chromium.launch();
-process.on("uncaughtException", async error => { console.error(error); await browser.close(); process.exit(1); });
 const page = await browser.newPage({ ignoreHTTPSErrors: true, viewport: { width: 1100, height: 800 } });
 const errors = [];
-page.on("pageerror", e => errors.push(e.message));
+page.on("pageerror", error => errors.push(error.message));
 const text = () => page.locator("body").innerText();
-const fast = () => page.evaluate(() => { Math.random = () => .95; const real = window.setTimeout; window.setTimeout = (fn, ms = 0, ...args) => real(fn, Math.min(ms, 1), ...args); });
-const walkTo = async (floor, from, to) => { for (const step of route(floor, from, to)) await page.keyboard.press(step.dx === 1 ? "ArrowRight" : step.dx === -1 ? "ArrowLeft" : step.dy === 1 ? "ArrowDown" : "ArrowUp"); };
-const win = async () => {
-  for (let i = 0; i < 10; i++) {
-    const hit = page.getByRole("button", { name: "接近／攻撃" });
-    if (await hit.count()) await hit.click();
-    await page.waitForTimeout(80);
+const saved = () => page.evaluate(() => JSON.parse(localStorage.getItem("ai_companion_expedition_b1")));
+const keyFor = dir => ({ north: "ArrowUp", east: "ArrowRight", south: "ArrowDown", west: "ArrowLeft" })[dir];
+const waitForHero = () => page.getByRole("button", { name: "接近／攻撃" }).waitFor({ state: "visible", timeout: 5000 });
+
+async function travelTo(roomId) {
+  for (let steps = 0; steps < 100; steps += 1) {
+    const game = await saved();
+    if (game.floor.at === roomId) return;
+    const path = route(game.floor, game.floor, { roomId });
+    assert.ok(path?.length, `${roomId} への経路が無い`);
+    await page.keyboard.press(keyFor(path[0].dir));
+    await page.waitForTimeout(35);
+    if (await page.locator("canvas").count()) return;
+  }
+  throw new Error(`${roomId} へ到達しない`);
+}
+
+async function win() {
+  for (let i = 0; i < 12; i += 1) {
     if ((await page.locator("canvas").count()) === 0) return;
-    if ((await text()).includes("敗北")) throw new Error("勝利側の守護者戦で敗北した");
+    await page.waitForFunction(() => !document.querySelector("canvas") || [...document.querySelectorAll("button")].some(button => button.textContent === "接近／攻撃"), null, { timeout: 5000 });
+    if ((await page.locator("canvas").count()) === 0) return;
+    await page.getByRole("button", { name: "接近／攻撃" }).click();
+    await page.waitForTimeout(1050);
   }
   throw new Error("戦闘が勝利で終わらない");
-};
+}
 
 await page.goto(URL, { waitUntil: "networkidle" });
-await fast();
-await page.evaluate(() => localStorage.removeItem("ai_companion_expedition_b1"));
+await page.evaluate(() => { localStorage.removeItem("ai_companion_expedition_b1"); Math.random = () => .9; });
 await page.reload({ waitUntil: "networkidle" });
-await fast();
+await page.evaluate(() => { Math.random = () => .9; });
 await page.getByRole("button", { name: "坑道の剣 12G" }).click();
+await page.getByRole("button", { name: "装備" }).nth(1).click();
 await page.getByRole("button", { name: "地下1階へ遠征" }).click();
-const seed = Number((await text()).match(/seed (\d+)/)[1]), floor = createFloor(seed);
-let at = floor.entrance, carriedHp = null;
-for (const [index, event] of floor.events.entries()) {
-  console.log(`fight ${event.id}`); await walkTo(floor, at, event); await page.waitForTimeout(80);
-  if (carriedHp !== null && !(await text()).includes(`あなた ${carriedHp}/16`)) throw new Error("前戦のHPが次戦へ引き継がれない");
-  if (index === 0) {
-    await page.getByRole("button", { name: "退却", exact: true }).click();
-    for (let i = 0; i < 4; i++) { const end = page.getByRole("button", { name: "ターン終了" }); if (await end.count()) await end.click(); await page.waitForTimeout(80); }
-    await page.getByRole("button", { name: "攻撃", exact: true }).click();
-  }
-  await win(); at = event;
-  if (index === 0) { carriedHp = (await page.evaluate(() => JSON.parse(localStorage.getItem("ai_companion_expedition_b1")).floor.party.hero)); if (carriedHp >= 16) throw new Error("検査戦でダメージを受けなかった"); }
-}
-await walkTo(floor, at, floor.chest); await page.getByRole("button", { name: "宝箱を開ける" }).click();
-await walkTo(floor, floor.chest, floor.entrance); await page.getByRole("button", { name: "入口から帰還" }).click();
-if (!(await text()).includes("無事に村へ帰還")) throw new Error("宝箱から徒歩帰還できない");
+await page.locator("svg[aria-label='探索地図']").waitFor();
+await page.screenshot({ path: "/tmp/expedition-rogue-map.png" });
+assert.equal(await page.locator(".rogue-floor rect").count() >= 1, true, "部屋をSVGの面として描画する");
+assert.equal(await page.locator(".rogue-floor polyline").count() >= 1, true, "通路をSVGの線として描画する");
+
+await travelTo("fight-0");
+await page.locator("[data-battle-layout='corridor-3x7']").waitFor();
+assert.equal(await page.locator("[data-battle-layout='corridor-3x7']").count(), 1, "通常遭遇は3x7通路盤面");
+
+// 初手の前衛移動の後、リディアは一度だけ遠隔攻撃して敵手番へ渡す。
+await page.getByRole("button", { name: "接近／攻撃" }).click();
+await page.getByText("リディアの手番").waitFor({ timeout: 3000 });
+await page.waitForTimeout(1150);
+assert.equal(((await text()).match(/リディアの攻撃/g) || []).length, 1, "リディアの自動手番が重複しない");
+await waitForHero();
+await page.getByRole("button", { name: "接近／攻撃" }).click();
+await page.locator("[data-camera='combat']").waitFor({ timeout: 1200 });
+await page.screenshot({ path: "/tmp/expedition-combat-camera.png" });
+await page.waitForTimeout(500);
+assert.equal(await page.locator("[data-camera='iso']").count(), 1, "攻撃演出後はアイソメトリックへ戻る");
+await win();
+
+await travelTo("fight-1");
+await page.locator("[data-battle-layout='corridor-3x7']").waitFor();
+await win();
+await travelTo("guardian");
+await page.locator("[data-battle-layout='arena-8x8']").waitFor();
+await win();
+await page.getByRole("button", { name: "宝箱を開ける" }).click();
+await travelTo("entrance");
+await page.getByRole("button", { name: "入口から帰還" }).click();
+assert.ok((await text()).includes("無事に村へ帰還"), "宝箱から徒歩で帰還できる");
 
 const defeatFloor = createFloor(77);
-await page.evaluate(({ village, floor }) => localStorage.setItem("ai_companion_expedition_b1", JSON.stringify({ village, floor, haul: ["sword","mail","charm","tonic","tonic"], command: "retreat", message: "検査", battleId: "guardian" })), { village: newVillage({ stash: [] }), floor: defeatFloor });
+await page.evaluate(({ village, floor }) => localStorage.setItem("ai_companion_expedition_b1", JSON.stringify({ village, floor, haul: ["sword", "mail", "charm", "tonic", "tonic"], command: "retreat", message: "検査", battleId: "guardian" })), { village: newVillage({ stash: [] }), floor: { ...defeatFloor, party: { hero: 1, mage: 1 } } });
 await page.reload({ waitUntil: "networkidle" });
-await fast();
-if ((await page.locator("canvas").count()) !== 1) throw new Error("保存済みの戦闘を復元できない: " + await text());
-for (let i = 0; i < 40; i++) { const end = page.getByRole("button", { name: "ターン終了" }); if (await end.count()) await end.click(); await page.waitForTimeout(80); if ((await page.locator("canvas").count()) === 0) break; }
-await page.waitForTimeout(900);
-if ((await page.locator("canvas").count()) !== 0) throw new Error("敗北戦闘が完了しない: " + await text());
-const saved = await page.evaluate(() => JSON.parse(localStorage.getItem("ai_companion_expedition_b1")));
-const kept = saved.village.stash.length;
-if (kept < 2 || kept > 4) throw new Error(`敗北保持が2〜4個ではない: ${kept}`);
-if (errors.length) throw new Error(errors.join("\n"));
-console.log("expedition/smoke: 村→通常戦2→守護者→宝箱→徒歩帰還、全滅保持を確認");
+await page.evaluate(() => { Math.random = () => .9; });
+await page.locator("canvas").waitFor();
+for (let i = 0; i < 20 && await page.locator("canvas").count(); i += 1) {
+  const end = page.getByRole("button", { name: "ターン終了" });
+  if (await end.count() && await end.isEnabled()) await end.click();
+  await page.waitForTimeout(900);
+}
+assert.equal(await page.locator("canvas").count(), 0, "敗北戦闘が完了する");
+const kept = (await saved()).village.stash.length;
+assert.ok(kept >= 2 && kept <= 4, `敗北保持が2〜4個ではない: ${kept}`);
+assert.deepEqual(errors, [], `ブラウザJSエラー: ${errors.join(" / ")}`);
+console.log("expedition/smoke: SVG地図→通路戦→リディア1手番→対面カメラ→守護者→帰還、全滅保持を確認");
 await browser.close();

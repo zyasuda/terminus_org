@@ -901,10 +901,30 @@ export function createBattleScene(container, grid) {
     playShove,
     playSweep,
     rotate(delta) { dirIndex += delta; },
+    // 戦闘専用。会話用の一人称(setCameraFocus)とは違い、攻撃者を画面手前に残す。
+    // 背後から相手を見るため、狭い通路でも「手前の味方／奥の敵」の対面構図になる。
+    setCombatCamera(attacker, subject) {
+      if (!attacker || !subject) return;
+      camera = firstPersonCamera;
+      firstPersonUnitId = null;
+      firstPersonCamera.fov = 55;
+      firstPersonCamera.updateProjectionMatrix();
+      const [ax, az] = worldOf(attacker.x, attacker.y);
+      const [sx, sz] = worldOf(subject.x, subject.y);
+      const dx = sx - ax, dz = sz - az, length = Math.hypot(dx, dz) || 1;
+      const eyeY = elevationAt(grid, attacker.x, attacker.y) + Math.max(1.28, (attacker.height ?? 1.6) * .9);
+      // 通路でも二人が重ならないよう、真後ろではなく半歩横から見る。
+      // 画面手前に攻撃者、斜め奥に敵を残すポケモン風の対面構図にする。
+      firstPersonCamera.position.set(ax - dx / length * 4.4 - dz / length * .8, eyeY + .38, az - dz / length * 4.4 + dx / length * .8);
+      const subjectY = elevationAt(grid, subject.x, subject.y) + Math.max(.9, (subject.height ?? 1.2) * .68);
+      firstPersonCamera.lookAt(sx, subjectY, sz);
+    },
     setCameraFocus(unit = null, subject = null) {
       if (unit) {
         camera = firstPersonCamera;
         firstPersonUnitId = unit.id;
+        firstPersonCamera.fov = 90;
+        firstPersonCamera.updateProjectionMatrix();
         const [x, z] = worldOf(unit.x, unit.y);
         const eyeY = elevationAt(grid, unit.x, unit.y) + Math.max(1.18, (unit.height ?? 1.6) * 0.92);
         const [subjectX, subjectZ] = subject ? worldOf(subject.x, subject.y) : [x, z - 5];
@@ -920,6 +940,8 @@ export function createBattleScene(container, grid) {
       }
       camera = isoCamera;
       firstPersonUnitId = null;
+      firstPersonCamera.fov = 90;
+      firstPersonCamera.updateProjectionMatrix();
       viewSize = baseViewSize;
       target.set(0, 0, 0);
       applyFrustum();

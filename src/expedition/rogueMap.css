@@ -1,0 +1,17 @@
+.rogue-map-shell { width: min(680px, 100%); background: #0f1418; border: 1px solid #3c4354; color: #c9c3b7; }
+.rogue-map-rail { display: flex; justify-content: space-between; gap: 12px; padding: 9px 12px; border-bottom: 1px solid rgba(201,195,183,.12); letter-spacing: .06em; }
+.rogue-map-rail span { color: #6e7580; font-size: 12px; }
+.rogue-map { min-height: 330px; overflow: hidden; perspective: 2600px; perspective-origin: 50% 34%; }
+.rogue-map svg { display: block; width: 100%; height: 330px; transform: rotateX(24deg); transform-origin: 50% 58%; }
+.rogue-floor { fill: #454f5a; stroke: #454f5a; stroke-width: .14; }
+.rogue-memory { opacity: .3; }
+.rogue-light { fill: #e4b064; stroke: #e4b064; opacity: .18; mix-blend-mode: screen; }
+.rogue-lamp-glow { mix-blend-mode: screen; pointer-events: none; }
+.rogue-player { fill: #93c6d6; stroke: #c9c3b7; stroke-width: .05; }
+.rogue-marker text { text-anchor: middle; fill: #e4b064; font: .62px system-ui, sans-serif; paint-order: stroke; stroke: #0f1418; stroke-width: .08px; }
+.rogue-marker .rogue-room-name { fill: #c9c3b7; font-size: .37px; letter-spacing: .03px; }
+.rogue-controls { min-height: 58px; display: flex; border-top: 1px solid rgba(201,195,183,.12); }
+.rogue-controls button { flex: 1; border: 0; border-left: 1px solid rgba(201,195,183,.1); background: transparent; color: #e4b064; font-size: 23px; cursor: pointer; }
+.rogue-controls button:last-child { border-right: 1px solid rgba(201,195,183,.1); }
+.rogue-controls button span { display: block; color: #6e7580; font-size: 9px; letter-spacing: .08em; }
+@media (max-width: 680px) { .rogue-map { min-height: 260px; } .rogue-map svg { height: 260px; } }
