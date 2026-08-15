@@ -10,10 +10,17 @@ import {
   surroundMultiplier, adjacentAllies, turnOrder, resolveMelee,
   chooseEnemyAction, makeRng, scatterObstacles, occupiedBy, pathTo,
   elevationAt, heightSteps, scatterWater, moveCostAt, findDodgeCell, resolveSweep, resolveShove,
-  carveShape
+  carveShape, resolveRanged
 } from "./core.js";
 
 const near = (a, b) => Math.abs(a - b) < 1e-9;
+
+{
+  const g = createGrid([".....", "..#..", "....."]);
+  const mage = { x: 0, y: 0, hp: 8, atk: 2 }, enemy = { x: 4, y: 0, hp: 8, defenseDc: 10 };
+  assert.equal(resolveRanged({ attacker: mage, target: enemy, grid: g, roll: () => 12 }).damage, 2, "遠隔攻撃は射程内なら命中する");
+  assert.equal(resolveRanged({ attacker: mage, target: { ...enemy, x: 4, y: 2 }, grid: g, roll: () => 20 }).reason, "blocked", "壁は射線を遮る");
+}
 
 /* --- グリッド --- */
 {

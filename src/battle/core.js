@@ -474,6 +474,20 @@ export function resolveMelee({
   return { ok: true, d20, dc, hit, crit, fumble, surround, multiplier, damage, steps, heightDamage, reaction, counterRoll };
 }
 
+// 遠隔攻撃: 射程と壁による射線だけを追加し、命中・ダメージは近接と同じ確定規則を使う。
+export function resolveRanged({ attacker, target, units = [], roll, grid, range = 5 }) {
+  if (attacker.hp <= 0 || target.hp <= 0) return { ok: false, reason: "unit_down" };
+  const dx = target.x - attacker.x, dy = target.y - attacker.y;
+  if (Math.max(Math.abs(dx), Math.abs(dy)) > range) return { ok: false, reason: "out_of_range" };
+  const steps = Math.max(Math.abs(dx), Math.abs(dy));
+  for (let i = 1; i < steps; i++) {
+    const x = Math.round(attacker.x + dx * i / steps), y = Math.round(attacker.y + dy * i / steps);
+    if (!isWalkable(grid, x, y)) return { ok: false, reason: "blocked" };
+  }
+  const d20 = roll(), dc = target.defenseDc ?? 12, crit = d20 === 20, hit = crit || (d20 !== 1 && d20 >= dc);
+  return { ok: true, d20, dc, hit, crit, damage: hit ? Math.max(1, (attacker.atk ?? 2) * (crit ? 2 : 1)) : 0 };
+}
+
 // 薙ぎ払い: 隣接する敵全員に、同じ1回分の出目で攻撃する。
 // resolveMeleeを1体ずつ呼び出すだけの薄い層(命中判定・高低差・防御の構えは
 // resolveMelee側の仕様がそのまま個別に効く)。集中攻撃より弱くするため、
