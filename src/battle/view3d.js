@@ -32,6 +32,7 @@ const COLOR = {
 };
 
 const CAMERA_DIST = 20;   // placeCamera()の r と同じ値。fogのnear/farはここからの相対距離で決める
+const OCCLUDER_OPACITY = 0.35;
 
 const modelTemplates = new Map();
 const loadModel = path => {
@@ -457,6 +458,7 @@ export function createBattleScene(container, grid) {
   const unitGroup = new THREE.Group();
   let enemiesVisible = true;
   let firstPersonUnitId = null;
+  let occlusionTarget = null;
   scene.add(unitGroup);
 
   const markerGeo = new THREE.ConeGeometry(0.18, 0.4, 4);
@@ -473,6 +475,9 @@ export function createBattleScene(container, grid) {
     g.add(fallback);
     const h = unit.height ?? 2;
     const mat = new THREE.MeshLambertMaterial({ color: 0xffffff, flatShading: true });
+    // GLBのテンプレートは全ユニットで共有される。材質までcloneしないと、1人だけを
+    // 透過したつもりで同じモデルの全員が透けるため、透過対象の材質は駒ごとに記録する。
+    const opacityMaterials = [{ material: mat, transparent: mat.transparent, opacity: mat.opacity, depthWrite: mat.depthWrite }];
     const part = (geometry, x, y, z, rotation = null) => {
       const m = new THREE.Mesh(geometry, mat);
       m.position.set(x, y, z);
@@ -488,10 +493,19 @@ export function createBattleScene(container, grid) {
         model.scale.set(...scale);
         model.position.y = y;
         model.traverse(obj => {
-          if (obj.isMesh) obj.userData = { kind: "unit", id: unit.id };
+          if (!obj.isMesh) return;
+          const source = Array.isArray(obj.material) ? obj.material : [obj.material];
+          const cloned = source.map(material => {
+            const copy = material.clone();
+            opacityMaterials.push({ material: copy, transparent: copy.transparent, opacity: copy.opacity, depthWrite: copy.depthWrite });
+            return copy;
+          });
+          obj.material = Array.isArray(obj.material) ? cloned : cloned[0];
+          obj.userData = { kind: "unit", id: unit.id };
         });
         fallback.visible = false;
         g.add(model);
+        if (g.userData.occluded) setUnitOccluded(g, true);
       }).catch(() => {});
     };
 
@@ -525,7 +539,7 @@ export function createBattleScene(container, grid) {
       addModel(model.path, model.scale, model.y);
     }
 
-    g.userData = { kind: "unit", id: unit.id, side: unit.side, modelId: unit.modelId, mats: [mat] };
+    g.userData = { kind: "unit", id: unit.id, side: unit.side, modelId: unit.modelId, mats: [mat], opacityMaterials, occluded: false };
     return g;
   };
 
@@ -611,9 +625,23 @@ export function createBattleScene(container, grid) {
         marker.position.set(wx, e + h + 0.5, wz);
       }
     }
+    // stateから完全に消えた駒は、透過を戻してから取り除く。戦闘不能(hp=0)は
+    // 同じstateに残るので、従来どおり非表示のまま扱う。
+    const unitIds = new Set(units.map(u => u.id));
+    for (const [id, g] of unitMeshes) {
+      if (unitIds.has(id)) continue;
+      setUnitOccluded(g, false);
+      unitGroup.remove(g);
+      unitMeshes.delete(id);
+      const lanternIndex = lanterns.findIndex(l => l.id === id);
+      if (lanternIndex >= 0) lanterns.splice(lanternIndex, 1);
+    }
     if (!activeId) marker.visible = false;
 
     syncCoins(coins);
+    // 通常のアイソメトリック表示では、現在選べる敵を対象として遮蔽を確認する。
+    // 攻撃演出中はsetCombatCameraが確定対象を持っているため、ここで上書きしない。
+    if (camera === isoCamera) setOcclusionTarget(targetIds[0] || null);
   }
 
   /* --- ヒット演出 --- */
@@ -817,6 +845,69 @@ export function createBattleScene(container, grid) {
   const ndc = new THREE.Vector2();
   let pickHandler = null;
 
+  function setUnitOccluded(g, on) {
+    if (!g || g.userData.occluded === on) return;
+    for (const entry of g.userData.opacityMaterials || []) {
+      const { material, transparent, opacity, depthWrite } = entry;
+      material.transparent = on ? true : transparent;
+      material.opacity = on ? OCCLUDER_OPACITY : opacity;
+      material.depthWrite = on ? false : depthWrite;
+      material.needsUpdate = true;
+    }
+    g.userData.occluded = on;
+  }
+
+  function clearOcclusion() {
+    for (const g of unitMeshes.values()) setUnitOccluded(g, false);
+    occlusionTarget = null;
+    container.dataset.occlusionTarget = "";
+    container.dataset.occludingUnits = "";
+    container.dataset.occlusionOpacity = "";
+  }
+
+  // カメラ→敵の見通しにある味方だけを透過する。マス座標ではなく表示中の
+  // 駒のboundsを使うため、斜めカメラや実モデルの大きさにも従う。
+  function refreshOcclusion() {
+    if (!occlusionTarget) return;
+    const targetUnit = unitMeshes.get(occlusionTarget.id);
+    if (!targetUnit?.visible) { clearOcclusion(); return; }
+
+    targetUnit.updateWorldMatrix(true, false);
+    const box = new THREE.Box3().setFromObject(targetUnit);
+    const targetPoint = box.isEmpty() ? targetUnit.getWorldPosition(new THREE.Vector3()) : box.getCenter(new THREE.Vector3());
+    const cameraPoint = camera.getWorldPosition(new THREE.Vector3());
+    const direction = targetPoint.clone().sub(cameraPoint);
+    const targetDistance = direction.length();
+    if (!targetDistance) { clearOcclusion(); return; }
+    raycaster.set(cameraPoint, direction.normalize());
+    raycaster.far = Math.max(0, targetDistance - 0.04);
+
+    const occluders = [];
+    for (const [id, g] of unitMeshes) {
+      const shouldTest = g.visible && g.userData.side === "party" && id !== occlusionTarget.ignoreId && id !== occlusionTarget.id;
+      if (!shouldTest) { setUnitOccluded(g, false); continue; }
+      g.updateWorldMatrix(true, false);
+      // GLBの細い部位の隙間を通るとRaycasterの三角形単位では「見えている」判定に
+      // なってしまう。画面上で駒が敵を隠すかを扱うため、表示中の駒全体のboundsで
+      // 判定する。boundsの手前交点が敵より近い時だけ透過する。
+      const bounds = new THREE.Box3().setFromObject(g);
+      const intersection = bounds.isEmpty() ? null : raycaster.ray.intersectBox(bounds, new THREE.Vector3());
+      const blocked = !!intersection && intersection.distanceTo(cameraPoint) < targetDistance - 0.04;
+      setUnitOccluded(g, blocked);
+      if (blocked) occluders.push(id);
+    }
+    container.dataset.occludingUnits = occluders.join(" ");
+    container.dataset.occlusionOpacity = occluders.length ? String(OCCLUDER_OPACITY) : "";
+  }
+
+  function setOcclusionTarget(target = null, ignoreId = null) {
+    const id = typeof target === "string" ? target : target?.id;
+    if (!id) { clearOcclusion(); return; }
+    occlusionTarget = { id, ignoreId };
+    container.dataset.occlusionTarget = id;
+    refreshOcclusion();
+  }
+
   const onPointerDown = e => {
     if (!pickHandler) return;
     const r = renderer.domElement.getBoundingClientRect();
@@ -887,6 +978,7 @@ export function createBattleScene(container, grid) {
     // 1箇所ずらすだけで全部にさざ波が付く)。ごく低速: 速いと安っぽいスクロールに見える
     waterTex.offset.x = (waterTex.offset.x + dt * 0.05) % 1;
     waterTex.offset.y = (waterTex.offset.y + dt * 0.032) % 1;
+    refreshOcclusion();
     renderer.render(scene, camera);
   };
   loop();
@@ -918,9 +1010,12 @@ export function createBattleScene(container, grid) {
       firstPersonCamera.position.set(ax - dx / length * 4.4 - dz / length * .8, eyeY + .38, az - dz / length * 4.4 + dx / length * .8);
       const subjectY = elevationAt(grid, subject.x, subject.y) + Math.max(.9, (subject.height ?? 1.2) * .68);
       firstPersonCamera.lookAt(sx, subjectY, sz);
+      // 攻撃者自身はポケモン風構図の手前に残すため、他の味方だけを透過候補にする。
+      setOcclusionTarget(subject, attacker.id);
     },
     setCameraFocus(unit = null, subject = null) {
       if (unit) {
+        clearOcclusion();
         camera = firstPersonCamera;
         firstPersonUnitId = unit.id;
         firstPersonCamera.fov = 90;
@@ -938,6 +1033,7 @@ export function createBattleScene(container, grid) {
         firstPersonCamera.lookAt(subjectX, subjectY, subjectZ);
         return;
       }
+      clearOcclusion();
       camera = isoCamera;
       firstPersonUnitId = null;
       firstPersonCamera.fov = 90;
@@ -996,6 +1092,7 @@ export function createBattleScene(container, grid) {
     setBackgroundColor(hex) { scene.background.set(hex); },
     setFogColor(hex) { fogObj.color.set(hex); },
     dispose() {
+      clearOcclusion();
       cancelAnimationFrame(raf);
       ro.disconnect();
       renderer.domElement.removeEventListener("pointerdown", onPointerDown);

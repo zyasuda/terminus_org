@@ -12,6 +12,42 @@ const saved = () => page.evaluate(() => JSON.parse(localStorage.getItem("ai_comp
 const keyFor = dir => ({ north: "ArrowUp", east: "ArrowRight", south: "ArrowDown", west: "ArrowLeft" })[dir];
 const waitForHero = () => page.getByRole("button", { name: "接近／攻撃" }).waitFor({ state: "visible", timeout: 5000 });
 
+// 実際のThree.jsメッシュで、アイソメトリックの対象選択と攻撃カメラの両方を確認する。
+// data属性はレンダラー内部の材質をDOMから検査するための読み取り専用観測点。
+async function checkOccluderFade() {
+  const result = await page.evaluate(async () => {
+    const { createBattleScene } = await import("/src/battle/view3d.js");
+    const { createGrid } = await import("/src/battle/core.js");
+    const mount = document.createElement("div");
+    mount.style.cssText = "position:fixed;left:0;top:0;width:600px;height:400px";
+    document.body.append(mount);
+    const scene = createBattleScene(mount, createGrid(Array(7).fill(".......")));
+    const enemy = { id: "enemy", side: "enemy", x: 3, y: 3, hp: 10, height: .9, modelId: "rust-eater" };
+    const isoHero = { id: "hero", side: "party", x: 4, y: 4, hp: 10, height: 1.6, modelId: "gareth" };
+    scene.sync({ units: [isoHero, enemy], targetIds: ["enemy"] });
+    await new Promise(resolve => setTimeout(resolve, 250));
+    const iso = [mount.dataset.occlusionTarget, mount.dataset.occludingUnits, mount.dataset.occlusionOpacity];
+
+    const hero = { ...isoHero, x: 1, y: 1 };
+    const mage = { id: "mage", side: "party", x: 2, y: 2, hp: 10, height: 1.6, modelId: "lydia" };
+    scene.sync({ units: [hero, mage, enemy] });
+    scene.setCombatCamera(hero, enemy);
+    await new Promise(resolve => setTimeout(resolve, 80));
+    const combat = [mount.dataset.occlusionTarget, mount.dataset.occludingUnits, mount.dataset.occlusionOpacity];
+
+    scene.sync({ units: [hero, enemy] });
+    await new Promise(resolve => setTimeout(resolve, 30));
+    const removed = mount.dataset.occludingUnits;
+    scene.setCameraFocus(null);
+    await new Promise(resolve => setTimeout(resolve, 30));
+    const restored = [mount.dataset.occlusionTarget, mount.dataset.occludingUnits, mount.dataset.occlusionOpacity];
+    scene.dispose();
+    mount.remove();
+    return { iso, combat, removed, restored };
+  });
+  assert.deepEqual(result, { iso: ["enemy", "hero", "0.35"], combat: ["enemy", "mage", "0.35"], removed: "", restored: ["", "", ""] }, "遮る味方だけを透過し、対象解除・削除・カメラ復帰で戻す");
+}
+
 async function travelTo(roomId) {
   for (let steps = 0; steps < 100; steps += 1) {
     const game = await saved();
@@ -37,6 +73,7 @@ async function win() {
 }
 
 await page.goto(URL, { waitUntil: "networkidle" });
+await checkOccluderFade();
 await page.evaluate(() => { localStorage.removeItem("ai_companion_expedition_b1"); Math.random = () => .9; });
 await page.reload({ waitUntil: "networkidle" });
 await page.evaluate(() => { Math.random = () => .9; });
