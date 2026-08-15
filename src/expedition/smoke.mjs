@@ -1,7 +1,10 @@
 import assert from "node:assert/strict";
 import { chromium } from "playwright";
+import * as THREE from "three";
+import { isAdjacent } from "../battle/core.js";
 import { createFloor, newVillage, route } from "./core.js";
 import { EXPEDITION_BATTLE_CONFIG } from "./battleConfig.js";
+import { createExpeditionBattleLayout } from "./battleState.js";
 
 const URL = process.env.SMOKE_URL || "https://127.0.0.1:5174/expedition";
 const browser = await chromium.launch();
@@ -14,10 +17,78 @@ const keyFor = dir => ({ north: "ArrowUp", east: "ArrowRight", south: "ArrowDown
 const waitForHero = () => page.waitForFunction(() => {
   if (!document.querySelector("canvas")) return true;
   const battle = document.querySelector('[data-active-unit="hero"]');
-  const button = [...(battle?.querySelectorAll("button") || [])].find(item => item.textContent === "接近／攻撃");
+  const button = [...(battle?.querySelectorAll("button") || [])].find(item => item.textContent === "待機");
   return !!button && !button.disabled;
 }, null, { timeout: 8000 });
-const heroAction = () => page.locator('[data-active-unit="hero"] button', { hasText: "接近／攻撃" });
+const heroButton = name => {
+  const buttons = page.locator('[data-active-unit="hero"] button', { hasText: name });
+  return name === "攻撃" ? buttons.last() : buttons;
+};
+const positions = () => page.locator("[data-unit-positions]").getAttribute("data-unit-positions").then(JSON.parse);
+const reachCells = () => page.locator("[data-reach-cells]").getAttribute("data-reach-cells").then(JSON.parse);
+
+// 現行の正射影カメラと同じ計算で、実際のcanvas上のマス/ユニットをクリックする。
+// UIの状態だけを直接書き換えず、プレイヤーと同じpointerdown経路を検証する。
+function projectGridPoint(rect, grid, x, y, height = 0) {
+  const viewSize = Math.max(grid.w, grid.h) + 4;
+  const camera = new THREE.OrthographicCamera(-(viewSize * rect.width / rect.height) / 2, (viewSize * rect.width / rect.height) / 2, viewSize / 2, -viewSize / 2, 0.1, 200);
+  const r = 20, angle = Math.PI / 4, cameraY = r * Math.tan(Math.atan(1 / Math.SQRT2));
+  camera.position.set(Math.cos(angle) * r, cameraY, Math.sin(angle) * r);
+  camera.lookAt(0, 0, 0);
+  camera.updateProjectionMatrix();
+  camera.updateMatrixWorld();
+  const point = new THREE.Vector3(x - (grid.w - 1) / 2, height, y - (grid.h - 1) / 2).project(camera);
+  return { x: rect.x + (point.x + 1) * rect.width / 2, y: rect.y + (1 - point.y) * rect.height / 2 };
+}
+async function clickGridPoint(grid, x, y, height = 0) {
+  const rect = await page.locator("canvas").boundingBox();
+  assert.ok(rect, "戦闘canvasを取得できる");
+  const point = projectGridPoint(rect, grid, x, y, height);
+  assert.ok(Number.isFinite(point.x) && Number.isFinite(point.y), `canvas上のクリック座標を計算できる: ${JSON.stringify({ rect, grid: { w: grid.w, h: grid.h }, x, y, height, point })}`);
+  await page.mouse.click(point.x, point.y);
+}
+const battleSeed = async () => {
+  const game = await saved();
+  return (game.floor.seed + [...game.battleId].reduce((n, char) => n + char.charCodeAt(0), 0)) >>> 0;
+};
+const battleLayout = async guardian => createExpeditionBattleLayout(guardian, await battleSeed()).grid;
+async function selectMove(grid, to) {
+  await heroButton("移動").click();
+  await page.locator('[data-hero-action="move"]').waitFor();
+  await page.waitForTimeout(100); // Reactの描画後にThree.jsの選択ハンドラも更新される
+  await clickGridPoint(grid, to.x, to.y);
+  await page.locator('[data-hero-action="moved"]').waitFor();
+}
+async function selectAttack(grid, target, height) {
+  await heroButton("攻撃").click();
+  await page.locator('[data-hero-action="attack"]').waitFor();
+  await page.waitForTimeout(100); // Reactの描画後にThree.jsの選択ハンドラも更新される
+  await clickGridPoint(grid, target.x, target.y, height * 0.45);
+  await page.waitForFunction(() => !document.querySelector('[data-hero-action="attack"]'), null, { timeout: 1500 });
+}
+async function finishBattle(guardian) {
+  const grid = await battleLayout(guardian);
+  const enemyHeight = (guardian ? EXPEDITION_BATTLE_CONFIG.units.guardian : EXPEDITION_BATTLE_CONFIG.units.enemy).height;
+  for (let i = 0; i < 24; i += 1) {
+    if ((await page.locator("canvas").count()) === 0) return;
+    await waitForHero();
+    if ((await page.locator("canvas").count()) === 0) return;
+    const now = await positions();
+    const hero = { id: "hero", ...now.hero, hp: 1 };
+    const enemy = { id: "enemy", ...now.enemy, hp: 1 };
+    if (isAdjacent(hero, enemy)) {
+      await selectAttack(grid, enemy, enemyHeight);
+    } else {
+      const cells = await reachCells();
+      const to = cells.sort((a, b) => Math.max(Math.abs(a.x - enemy.x), Math.abs(a.y - enemy.y)) - Math.max(Math.abs(b.x - enemy.x), Math.abs(b.y - enemy.y)))[0];
+      assert.ok(to, "敵へ近づける移動先がある");
+      await selectMove(grid, to);
+      if (isAdjacent(to, enemy)) await selectAttack(grid, enemy, enemyHeight);
+      else await heroButton("待機").click();
+    }
+  }
+  throw new Error("戦闘が勝利で終わらない");
+}
 
 // 実際のThree.jsメッシュで、アイソメトリックの対象選択と攻撃カメラの両方を確認する。
 // data属性はレンダラー内部の材質をDOMから検査するための読み取り専用観測点。
@@ -68,17 +139,6 @@ async function travelTo(roomId) {
   throw new Error(`${roomId} へ到達しない`);
 }
 
-async function win() {
-  for (let i = 0; i < 12; i += 1) {
-    if ((await page.locator("canvas").count()) === 0) return;
-    await waitForHero();
-    if ((await page.locator("canvas").count()) === 0) return;
-    await heroAction().click();
-    await page.waitForTimeout(1050);
-  }
-  throw new Error("戦闘が勝利で終わらない");
-}
-
 await page.goto(URL, { waitUntil: "networkidle" });
 await checkOccluderFade();
 await page.evaluate(() => { localStorage.removeItem("ai_companion_expedition_b1"); Math.random = () => .9; Date.now = () => 777; });
@@ -101,7 +161,6 @@ assert.ok(blockCount >= EXPEDITION_BATTLE_CONFIG.board.obstacles.min && blockCou
 const view = corridor.locator("[data-camera]");
 const near = (actual, expected) => Math.abs(actual - expected) < 0.001;
 const facings = () => view.getAttribute("data-unit-facings").then(JSON.parse);
-const positions = () => view.getAttribute("data-unit-positions").then(JSON.parse);
 assert.equal(await view.getAttribute("data-view-direction"), "0", "初期視点は0方向");
 assert.deepEqual(JSON.parse(await view.getAttribute("data-model-facing-offsets")), {
   hero: EXPEDITION_BATTLE_CONFIG.presentation.modelFacingOffset.party,
@@ -124,35 +183,73 @@ for (const direction of ["1", "2", "3", "0"]) {
 await page.screenshot({ path: "/tmp/expedition-corridor-open.png" });
 await page.screenshot({ path: "/tmp/expedition-facing-start.png" });
 
-// 初手の前衛移動の後、リディアは射程へ移動し、敵は接近してから次手番へ渡す。
+const corridorGrid = await battleLayout(false);
+assert.equal(await page.getByRole("button", { name: "接近／攻撃" }).count(), 0, "曖昧な自動行動ボタンを表示しない");
+assert.ok((await text()).includes("隣接する敵がいないため、移動または待機"), "隣接敵なしをHUDで表示する");
 await waitForHero();
-await heroAction().click();
+await heroButton("待機").click();
 await page.getByText("リディアの手番").waitFor({ timeout: 3000 });
 await page.getByText("リディアは魔法の射程へ移動した。").waitFor({ timeout: 3000 });
 const magePosition = (await positions()).mage;
 assert.ok(near((await facings()).mage, Math.atan2(magePosition.x - initialPositions.mage.x, magePosition.y - initialPositions.mage.y)), "リディアは移動先の方向を向く");
-await page.getByText("坑道の獣はあなたへ接近した。").waitFor({ timeout: 5000 });
+await waitForHero();
 const enemyPosition = (await positions()).enemy;
+assert.notDeepEqual(enemyPosition, initialPositions.enemy, "敵は主人公手番までに接近する");
 assert.ok(near((await facings()).enemy, Math.atan2(enemyPosition.x - 6, enemyPosition.y - 1)), "敵は移動先の方向を向く");
-await waitForHero();
-await page.getByRole("button", { name: "戦術移動" }).click();
-assert.ok((await text()).includes("敵に隣接していても移動できます"), "主人公は隣接時にも戦術移動を選べる");
-await waitForHero();
-await heroAction().click();
-await page.getByText("リディアは魔法を放った。").waitFor({ timeout: 5000 });
-assert.equal(((await text()).match(/リディアの攻撃/g) || []).length, 1, "リディアの自動手番が重複しない");
+
+// 移動→攻撃: 青マスを実クリックしてから、隣接した敵を実クリックする。
+let beforeMove, moveToAttack;
+for (let i = 0; i < 3 && !moveToAttack; i += 1) {
+  beforeMove = await positions();
+  const reachable = await reachCells();
+  moveToAttack = reachable.find(cell => isAdjacent(cell, beforeMove.enemy));
+  if (!moveToAttack) { await heroButton("待機").click(); await waitForHero(); }
+}
+assert.ok(moveToAttack, "移動後に攻撃できる青マスがある");
+await selectMove(corridorGrid, moveToAttack);
+assert.equal(await corridor.getAttribute("data-hero-action"), "moved", "青マスを1回選ぶと移動済みになる");
+assert.ok((await text()).includes("移動済み：攻撃できます"), "移動済みをHUDで表示する");
+await selectAttack(corridorGrid, (await positions()).enemy, EXPEDITION_BATTLE_CONFIG.units.enemy.height);
 await page.locator("[data-camera='combat']").waitFor({ timeout: 1200 });
 await page.screenshot({ path: "/tmp/expedition-combat-camera.png" });
 await page.locator("[data-camera='iso']").waitFor({ timeout: 2000 });
-assert.equal(await page.locator("[data-camera='iso']").count(), 1, "攻撃演出後はアイソメトリックへ戻る");
-await win();
+assert.equal(await page.locator("[data-camera='iso']").count(), 1, "移動後の攻撃演出はアイソメトリックへ戻る");
+
+// 隣接中でも移動を選べることは、青マスの表示まで確認する。
+await waitForHero();
+const beforeAdjacentMove = await positions();
+assert.ok(isAdjacent(beforeAdjacentMove.hero, beforeAdjacentMove.enemy), "敵に隣接した主人公手番になる");
+const sideStep = (await reachCells())[0];
+assert.ok(sideStep, "隣接中にも移動先が残る");
+await heroButton("移動").click();
+await page.locator('[data-hero-action="move"]').waitFor();
+assert.ok((await reachCells()).some(cell => cell.x === sideStep.x && cell.y === sideStep.y), "隣接中でも青い移動先を表示する");
+assert.ok((await text()).includes("移動先を選択中"), "隣接中の移動選択状態をHUDで表示する");
+await heroButton("待機").click();
+await finishBattle(false);
 
 await travelTo("fight-1");
 await page.locator("[data-battle-layout='corridor-3x7']").waitFor();
-await win();
+await waitForHero();
+const secondGrid = await battleLayout(false);
+let secondMove;
+for (let i = 0; i < 3 && !secondMove; i += 1) {
+  const now = await positions();
+  secondMove = (await reachCells()).find(cell => isAdjacent(cell, now.enemy));
+  if (!secondMove) { await heroButton("待機").click(); await waitForHero(); }
+}
+assert.ok(secondMove, "攻撃のみの確認前に敵へ近づける");
+await selectMove(secondGrid, secondMove);
+await selectAttack(secondGrid, (await positions()).enemy, EXPEDITION_BATTLE_CONFIG.units.enemy.height);
+await waitForHero();
+const attackOnly = await positions();
+assert.ok(isAdjacent(attackOnly.hero, attackOnly.enemy), "攻撃だけを選べる距離にいる");
+await selectAttack(secondGrid, attackOnly.enemy, EXPEDITION_BATTLE_CONFIG.units.enemy.height);
+assert.equal(((await text()).match(/リディアの攻撃/g) || []).length, 1, "リディアの自動手番が重複しない");
+await finishBattle(false);
 await travelTo("guardian");
 await page.locator("[data-battle-layout='arena-8x8']").waitFor();
-await win();
+await finishBattle(true);
 await page.getByRole("button", { name: "宝箱を開ける" }).click();
 await travelTo("entrance");
 await page.getByRole("button", { name: "入口から帰還" }).click();
@@ -164,7 +261,7 @@ await page.reload({ waitUntil: "networkidle" });
 await page.evaluate(() => { Math.random = () => .9; });
 await page.locator("canvas").waitFor();
 for (let i = 0; i < 20 && await page.locator("canvas").count(); i += 1) {
-  const end = page.getByRole("button", { name: "ターン終了" });
+  const end = page.getByRole("button", { name: "待機" });
   if (await end.count() && await end.isEnabled()) await end.click();
   await page.waitForTimeout(900);
 }

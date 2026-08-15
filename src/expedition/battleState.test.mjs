@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { isWalkable, reachableCells } from "../battle/core.js";
+import { createGrid, isAdjacent, isWalkable, movePointsFor, occupiedBy, reachableCells } from "../battle/core.js";
 import { EXPEDITION_BATTLE_CONFIG } from "./battleConfig.js";
 import { createExpeditionBattleLayout, facingToward } from "./battleState.js";
 
@@ -43,4 +43,9 @@ assert.deepEqual(signature(createExpeditionBattleLayout(false, 42)), signature(c
 assert.equal(facingToward({ x: 0, y: 0 }, { x: 1, y: 0 }), Math.PI / 2, "東へ移動する時は右を向く");
 assert.equal(facingToward({ x: 1, y: 1 }, { x: 1, y: 0 }), Math.PI, "北の敵へ対峙する時は奥を向く");
 assert.equal(facingToward({ x: 1, y: 1 }, { x: 1, y: 1 }, 0.7), 0.7, "目標が無ければ最後の向きを維持する");
+const adjacentHero = { id: "hero", x: 1, y: 1, hp: 10, agility: EXPEDITION_BATTLE_CONFIG.units.hero.agility };
+const adjacentEnemy = { id: "enemy", x: 2, y: 1, hp: 10 };
+const adjacentMoves = reachableCells(createGrid(["...", "...", "..."]), adjacentHero, movePointsFor(adjacentHero.agility), occupiedBy([adjacentHero, adjacentEnemy], adjacentHero.id));
+assert.ok(isAdjacent(adjacentHero, adjacentEnemy), "攻撃可能な距離を確認する");
+assert.ok(adjacentMoves.some(cell => cell.x === 0 && cell.y === 1), "敵に隣接していても別の空きマスへ移動できる");
 console.log("expedition battle state: open boards, seeded blocks, reachable starts");
