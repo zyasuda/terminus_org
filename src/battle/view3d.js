@@ -362,7 +362,7 @@ export function createBattleScene(container, grid, { voidBoundaryWalls = false }
         // グリッド外の三つの枝先は出口として開けておく。ここで描くのは
         // グリッド内の盤外セルとの境目だけで、T字の凹角も自然に含まれる。
         if (nx < 0 || ny < 0 || nx >= grid.w || ny >= grid.h) continue;
-        if (!grid.cells[ny * grid.w + nx]?.walkable) edgeWall(x, y, dx, dy);
+        if (grid.cells[ny * grid.w + nx]?.void) edgeWall(x, y, dx, dy);
       }
     }
   }
@@ -894,7 +894,9 @@ export function createBattleScene(container, grid, { voidBoundaryWalls = false }
   /* --- 入力(クリックでマス/ユニットを拾う) --- */
   const raycaster = new THREE.Raycaster();
   const ndc = new THREE.Vector2();
-  let pickHandler = null;
+  const floorPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
+  const floorPoint = new THREE.Vector3();
+  let pickHandler = null, preferCells = false;
 
   function setUnitOccluded(g, on) {
     if (!g || g.userData.occluded === on) return;
@@ -969,8 +971,16 @@ export function createBattleScene(container, grid, { voidBoundaryWalls = false }
     // ユニットはGroup(円錐+球など)なので再帰的に当てる
     const hits = raycaster.intersectObjects([...unitGroup.children, ...propGroup.children, ...tiles.values()], true);
     const unitHit = hits.find(h => h.object.userData.kind === "unit");
-    const hit = unitHit || hits[0];
-    if (hit) pickHandler(hit.object.userData.kind ? hit.object.userData : hit.object.parent?.userData || {});
+    const cellHit = hits.find(h => h.object.userData.kind === "cell");
+    let hit = preferCells ? (cellHit || unitHit || hits[0]) : (unitHit || hits[0]);
+    let data = hit?.object.userData.kind ? hit.object.userData : hit?.object.parent?.userData || {};
+    // 駒や演出で床メッシュに当たらない場合でも、移動中だけは床平面からマスを復元する。
+    // 攻撃時は従来どおりユニットを優先する。
+    if (preferCells && !cellHit && raycaster.ray.intersectPlane(floorPlane, floorPoint)) {
+      const x = Math.round(floorPoint.x + offX), y = Math.round(floorPoint.z + offZ);
+      if (tiles.has(x + "," + y)) { data = { kind: "cell", x, y }; hit = true; }
+    }
+    if (hit) pickHandler(data);
   };
 
   /* --- レンダラーとループ --- */
@@ -1096,7 +1106,7 @@ export function createBattleScene(container, grid, { voidBoundaryWalls = false }
       applyFrustum();
       placeCamera();
     },
-    setPickHandler(fn) { pickHandler = fn; },
+    setPickHandler(fn, { preferCells: nextPreferCells = false } = {}) { pickHandler = fn; preferCells = nextPreferCells; },
     // 検証パネル用のトグル・フェーダー。強さ0〜1: 0=ほぼ無効(farを遠くへ逃がす)、
     // 1=現状のチューニング値(near=CAMERA_DIST-1 / far=CAMERA_DIST+10)
     setFogEnabled(on) { scene.fog = on ? fogObj : null; },

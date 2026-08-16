@@ -15,9 +15,9 @@ const makeState = (guardian, layout, equipment = {}, party = {}, seed = 0) => {
   const battleLayout = guardian ? "guardian" : layout;
   const { grid, starts } = createExpeditionBattleLayout(battleLayout, seed);
   const units = [
-    { id: "hero", name: heroConfig.name, side: "party", ...starts.hero, facing: facingToward(starts.hero, starts.enemy), modelFacingOffset: modelFacingOffset.party, hp: Math.min(hero.hp, party.hero ?? hero.hp), maxHp: hero.hp, atk: hero.atk, agility: heroConfig.agility, height: heroConfig.height, modelId: heroConfig.modelId },
-    { id: "mage", name: mageConfig.name, side: "party", ...starts.mage, facing: facingToward(starts.mage, starts.enemy), modelFacingOffset: modelFacingOffset.party, hp: Math.min(mage.hp, party.mage ?? mage.hp), maxHp: mage.hp, atk: mage.atk, agility: mageConfig.agility, height: mageConfig.height, modelId: mageConfig.modelId },
-    { id: "enemy", name: foeConfig.name, side: "enemy", ...starts.enemy, facing: facingToward(starts.enemy, starts.hero), modelFacingOffset: modelFacingOffset.enemy, hp: foeConfig.hp, maxHp: foeConfig.hp, atk: foeConfig.atk, agility: foeConfig.agility, height: foeConfig.height, modelId: foeConfig.modelId }
+    { id: "hero", name: heroConfig.name, side: "party", ...starts.hero, facing: facingToward(starts.hero, starts.enemy), modelFacingOffset: modelFacingOffset.party, hp: Math.min(hero.hp, party.hero ?? hero.hp), maxHp: hero.hp, atk: hero.atk, agility: heroConfig.agility, height: heroConfig.height, canClimb: heroConfig.canClimb, maxObstacleHeight: EXPEDITION_BATTLE_CONFIG.movement.maxObstacleHeight, modelId: heroConfig.modelId },
+    { id: "mage", name: mageConfig.name, side: "party", ...starts.mage, facing: facingToward(starts.mage, starts.enemy), modelFacingOffset: modelFacingOffset.party, hp: Math.min(mage.hp, party.mage ?? mage.hp), maxHp: mage.hp, atk: mage.atk, agility: mageConfig.agility, height: mageConfig.height, canClimb: mageConfig.canClimb, maxObstacleHeight: EXPEDITION_BATTLE_CONFIG.movement.maxObstacleHeight, modelId: mageConfig.modelId },
+    { id: "enemy", name: foeConfig.name, side: "enemy", ...starts.enemy, facing: facingToward(starts.enemy, starts.hero), modelFacingOffset: modelFacingOffset.enemy, hp: foeConfig.hp, maxHp: foeConfig.hp, atk: foeConfig.atk, agility: foeConfig.agility, height: foeConfig.height, canClimb: foeConfig.canClimb, maxObstacleHeight: EXPEDITION_BATTLE_CONFIG.movement.maxObstacleHeight, modelId: foeConfig.modelId }
   ];
   return { grid, units, order: turnOrder(units).map(u => u.id), turn: 0, log: [guardian ? "守護者が宝箱を守っている。" : layout === "junction" ? "坑道の獣が三叉路を塞いだ。" : "坑道の獣が狭い通路を塞いだ。"] };
 };
@@ -32,7 +32,7 @@ export default function ExpeditionBattle({ guardian, layout = "corridor", order,
   const partyAlive = alive(state.units, "party"), enemyAlive = alive(state.units, "enemy");
   const playerTurn = active?.id === "hero" && partyAlive && enemyAlive;
   const adjacentTargets = playerTurn ? state.units.filter(u => u.side === "enemy" && u.hp > 0 && isAdjacent(active, u)) : [];
-  const heroReach = playerTurn && !moved ? reachableCells(state.grid, active, movePointsFor(active.agility), occupiedBy(state.units, active.id)) : [];
+  const heroReach = playerTurn && !moved ? reachableCells(state.grid, active, movePointsFor(active.agility), occupiedBy(state.units, active.id), active) : [];
   const scheduleNextTurn = (expectedTurn, delay = EXPEDITION_BATTLE_CONFIG.timing.turnTransitionMs) => {
     clearTimeout(turnTimer.current);
     setBusy(true);
@@ -78,7 +78,7 @@ export default function ExpeditionBattle({ guardian, layout = "corridor", order,
       const t = state.units.find(u => u.id === data.id);
       if (t && heroAction === "attack" && targets.some(x => x.id === t.id) && !busy) { setHeroAction(null); damage(active, t); scheduleNextTurn(state.turn, EXPEDITION_BATTLE_CONFIG.timing.attackSettleMs); }
       else if (data.kind === "cell" && heroAction === "move" && !moved && heroReach.some(p => p.x === data.x && p.y === data.y)) { moveUnit(active, data, "あなたは移動した。"); setMoved(true); setHeroAction(null); }
-    });
+    }, { preferCells: heroAction === "move" });
   }, [state, active?.id, playerTurn, moved, heroAction, busy]);
   useEffect(() => {
     if (!partyAlive || !enemyAlive) { onFinish(enemyAlive ? "defeat" : "victory", Object.fromEntries(state.units.filter(u => u.side === "party").map(u => [u.id, u.hp]))); return; }

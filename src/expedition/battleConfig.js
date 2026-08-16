@@ -40,6 +40,10 @@ export const EXPEDITION_BATTLE_CONFIG = {
       max: 6,
     },
   },
+  movement: {
+    /** 通常キャラが乗れる障害物の高さの上限（この値以上は不可）。低くすると高所を避ける必要が増す。単位: タイル高。 */
+    maxObstacleHeight: 0.5,
+  },
   units: {
     /** 主人公の基礎値。装備の補正はatk/hpへ加算される。 */
     hero: {
@@ -49,6 +53,7 @@ export const EXPEDITION_BATTLE_CONFIG = {
       /** 装備前の最大HP。高いほど倒れにくい。単位: HP。 */ hp: 16,
       /** 行動順と移動力に使う敏捷。高いほど先手と移動距離を得やすい。単位: 敏捷値。 */ agility: 7,
       /** 3D上のモデルの見かけの高さ。ゲーム上の当たり判定は変わらない。単位: タイル高。 */ height: 1.6,
+      /** 高い障害物を登れるか。falseならmovement.maxObstacleHeight以上のブロックへ入れない。 */ canClimb: false,
     },
     /** リディアの基礎値。遠隔攻撃の演出と行動順に使う。 */
     mage: {
@@ -58,6 +63,7 @@ export const EXPEDITION_BATTLE_CONFIG = {
       /** 装備前の最大HP。高いほど倒れにくい。単位: HP。 */ hp: 12,
       /** 行動順と移動力に使う敏捷。高いほど先手と移動距離を得やすい。単位: 敏捷値。 */ agility: 5,
       /** 3D上のモデルの見かけの高さ。ゲーム上の当たり判定は変わらない。単位: タイル高。 */ height: 1.6,
+      /** 高い障害物を登れるか。falseならmovement.maxObstacleHeight以上のブロックへ入れない。 */ canClimb: false,
     },
     /** 通常遭遇の敵の基礎値。 */
     enemy: {
@@ -67,6 +73,7 @@ export const EXPEDITION_BATTLE_CONFIG = {
       /** 敵の最大HP。高いほど撃破までの攻撃回数が増える。単位: HP。 */ hp: 8,
       /** 行動順と移動力に使う敏捷。高いほど先手と移動距離を得やすい。単位: 敏捷値。 */ agility: 4,
       /** 3D上のモデルの見かけの高さ。ゲーム上の当たり判定は変わらない。単位: タイル高。 */ height: 0.9,
+      /** 高い障害物を登れるか。坑道の獣は高所ブロックにも乗れる。 */ canClimb: true,
     },
     /** 宝箱守護者の基礎値。通常敵との差をここだけで調整する。 */
     guardian: {
@@ -76,6 +83,7 @@ export const EXPEDITION_BATTLE_CONFIG = {
       /** 守護者の最大HP。高いほど撃破までの攻撃回数が増える。単位: HP。 */ hp: 18,
       /** 行動順と移動力に使う敏捷。高いほど先手と移動距離を得やすい。単位: 敏捷値。 */ agility: 4,
       /** 3D上のモデルの見かけの高さ。ゲーム上の当たり判定は変わらない。単位: タイル高。 */ height: 0.9,
+      /** 高い障害物を登れるか。守護者は高所ブロックにも乗れる。 */ canClimb: true,
     },
   },
   timing: {

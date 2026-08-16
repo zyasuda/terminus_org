@@ -189,7 +189,13 @@ await page.locator("[data-battle-layout='junction-7x7']").waitFor();
 assert.equal(await page.locator("[data-battle-layout='junction-7x7']").count(), 1, "三叉路の固定遭遇はT字の専用盤面で始まる");
 const junction = page.locator("[data-battle-layout='junction-7x7']");
 assert.ok(Number(await junction.getAttribute("data-obstacle-count")) >= EXPEDITION_BATTLE_CONFIG.board.obstacles.min, "三叉路にも少数のランダム障害物を置く");
-assert.equal(Number(await junction.locator("[data-camera]").getAttribute("data-void-boundary-wall-count")), 15, "三叉路は内側の盤外境界だけに壁面を置き、三つの出口は塞がない");
+const junctionGrid = await battleLayout("junction");
+const junctionVoidBoundaryCount = junctionGrid.cells.reduce((count, cell, index) => {
+  if (!cell.walkable) return count;
+  const x = index % junctionGrid.w, y = Math.floor(index / junctionGrid.w);
+  return count + [[0, -1], [1, 0], [0, 1], [-1, 0]].filter(([dx, dy]) => x + dx >= 0 && y + dy >= 0 && x + dx < junctionGrid.w && y + dy < junctionGrid.h && junctionGrid.cells[(y + dy) * junctionGrid.w + x + dx]?.void).length;
+}, 0);
+assert.equal(Number(await junction.locator("[data-camera]").getAttribute("data-void-boundary-wall-count")), junctionVoidBoundaryCount, "三叉路は障害物ではなく盤外との境界だけに壁面を置き、三つの出口は塞がない");
 await page.screenshot({ path: "/tmp/expedition-junction-battle.png" });
 await finishBattle("junction");
 await page.locator("svg[aria-label='探索地図']").waitFor();
@@ -226,11 +232,6 @@ assert.ok(
   near(initialFacing.enemy, Math.atan2(initialPositions.hero.x - initialPositions.enemy.x, initialPositions.hero.y - initialPositions.enemy.y)),
   "通路端で横並びの味方と敵が正面から対峙する"
 );
-for (const direction of ["1", "2", "3", "0"]) {
-  await page.getByRole("button", { name: "視点を回す" }).click();
-  await page.waitForTimeout(400);
-  assert.equal(await view.getAttribute("data-view-direction"), direction, `視点を${direction}方向へ回転できる`);
-}
 await page.screenshot({ path: "/tmp/expedition-corridor-open.png" });
 await page.screenshot({ path: "/tmp/expedition-facing-start.png" });
 
@@ -266,7 +267,7 @@ await page.screenshot({ path: "/tmp/expedition-combat-camera.png" });
 await page.locator("[data-camera='iso']").waitFor({ timeout: 3500 });
 assert.equal(await page.locator("[data-camera='iso']").count(), 1, "移動後の攻撃演出はアイソメトリックへ戻る");
 
-// 隣接中でも移動を選べることは、青マスの表示まで確認する。
+// 2回目の主人公手番でも、隣接中に移動を実行できることまで確認する。
 await waitForHero();
 const beforeAdjacentMove = await positions();
 assert.ok(isAdjacent(beforeAdjacentMove.hero, beforeAdjacentMove.enemy), "敵に隣接した主人公手番になる");
@@ -276,7 +277,17 @@ await heroButton("移動").click();
 await page.locator('[data-hero-action="move"]').waitFor();
 assert.ok((await reachCells()).some(cell => cell.x === sideStep.x && cell.y === sideStep.y), "隣接中でも青い移動先を表示する");
 assert.ok((await text()).includes("移動先を選択中"), "隣接中の移動選択状態をHUDで表示する");
+await page.waitForTimeout(100); // React反映後にThree.jsの選択ハンドラを更新する
+await clickGridPoint(corridorGrid, sideStep.x, sideStep.y);
+await page.locator('[data-hero-action="moved"]').waitFor();
+const movedHero = (await positions()).hero;
+assert.deepEqual(movedHero, { x: sideStep.x, y: sideStep.y }, "2回目の主人公手番でも青マスを実クリックして移動する");
 await heroButton("待機").click();
+for (const direction of ["1", "2", "3", "0"]) {
+  await page.getByRole("button", { name: "視点を回す" }).click();
+  await page.waitForTimeout(400);
+  assert.equal(await view.getAttribute("data-view-direction"), direction, `視点を${direction}方向へ回転できる`);
+}
 await finishBattle(false);
 
 await travelTo("fight-1");

@@ -5,7 +5,7 @@
 
 import assert from "node:assert/strict";
 import {
-  createGrid, isWalkable, inBounds, cellAt,
+  createGrid, isWalkable, inBounds, cellAt, canOccupyCell,
   isAdjacent, movePointsFor, reachableCells,
   surroundMultiplier, adjacentAllies, turnOrder, resolveMelee,
   chooseEnemyAction, chooseMoveToward, makeRng, scatterObstacles, occupiedBy, pathTo,
@@ -87,6 +87,23 @@ const near = (a, b) => Math.abs(a - b) < 1e-9;
 
   // 起点は結果に含めない
   assert.ok(!one.some(c => c.x === 2 && c.y === 1), "起点は含めない");
+}
+
+/* --- 高所ブロック --- */
+{
+  const g = createGrid(["...."]);
+  cellAt(g, 1, 0).obstacle = { height: 0.5 };
+  cellAt(g, 2, 0).obstacle = { height: 0.75 };
+  cellAt(g, 3, 0).obstacle = { height: 1 };
+  cellAt(g, 3, 0).walkable = false;
+  const party = { maxObstacleHeight: 0.5 };
+  const climber = { maxObstacleHeight: 0.5, canClimb: true };
+  assert.equal(canOccupyCell(g, 1, 0, party), false, "通常キャラは高さ0.5へ乗れない");
+  assert.equal(canOccupyCell(g, 2, 0, party), false, "通常キャラは高さ0.75へ乗れない");
+  assert.equal(canOccupyCell(g, 3, 0, party), false, "通常キャラは高さ1へ乗れない");
+  assert.equal(canOccupyCell(g, 3, 0, climber), true, "登攀能力者は高さ1のブロックへ乗れる");
+  assert.deepEqual(reachableCells(g, { x: 0, y: 0 }, 3, [], party), [], "通常キャラの経路には高所を含めない");
+  assert.ok(reachableCells(g, { x: 0, y: 0 }, 3, [], climber).some(cell => cell.x === 3), "登攀能力者は高所を越えて進める");
 }
 
 /* --- 水溜り(移動コスト2倍) --- */

@@ -15,7 +15,7 @@ for (const guardian of [false, true]) {
     assert.ok(blocks.every(cell => HEIGHTS.has(cell.obstacle.height)), `${guardian ? "守護者" : "通路"} ${seed}: 高さは4段階`);
     assert.ok(grid.cells.every(cell => cell.walkable || !!cell.obstacle), `${guardian ? "守護者" : "通路"} ${seed}: 外周壁を置かない`);
     for (const start of Object.values(starts)) assert.ok(isWalkable(grid, start.x, start.y), `${guardian ? "守護者" : "通路"} ${seed}: 開始位置を空ける`);
-    const reached = reachableCells(grid, starts.hero, 99);
+    const reached = reachableCells(grid, starts.hero, 99, [], { maxObstacleHeight: EXPEDITION_BATTLE_CONFIG.movement.maxObstacleHeight });
     assert.ok(reached.some(cell => cell.x === starts.enemy.x && cell.y === starts.enemy.y), `${guardian ? "守護者" : "通路"} ${seed}: 両陣営が到達可能`);
   }
   assert.ok(blockCounts.has(EXPEDITION_BATTLE_CONFIG.board.obstacles.max), `${guardian ? "守護者" : "通路"}: Configの障害物上限まで生成できる`);
@@ -47,7 +47,13 @@ assert.ok(junction.grid.cells.filter(cell => !cell.walkable && !cell.obstacle).e
 assert.ok(junction.grid.cells.filter(cell => cell.obstacle).every(cell => !cell.void), "ランダム障害物は三叉路の床だけに置く");
 assert.deepEqual(junction.starts.enemy, EXPEDITION_BATTLE_CONFIG.board.junction.enemyStart, "三叉路の敵位置はConfigから読む");
 assert.equal(junction.grid.cells.filter(cell => !cell.void).length, 27, "三叉路は各枝が3マス幅のT字の床だけを持つ");
-assert.ok(reachableCells(junction.grid, junction.starts.hero, 99).some(cell => cell.x === junction.starts.enemy.x && cell.y === junction.starts.enemy.y), "三叉路でも両陣営は到達可能");
+assert.ok(reachableCells(junction.grid, junction.starts.hero, 99, [], { maxObstacleHeight: EXPEDITION_BATTLE_CONFIG.movement.maxObstacleHeight }).some(cell => cell.x === junction.starts.enemy.x && cell.y === junction.starts.enemy.y), "三叉路でも通常キャラが両陣営へ到達可能");
+const voidBoundaryEdges = junction.grid.cells.reduce((count, cell, index) => {
+  if (!cell.walkable) return count;
+  const x = index % junction.grid.w, y = Math.floor(index / junction.grid.w);
+  return count + [[0, -1], [1, 0], [0, 1], [-1, 0]].filter(([dx, dy]) => x + dx >= 0 && y + dy >= 0 && x + dx < junction.grid.w && y + dy < junction.grid.h && junction.grid.cells[(y + dy) * junction.grid.w + x + dx]?.void).length;
+}, 0);
+assert.equal(voidBoundaryEdges, 14, "三叉路の背景壁候補は盤外との境界だけで、高い障害物の周囲は含めない");
 assert.equal(facingToward({ x: 0, y: 0 }, { x: 1, y: 0 }), Math.PI / 2, "東へ移動する時は右を向く");
 assert.equal(facingToward({ x: 1, y: 1 }, { x: 1, y: 0 }), Math.PI, "北の敵へ対峙する時は奥を向く");
 assert.equal(facingToward({ x: 1, y: 1 }, { x: 1, y: 1 }, 0.7), 0.7, "目標が無ければ最後の向きを維持する");

@@ -68,7 +68,7 @@ export function makeRng(seed) {
 const LOW_HEIGHTS = [0.25, 0.5, 0.75];
 
 // 2点が行き来できるか(移動力を無視した到達性の確認)
-function pathExists(grid, from, to) {
+function pathExists(grid, from, to, canTraverse = (x, y) => isWalkable(grid, x, y)) {
   const seen = new Set([key(from.x, from.y)]);
   let frontier = [from];
   while (frontier.length) {
@@ -77,7 +77,7 @@ function pathExists(grid, from, to) {
       if (p.x === to.x && p.y === to.y) return true;
       for (const [dx, dy] of DIRS8) {
         const x = p.x + dx, y = p.y + dy, k = key(x, y);
-        if (seen.has(k) || !isWalkable(grid, x, y)) continue;
+        if (seen.has(k) || !canTraverse(x, y)) continue;
         seen.add(k);
         next.push({ x, y });
       }
@@ -91,10 +91,10 @@ function pathExists(grid, from, to) {
 // 「両端(最初と最後)さえ繋がっていればよい」だと、間の1体だけが孤立していても
 // 見逃してしまう(実際に指摘を受けた不具合)。開始位置(keepClear)全員の保護には
 // これが要る
-function allConnected(grid, points) {
+function allConnected(grid, points, canTraverse = (x, y) => isWalkable(grid, x, y)) {
   if (points.length < 2) return true;
   const [first, ...rest] = points;
-  return rest.every(p => pathExists(grid, first, p));
+  return rest.every(p => pathExists(grid, first, p, canTraverse));
 }
 
 /* ---------------- 盤面の外形(長方形の角・辺を削る) ---------------- */
@@ -186,7 +186,8 @@ export function carveShape(grid, rng, { keepClear = [] } = {}) {
 // keepClear(開始位置)には置かない。置いた結果keepClear全員が互いに行き来
 // できなくなる(誰か1人だけ孤立する場合も含む)柱は取り消すので、
 // 通り抜けられない盤面や、出られない孤島にはならない
-export function scatterObstacles(grid, rng, { pillars = 5, rubble = 6, keepClear = [], count = null } = {}) {
+export function scatterObstacles(grid, rng, { pillars = 5, rubble = 6, keepClear = [], count = null, canTraverse = null } = {}) {
+  const traverse = canTraverse || ((x, y) => isWalkable(grid, x, y));
   const clear = new Set(keepClear.map(p => key(p.x, p.y)));
   const open = [];
   for (let y = 0; y < grid.h; y++) {
@@ -210,7 +211,7 @@ export function scatterObstacles(grid, rng, { pillars = 5, rubble = 6, keepClear
       const height = [...LOW_HEIGHTS, 1][Math.floor(rng() * 4)];
       c.obstacle = { height };
       if (height === 1) c.walkable = false;
-      if (!allConnected(grid, keepClear)) {
+      if (!allConnected(grid, keepClear, traverse)) {
         c.obstacle = null;
         c.walkable = true;
         continue;
@@ -226,7 +227,7 @@ export function scatterObstacles(grid, rng, { pillars = 5, rubble = 6, keepClear
     const c = cellAt(grid, p.x, p.y);
     c.obstacle = { height: 1 };
     c.walkable = false;
-    if (!allConnected(grid, keepClear)) {
+    if (!allConnected(grid, keepClear, traverse)) {
       c.obstacle = null;                                // 行き来を断つ柱は置かない
       c.walkable = true;
     } else {
@@ -316,12 +317,22 @@ export function occupiedBy(units, moverId) {
   return units.filter(u => u.hp > 0 && u.id !== moverId).map(u => ({ x: u.x, y: u.y }));
 }
 
+// 通行可能かを、通常の床判定に加えて障害物の高さと登攀能力で決める。
+// `maxObstacleHeight` 未指定は既存盤面との互換のため高さ制限なしにする。
+export function canOccupyCell(grid, x, y, unit = {}) {
+  const cell = cellAt(grid, x, y);
+  if (!cell || cell.void || (!cell.walkable && !cell.obstacle)) return false;
+  if (!cell.obstacle) return cell.walkable;
+  if (unit.canClimb) return true;
+  return cell.walkable && cell.obstacle.height < (unit.maxObstacleHeight ?? Infinity);
+}
+
 // 到達可能マスを列挙する。8方向・そのマスへ入るコストはmoveCostAt()(既定1、
 // 水溜りは2)。コストが均一でなくなったのでBFSではなくダイクストラ法で解く。
 // 盤面は最大64マスなので、優先度付きキューを使わない素朴なO(V^2)で十分。
 // 他ユニットのいるマスは通過も着地も不可として扱う(すり抜けを許すならblockedの作り方を変える)。
 // 各マスに from(直前のマス)を持たせるので、pathTo()で経路を復元できる
-export function reachableCells(grid, start, movePoints, occupied = []) {
+export function reachableCells(grid, start, movePoints, occupied = [], unit = {}) {
   const blocked = new Set(occupied.map(p => key(p.x, p.y)));
   const startKey = key(start.x, start.y);
   const dist = new Map([[startKey, 0]]);
@@ -339,7 +350,7 @@ export function reachableCells(grid, start, movePoints, occupied = []) {
 
     for (const [dx, dy] of DIRS8) {
       const x = cx + dx, y = cy + dy, k = key(x, y);
-      if (settled.has(k) || !isWalkable(grid, x, y) || blocked.has(k)) continue;
+      if (settled.has(k) || !canOccupyCell(grid, x, y, unit) || blocked.has(k)) continue;
       const nd = curCost + moveCostAt(grid, x, y);
       if (nd > movePoints) continue;
       if (!dist.has(k) || nd < dist.get(k)) {
@@ -565,7 +576,7 @@ const dist = (a, b) => Math.max(Math.abs(a.x - b.x), Math.abs(a.y - b.y));
 // 指定した目標へ近づく最良の到達マスを選ぶ。敵AI・相棒の護衛/退却で同じ
 // 「通れる範囲から距離が縮むマスを選ぶ」規則を使うため、盤面規則はここだけにする。
 export function chooseMoveToward(grid, unit, target, units) {
-  const cells = reachableCells(grid, unit, movePointsFor(unit.agility), occupiedBy(units, unit.id));
+  const cells = reachableCells(grid, unit, movePointsFor(unit.agility), occupiedBy(units, unit.id), unit);
 
   let bestCell = null, bestDist = dist(unit, target);
   for (const c of cells) {

@@ -1,4 +1,4 @@
-import { createGrid, makeRng, scatterObstacles } from "../battle/core.js";
+import { canOccupyCell, createGrid, makeRng, scatterObstacles } from "../battle/core.js";
 import { EXPEDITION_BATTLE_CONFIG } from "./battleConfig.js";
 
 const openRows = ({ width, height }) => Array.from({ length: height }, () => ".".repeat(width));
@@ -29,9 +29,12 @@ export function createExpeditionBattleLayout(layout, seed = 0) {
   };
   const grid = gridFor(board);
   const { min, max } = EXPEDITION_BATTLE_CONFIG.board.obstacles;
+  const partyMovement = { maxObstacleHeight: EXPEDITION_BATTLE_CONFIG.movement.maxObstacleHeight };
   scatterObstacles(grid, rng, {
     count: min + Math.floor(rng() * (max - min + 1)),
     keepClear: Object.values(starts),
+    // 味方が高いブロックで分断されないよう、通常キャラの経路で生成時に接続を確認する。
+    canTraverse: (x, y) => canOccupyCell(grid, x, y, partyMovement),
   });
   return { grid, starts };
 }
