@@ -8,6 +8,7 @@ const keyOf = cell => `${cell.x},${cell.y}`;
 const markerFor = (floor, room) => {
   if (room.id === "entrance") return "△";
   const event = floor.events.find(item => item.roomId === room.id && !item.done);
+  if (room.kind === "junction") return event ? "T!" : "T";
   if (event) return event.kind === "guardian" ? "♛" : "!";
   if (floor.chest.roomId === room.id && !floor.chest.opened) return "□";
   return "";

@@ -40,6 +40,14 @@ assert.deepEqual(normalOrders, new Set(["0,2", "2,0"]), "通常通路ではseed�
 assert.deepEqual(guardianOrders, new Set(["3,4", "4,3"]), "守護者戦でも味方の上下を入れ替える");
 assert.deepEqual(EXPEDITION_BATTLE_CONFIG.presentation.modelFacingOffset, { party: 0, enemy: 0 }, "対峙方向はrootのfacingだけで決める");
 assert.deepEqual(signature(createExpeditionBattleLayout(false, 42)), signature(createExpeditionBattleLayout(false, 42)), "同じseedは同じブロック配置になる");
+const junction = createExpeditionBattleLayout("junction", 42);
+assert.equal(junction.grid.w, 7, "三叉路盤面の横幅は定義した形状から読む");
+assert.equal(junction.grid.h, 7, "三叉路盤面の縦幅は定義した形状から読む");
+assert.ok(junction.grid.cells.filter(cell => !cell.walkable && !cell.obstacle).every(cell => cell.void), "三叉路の枝以外は壁ブロックでなく盤外として描画する");
+assert.ok(junction.grid.cells.filter(cell => cell.obstacle).every(cell => !cell.void), "ランダム障害物は三叉路の床だけに置く");
+assert.deepEqual(junction.starts.enemy, EXPEDITION_BATTLE_CONFIG.board.junction.enemyStart, "三叉路の敵位置はConfigから読む");
+assert.equal(junction.grid.cells.filter(cell => !cell.void).length, 27, "三叉路は各枝が3マス幅のT字の床だけを持つ");
+assert.ok(reachableCells(junction.grid, junction.starts.hero, 99).some(cell => cell.x === junction.starts.enemy.x && cell.y === junction.starts.enemy.y), "三叉路でも両陣営は到達可能");
 assert.equal(facingToward({ x: 0, y: 0 }, { x: 1, y: 0 }), Math.PI / 2, "東へ移動する時は右を向く");
 assert.equal(facingToward({ x: 1, y: 1 }, { x: 1, y: 0 }), Math.PI, "北の敵へ対峙する時は奥を向く");
 assert.equal(facingToward({ x: 1, y: 1 }, { x: 1, y: 1 }, 0.7), 0.7, "目標が無ければ最後の向きを維持する");

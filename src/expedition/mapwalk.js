@@ -22,8 +22,9 @@ export function step(state, map, dir) {
   const cell = map.cells.get(keyOf(next));
   if (!cell) return false;
   state.pos = next;
-  state.at = cell.kind === "room" ? cell.id : null;
-  if (cell.kind === "room") state.visited.add(cell.id);
+  // 交差点も部屋と同じく停止・訪問の対象にする。通路だけを自動通過する。
+  state.at = cell.kind === "corridor" ? null : cell.id;
+  if (cell.kind !== "corridor") state.visited.add(cell.id);
   else {
     const corridor = map.corridors.find(item => item.path.some(part => part.x === next.x && part.y === next.y));
     if (corridor) state.walked.add(corridorKey(corridor.a, corridor.b));

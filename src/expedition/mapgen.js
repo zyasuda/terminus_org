@@ -98,7 +98,10 @@ export function generate(chapter, seed) {
   const scenes = chapter.scenes || [];
   if (!scenes.length) return null;
   const rng = makeRng(seed), links = linksOf(chapter);
-  const sizes = new Map(scenes.map(scene => [scene.id, { id: scene.id, name: scene.name, w: randomInt(rng, [4, 7]), h: randomInt(rng, [3, 5]) }]));
+  const sizes = new Map(scenes.map(scene => [scene.id, {
+    id: scene.id, name: scene.name, kind: scene.kind || "room",
+    w: scene.size?.w ?? randomInt(rng, [4, 7]), h: scene.size?.h ?? randomInt(rng, [3, 5]),
+  }]));
   const entrance = scenes[0].id;
   const rooms = new Map([[entrance, { ...sizes.get(entrance), x: 0, y: 0 }]]);
   const corridors = [];
@@ -135,7 +138,7 @@ export function generate(chapter, seed) {
     if (!placed) return null;
   }
   const cells = new Map();
-  for (const room of rooms.values()) for (const cell of roomCells(room)) cells.set(keyOf(cell.x, cell.y), { kind: "room", id: room.id });
+  for (const room of rooms.values()) for (const cell of roomCells(room)) cells.set(keyOf(cell.x, cell.y), { kind: room.kind, id: room.id });
   for (const corridor of corridors) for (const cell of corridor.path) cells.set(keyOf(cell.x, cell.y), { kind: "corridor" });
   const coordinates = [...cells.keys()].map(key => key.split(",").map(Number));
   const bounds = { minX: Math.min(...coordinates.map(([x]) => x)), minY: Math.min(...coordinates.map(([, y]) => y)), maxX: Math.max(...coordinates.map(([x]) => x)), maxY: Math.max(...coordinates.map(([, y]) => y)) };

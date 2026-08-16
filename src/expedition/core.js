@@ -4,10 +4,11 @@ import { generateWithRetry } from "./mapgen.js";
 import { run, start } from "./mapwalk.js";
 
 const EXPEDITION_CHAPTER = { scenes: [
-  { id: "entrance", name: "入口", exits: [{ to: "fight-0" }] },
-  { id: "fight-0", name: "崩落跡", exits: [{ to: "entrance" }, { to: "fight-1" }, { to: "store" }] },
+  { id: "entrance", name: "入口", exits: [{ to: "junction-0" }] },
+  { id: "junction-0", name: "三叉路", kind: "junction", size: { w: 1, h: 1 }, exits: [{ to: "entrance" }, { to: "fight-0" }, { to: "store" }] },
+  { id: "fight-0", name: "崩落跡", exits: [{ to: "junction-0" }, { to: "fight-1" }] },
   { id: "fight-1", name: "古い通路", exits: [{ to: "fight-0" }, { to: "guardian" }] },
-  { id: "store", name: "空の貯蔵室", exits: [{ to: "fight-0" }] },
+  { id: "store", name: "空の貯蔵室", exits: [{ to: "junction-0" }] },
   { id: "guardian", name: "封印庫", exits: [{ to: "fight-1" }] },
 ] };
 
@@ -87,12 +88,14 @@ export function createFloor(seed = Date.now()) {
   const generated = generateWithRetry(EXPEDITION_CHAPTER, seed);
   const state = start(generated.map);
   return {
+    mapVersion: 2,
     seed: generated.seed,
     pos: state.pos,
     at: state.at,
     visited: [...state.visited], walked: [...state.walked], seen: [...state.seen],
     party: { hero: 16, mage: 12 },
     events: [
+      { id: "junction-0", roomId: "junction-0", kind: "junction", done: false },
       { id: "fight-0", roomId: "fight-0", kind: "fight", done: false },
       { id: "fight-1", roomId: "fight-1", kind: "fight", done: false },
       { id: "guardian", roomId: "guardian", kind: "guardian", done: false },

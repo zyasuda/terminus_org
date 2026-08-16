@@ -3,9 +3,11 @@ import { ITEMS, createFloor, equipFromStash, equipInField, eventAt, isEntrance, 
 const a = createFloor(123), b = createFloor(123);
 assert.equal(a.seed, b.seed);
 assert.deepEqual([...mapForFloor(a).rooms], [...mapForFloor(b).rooms]);
-assert.equal(mapForFloor(a).rooms.size, 5, "入口、2遭遇、寄り道、守護者を部屋へ配置する");
+assert.equal(mapForFloor(a).rooms.size, 6, "入口、三叉路、2遭遇、寄り道、守護者を配置する");
+assert.equal(mapForFloor(a).rooms.get("junction-0")?.kind, "junction", "三叉路は部屋とは別種の停止ノードにする");
 assert.ok(mapForFloor(a).corridors.length >= 4, "部屋同士は独立した通路で繋ぐ");
 assert.equal(a.events.filter(e => e.kind === "fight").length, 2);
+assert.equal(a.events.filter(e => e.kind === "junction").length, 1, "三叉路の固定遭遇を持つ");
 assert.equal(a.events.filter(e => e.kind === "guardian").length, 1);
 assert.deepEqual(keepAfterDefeat(["a", "b", "c", "d", "e"], 8), keepAfterDefeat(["a", "b", "c", "d", "e"], 8));
 assert.equal(walk(a, "north").seed, a.seed);
@@ -35,6 +37,13 @@ for (const step of route(a, a, { roomId: "fight-0" })) {
   crossing = next;
 }
 assert.ok(autoCrossed, "通路へ踏み出した1入力で、次の曲がり角か部屋まで自動通過する");
+let junction = a;
+for (const step of route(a, a, { roomId: "junction-0" })) {
+  junction = walk(junction, step.dir);
+  if (junction.at === "junction-0") break;
+}
+assert.equal(junction.at, "junction-0", "通路の自動通過は三叉路で止まる");
+assert.equal(mapForFloor(junction).cells.get(`${junction.pos.x},${junction.pos.y}`)?.kind, "junction", "停止位置は部屋ではない交差点セル");
 for (let seed = 1; seed <= 80; seed++) {
   const floor = createFloor(seed);
   for (const target of [...floor.events, floor.chest]) assert.ok(route(floor, floor, target), `seed ${seed} reaches ${target.id || "chest"}`);

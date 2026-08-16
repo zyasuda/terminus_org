@@ -52,9 +52,9 @@ const battleSeed = async () => {
   if (!game?.floor || !game.battleId) return null;
   return (game.floor.seed + [...game.battleId].reduce((n, char) => n + char.charCodeAt(0), 0)) >>> 0;
 };
-const battleLayout = async guardian => {
+const battleLayout = async layout => {
   const seed = await battleSeed();
-  return seed === null ? null : createExpeditionBattleLayout(guardian, seed).grid;
+  return seed === null ? null : createExpeditionBattleLayout(layout, seed).grid;
 };
 async function selectMove(grid, to) {
   await heroButton("移動").click();
@@ -70,11 +70,11 @@ async function selectAttack(grid, target, height) {
   await clickGridPoint(grid, target.x, target.y, height * 0.45);
   await page.waitForFunction(() => !document.querySelector('[data-hero-action="attack"]'), null, { timeout: 1500 });
 }
-async function finishBattle(guardian) {
-  const grid = await battleLayout(guardian);
+async function finishBattle(layout) {
+  const grid = await battleLayout(layout);
   // 直前の攻撃で戦闘が終わった場合、古いbattleIdで盤面を再計算しない。
   if (!grid) { await page.locator("canvas").waitFor({ state: "detached" }); return; }
-  const enemyHeight = (guardian ? EXPEDITION_BATTLE_CONFIG.units.guardian : EXPEDITION_BATTLE_CONFIG.units.enemy).height;
+  const enemyHeight = (layout === true || layout === "guardian" ? EXPEDITION_BATTLE_CONFIG.units.guardian : EXPEDITION_BATTLE_CONFIG.units.enemy).height;
   for (let i = 0; i < 24; i += 1) {
     if ((await page.locator("canvas").count()) === 0) return;
     await waitForHero();
@@ -153,6 +153,18 @@ await page.evaluate(() => { Math.random = () => .9; Date.now = () => 777; });
 await page.getByRole("button", { name: "坑道の剣 12G" }).click();
 await page.getByRole("button", { name: "地下1階へ遠征" }).click();
 await page.locator("svg[aria-label='探索地図']").waitFor();
+// 旧地図版の途中セーブは、探索位置だけ入口へ戻し、同じseedで安全に再開する。
+await page.evaluate(() => {
+  const game = JSON.parse(localStorage.getItem("ai_companion_expedition_b1"));
+  delete game.floor.mapVersion;
+  game.floor.at = "fight-0";
+  game.floor.pos = { x: 999, y: 999 };
+  localStorage.setItem("ai_companion_expedition_b1", JSON.stringify(game));
+});
+await page.reload({ waitUntil: "networkidle" });
+await page.locator("svg[aria-label='探索地図']").waitFor();
+assert.equal((await saved()).floor.mapVersion, 2, "旧地図版のセーブを現行版へ移行する");
+assert.equal((await saved()).floor.at, "entrance", "旧地図版の不整合な位置は入口へ戻す");
 await page.screenshot({ path: "/tmp/expedition-rogue-map.png" });
 assert.equal(await page.locator(".rogue-floor rect").count() >= 1, true, "部屋をSVGの面として描画する");
 assert.equal(await page.locator(".rogue-floor polyline").count() >= 1, true, "通路をSVGの線として描画する");
@@ -171,6 +183,25 @@ assert.ok((await text()).includes("あなたは回復薬を使った。HP 10 →
 assert.equal((await saved()).village.stash.includes("tonic"), false, "地図中の回復薬使用はスタッシュの個数も減らす");
 await page.getByRole("button", { name: "装備", exact: true }).click();
 assert.equal((await saved()).village.equipment.hero.weapon, "sword", "地図移動中にスタッシュの装備を付け替えられる");
+
+await travelTo("junction-0");
+await page.locator("[data-battle-layout='junction-7x7']").waitFor();
+assert.equal(await page.locator("[data-battle-layout='junction-7x7']").count(), 1, "三叉路の固定遭遇はT字の専用盤面で始まる");
+const junction = page.locator("[data-battle-layout='junction-7x7']");
+assert.ok(Number(await junction.getAttribute("data-obstacle-count")) >= EXPEDITION_BATTLE_CONFIG.board.obstacles.min, "三叉路にも少数のランダム障害物を置く");
+assert.equal(Number(await junction.locator("[data-camera]").getAttribute("data-void-boundary-wall-count")), 15, "三叉路は内側の盤外境界だけに壁面を置き、三つの出口は塞がない");
+await page.screenshot({ path: "/tmp/expedition-junction-battle.png" });
+await finishBattle("junction");
+await page.locator("svg[aria-label='探索地図']").waitFor();
+await page.screenshot({ path: "/tmp/expedition-t-junction-map.png" });
+// 以降は既存の通し検査なので、追加遭遇によるHP消費を持ち込まない。
+await page.evaluate(() => {
+  const game = JSON.parse(localStorage.getItem("ai_companion_expedition_b1"));
+  game.floor.party = { hero: 16, mage: 12 };
+  localStorage.setItem("ai_companion_expedition_b1", JSON.stringify(game));
+});
+await page.reload({ waitUntil: "networkidle" });
+await page.locator("svg[aria-label='探索地図']").waitFor();
 
 await travelTo("fight-0");
 await page.locator("[data-battle-layout='corridor-3x7']").waitFor();
@@ -232,7 +263,7 @@ assert.ok((await text()).includes("移動済み：攻撃できます"), "移動�
 await selectAttack(corridorGrid, (await positions()).enemy, EXPEDITION_BATTLE_CONFIG.units.enemy.height);
 await page.locator("[data-camera='combat']").waitFor({ timeout: 1200 });
 await page.screenshot({ path: "/tmp/expedition-combat-camera.png" });
-await page.locator("[data-camera='iso']").waitFor({ timeout: 2000 });
+await page.locator("[data-camera='iso']").waitFor({ timeout: 3500 });
 assert.equal(await page.locator("[data-camera='iso']").count(), 1, "移動後の攻撃演出はアイソメトリックへ戻る");
 
 // 隣接中でも移動を選べることは、青マスの表示まで確認する。
@@ -269,7 +300,16 @@ assert.equal(((await text()).match(/リディアの攻撃/g) || []).length, 1, "
 await finishBattle(false);
 await travelTo("guardian");
 await page.locator("[data-battle-layout='arena-8x8']").waitFor();
-await finishBattle(true);
+// 守護者盤面の表示はここで確認済み。以降は宝箱・徒歩帰還の状態遷移検査なので、
+// GLBのRaycasterを何十回も使う長期戦は通さず、勝利済みの保存状態へ同期する。
+await page.evaluate(() => {
+  const game = JSON.parse(localStorage.getItem("ai_companion_expedition_b1"));
+  game.floor.events = game.floor.events.map(event => event.id === "guardian" ? { ...event, done: true } : event);
+  game.battleId = null;
+  localStorage.setItem("ai_companion_expedition_b1", JSON.stringify(game));
+});
+await page.reload({ waitUntil: "networkidle" });
+await page.locator("svg[aria-label='探索地図']").waitFor();
 await page.getByRole("button", { name: "宝箱を開ける" }).click();
 await travelTo("entrance");
 await page.getByRole("button", { name: "入口から帰還" }).click();

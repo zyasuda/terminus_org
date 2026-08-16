@@ -44,7 +44,7 @@ const loadModel = path => {
   return modelTemplates.get(path);
 };
 
-export function createBattleScene(container, grid) {
+export function createBattleScene(container, grid, { voidBoundaryWalls = false } = {}) {
   const scene = new THREE.Scene();
   scene.background = new THREE.Color(COLOR.bg);
   // 奥行き方向の霞み。書き割りの上下グラデーションとは軸が違う(fogは奥行き、
@@ -341,6 +341,32 @@ export function createBattleScene(container, grid) {
     m.rotation.y = rotY;
     backdropGroup.add(m);
   });
+  // 三叉路の内側は、既存の背景壁と同じ片面の書き割りで縁取る。盤外セルを
+  // 壁マスに変えないため、移動・射線・障害物の規則には一切影響しない。
+  let voidBoundaryWallCount = 0;
+  if (voidBoundaryWalls) {
+    const edgeWall = (x, y, dx, dy) => {
+      const [wx, wz] = worldOf(x, y);
+      const wall = new THREE.Mesh(new THREE.PlaneGeometry(1, BACKDROP_H), backdropMat);
+      wall.position.set(wx + dx * 0.5, BACKDROP_H / 2, wz + dy * 0.5);
+      // PlaneGeometryの法線は+Z。必ず床側を向け、カメラの反対側からは消える。
+      wall.rotation.y = dy < 0 ? 0 : dy > 0 ? Math.PI : dx < 0 ? Math.PI / 2 : -Math.PI / 2;
+      backdropGroup.add(wall);
+      voidBoundaryWallCount += 1;
+    };
+    for (let y = 0; y < grid.h; y++) for (let x = 0; x < grid.w; x++) {
+      const cell = grid.cells[y * grid.w + x];
+      if (!cell?.walkable) continue;
+      for (const [dx, dy] of [[0, -1], [1, 0], [0, 1], [-1, 0]]) {
+        const nx = x + dx, ny = y + dy;
+        // グリッド外の三つの枝先は出口として開けておく。ここで描くのは
+        // グリッド内の盤外セルとの境目だけで、T字の凹角も自然に含まれる。
+        if (nx < 0 || ny < 0 || nx >= grid.w || ny >= grid.h) continue;
+        if (!grid.cells[ny * grid.w + nx]?.walkable) edgeWall(x, y, dx, dy);
+      }
+    }
+  }
+  container.dataset.voidBoundaryWallCount = String(voidBoundaryWallCount);
 
   /* --- 空気感の粒子(ゆらゆら立ち上る塵・埃) ---
      地面から上へ、少量だけゆっくり上がっていく演出。数を少なめにして
