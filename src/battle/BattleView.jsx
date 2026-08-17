@@ -11,6 +11,7 @@
    ========================================================= */
 
 import React, { useEffect, useRef, useState } from "react";
+import { D20Overlay } from "@terminus/d20-overlay";
 import { createBattleScene } from "./view3d.js";
 import {
   isAdjacent, movePointsFor, reachableCells,
@@ -62,6 +63,7 @@ export default function BattleView() {
   const [obstaclesOn, setObstaclesOn] = useState(false);
   const [waterOn, setWaterOn] = useState(false);
   const [holesOn, setHolesOn] = useState(false);
+  const [d20DemoResult, setD20DemoResult] = useState(null);
   const [mode, setMode] = useState("dialogue");
   const [closeCamera, setCloseCamera] = useState(false);
   const [dialogueFocusId, setDialogueFocusId] = useState("gareth");
@@ -526,6 +528,10 @@ export default function BattleView() {
           </button>)}
         </div>}
 
+        <div style={S.row}>
+          <button style={S.btn} onClick={() => setD20DemoResult(1 + Math.floor(Math.random() * 20))}>D20演出を試す</button>
+        </div>
+
         {/* 演出の見た目調整(検証用)。盤面のルールには影響しない */}
         {battleMode && <div style={S.row}>
           <label style={S.toggle}>
@@ -584,6 +590,12 @@ export default function BattleView() {
           {state.log.slice(-8).map((l, i) => <div key={i}>{l}</div>)}
         </div>}
       </div>
+      <D20Overlay
+        open={d20DemoResult !== null}
+        result={d20DemoResult ?? 20}
+        title="D20 演出テスト"
+        onComplete={() => setD20DemoResult(null)}
+      />
     </div>
   );
 }

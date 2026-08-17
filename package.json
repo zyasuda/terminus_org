@@ -21,6 +21,7 @@
   },
   "dependencies": {
     "@litert-lm/core": "^0.14.0",
+    "@terminus/d20-overlay": "file:../trpg-dice-overlay",
     "phaser": "^3.87.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",

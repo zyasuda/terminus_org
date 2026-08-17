@@ -31,6 +31,14 @@ if (!hud.includes("会話モード") || hud.includes("の手番") || hud.include
   throw new Error("会話モードのUIが戦闘UIと混ざっている:\n" + hud);
 }
 if (!loadedModels.has("gareth") || !loadedModels.has("lydia")) throw new Error("味方GLBが読み込まれていない");
+await page.locator('button:has-text("D20演出を試す")').click();
+await page.locator('button:has-text("ダイスを振る")').click();
+await page.waitForTimeout(250);
+await page.screenshot({ path: "/tmp/d20_smoke.png" });
+await page.waitForTimeout(1150);
+await page.screenshot({ path: "/tmp/d20_landed_smoke.png" });
+await page.waitForTimeout(1400);
+if (await page.locator('button:has-text("ダイスを振る")').count()) throw new Error("D20演出が完了しない");
 await page.screenshot({ path: "/tmp/dialogue_smoke.png" });
 await page.locator('button:has-text("リディア視点")').click();
 if (!(await page.locator("body").innerText()).includes("リディア視点：坑道の奥を見ている。")) {
