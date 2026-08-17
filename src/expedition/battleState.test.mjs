@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { createGrid, isAdjacent, isWalkable, movePointsFor, occupiedBy, reachableCells } from "../battle/core.js";
 import { EXPEDITION_BATTLE_CONFIG } from "./battleConfig.js";
-import { createExpeditionBattleLayout, facingToward } from "./battleState.js";
+import { chooseCompanionAction, createExpeditionBattleLayout, facingToward } from "./battleState.js";
 
 const HEIGHTS = new Set([0.25, 0.5, 0.75, 1]);
 const signature = layout => layout.grid.cells.map((cell, i) => cell.obstacle ? `${i}:${cell.obstacle.height}` : "").filter(Boolean);
@@ -62,4 +62,46 @@ const adjacentEnemy = { id: "enemy", x: 2, y: 1, hp: 10 };
 const adjacentMoves = reachableCells(createGrid(["...", "...", "..."]), adjacentHero, movePointsFor(adjacentHero.agility), occupiedBy([adjacentHero, adjacentEnemy], adjacentHero.id));
 assert.ok(isAdjacent(adjacentHero, adjacentEnemy), "攻撃可能な距離を確認する");
 assert.ok(adjacentMoves.some(cell => cell.x === 0 && cell.y === 1), "敵に隣接していても別の空きマスへ移動できる");
-console.log("expedition battle state: open boards, seeded blocks, reachable starts");
+
+// --- 相棒(リディア)の戦術判断 ---
+// 演出から切り離した判定なので、盤面とコマンドだけで結果が決まる。
+const mageAgility = EXPEDITION_BATTLE_CONFIG.units.mage.agility;
+// 射程(5)より遠くへ離せる盤面にする。7x7だと中央からどこへ置いても射程内になり、
+// 「撃てない時にどう動くか」を試せない。
+const openGrid = createGrid(Array.from({ length: 13 }, () => ".".repeat(13)));
+const companion = (mage, enemy, command, { extra = [], hero = { x: 3, y: 6 } } = {}) => {
+  const units = [{ id: "hero", side: "party", hp: 10, ...hero }, mage, ...(enemy ? [enemy] : []), ...extra];
+  return chooseCompanionAction({ grid: openGrid, units, mage, command });
+};
+const mageAt = (x, y) => ({ id: "mage", side: "party", x, y, hp: 12, atk: 3, agility: mageAgility });
+
+assert.equal(companion(mageAt(3, 3), { id: "enemy", side: "enemy", x: 3, y: 5, hp: 8 }, "attack").type, "cast",
+  "攻撃指示で射程内なら魔法を撃つ");
+const far = companion(mageAt(0, 0), { id: "enemy", side: "enemy", x: 6, y: 6, hp: 8 }, "attack");
+assert.equal(far.type, "move", "攻撃指示で射程外なら射程へ寄る");
+assert.ok(far.to.x > 0 || far.to.y > 0, "寄る先は敵の方向");
+assert.equal(companion(mageAt(3, 3), null, "attack").type, "none", "敵がいなければ攻撃指示では何もしない");
+
+assert.equal(companion(mageAt(3, 3), { id: "enemy", side: "enemy", x: 3, y: 5, hp: 8 }, "guard").type, "cast",
+  "護衛指示でも撃てるなら撃つ");
+// 前衛と敵を正反対に置く。どちらへ寄ったのかを移動方向だけで見分けられるようにする。
+const guarding = companion(mageAt(6, 6), { id: "enemy", side: "enemy", x: 12, y: 12, hp: 8 }, "guard", { hero: { x: 0, y: 0 } });
+assert.equal(guarding.type, "move", "護衛指示で撃てない時は前衛へ寄る");
+assert.ok(guarding.to.x < 6 && guarding.to.y < 6, "護衛の移動先は敵側ではなく前衛側");
+
+const retreating = companion(mageAt(4, 3), { id: "enemy", side: "enemy", x: 4, y: 4, hp: 8 }, "retreat");
+assert.equal(retreating.type, "move", "退却指示は隣接した敵がいても退がる");
+assert.ok(retreating.to.x < 4, "退却先は入口側(西)");
+assert.equal(companion(mageAt(0, 3), { id: "enemy", side: "enemy", x: 0, y: 4, hp: 8 }, "retreat").type, "wait",
+  "西端で退がれない時は待機する");
+
+assert.equal(companion(mageAt(3, 3), { id: "enemy", side: "enemy", x: 3, y: 5, hp: 0 }, "attack").type, "none",
+  "撃破済みの敵は狙わない");
+const twoFoes = companion(mageAt(3, 3),
+  { id: "enemy", side: "enemy", x: 3, y: 6, hp: 8 },
+  "attack",
+  { extra: [{ id: "enemy2", side: "enemy", x: 3, y: 4, hp: 8 }] });
+assert.equal(twoFoes.type, "cast", "複数いても撃てる");
+assert.equal(twoFoes.targetId, "enemy2", "狙うのは最も近い敵");
+
+console.log("expedition battle state: open boards, seeded blocks, reachable starts, companion tactics");

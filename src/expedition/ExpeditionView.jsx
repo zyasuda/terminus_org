@@ -14,7 +14,23 @@ const migrateFloor = floor => {
     chest: { ...fresh.chest, opened: floor.chest?.opened || false },
   };
 };
-const load = () => { try { const saved = JSON.parse(localStorage.getItem(SAVE) || "{}"); return { village: newVillage(saved.village || saved), floor: migrateFloor(saved.floor), haul: saved.haul || [], command: saved.command || "attack", message: saved.message || "村で遠征準備をする。", battleId: saved.battleId || null }; } catch { return { village: newVillage(), floor: null, haul: [], command: "attack", message: "村で遠征準備をする。", battleId: null }; } };
+const load = () => {
+  try {
+    const saved = JSON.parse(localStorage.getItem(SAVE) || "{}");
+    return {
+      village: newVillage(saved.village || saved),
+      floor: migrateFloor(saved.floor),
+      haul: saved.haul || [],
+      command: saved.command || "attack",
+      message: saved.message || "村で遠征準備をする。",
+      battleId: saved.battleId || null,
+    };
+  } catch {
+    // ponytail: 壊れたセーブは黙って村からやり直す。直後のuseEffectが同じキーを上書きするので、
+    // 中断していた遠征は復旧できない。惜しくなったら、捨てる前に作者へ知らせる導線を足す。
+    return { village: newVillage(), floor: null, haul: [], command: "attack", message: "村で遠征準備をする。", battleId: null };
+  }
+};
 export default function ExpeditionView() {
   const saved = useState(load)[0];
   const [village, setVillage] = useState(saved.village), [floor, setFloor] = useState(saved.floor), [battle, setBattle] = useState(() => saved.floor?.events.find(e => e.id === saved.battleId) || null), [command, setCommand] = useState(saved.command), [haul, setHaul] = useState(saved.haul), [message, setMessage] = useState(saved.message);
@@ -40,7 +56,37 @@ export default function ExpeditionView() {
   const equip = (id, index) => { if (ITEMS[id]?.slot !== "consumable") setVillage(v => equipFromStash(v, owner, index)); };
   const useTonic = () => { const i = village.stash.indexOf("tonic"); if (i < 0) return false; setVillage(v => ({ ...v, stash: v.stash.filter((_, n) => n !== i) })); return true; };
   if (battle) return <ExpeditionBattle guardian={battle.kind === "guardian"} layout={battle.kind === "junction" ? "junction" : "corridor"} order={command} equipment={village.equipment} party={floor.party} seed={(floor.seed + [...battle.id].reduce((n, char) => n + char.charCodeAt(0), 0)) >>> 0} tonics={village.stash.filter(i => i === "tonic").length} onUseTonic={useTonic} onFinish={finishBattle}/>;
-  if (!floor) return <div style={S.page}><h1>燈火の村</h1><p style={S.message}>{message}</p><p>所持金 {village.gold}G / スタッシュ {village.stash.length}個</p><button style={S.primary} onClick={start}>地下1階へ遠征</button><section style={S.box}><b>装備</b>{[["hero","あなた"],["mage","リディア"]].map(([id,name]) => <div key={id}><b>{name}</b>{["weapon","armor","charm"].map(s => <span key={s} style={S.tag}>{s}: {village.equipment[id][s] ? ITEMS[village.equipment[id][s]].name : "なし"}</span>)}</div>)}</section><section style={S.box}><b>スタッシュ（装備先を選んでから装備）</b><div><button style={{...S.btn,...(owner === "hero" ? S.selected : {})}} onClick={() => setOwner("hero")}>あなたへ</button><button style={{...S.btn,...(owner === "mage" ? S.selected : {})}} onClick={() => setOwner("mage")}>リディアへ</button></div>{village.stash.length === 0 ? <p>空です。</p> : village.stash.map((id,i) => <div key={i} style={S.item}>{ITEMS[id].name} <button style={S.btn} onClick={() => equip(id,i)}>装備</button><button style={S.btn} onClick={() => sell(id,i)}>売る +{Math.ceil(ITEMS[id].price/2)}G</button></div>)}</section><section style={S.box}><b>固定ショップ</b><div>{["tonic","sword","mail","charm"].map(id => <button key={id} style={S.btn} onClick={() => buy(id)}>{ITEMS[id].name} {ITEMS[id].price}G</button>)}</div></section></div>;
+  if (!floor) return <div style={S.page}>
+    <h1>燈火の村</h1>
+    <p style={S.message}>{message}</p>
+    <p>所持金 {village.gold}G / スタッシュ {village.stash.length}個</p>
+    <button style={S.primary} onClick={start}>地下1階へ遠征</button>
+    <section style={S.box}>
+      <b>装備</b>
+      {[["hero", "あなた"], ["mage", "リディア"]].map(([id, name]) => <div key={id}>
+        <b>{name}</b>
+        {["weapon", "armor", "charm"].map(s =>
+          <span key={s} style={S.tag}>{s}: {village.equipment[id][s] ? ITEMS[village.equipment[id][s]].name : "なし"}</span>)}
+      </div>)}
+    </section>
+    <section style={S.box}>
+      <b>スタッシュ（装備先を選んでから装備）</b>
+      <div>
+        <button style={{ ...S.btn, ...(owner === "hero" ? S.selected : {}) }} onClick={() => setOwner("hero")}>あなたへ</button>
+        <button style={{ ...S.btn, ...(owner === "mage" ? S.selected : {}) }} onClick={() => setOwner("mage")}>リディアへ</button>
+      </div>
+      {village.stash.length === 0 ? <p>空です。</p> : village.stash.map((id, i) => <div key={i} style={S.item}>
+        {ITEMS[id].name}{" "}
+        <button style={S.btn} onClick={() => equip(id, i)}>装備</button>
+        <button style={S.btn} onClick={() => sell(id, i)}>売る +{Math.ceil(ITEMS[id].price / 2)}G</button>
+      </div>)}
+    </section>
+    <section style={S.box}>
+      <b>固定ショップ</b>
+      <div>{["tonic", "sword", "mail", "charm"].map(id =>
+        <button key={id} style={S.btn} onClick={() => buy(id)}>{ITEMS[id].name} {ITEMS[id].price}G</button>)}</div>
+    </section>
+  </div>;
   const e = eventAt(floor); const chest = canOpenChest(floor);
   const useFieldItem = target => {
     const result = useFieldTonic(village, floor, target);
@@ -55,6 +101,56 @@ export default function ExpeditionView() {
     setVillage(result.village); setFloor(result.floor);
   };
   const equipmentItems = village.stash.map((id, index) => ({ id, index })).filter(({ id }) => ITEMS[id]?.slot !== "consumable");
-  return <div style={S.page}><header style={S.header}><b>地下1階 / seed {floor.seed}</b><span>戦利品: {haul.map(i => ITEMS[i].name).join("、") || "なし"}</span><button style={S.btn} disabled={!isEntrance(floor)} onClick={returnVillage}>入口から帰還</button></header><p style={S.message}>{message}</p><div style={S.layout}><RogueMap floor={floor} onMove={move}/><aside style={S.side}><section style={S.field}><b>携行品・装備</b><div>{[["hero","あなた"],["mage","リディア"]].map(([id,name]) => <div key={id}>{name} HP {floor.party[id]}/{partyMaxHp(id, village.equipment)} <button style={S.btn} disabled={!village.stash.includes("tonic")} onClick={() => useFieldItem(id)}>回復薬 ({village.stash.filter(item => item === "tonic").length})</button></div>)}</div><div><button style={{...S.btn,...(owner === "hero" ? S.selected : {})}} onClick={() => setOwner("hero")}>あなたへ装備</button><button style={{...S.btn,...(owner === "mage" ? S.selected : {})}} onClick={() => setOwner("mage")}>リディアへ装備</button></div>{equipmentItems.length ? equipmentItems.map(({ id, index }) => <div key={index} style={S.item}>{ITEMS[id].name} <button style={S.btn} onClick={() => equipInMap(id, index)}>装備</button></div>) : <div style={S.muted}>変更できる装備はありません。</div>}</section><b>リディアへの指示</b>{[["attack","攻撃"],["guard","護衛"],["retreat","退却"]].map(([id,label]) => <button key={id} style={{...S.btn,...(command===id?S.selected:{})}} onClick={() => setCommand(id)}>{label}</button>)}<p>矢印キーまたは地図下のボタンで移動します。通路は次の部屋まで自動で通過します。三叉路では止まります。</p>{e && <button style={S.primary} onClick={() => setBattle(e)}>戦闘を開始</button>}{chest && <button style={S.primary} onClick={openChest}>宝箱を開ける</button>}</aside></div></div>;
+  return <div style={S.page}>
+    <header style={S.header}>
+      <b>地下1階 / seed {floor.seed}</b>
+      <span>戦利品: {haul.map(i => ITEMS[i].name).join("、") || "なし"}</span>
+      <button style={S.btn} disabled={!isEntrance(floor)} onClick={returnVillage}>入口から帰還</button>
+    </header>
+    <p style={S.message}>{message}</p>
+    <div style={S.layout}>
+      <RogueMap floor={floor} onMove={move}/>
+      <aside style={S.side}>
+        <section style={S.field}>
+          <b>携行品・装備</b>
+          <div>{[["hero", "あなた"], ["mage", "リディア"]].map(([id, name]) => <div key={id}>
+            {name} HP {floor.party[id]}/{partyMaxHp(id, village.equipment)}{" "}
+            <button style={S.btn} disabled={!village.stash.includes("tonic")} onClick={() => useFieldItem(id)}>回復薬 ({village.stash.filter(item => item === "tonic").length})</button>
+          </div>)}</div>
+          <div>
+            <button style={{ ...S.btn, ...(owner === "hero" ? S.selected : {}) }} onClick={() => setOwner("hero")}>あなたへ装備</button>
+            <button style={{ ...S.btn, ...(owner === "mage" ? S.selected : {}) }} onClick={() => setOwner("mage")}>リディアへ装備</button>
+          </div>
+          {equipmentItems.length
+            ? equipmentItems.map(({ id, index }) => <div key={index} style={S.item}>
+              {ITEMS[id].name}{" "}
+              <button style={S.btn} onClick={() => equipInMap(id, index)}>装備</button>
+            </div>)
+            : <div style={S.muted}>変更できる装備はありません。</div>}
+        </section>
+        <b>リディアへの指示</b>
+        {[["attack", "攻撃"], ["guard", "護衛"], ["retreat", "退却"]].map(([id, label]) =>
+          <button key={id} style={{ ...S.btn, ...(command === id ? S.selected : {}) }} onClick={() => setCommand(id)}>{label}</button>)}
+        <p>矢印キーまたは地図下のボタンで移動します。通路は次の部屋まで自動で通過します。三叉路では止まります。</p>
+        {e && <button style={S.primary} onClick={() => setBattle(e)}>戦闘を開始</button>}
+        {chest && <button style={S.primary} onClick={openChest}>宝箱を開ける</button>}
+      </aside>
+    </div>
+  </div>;
 }
-const S={page:{width:"100vw",height:"100dvh",overflowY:"auto",boxSizing:"border-box",padding:"24px",background:"#161a22",color:"#e6e8ee",font:"14px/1.6 system-ui"},header:{display:"flex",gap:16,alignItems:"center",flexWrap:"wrap"},message:{color:"#d8c98c",maxWidth:680},box:{background:"#20242e",border:"1px solid #3c4354",padding:12,borderRadius:8,maxWidth:620,marginTop:12},field:{background:"#20242e",border:"1px solid #3c4354",padding:10,borderRadius:8,marginBottom:12},tag:{display:"inline-block",margin:"8px 12px 0 0"},item:{padding:"5px 0"},btn:{margin:"4px",background:"#2b303c",color:"#e6e8ee",border:"1px solid #4a5366",borderRadius:5,padding:"5px 9px"},primary:{margin:"6px 0",background:"#3d7fb5",color:"#fff",border:0,borderRadius:6,padding:"8px 12px"},layout:{display:"flex",gap:24,alignItems:"start",flexWrap:"wrap"},side:{maxWidth:260},selected:{background:"#3d7fb5"},muted:{opacity:.6,marginTop:4}};
+// 画面の見た目。1トークン1行にして、色や余白を1つ変えた時にdiffがその1行だけになるようにする。
+const S = {
+  page: { width: "100vw", height: "100dvh", overflowY: "auto", boxSizing: "border-box", padding: "24px", background: "#161a22", color: "#e6e8ee", font: "14px/1.6 system-ui" },
+  header: { display: "flex", gap: 16, alignItems: "center", flexWrap: "wrap" },
+  message: { color: "#d8c98c", maxWidth: 680 },
+  box: { background: "#20242e", border: "1px solid #3c4354", padding: 12, borderRadius: 8, maxWidth: 620, marginTop: 12 },
+  field: { background: "#20242e", border: "1px solid #3c4354", padding: 10, borderRadius: 8, marginBottom: 12 },
+  tag: { display: "inline-block", margin: "8px 12px 0 0" },
+  item: { padding: "5px 0" },
+  btn: { margin: "4px", background: "#2b303c", color: "#e6e8ee", border: "1px solid #4a5366", borderRadius: 5, padding: "5px 9px" },
+  primary: { margin: "6px 0", background: "#3d7fb5", color: "#fff", border: 0, borderRadius: 6, padding: "8px 12px" },
+  layout: { display: "flex", gap: 24, alignItems: "start", flexWrap: "wrap" },
+  side: { maxWidth: 260 },
+  selected: { background: "#3d7fb5" },
+  muted: { opacity: .6, marginTop: 4 },
+};

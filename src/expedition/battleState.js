@@ -1,4 +1,4 @@
-import { canOccupyCell, createGrid, makeRng, scatterObstacles } from "../battle/core.js";
+import { canOccupyCell, chooseMoveToward, createGrid, makeRng, resolveRanged, scatterObstacles } from "../battle/core.js";
 import { EXPEDITION_BATTLE_CONFIG } from "./battleConfig.js";
 
 const openRows = ({ width, height }) => Array.from({ length: height }, () => ".".repeat(width));
@@ -15,6 +15,36 @@ const gridFor = board => {
 export function facingToward(from, to, fallback = 0) {
   const dx = to.x - from.x, dy = to.y - from.y;
   return dx || dy ? Math.atan2(dx, dy) : fallback;
+}
+
+// チェビシェフ距離で最も近い生存者。射程判定と同じ距離の測り方に合わせる。
+const nearest = (unit, units) => units.filter(u => u.hp > 0).reduce(
+  (best, u) => !best || Math.max(Math.abs(u.x - unit.x), Math.abs(u.y - unit.y)) < Math.max(Math.abs(best.x - unit.x), Math.abs(best.y - unit.y)) ? u : best,
+  null,
+);
+
+// 相棒(リディア)の戦術判断。敵AIの chooseEnemyAction と同じく、判定だけを返して演出はしない。
+// roll:()=>20 は「当たれば必ず命中する目」で撃てるかどうかだけを試す射線・射程の検査であり、
+// 実際のダメージ判定には使わない。
+export function chooseCompanionAction({ grid, units, mage, command }) {
+  const enemy = nearest(mage, units.filter(u => u.side === "enemy"));
+  const canCast = !!enemy && resolveRanged({ attacker: mage, target: enemy, units, grid, roll: () => 20 }).ok;
+  const approach = (target, moveLine, waitLine) => {
+    const to = chooseMoveToward(grid, mage, target, units);
+    return to.type === "move" ? { type: "move", to: to.to, line: moveLine } : { type: "wait", line: waitLine };
+  };
+
+  if (command === "retreat") {
+    // 入口側は盤面の西端。敵の位置に関係なく退がる。
+    return approach({ x: 0, y: mage.y }, "リディアは入口側へ退却した。", "リディアは退却路を探している。");
+  }
+  if (command === "guard") {
+    if (canCast) return { type: "cast", targetId: enemy.id };
+    return approach(units.find(u => u.id === "hero"), "リディアは前衛を護衛する位置へ移動した。", "リディアは前衛のそばで護衛している。");
+  }
+  if (canCast) return { type: "cast", targetId: enemy.id };
+  if (enemy) return approach(enemy, "リディアは魔法の射程へ移動した。", "リディアは魔法の射程を探している。");
+  return { type: "none" };
 }
 
 export function createExpeditionBattleLayout(layout, seed = 0) {

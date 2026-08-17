@@ -24,8 +24,9 @@ export default function RogueMap({ floor, onMove }) {
     for (let y = room.y; y < room.y + room.h; y += 1) for (let x = room.x; x < room.x + room.w; x += 1) if (state.seen.has(`${x},${y}`)) return true;
     return false;
   };
-  const memoryRooms = roomShapes(map.rooms, roomSeen);
-  const lightRooms = roomShapes(map.rooms, room => roomSeen(room));
+  // 部屋は記憶側と灯り側で同じ形を描く。明暗の差はtorchマスクが付けるので、二度組み立てない。
+  // 通路だけは踏破の記憶(seen)と現在の視界(visible)で描く範囲が変わる。
+  const rooms = roomShapes(map.rooms, roomSeen);
   const memoryCorridors = corridorShapes(map.corridors, map.rooms, corridor => corridor.path.some(seenCell), seenCell);
   const lightCorridors = corridorShapes(map.corridors, map.rooms, corridor => corridor.path.some(visibleCell), visibleCell);
   // 未探索の全体を縮小表示せず、既知の範囲だけを追う。現在地を見失わない地図にする。
@@ -47,8 +48,8 @@ export default function RogueMap({ floor, onMove }) {
           <mask id="expedition-torch-mask" maskUnits="userSpaceOnUse" x={left} y={top} width={width} height={height}><rect x={left} y={top} width={width} height={height} fill="url(#expedition-torch)"/></mask>
           <radialGradient id="expedition-glow" gradientUnits="userSpaceOnUse" cx={lamp.x} cy={lamp.y} r="5"><stop stopColor="#e4b064" stopOpacity=".38"/><stop offset="1" stopColor="#e4b064" stopOpacity="0"/></radialGradient>
         </defs>
-        <g className="rogue-floor rogue-memory" dangerouslySetInnerHTML={{ __html: memoryRooms + memoryCorridors }}/>
-        <g mask="url(#expedition-torch-mask)" className="rogue-floor rogue-light" dangerouslySetInnerHTML={{ __html: lightRooms + lightCorridors }}/>
+        <g className="rogue-floor rogue-memory" dangerouslySetInnerHTML={{ __html: rooms + memoryCorridors }}/>
+        <g mask="url(#expedition-torch-mask)" className="rogue-floor rogue-light" dangerouslySetInnerHTML={{ __html: rooms + lightCorridors }}/>
         {Array.from(map.rooms.values()).filter(room => state.visited.has(room.id)).map(room => <g key={room.id} className="rogue-marker" transform={`translate(${room.x + room.w / 2} ${room.y + room.h / 2})`}><text y=".12">{markerFor(floor, room)}</text><text className="rogue-room-name" y="-.7">{room.name}</text></g>)}
         <circle className="rogue-lamp-glow" cx={lamp.x} cy={lamp.y} r="5" fill="url(#expedition-glow)"/>
         <circle className="rogue-player" cx={lamp.x} cy={lamp.y} r=".19"/>
