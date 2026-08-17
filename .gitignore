@@ -8,3 +8,6 @@ public/models/
 # 現在どのデータからも参照していない画像の置き場。
 # 使うときは images/ へ戻し、public/data/assets.json に登録する。
 images-unused/
+
+# 検証用スクリーンショットの一時置き場。ソースではない。
+output/
