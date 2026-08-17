@@ -45,6 +45,8 @@ export default function ExpeditionBattle({ guardian, layout = "corridor", order,
   if (!rng.current) rng.current = makeRng(seed + 777);
   const roll = () => 1 + Math.floor(rng.current() * 20);
   const [command, setCommand] = useState(order), [moved, setMoved] = useState(false), [heroAction, setHeroAction] = useState(null), [busy, setBusy] = useState(false), [combatShot, setCombatShot] = useState(false), [viewDirection, setViewDirection] = useState(0);
+  // カメラの見下ろし角を見た目を見ながら調整するスライダー。正本はConfig側で、ここでは動かして確認するだけ。
+  const [cameraElevationDeg, setCameraElevationDeg] = useState(EXPEDITION_BATTLE_CONFIG.presentation.cameraElevationDeg);
   const active = state.units.find(u => u.id === state.order[state.turn] && u.hp > 0);
   const partyAlive = alive(state.units, "party"), enemyAlive = alive(state.units, "enemy");
   const playerTurn = active?.id === "hero" && partyAlive && enemyAlive;
@@ -82,7 +84,7 @@ export default function ExpeditionBattle({ guardian, layout = "corridor", order,
     setState(s => ({ ...s, units: s.units.map(u => u.id === unit.id ? { ...u, ...to, facing: facingToward(unit, to, u.facing) } : u), log: [...s.log, line] }));
   };
   useEffect(() => {
-    const grid = state.grid; const s = createBattleScene(mount.current, grid, { voidBoundaryWalls: battleLayout === "junction" }); scene.current = s; s.setWallsEnabled(EXPEDITION_BATTLE_CONFIG.presentation.showBackdropWalls); s.setEnemiesVisible(true);
+    const grid = state.grid; const s = createBattleScene(mount.current, grid, { voidBoundaryWalls: battleLayout === "junction", cameraElevationDeg: EXPEDITION_BATTLE_CONFIG.presentation.cameraElevationDeg }); scene.current = s; s.setWallsEnabled(EXPEDITION_BATTLE_CONFIG.presentation.showBackdropWalls); s.setEnemiesVisible(true);
     return () => s.dispose();
   }, []);
   useEffect(() => {
@@ -159,6 +161,12 @@ export default function ExpeditionBattle({ guardian, layout = "corridor", order,
       </div>
       <div style={S.hint}>{heroStatus || "攻撃時は対面カメラになります。"}</div>
       <div style={S.log}>{state.log.slice(-4).map((x, i) => <div key={i}>{x}</div>)}</div>
+      <div style={S.row}>
+        <span>カメラの高さ:</span>
+        <input type="range" min="20" max="80" step="1" value={cameraElevationDeg}
+          onChange={e => { const deg = Number(e.target.value); setCameraElevationDeg(deg); scene.current?.setCameraElevationDeg(deg); }}/>
+        <span>{cameraElevationDeg}度</span>
+      </div>
     </div>
   </div>;
 }

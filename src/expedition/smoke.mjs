@@ -32,7 +32,9 @@ const reachCells = () => page.locator("[data-reach-cells]").getAttribute("data-r
 function projectGridPoint(rect, grid, x, y, height = 0) {
   const viewSize = Math.max(grid.w, grid.h) + 4;
   const camera = new THREE.OrthographicCamera(-(viewSize * rect.width / rect.height) / 2, (viewSize * rect.width / rect.height) / 2, viewSize / 2, -viewSize / 2, 0.1, 200);
-  const r = 20, angle = Math.PI / 4, cameraY = r * Math.tan(Math.atan(1 / Math.SQRT2));
+  // EXPEDITION_BATTLE_CONFIG.presentation.cameraElevationDegと同じ角度を使う。
+  // ここがずれると、見た目には正しく描画されていてもクリック座標だけが外れる。
+  const r = 20, angle = Math.PI / 4, cameraY = r * Math.tan(EXPEDITION_BATTLE_CONFIG.presentation.cameraElevationDeg * Math.PI / 180);
   camera.position.set(Math.cos(angle) * r, cameraY, Math.sin(angle) * r);
   camera.lookAt(0, 0, 0);
   camera.updateProjectionMatrix();

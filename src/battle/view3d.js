@@ -44,7 +44,12 @@ const loadModel = path => {
   return modelTemplates.get(path);
 };
 
-export function createBattleScene(container, grid, { voidBoundaryWalls = false } = {}) {
+// 真のアイソメトリックに近い見下ろし角(atan(1/√2) ≒ 35.264度)。
+// cameraElevationDegを省略した呼び出し(本編の会話バトル画面など)はこれまで通りの見た目になる。
+const TRUE_ISO_ELEVATION_DEG = Math.atan(1 / Math.SQRT2) * 180 / Math.PI;
+
+export function createBattleScene(container, grid, { voidBoundaryWalls = false, cameraElevationDeg = TRUE_ISO_ELEVATION_DEG } = {}) {
+  let cameraElevation = cameraElevationDeg * Math.PI / 180;   // setCameraElevationDeg()で見た目を確認しながら調整できる
   const scene = new THREE.Scene();
   scene.background = new THREE.Color(COLOR.bg);
   // 奥行き方向の霞み。書き割りの上下グラデーションとは軸が違う(fogは奥行き、
@@ -53,18 +58,31 @@ export function createBattleScene(container, grid, { voidBoundaryWalls = false }
   // THREE.Fogは「カメラ位置からの実距離」で効く。正射影でも見た目の大きさは
   // 変わらないが距離自体はCAMERA_DIST(≒20)離れているので、盤面の大きさだけで
   // near/farを決めると実距離よりずっと小さくなり、全部霞んでしまう(実際に起きた)。
-  // 8x8盤面・この俯角では実測で手前角が約20.6、奥角が約28.7だったので、
-  // その範囲を挟むようにnear/farを置く(手前はほぼ霞まず、奥だけはっきり沈む)。
-  // オブジェクト自体は常に保持し、on/offはscene.fogへの参照の付け外しで行う
-  // (毎回作り直すと強さスライダーの度に無駄が出る)
-  const FOG_NEAR = CAMERA_DIST - 1;
-  // 盤面奥角の実測距離(約28.7)。フェーダーの強さをここでの霞み具合に対して
-  // 線形にするための基準点(setFogIntensity参照)
-  const FOG_REF_DIST = CAMERA_DIST + 8.7;
+  // 8x8盤面・真のアイソメトリック(35.264度)では実測で手前角が約20.6、奥角が約28.7
+  // だったので、その範囲を挟むようにnear/farを置く(手前はほぼ霞まず、奥だけはっきり沈む)。
+  // 見下ろし角を変えると、水平距離(r)を保ったままカメラの実距離(r/cos(角度))が伸び縮みする。
+  // near/farを固定のままにすると、角度を上げただけで盤面ごと霧の外(=背景色)に
+  // 押し出されて真っ暗になる(cameraElevationDeg導入時に実際に起きた)。
+  // 真のアイソメトリック時の実距離との比でnear/farを一緒に伸縮させ、
+  // 「手前は霞まず奥だけ沈む」という見え方の相対関係を角度によらず保つ。
+  const trueIsoDist = CAMERA_DIST / Math.cos(TRUE_ISO_ELEVATION_DEG * Math.PI / 180);
   const FOG_MIN_DENSITY = 0.05;   // 強さ0: ほぼ無効
   const FOG_MAX_DENSITY = 0.88;   // 強さ1: 従来のfar=CAMERA_DIST+10相当
-  const fogObj = new THREE.Fog(COLOR.bg, FOG_NEAR, CAMERA_DIST + 10);
+  let FOG_NEAR, FOG_REF_DIST;
+  const fogObj = new THREE.Fog(COLOR.bg, 1, 2);
   scene.fog = fogObj;
+  // setCameraElevationDeg()で角度を変えるたびにも呼び直し、fogが盤面を飲み込まないようにする。
+  const applyFogRange = () => {
+    const cameraDist = CAMERA_DIST / Math.cos(cameraElevation);
+    const fogScale = cameraDist / trueIsoDist;
+    FOG_NEAR = (CAMERA_DIST - 1) * fogScale;
+    // 盤面奥角の実測距離(約28.7、真のアイソメトリック時)。フェーダーの強さをここでの
+    // 霞み具合に対して線形にするための基準点(setFogIntensity参照)
+    FOG_REF_DIST = (CAMERA_DIST + 8.7) * fogScale;
+    fogObj.near = FOG_NEAR;
+    fogObj.far = (CAMERA_DIST + 10) * fogScale;
+  };
+  applyFogRange();
 
   // グリッド中心を原点に置く。セル(x,y)はワールドの(x,·,y)へ写す
   const offX = (grid.w - 1) / 2;
@@ -96,8 +114,9 @@ export function createBattleScene(container, grid, { voidBoundaryWalls = false }
 
   const placeCamera = () => {
     if (camera !== isoCamera) return;
-    // 真のアイソメトリックに近い見下ろし角(atan(1/√2) ≒ 35.26度)
-    const r = CAMERA_DIST, y = r * Math.tan(Math.atan(1 / Math.SQRT2));
+    // 注視点(target)と水平距離(r)は変えず、見下ろし角だけをcameraElevationで変える。
+    // 角度を上げるほど、手前の障害物が奥の盤面と重なりにくくなる。
+    const r = CAMERA_DIST, y = r * Math.tan(cameraElevation);
     isoCamera.position.set(Math.cos(camAngle) * r, y, Math.sin(camAngle) * r);
     isoCamera.lookAt(target);
   };
@@ -1124,6 +1143,9 @@ export function createBattleScene(container, grid, { voidBoundaryWalls = false }
     setDustEnabled(on) { dustGroup.visible = on; },
     setRainEnabled(on) { rainGroup.visible = on; },
     setWallsEnabled(on) { backdropGroup.visible = on; },
+    // 見た目を確認しながらカメラの見下ろし角を調整するための検証用API。
+    // 正本はbattleConfig.jsのpresentation.cameraElevationDeg。ここでは反映するだけ。
+    setCameraElevationDeg(deg) { cameraElevation = deg * Math.PI / 180; applyFogRange(); placeCamera(); },
     setObstaclesEnabled(on) { obstacleGroup.visible = on; },
     setWaterEnabled(on) { waterGroup.visible = on; },
     setHolesEnabled(on) { groundPatchGroup.visible = !on; },

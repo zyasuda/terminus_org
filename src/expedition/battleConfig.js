@@ -101,6 +101,10 @@ export const EXPEDITION_BATTLE_CONFIG = {
   presentation: {
     /** 遠征戦闘の周囲に背景壁を表示するか。falseにすると開放感が増す。単位: 真偽値。 */
     showBackdropWalls: true,
+    /** カメラの見下ろし角。真のアイソメトリックは35.264度。上げるほど見下ろしが強くなり、
+     * 手前の障害物が奥の盤面・ユニットと重なりにくくなる。注視点と水平距離は変わらない。単位: 度。
+     * 戦闘画面下部のスライダーで見た目を見ながら調整できる(この値は既定値)。 */
+    cameraElevationDeg: 35.264,
     modelFacingOffset: {
       /** 味方GLBのローカル正面補正。値を変えると見た目だけがY軸回転する。単位: ラジアン。 */
       party: 0,
