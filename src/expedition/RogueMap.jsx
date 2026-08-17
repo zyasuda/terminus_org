@@ -15,7 +15,7 @@ const markerFor = (floor, room) => {
 };
 
 export default function RogueMap({ floor, onMove }) {
-  const map = useMemo(() => mapForFloor(floor), [floor.seed]);
+  const map = useMemo(() => mapForFloor(floor), [floor.seed, floor.corridorSeed]);
   const state = useMemo(() => ({ pos: floor.pos, at: floor.at, visited: new Set(floor.visited), walked: new Set(floor.walked), seen: new Set(floor.seen) }), [floor]);
   const visible = useMemo(() => lit(state, map), [state, map]);
   const seenCell = cell => state.seen.has(keyOf(cell));

@@ -1,9 +1,13 @@
 import React, { useEffect, useState } from "react";
 import ExpeditionBattle from "./ExpeditionBattle.jsx";
 import RogueMap from "./RogueMap.jsx";
-import { ITEMS, canOpenChest, createFloor, equipFromStash, equipInField, eventAt, isEntrance, keepAfterDefeat, newVillage, partyMaxHp, rewardFor, useFieldTonic, walk } from "./core.js";
+import { ITEMS, canOpenChest, createFloor, equipFromStash, equipInField, eventAt, isEntrance, keepAfterDefeat, newVillage, partyMaxHp, rerouteFloorCorridors, rewardFor, useFieldTonic, walk } from "./core.js";
 
 const SAVE = "ai_companion_expedition_b1";
+// 開発中の検証専用。プレイヤー向け機能ではない(game-debug-tools)。
+// URLに?debugが付いている時だけ、戦闘を即座に勝利扱いでスキップするボタンを出す。
+// 遠征コアのロジックには一切手を入れず、UI層に1つボタンを足すだけにする。
+const DEBUG = new URLSearchParams(window.location.search).has("debug");
 const migrateFloor = floor => {
   if (!floor) return null;
   const fresh = createFloor(floor.seed || Date.now());
@@ -46,7 +50,12 @@ export default function ExpeditionView() {
   }, [floor, battle]);
   const finishBattle = (result, party) => {
     if (result === "defeat") { const kept = keepAfterDefeat(haul, floor.seed); setVillage(v => ({ ...v, stash: [...v.stash, ...kept] })); setFloor(null); setBattle(null); setHaul([]); setMessage(`全滅。リディアが ${kept.length} 個を持ち帰った。`); return; }
-    setFloor(f => ({ ...f, party, events: f.events.map(e => e.id === battle.id ? { ...e, done: true } : e) })); setMessage(battle.kind === "guardian" ? "リディア「守護者を倒しました。宝箱を開けましょう。」" : "リディア「道が開けました。」"); setBattle(null);
+    // 守護者を倒した時だけ、部屋とドアの位置は変えずに通路の曲がり方を引き直し、
+    // 通路の記憶(seen/walked)も消す。「中ボスを倒して村に戻る際に通路が変化している」
+    // 「通路をロストした感じ」という要望への対応。部屋の記憶(visited)は消さない。
+    setFloor(f => ({ ...f, party, events: f.events.map(e => e.id === battle.id ? { ...e, done: true } : e),
+      ...(battle.kind === "guardian" ? rerouteFloorCorridors(f) : {}) }));
+    setMessage(battle.kind === "guardian" ? "リディア「守護者を倒しました。宝箱を開けましょう。」" : "リディア「道が開けました。」"); setBattle(null);
   };
   const openChest = () => { const item = rewardFor(floor); setHaul(h => [...h, item]); setFloor(f => ({ ...f, chest: { ...f.chest, opened: true } })); setMessage(`宝箱から「${ITEMS[item].name}」を入手。入口まで持ち帰れます。`); };
   const returnVillage = () => { setVillage(v => ({ ...v, stash: [...v.stash, ...haul], gold: v.gold + 8 })); setFloor(null); setHaul([]); setMessage("無事に村へ帰還。8Gと戦利品をスタッシュへ預けた。"); };
@@ -55,7 +64,10 @@ export default function ExpeditionView() {
   const [owner, setOwner] = useState("hero");
   const equip = (id, index) => { if (ITEMS[id]?.slot !== "consumable") setVillage(v => equipFromStash(v, owner, index)); };
   const useTonic = () => { const i = village.stash.indexOf("tonic"); if (i < 0) return false; setVillage(v => ({ ...v, stash: v.stash.filter((_, n) => n !== i) })); return true; };
-  if (battle) return <ExpeditionBattle guardian={battle.kind === "guardian"} layout={battle.kind === "junction" ? "junction" : "corridor"} order={command} equipment={village.equipment} party={floor.party} seed={(floor.seed + [...battle.id].reduce((n, char) => n + char.charCodeAt(0), 0)) >>> 0} tonics={village.stash.filter(i => i === "tonic").length} onUseTonic={useTonic} onFinish={finishBattle}/>;
+  if (battle) return <>
+    <ExpeditionBattle guardian={battle.kind === "guardian"} layout={battle.kind === "junction" ? "junction" : "corridor"} order={command} equipment={village.equipment} party={floor.party} seed={(floor.seed + [...battle.id].reduce((n, char) => n + char.charCodeAt(0), 0)) >>> 0} tonics={village.stash.filter(i => i === "tonic").length} onUseTonic={useTonic} onFinish={finishBattle}/>
+    {DEBUG && <button style={S.debugSkip} onClick={() => finishBattle("victory", floor.party)}>[debug] 戦闘スキップ</button>}
+  </>;
   if (!floor) return <div style={S.page}>
     <h1>燈火の村</h1>
     <p style={S.message}>{message}</p>
@@ -153,4 +165,6 @@ const S = {
   side: { maxWidth: 260 },
   selected: { background: "#3d7fb5" },
   muted: { opacity: .6, marginTop: 4 },
+  // 本番プレイヤーが誤って押さないよう、通常のUIから明確に浮いた見た目にする。
+  debugSkip: { position: "fixed", top: 8, right: 8, zIndex: 9999, background: "#a83232", color: "#fff", border: "1px solid #ff8080", borderRadius: 4, padding: "6px 10px", fontSize: 12 },
 };

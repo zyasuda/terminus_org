@@ -1,6 +1,6 @@
 import { makeRng } from "../battle/core.js";
 import { EXPEDITION_BATTLE_CONFIG } from "./battleConfig.js";
-import { generateWithRetry } from "./mapgen.js";
+import { generateWithRetry, rerouteCorridorsWithRetry } from "./mapgen.js";
 import { run, start } from "./mapwalk.js";
 
 const EXPEDITION_CHAPTER = { scenes: [
@@ -12,7 +12,12 @@ const EXPEDITION_CHAPTER = { scenes: [
   { id: "guardian", name: "封印庫", exits: [{ to: "fight-1" }] },
 ] };
 
-export const mapForFloor = floor => generateWithRetry(EXPEDITION_CHAPTER, floor.seed).map;
+// 部屋は floor.seed だけで決まる(記憶が効く)。floor.corridorSeed が付いていたら、
+// 部屋とドアの位置は変えずに通路の曲がり方だけ引き直す(守護者撃破時に付与する)。
+export const mapForFloor = floor => {
+  const { map } = generateWithRetry(EXPEDITION_CHAPTER, floor.seed);
+  return floor.corridorSeed ? rerouteCorridorsWithRetry(map, floor.corridorSeed).map : map;
+};
 const restoreMapState = (floor, map) => {
   const initial = start(map);
   return {
@@ -110,6 +115,19 @@ export function walk(floor, direction) {
   const state = restoreMapState(floor, map);
   if (!run(state, map, direction)) return floor;
   return { ...floor, pos: state.pos, at: state.at, visited: [...state.visited], walked: [...state.walked], seen: [...state.seen] };
+}
+
+// 守護者を倒した時に呼ぶ。部屋の位置・記憶(visited)はそのまま、通路の形だけ引き直し、
+// 通路の記憶(seen/walked)だけを消す。部屋は覚えているが、そこへの道は忘れた、という体験にする
+// (作者の要望:「リルートしたら部屋だけ見えて通路はそこに行くまで見えない。通路をロストした感じ」)。
+export function rerouteFloorCorridors(floor, seed = Date.now()) {
+  const before = mapForFloor(floor);
+  const corridorCells = new Set(before.corridors.flatMap(c => c.path.map(cell => `${cell.x},${cell.y}`)));
+  return {
+    corridorSeed: seed >>> 0,
+    seen: floor.seen.filter(key => !corridorCells.has(key)),
+    walked: [],
+  };
 }
 
 export function eventAt(floor) { return floor.events.find(event => !event.done && event.roomId === floor.at) || null; }
