@@ -85,6 +85,8 @@ export default function App() {
   }
   // 吹き出しはペットのいる側と逆へ伸ばす(右半分にいれば左へ、左半分にいれば右へ)
   const bubbleOnLeft = petPos.x > 50;
+  // 素材は右側配置(既定x:92)向けの向き。画面中心をまたいで左半分に来たら左右反転する
+  const gmFlipped = petPos.x <= 50;
 
   // スワイプ検出: 画面端または開いているパネル内からのスワイプでパネル開閉
   // Pointer Eventsを使うことで、実機のタッチだけでなくMacのマウス/トラックパッドでも
@@ -278,7 +280,7 @@ export default function App() {
           id="gmPet"
           key={"pet" + eng.gmBubble.seq}
           className={"emotion-" + (eng.gmBubble.emotion || "Neutral").toLowerCase()} /* 表情差分フレームが来たらこのクラスで切替(ASSET_LIST #15b) */
-          style={{ left: petPos.x + "%", top: petPos.y + "%", backgroundImage: `url("/images/${eng.gmSprite}")` }}
+          style={{ left: petPos.x + "%", top: petPos.y + "%", backgroundImage: `url("/images/${eng.gmSprite}")`, "--flip": gmFlipped ? -1 : 1 }}
           onPointerDown={petPointerDown}
           onPointerMove={petPointerMove}
           onPointerUp={petPointerUp}
