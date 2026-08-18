@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { useEngine } from "./hooks/useEngine.js";
 import { setStore } from "./engine/store.js";
 import { joinParticle } from "./engine/index.js";
+import { useSpeechInput } from "./hooks/useSpeechInput.js";
 import PhaserFx from "./PhaserFx.jsx";
 import { D20Overlay } from "@terminus/d20-overlay";
 
@@ -39,6 +40,11 @@ export default function App() {
     : eng.sceneNpcName ? "相手"
     : (eng.enemySprite.identified && eng.enemySprite.name) || "不気味な影";
   const nounChips = [...new Set([contextNoun, ...eng.introHints, ...eng.revealedEntities])];
+
+  /* 音声入力。認識結果で入力欄を置き換える。送信はしない(誤認識を送信前に直せるようにする)。
+     追記にすると、チップで入れた名詞の後ろに宣言全体が続いて「金属音見取り図をよく見る」のような
+     非文になる。音声は一度に宣言をまるごと話すものなので、置き換えが素直 */
+  const speech = useSpeechInput({ onResult: text => setInput(text) });
 
   // GMペットの位置(ステージに対する%座標、ペット中心基準)。ドラッグで4隅など自由に配置でき、端末に保存される
   const [petPos, setPetPos] = useState(() => {
@@ -458,6 +464,18 @@ export default function App() {
             {/* 入力があるときだけ✕(クリア)を出す */}
             {input && (
               <button id="clearBtn" aria-label="入力をクリア" onClick={() => setInput("")}>✕</button>
+            )}
+            {/* 音声入力。横持ちでキーボードを出すと画面が隠れるため、声だけで宣言できる経路を用意する。
+                未対応ブラウザ(Firefox等)では supported=false になり、ボタン自体を出さない */}
+            {speech.supported && (
+              <button
+                id="micBtn"
+                className={speech.listening ? "listening" : ""}
+                aria-label={speech.listening ? "音声入力を止める" : "音声で宣言する"}
+                title={speech.error || (speech.listening ? "聞いています…" : "音声で宣言する")}
+                disabled={eng.busy}
+                onClick={speech.toggle}
+              >🎤</button>
             )}
             <button id="sendBtn" disabled={eng.busy} onClick={handleSend}>行動</button>
           </div>

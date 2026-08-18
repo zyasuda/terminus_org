@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updated": "2026-08-07",
+  "updated": "2026-08-18",
   "assets": {
     "mine_entrance": {
       "file": "mine_entrance.png",
@@ -9,8 +9,7 @@
       "size": "1376x768",
       "usedBy": [
         "chapter_01.scenes.1.img",
-        "chapter_01.scenes.1.parallax.fg",
-        "chapter_01.scenes.3.img"
+        "chapter_01.scenes.1.parallax.fg"
       ],
       "notes": "透過前景レイヤー(左上に山の稜線状の透過あり)。パララックス前景として使用。対応する新しいsky画像はTASに再生成依頼中(s1_skyは旧デザインのまま暫定使用)。"
     },
@@ -109,7 +108,9 @@
       "kind": "background",
       "status": "approved",
       "target": "1920x1080",
-      "usedBy": [],
+      "usedBy": [
+        "chapter_01.scenes.2.img"
+      ],
       "source": "imagegen",
       "promptVersion": 1,
       "notes": "2026-07-12生成。16:9にクロップして配置。"
@@ -119,9 +120,7 @@
       "kind": "background",
       "status": "approved",
       "target": "1920x1080",
-      "usedBy": [
-        "chapter_01.scenes.2.img"
-      ],
+      "usedBy": [],
       "source": "imagegen",
       "promptVersion": 1,
       "notes": "2026-07-12生成。封鎖の木柵に合わせた。16:9にクロップして配置。2026-07-31にシーン2の柵ルートで再利用するためimages/へ戻した。"
@@ -144,7 +143,9 @@
       "kind": "background",
       "status": "pending",
       "target": "1920x1080",
-      "usedBy": [],
+      "usedBy": [
+        "chapter_01.scenes.3.img"
+      ],
       "notes": "プレースホルダー配置済み(ロジック検証用の仮画像。本番素材で同名上書き予定)"
     },
     "s3_guardian": {
@@ -154,7 +155,6 @@
       "target": "height 800px",
       "alpha": true,
       "usedBy": [
-        "chapter_01.scenes.3.enemy.sprite",
         "chapter_01.scenes.3.npcSprite"
       ],
       "source": "imagegen",
@@ -279,7 +279,9 @@
       "status": "approved",
       "target": "height 600px",
       "alpha": true,
-      "usedBy": [],
+      "usedBy": [
+        "chapter_01.scenes.3.enemy.sprite"
+      ],
       "source": "imagegen",
       "promptVersion": 1,
       "notes": "2026-07-31生成（Codex組み込みimage_gen / gpt-image-2）。坑道蝙蝠。純黒背景で生成し、sharpで輝度しきい値18/48の二段で透過へ変換（透過率71.2%）。"

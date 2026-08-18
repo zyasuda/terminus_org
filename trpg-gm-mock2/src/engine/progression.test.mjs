@@ -68,7 +68,7 @@ section("2. 出口の移動先が実在するシーンを指している");
 for (const { label, node } of exitNodes) {
   for (const e of node.exits || []) {
     if (e.to === null || e.to === undefined) continue; // 行き止まりは意図的
-    if (e.to === "end") continue; // 章の完了。シーンを指さない正当な行き先
+    if (e.to === "end" || e.to === "ending") continue; // 章の完了。シーンを指さない正当な行き先
     const idx = exitTargetIndexIn(scenes, e.to);
     ok(idx >= 0, `${label} 出口${e.id} の移動先 ${e.to} が実在する`,
       `該当するidのシーンが無い。移動しようとした瞬間に詰む`);
@@ -118,7 +118,7 @@ const PHRASES = [
   [1, "座って休む", null],
   [2, "右へ向かう", "to_scean03"],
   [2, "木柵を越えて進む", "to_scean03"],
-  // 左(崩落)はシーン3への出口ではない。蝙蝠を倒すまでは行き止まりのまま(2026-08-06に出口を削除)
+  // 左(崩落)は「隙間」が秘密s2cの別名でもシーン3への出口ではない。蝙蝠を倒すまでは行き止まりのまま(2026-08-06に出口を削除)
   [2, "左の隙間をくぐる", null],
   [3, "村へ戻る", "to_cean04"],
 ];
@@ -177,7 +177,11 @@ const EXAMINE = [
   [1, "線路を辿ってみる", "s1b"],
   [2, "木柵に触れてみる", "s2a"],
   [2, "油くさいにおいを確かめる", "s2b"],
-  [3, "胸の青い光を見つめる", "s3b"],
+  /* シーン3は「灯りの主の正体/胸の光るもの」から「機械人形/心石/心石の欠片」へ作者が設計変更した。
+     秘密のidは既存のs3a/s3bを引き継いでおり、entityだけが変わっている(2026-08-10に実データで確認) */
+  [3, "灯りの主の姿をよく見る", "s3a"],
+  [3, "青い石を確かめる", "s3b"],
+  [3, "欠片を探す", "ch1_s3_item_3"],
 ];
 for (const [sceneId, text, expected] of EXAMINE) {
   const sc = scenes.find(s => String(s.id) === String(sceneId));
@@ -239,11 +243,14 @@ section("12. 作者が書いた開示方法(trigger)で、その秘密自身が�
 /* 2026-08-04の実プレイで見つけた欠陥の再発防止。プレイヤーが作者の書いた開示方法を
    そのまま打っても、別の秘密の1文字の別名に負けて狙った秘密が開かず、章が完了できなかった。
    実物の決定関数(pickExamineSecret と resolveSecretTarget)へ trigger の文をそのまま通す */
+const triggerSecrets = scenes.flatMap(s => (s.secrets || []).filter(sec => String(sec.trigger || "").trim()));
+let triggerChecks = 0;
 for (const s of scenes) {
   const unrevealed = { revealed: new Set() }; // まだ何も開示していない状態
   for (const sec of s.secrets || []) {
     for (const t of String(sec.trigger || "").split(/[,、]/).map(x => x.trim().replace(/[。.]$/, ""))) {
       if (t.length < 2) continue;
+      triggerChecks++;
       const picked = pickExamineSecret(s, t, t, unrevealed).secret;
       ok(picked === sec, `シーン${s.id} 「${t}」→ ${picked ? picked.id : "対象なし"}（作者は${sec.id}のために書いた）`,
         picked ? `別の秘密 ${picked.id}(${picked.entity}) に取られる。この開示方法では${sec.id}が開かない`
@@ -256,6 +263,12 @@ for (const s of scenes) {
         `LLM経由の解決では ${viaLlm ? viaLlm.id : "決まらない"}。scriptedと食い違う`);
     }
   }
+}
+if (!triggerSecrets.length) {
+  ok(true, "triggerを持つ秘密が無いため検査12は対象なし（開示経路は検査5〜7で検証）");
+} else {
+  ok(triggerChecks > 0, "triggerを持つ秘密に検証可能な開示文がある",
+    "triggerはあるが、2文字以上の照合語が無い。検査12が空振りする");
 }
 
 // ───────────────────────────────────────────────

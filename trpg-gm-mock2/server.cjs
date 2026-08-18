@@ -162,9 +162,11 @@ async function callGemini(payload) {
         generationConfig: {
           // 思考モデル対策: 思考トークンがmaxOutputTokensを消費するため上限を大きめに取り、思考は最小化する。
           // thinkingBudget:0はgemini-3.5系以降で「Request contains an invalid argument」になるため
-          // (2026-07-21確認)、新旧モデル共通で通るthinkingLevel:"minimal"を使う
+          // (2026-07-21確認)、thinkingLevel:"minimal"を使っていたが、2026-08-10に
+          // gemini-flash-latestで「Thinking level MINIMAL is not supported for this model」に
+          // なった(API側の対応変更)。実測でminimal/low/medium/highのうち"low"が最も軽く通った
           maxOutputTokens: Math.max((payload.max_tokens || 1000) * 4, 4000),
-          thinkingConfig: { thinkingLevel: "minimal" },
+          thinkingConfig: { thinkingLevel: "low" },
           // GMの応答は常にJSONを要求している(R4-9)ため、JSON出力を強制する
           responseMimeType: "application/json"
         }
