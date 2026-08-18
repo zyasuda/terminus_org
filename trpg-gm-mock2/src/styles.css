@@ -774,16 +774,21 @@ body {
   margin: 0 2ch; /* 両端を2文字分だけ内側に寄せる */
 }
 
-/* 入力クリア(✕)。行動ボタンの左に小さく置き、タップで入力欄を空にする */
+/* 入力クリア(✕)。タップで入力欄を空にする。
+   音声入力は誤認識をまるごと捨てたい場面が多いので、指で確実に押せる大きさが要る。
+   20x20pxの固定にしていたときは横持ちで小さすぎ、隣の🎤との間隔も5pxしかなく誤タップした。
+   他のボタン(🎤・行動)と同じ高さに揃え、マイクとの間だけ余白を足している */
 #clearBtn {
   flex: none;
-  width: 20px;
-  height: 20px;
-  border-radius: 50%;
+  width: 5.5%;
+  min-width: 24px;
+  height: 78%;
+  margin-right: 1.4%;
+  border-radius: 8px;
   border: none;
   background: rgba(192, 202, 243, .25);
   color: var(--text);
-  font-size: 12px;
+  font-size: 1.05vw;
   line-height: 1;
   cursor: pointer;
   font-family: inherit;
