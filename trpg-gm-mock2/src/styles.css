@@ -568,6 +568,10 @@ body {
   z-index: 15;
   padding: 2% 2.3% 2% max(2.3%, var(--safe-left)); /* 横持ちのDynamic Islandを避ける */
   overflow-y: auto;
+  /* 縦に積んで、GMの語りだけを残り高さいっぱいに伸ばす。
+     画面が縦長になるほどパネル下部に余白が増えるのを防ぐ(実測: 横持ちで159pxの空き) */
+  display: flex;
+  flex-direction: column;
   font-size: 1.4vw;
   opacity: 1;
   visibility: visible;
@@ -608,8 +612,15 @@ body {
   border-bottom: 1px solid rgba(255, 255, 255, .15);
 }
 .cluesView .clue { font-size: .85em; line-height: 1.6; color: var(--success); }
+/* 見出し・シーン説明・手がかりは中身なりの高さで固定し、縮ませない */
+#leftPanel > * { flex: none; }
+/* GMの語りだけが残り高さを取る。max-heightで28%に固定していたときは、
+   画面が縦長になるほどパネル下部に余白が残った(実測: 横持ちで159px)。
+   min-height:0 が無いとflexの子は中身の高さより縮めず、自前のスクロールが効かない */
+#leftPanel > .gmLogView { flex: 1 1 auto; min-height: 0; }
+/* 最後の要素なら、下の余白と区切り線は不要(下端まで伸びるため) */
+#leftPanel > .gmLogView:last-child { margin-bottom: 0; padding-bottom: 0; border-bottom: none; }
 .gmLogView {
-  max-height: 28%;
   overflow-y: auto;
   display: flex;
   flex-direction: column;
