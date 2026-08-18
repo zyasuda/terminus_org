@@ -8,7 +8,7 @@ import {
   createGrid, isWalkable, inBounds, cellAt, canOccupyCell,
   isAdjacent, movePointsFor, reachableCells,
   surroundMultiplier, adjacentAllies, turnOrder, resolveMelee,
-  chooseEnemyAction, chooseMoveToward, makeRng, scatterObstacles, occupiedBy, pathTo,
+  chooseEnemyAction, chooseMoveToward, chooseMoveAway, makeRng, scatterObstacles, occupiedBy, pathTo,
   elevationAt, heightSteps, scatterWater, moveCostAt, findDodgeCell, resolveSweep, resolveShove,
   carveShape, resolveRanged
 } from "./core.js";
@@ -721,7 +721,7 @@ function pathReaches(grid, from, to) {
   const hero = { id: "gareth", side: "party", hp: 10, agility: 7, x: 1, y: 1 };
   assert.deepEqual(
     chooseEnemyAction(g, foe, [foe, hero]),
-    { type: "attack", targetId: "gareth" }
+    { type: "attack", targetId: "gareth", intent: "attack" }
   );
 
   // 離れていれば近づく(移動後は必ず今より近くなる)
@@ -749,6 +749,52 @@ function pathReaches(grid, from, to) {
   const trapped = { id: "t", side: "enemy", hp: 8, agility: 5, x: 1, y: 1 };
   const outside = { id: "p", side: "party", hp: 10, agility: 5, x: 9, y: 9 };
   assert.deepEqual(chooseEnemyAction(boxed, trapped, [trapped, outside]), { type: "wait" });
+}
+
+/* --- 簡易ヘイト(aggroId優先)と離脱(fleeHpRatio) --- */
+{
+  const g = createGrid(["........", "........", "........"]);
+
+  // aggroIdがあれば、最も近い相手ではなくヘイト対象を優先して追う。
+  const foe = { id: "rust", side: "enemy", hp: 8, agility: 5, x: 4, y: 1, aggroId: "lydia" };
+  const nearHero = { id: "gareth", side: "party", hp: 10, agility: 7, x: 6, y: 1 };   // 近いがヘイト対象ではない
+  const farMage = { id: "lydia", side: "party", hp: 10, agility: 5, x: 0, y: 1 };     // 遠いがヘイト対象
+  assert.equal(chooseEnemyAction(g, foe, [foe, nearHero, farMage]).targetId, "lydia", "aggroIdがあれば最も近い相手より優先する");
+
+  // ヘイト対象が倒れていれば、通常どおり最も近い相手に切り替える。
+  const deadMage = { ...farMage, hp: 0 };
+  assert.equal(chooseEnemyAction(g, foe, [foe, nearHero, deadMage]).targetId, "gareth", "ヘイト対象が倒れていれば最も近い相手に戻す");
+
+  // 隣接していれば、ヘイトより先にその場の相手を殴る(素朴なAIの既存挙動を維持)。
+  const adjacentHero = { id: "gareth", side: "party", hp: 10, agility: 7, x: 5, y: 1 };
+  assert.equal(chooseEnemyAction(g, foe, [foe, adjacentHero, farMage]).targetId, "gareth", "隣接した相手はヘイトより優先する");
+
+  // fleeHpRatio: HPが閾値を割ったら、指示せずとも自分から離脱する。
+  const weakFoe = { id: "rust", side: "enemy", hp: 2, maxHp: 8, agility: 5, x: 4, y: 1 };
+  const threat = { id: "gareth", side: "party", hp: 10, agility: 7, x: 5, y: 1 };
+  const flee = chooseEnemyAction(g, weakFoe, [weakFoe, threat], { fleeHpRatio: 0.3 });
+  assert.equal(flee.intent, "flee", "HPが閾値以下なら逃げようとする");
+  assert.ok(flee.to.x < weakFoe.x, "脅威から離れる方向へ動く");
+
+  // fleeHpRatioを渡さなければ(既定0)、HPが低くても従来どおり戦う。BattleView.jsxなど
+  // 既存の呼び出し元がoptsを渡さない限り挙動が変わらないことの回帰確認。
+  assert.equal(chooseEnemyAction(g, weakFoe, [weakFoe, threat]).type, "attack", "fleeHpRatio未指定なら逃げない(後方互換)");
+}
+
+/* --- chooseMoveAway: chooseMoveTowardの対称形 --- */
+{
+  const g = createGrid(["........", "........", "........"]);
+  const unit = { id: "u", side: "enemy", hp: 8, agility: 5, x: 4, y: 1 };
+  const threat = { id: "t", side: "party", hp: 10, agility: 7, x: 5, y: 1 };
+  const act = chooseMoveAway(g, unit, [threat], [unit, threat]);
+  assert.equal(act.type, "move", "逃げ場があれば移動する");
+  assert.ok(act.to.x < unit.x, "脅威から離れる方向へ動く");
+
+  // 壁で完全に囲まれていれば、chooseMoveTowardと同じく待機になる。
+  const boxed = createGrid(["###", "#.#", "###"]);
+  const trapped = { id: "t2", side: "enemy", hp: 8, agility: 5, x: 1, y: 1 };
+  const farThreat = { id: "p2", side: "party", hp: 10, agility: 5, x: 9, y: 9 };
+  assert.deepEqual(chooseMoveAway(boxed, trapped, [farThreat], [trapped, farThreat]), { type: "wait" });
 }
 
 /* --- 通し戦闘: 誰も同じマスに重ならない --- */

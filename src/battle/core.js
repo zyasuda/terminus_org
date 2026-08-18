@@ -397,9 +397,15 @@ export function adjacentAllies(units, target, side) {
 
 /* ---------------- 行動順 ---------------- */
 
-// agility降順。同値は定義順を保つ(sortの安定性に依存)
-export function turnOrder(units) {
-  return units.filter(u => u.hp > 0).slice().sort((a, b) => (b.agility ?? 5) - (a.agility ?? 5));
+// agility降順。同値は定義順を保つ(sortの安定性に依存)。
+// opts.enemyFirstを渡すと、agilityより先にside(敵優先)で並べる。既定は指定しない限り
+// 従来どおりで、BattleView.jsxなど既存の呼び出し元には影響しない。
+export function turnOrder(units, opts = {}) {
+  const alive = units.filter(u => u.hp > 0).slice();
+  return alive.sort((a, b) => {
+    if (opts.enemyFirst && (a.side === "enemy") !== (b.side === "enemy")) return a.side === "enemy" ? -1 : 1;
+    return (b.agility ?? 5) - (a.agility ?? 5);
+  });
 }
 
 /* ---------------- 防御の構え(パリィ/いなす/カウンター/ドッジ) ---------------- */
@@ -587,17 +593,45 @@ export function chooseMoveToward(grid, unit, target, units) {
   return { type: "move", to: { x: bestCell.x, y: bestCell.y }, path: pathTo(cells, bestCell) };
 }
 
-// ponytail: 最も近い相手へ寄り、隣接していれば殴るだけの素朴なAI。
-// 遮蔽・退避・狙い分け・包囲の意図は持たない。手触り確認用の仮置きで、
-// Phase 4で tune-enemy-ai を使って本設計に置き換える
-export function chooseEnemyAction(grid, unit, units) {
+// chooseMoveTowardの対称形。指定した脅威から最も遠ざかる到達マスを選ぶ。
+// 複数の脅威がいる場合は「最も近い脅威との距離」を基準にする(1体から離れても
+// 別の1体に近づいては逃げた意味がないため)。
+export function chooseMoveAway(grid, unit, threats, units) {
+  const cells = reachableCells(grid, unit, movePointsFor(unit.agility), occupiedBy(units, unit.id), unit);
+  const nearestThreatDist = pos => threats.reduce((min, t) => Math.min(min, dist(pos, t)), Infinity);
+
+  let bestCell = null, bestDist = nearestThreatDist(unit);
+  for (const c of cells) {
+    const d = nearestThreatDist(c);
+    if (d > bestDist) { bestDist = d; bestCell = c; }
+  }
+  if (!bestCell) return { type: "wait" };
+  return { type: "move", to: { x: bestCell.x, y: bestCell.y }, path: pathTo(cells, bestCell) };
+}
+
+// ponytail: 最も近い相手(またはヘイト対象)へ寄り、隣接していれば殴るだけの素朴なAI。
+// 遮蔽・狙い分け・包囲の意図は持たない。手触り確認用の仮置きで、
+// Phase 4で tune-enemy-ai を使って本設計に置き換える。
+// opts.fleeHpRatioは既定0(逃げない)。呼び出し側が渡さない限り、既存の呼び出し元
+// (BattleView.jsxなど)の挙動には影響しない。
+export function chooseEnemyAction(grid, unit, units, opts = {}) {
+  const { fleeHpRatio = 0 } = opts;
   const foes = units.filter(u => u.side !== unit.side && u.hp > 0);
   if (!foes.length) return { type: "wait" };
 
-  const inReach = foes.find(f => isAdjacent(unit, f));
-  if (inReach) return { type: "attack", targetId: inReach.id };
+  // HPが閾値を割ったら、戦わずに離脱を試みる(退路が無ければ通常どおり動く)。
+  if (fleeHpRatio > 0 && unit.hp <= (unit.maxHp ?? unit.hp) * fleeHpRatio) {
+    const flee = chooseMoveAway(grid, unit, foes, units);
+    if (flee.type === "move") return { ...flee, intent: "flee" };
+  }
 
-  const nearest = foes.reduce((best, f) => (dist(unit, f) < dist(unit, best) ? f : best));
-  const move = chooseMoveToward(grid, unit, nearest, units);
-  return move.type === "move" ? { ...move, targetId: nearest.id } : move;
+  const inReach = foes.find(f => isAdjacent(unit, f));
+  if (inReach) return { type: "attack", targetId: inReach.id, intent: "attack" };
+
+  // 直近に自分へダメージを与えてきた相手を優先して追う(簡易ヘイト)。
+  // unit.aggroIdが無い(誰にも狙われていない)場合は、従来どおり最も近い相手を追う。
+  const target = (unit.aggroId && foes.find(f => f.id === unit.aggroId))
+    || foes.reduce((best, f) => (dist(unit, f) < dist(unit, best) ? f : best));
+  const move = chooseMoveToward(grid, unit, target, units);
+  return move.type === "move" ? { ...move, targetId: target.id, intent: "pursue" } : move;
 }

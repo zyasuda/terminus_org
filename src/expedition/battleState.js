@@ -2,7 +2,9 @@ import { canOccupyCell, chooseMoveToward, createGrid, makeRng, resolveRanged, sc
 import { EXPEDITION_BATTLE_CONFIG } from "./battleConfig.js";
 
 const openRows = ({ width, height }) => Array.from({ length: height }, () => ".".repeat(width));
-const layoutName = layout => layout === true ? "guardian" : layout === "junction" ? "junction" : "corridor";
+// guardianはboolean(true/false)とレイアウト名文字列("guardian"/"junction"/"corridor")の
+// 両方の呼び出し規約が混在しているため、両方を受け付ける。
+const layoutName = layout => layout === true || layout === "guardian" ? "guardian" : layout === "junction" ? "junction" : "corridor";
 const gridFor = board => {
   const grid = createGrid(board.rows || openRows(board));
   // 三叉路の'#'は壁ではなく、床が存在しない盤外として描画する。
@@ -33,10 +35,18 @@ export function chooseCompanionAction({ grid, units, mage, command }) {
     const to = chooseMoveToward(grid, mage, target, units);
     return to.type === "move" ? { type: "move", to: to.to, line: moveLine } : { type: "wait", line: waitLine };
   };
+  // 入口側は盤面の西端。敵の位置に関係なく退がる。
+  const retreat = (moveLine, waitLine) => approach({ x: 0, y: mage.y }, moveLine, waitLine);
+
+  // HPが閾値を割ったら、相棒指示に関わらず自ら後退する(自律判断)。
+  // 既に"retreat"を指示中なら、下の通常の退却分岐と同じ動きになるのでそちらへ委ねる。
+  const lowHp = mage.hp <= (mage.maxHp ?? mage.hp) * EXPEDITION_BATTLE_CONFIG.companion.lowHpRetreatRatio;
+  if (lowHp && command !== "retreat") {
+    return retreat("リディアは傷を負い、自ら後退した。", "リディアは傷を負い、退路を探している。");
+  }
 
   if (command === "retreat") {
-    // 入口側は盤面の西端。敵の位置に関係なく退がる。
-    return approach({ x: 0, y: mage.y }, "リディアは入口側へ退却した。", "リディアは退却路を探している。");
+    return retreat("リディアは入口側へ退却した。", "リディアは退却路を探している。");
   }
   if (command === "guard") {
     if (canCast) return { type: "cast", targetId: enemy.id };
@@ -53,16 +63,19 @@ export function createExpeditionBattleLayout(layout, seed = 0) {
   const partySlots = board.partySlots.map(slot => ({ ...slot }));
   const swap = Math.floor(rng() * partySlots.length); // Fisher-Yatesの2要素版
   [partySlots[partySlots.length - 1], partySlots[swap]] = [partySlots[swap], partySlots[partySlots.length - 1]];
+  // 敵は1体が既定。board.enemyStart2があれば(通路戦)2体目もそこから出す。
+  const enemyStarts = board.enemyStart2 ? [board.enemyStart, board.enemyStart2] : [board.enemyStart];
   const starts = {
     hero: partySlots[0], mage: partySlots[1],
-    enemy: { ...board.enemyStart },
+    enemy: { ...board.enemyStart },   // 後方互換: 1体目の座標(junction/guardianはこれだけを使う)
+    enemies: enemyStarts.map(pos => ({ ...pos })),
   };
   const grid = gridFor(board);
   const { min, max } = EXPEDITION_BATTLE_CONFIG.board.obstacles;
   const partyMovement = { maxObstacleHeight: EXPEDITION_BATTLE_CONFIG.movement.maxObstacleHeight };
   scatterObstacles(grid, rng, {
     count: min + Math.floor(rng() * (max - min + 1)),
-    keepClear: Object.values(starts),
+    keepClear: [starts.hero, starts.mage, ...starts.enemies],
     // 味方が高いブロックで分断されないよう、通常キャラの経路で生成時に接続を確認する。
     canTraverse: (x, y) => canOccupyCell(grid, x, y, partyMovement),
   });

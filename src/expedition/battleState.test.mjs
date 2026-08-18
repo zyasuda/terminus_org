@@ -14,7 +14,7 @@ for (const guardian of [false, true]) {
     assert.ok(blocks.length >= EXPEDITION_BATTLE_CONFIG.board.obstacles.min && blocks.length <= EXPEDITION_BATTLE_CONFIG.board.obstacles.max, `${guardian ? "守護者" : "通路"} ${seed}: Configのブロック数`);
     assert.ok(blocks.every(cell => HEIGHTS.has(cell.obstacle.height)), `${guardian ? "守護者" : "通路"} ${seed}: 高さは4段階`);
     assert.ok(grid.cells.every(cell => cell.walkable || !!cell.obstacle), `${guardian ? "守護者" : "通路"} ${seed}: 外周壁を置かない`);
-    for (const start of Object.values(starts)) assert.ok(isWalkable(grid, start.x, start.y), `${guardian ? "守護者" : "通路"} ${seed}: 開始位置を空ける`);
+    for (const start of [starts.hero, starts.mage, ...starts.enemies]) assert.ok(isWalkable(grid, start.x, start.y), `${guardian ? "守護者" : "通路"} ${seed}: 開始位置を空ける`);
     const reached = reachableCells(grid, starts.hero, 99, [], { maxObstacleHeight: EXPEDITION_BATTLE_CONFIG.movement.maxObstacleHeight });
     assert.ok(reached.some(cell => cell.x === starts.enemy.x && cell.y === starts.enemy.y), `${guardian ? "守護者" : "通路"} ${seed}: 両陣営が到達可能`);
   }
@@ -103,5 +103,16 @@ const twoFoes = companion(mageAt(3, 3),
   { extra: [{ id: "enemy2", side: "enemy", x: 3, y: 4, hp: 8 }] });
 assert.equal(twoFoes.type, "cast", "複数いても撃てる");
 assert.equal(twoFoes.targetId, "enemy2", "狙うのは最も近い敵");
+
+// --- リディアの自律退却(HPが閾値を割ったら指示に関わらず後退する) ---
+const lowHpRatio = EXPEDITION_BATTLE_CONFIG.companion.lowHpRetreatRatio;
+const lowHpMage = { id: "mage", side: "party", x: 3, y: 3, hp: 1, maxHp: 12, atk: 3, agility: mageAgility };
+assert.ok(lowHpMage.hp <= lowHpMage.maxHp * lowHpRatio, "このテストのHPは閾値以下である前提");
+const lowHpRetreat = companion(lowHpMage, { id: "enemy", side: "enemy", x: 3, y: 5, hp: 8 }, "attack");
+assert.equal(lowHpRetreat.type, "move", "HPが閾値以下なら攻撃指示中でも後退する");
+assert.ok(lowHpRetreat.to.x < lowHpMage.x, "後退先は入口側(西)");
+const healthyMage = { id: "mage", side: "party", x: 3, y: 3, hp: 12, maxHp: 12, atk: 3, agility: mageAgility };
+assert.equal(companion(healthyMage, { id: "enemy", side: "enemy", x: 3, y: 5, hp: 8 }, "attack").type, "cast",
+  "HPが十分なら通常どおり戦う");
 
 console.log("expedition battle state: open boards, seeded blocks, reachable starts, companion tactics");

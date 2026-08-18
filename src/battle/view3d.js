@@ -543,6 +543,9 @@ export function createBattleScene(container, grid, { voidBoundaryWalls = false, 
           const source = Array.isArray(obj.material) ? obj.material : [obj.material];
           const cloned = source.map(material => {
             const copy = material.clone();
+            // 個体差の色調(例: 守護者を同じモデルのまま黒っぽくする)。元の色に乗算するだけなので、
+            // テクスチャの模様そのものは変えない。
+            if (unit.tint !== undefined) copy.color.multiply(new THREE.Color(unit.tint));
             opacityMaterials.push({ material: copy, transparent: copy.transparent, opacity: copy.opacity, depthWrite: copy.depthWrite });
             return copy;
           });
@@ -706,14 +709,14 @@ export function createBattleScene(container, grid, { voidBoundaryWalls = false, 
   const ringGeo = new THREE.RingGeometry(0.18, 0.42, 24);
   let shake = 0;
 
-  function damageSprite(text, color) {
+  function damageSprite(text, color, fontSize = 44) {
     const c = document.createElement("canvas");
     c.width = 128; c.height = 64;
     const g = c.getContext("2d");
-    g.font = "bold 44px system-ui, sans-serif";
+    g.font = `bold ${fontSize}px system-ui, sans-serif`;
     g.textAlign = "center";
     g.textBaseline = "middle";
-    g.lineWidth = 7;
+    g.lineWidth = fontSize * 0.16;
     g.strokeStyle = "rgba(0,0,0,.85)";
     g.strokeText(text, 64, 32);
     g.fillStyle = color;
@@ -725,9 +728,9 @@ export function createBattleScene(container, grid, { voidBoundaryWalls = false, 
     return s;
   }
 
-  // ダメージ値を浮かび上がらせる(外れは0)
-  function floatDamage(wx, wz, text, color, elev = 0) {
-    const num = damageSprite(text, color);
+  // ダメージ値を浮かび上がらせる(ハズレは専用の小さめフォントサイズで呼ばれる)
+  function floatDamage(wx, wz, text, color, elev = 0, fontSize = 44) {
+    const num = damageSprite(text, color, fontSize);
     const y0 = elev + 1.3;
     num.position.set(wx, y0, wz);
     scene.add(num);
@@ -802,7 +805,7 @@ export function createBattleScene(container, grid, { voidBoundaryWalls = false, 
     const [wx, wz] = worldOf(x, y);
     const e = elevationAt(grid, x, y);
     spawnRing(wx, wz, 0x8b93a7, 0.3, true, e);
-    floatDamage(wx, wz, "0", "#9aa3b5", e);   // 外れも0として出す(何も起きなかったのか判断できるように)
+    floatDamage(wx, wz, "ハズレ", "#9aa3b5", e, 30);   // ダメージ数値と紛らわしくないよう、小さめの文字で出す
   }
 
   // パリィ成功: 素早く強い白光の輪+パフ+被弾者(受けた側)の一瞬の閃光。
@@ -860,11 +863,44 @@ export function createBattleScene(container, grid, { voidBoundaryWalls = false, 
     spawnPuff(tx, tz, 0xd6d9de, 0.3, 0.95, elevationAt(grid, toX, toY));
   }
 
-  // リディアの遠隔攻撃用。近接の衝撃輪と区別できる青い弾道を出す。
-  function playRanged(fromX, fromY, toX, toY) {
+  // 光る弾(魔法の飛翔体)。始点から終点へdur秒かけて弧を描いて移動し、
+  // 着弾した瞬間にonImpactを呼ぶ(ダメージ演出・state更新は呼び出し側の責務)。
+  // 暗闇での戦闘を想定しているため、弾自体が周囲を照らす光源を持つ
+  // (ランタンと同じdecay=0の一様減衰。持ち主の体だけが白飛びするのを避ける)。
+  function spawnProjectile(fx, fz, tx, tz, color, dur, elev, onImpact) {
+    const mat = new THREE.SpriteMaterial({
+      map: puffTexture, color, transparent: true, depthWrite: false, depthTest: false
+    });
+    const s = new THREE.Sprite(mat);
+    s.scale.setScalar(0.55);
+    const y = elev + 0.9;
+    s.position.set(fx, y, fz);
+    scene.add(s);
+    const light = new THREE.PointLight(color, 6.5, 6, 0);
+    light.position.copy(s.position);
+    scene.add(light);
+    effects.push({ kind: "projectile", obj: s, light, t: 0, dur, from: { x: fx, z: fz }, to: { x: tx, z: tz }, y, onImpact });
+  }
+
+  // 着弾の爆発。通常のヒット輪(spawnRing単体)より大きく、輪+2色のパフを重ねて破裂感を出す。
+  function spawnBurst(wx, wz, color, elev = 0) {
+    spawnRing(wx, wz, color, 0.5, false, elev);
+    spawnPuff(wx, wz, color, 0.4, 1.7, elev);
+    spawnPuff(wx, wz, 0xffe0a8, 0.3, 1.0, elev);
+  }
+
+  // リディアの遠隔攻撃(ファイアボール)用。炎の弾が発射点から着弾点へ飛び、着弾で爆発する。
+  // onImpactは弾が着弾した瞬間に呼ばれ、呼び出し側はそこでダメージ演出とstate更新を行う。
+  const FIREBALL_COLOR = 0xff6a2a;
+  function playRanged(fromX, fromY, toX, toY, { onImpact } = {}) {
     const [fx, fz] = worldOf(fromX, fromY), [tx, tz] = worldOf(toX, toY);
-    spawnStreak(fx, fz, tx, tz, 0x74d8ff, 0.38, elevationAt(grid, fromX, fromY));
-    spawnPuff(tx, tz, 0x74d8ff, 0.34, 1.05, elevationAt(grid, toX, toY));
+    const fromElev = elevationAt(grid, fromX, fromY), toElev = elevationAt(grid, toX, toY);
+    const dist = Math.hypot(tx - fx, tz - fz);
+    const dur = Math.min(0.6, Math.max(0.28, dist * 0.09));   // 距離に応じて飛行時間を伸ばす
+    spawnProjectile(fx, fz, tx, tz, FIREBALL_COLOR, dur, fromElev, () => {
+      spawnBurst(tx, tz, FIREBALL_COLOR, toElev);
+      onImpact?.();
+    });
   }
 
   function stepEffects(dt) {
@@ -891,6 +927,12 @@ export function createBattleScene(container, grid, { voidBoundaryWalls = false, 
         e.obj.material.opacity = 1 - k;
       } else if (e.kind === "streak") {
         e.obj.material.opacity = 1 - k;   // 拡大はせず、ただ薄れて消える
+      } else if (e.kind === "projectile") {
+        // 弧を描かせる(発射と着弾で低く、中間で高くなる)。飛び方に生っぽさを出すためだけの装飾。
+        e.obj.position.x = e.from.x + (e.to.x - e.from.x) * k;
+        e.obj.position.z = e.from.z + (e.to.z - e.from.z) * k;
+        e.obj.position.y = e.y + Math.sin(k * Math.PI) * 0.35;
+        e.light.position.copy(e.obj.position);
       }
       if (k < 1) continue;
 
@@ -905,6 +947,7 @@ export function createBattleScene(container, grid, { voidBoundaryWalls = false, 
         e.obj.material.map?.dispose();
         e.obj.material.dispose();
         if (e.kind === "streak") e.obj.geometry.dispose();   // streakだけジオメトリを使い回さない
+        if (e.kind === "projectile") { scene.remove(e.light); e.onImpact?.(); }   // 弾が消えた後に着弾演出(spawnBurst)を発火する
       }
       effects.splice(i, 1);
     }
@@ -1146,6 +1189,15 @@ export function createBattleScene(container, grid, { voidBoundaryWalls = false, 
     // 見た目を確認しながらカメラの見下ろし角を調整するための検証用API。
     // 正本はbattleConfig.jsのpresentation.cameraElevationDeg。ここでは反映するだけ。
     setCameraElevationDeg(deg) { cameraElevation = deg * Math.PI / 180; applyFogRange(); placeCamera(); },
+    // 水平方向の向きをスライダーでリニアに操作するためのAPI。「視点を回す」(rotate)と
+    // 同じdirIndex/camAngleを共有するが、なめらかな追従は挟まず即座に反映する
+    // (ドラッグ操作の追従遅れを避けるため。挙動はcameraElevationDegと合わせてある)。
+    setCameraAzimuthDeg(deg) {
+      const rad = deg * Math.PI / 180;
+      dirIndex = (rad - Math.PI / 4) / (Math.PI / 2);
+      camAngle = rad;
+      placeCamera();
+    },
     setObstaclesEnabled(on) { obstacleGroup.visible = on; },
     setWaterEnabled(on) { waterGroup.visible = on; },
     setHolesEnabled(on) { groundPatchGroup.visible = !on; },

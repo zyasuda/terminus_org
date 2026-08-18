@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { chromium } from "playwright";
 import * as THREE from "three";
-import { isAdjacent } from "../battle/core.js";
+import { isAdjacent, elevationAt } from "../battle/core.js";
 import { createFloor, newVillage, route } from "./core.js";
 import { EXPEDITION_BATTLE_CONFIG } from "./battleConfig.js";
 import { createExpeditionBattleLayout } from "./battleState.js";
@@ -26,15 +26,26 @@ const heroButton = name => {
 };
 const positions = () => page.locator("[data-unit-positions]").getAttribute("data-unit-positions").then(JSON.parse);
 const reachCells = () => page.locator("[data-reach-cells]").getAttribute("data-reach-cells").then(JSON.parse);
+// 通路戦は敵が2体("enemy-0"/"enemy-1")、それ以外は1体("enemy")なので、idを問わず動的に拾う。
+const enemyIdsOf = pos => Object.keys(pos).filter(id => id.startsWith("enemy")).sort();
+const enemiesOf = pos => enemyIdsOf(pos).map(id => pos[id]);
+// ExpeditionBattle.jsxのazimuthForFacingと同じ式(heroの向きを画面奥にする水平角度から、
+// hero自身が奥の敵を隠さないよう20度オフセットする)。
+const AZIMUTH_OFFSET_DEG = 20;
+const azimuthForFacing = facing => {
+  const rad = Math.atan2(-Math.cos(facing), -Math.sin(facing));
+  const deg = ((rad * 180 / Math.PI) % 360 + 360) % 360;
+  return (deg - AZIMUTH_OFFSET_DEG + 360) % 360;
+};
+const angleDiff = (a, b) => { const d = Math.abs(a - b) % 360; return Math.min(d, 360 - d); };
 
 // 現行の正射影カメラと同じ計算で、実際のcanvas上のマス/ユニットをクリックする。
 // UIの状態だけを直接書き換えず、プレイヤーと同じpointerdown経路を検証する。
-function projectGridPoint(rect, grid, x, y, height = 0) {
+function projectGridPoint(rect, grid, x, y, height = 0, azimuthDeg = 45, elevationDeg = EXPEDITION_BATTLE_CONFIG.presentation.cameraElevationDeg) {
   const viewSize = Math.max(grid.w, grid.h) + 4;
   const camera = new THREE.OrthographicCamera(-(viewSize * rect.width / rect.height) / 2, (viewSize * rect.width / rect.height) / 2, viewSize / 2, -viewSize / 2, 0.1, 200);
-  // EXPEDITION_BATTLE_CONFIG.presentation.cameraElevationDegと同じ角度を使う。
   // ここがずれると、見た目には正しく描画されていてもクリック座標だけが外れる。
-  const r = 20, angle = Math.PI / 4, cameraY = r * Math.tan(EXPEDITION_BATTLE_CONFIG.presentation.cameraElevationDeg * Math.PI / 180);
+  const r = 20, angle = azimuthDeg * Math.PI / 180, cameraY = r * Math.tan(elevationDeg * Math.PI / 180);
   camera.position.set(Math.cos(angle) * r, cameraY, Math.sin(angle) * r);
   camera.lookAt(0, 0, 0);
   camera.updateProjectionMatrix();
@@ -42,11 +53,16 @@ function projectGridPoint(rect, grid, x, y, height = 0) {
   const point = new THREE.Vector3(x - (grid.w - 1) / 2, height, y - (grid.h - 1) / 2).project(camera);
   return { x: rect.x + (point.x + 1) * rect.width / 2, y: rect.y + (1 - point.y) * rect.height / 2 };
 }
+// カメラの向き・高さはheroの向きや隣接状況に応じて動的に変わるため、クリックのたびに実際の値を読む。
+const currentAzimuthDeg = () => page.locator("[data-camera]").getAttribute("data-camera-azimuth-deg").then(Number);
+const currentElevationDeg = () => page.locator("[data-camera]").getAttribute("data-camera-elevation-deg").then(Number);
 async function clickGridPoint(grid, x, y, height = 0) {
   const rect = await page.locator("canvas").boundingBox();
   assert.ok(rect, "戦闘canvasを取得できる");
-  const point = projectGridPoint(rect, grid, x, y, height);
-  assert.ok(Number.isFinite(point.x) && Number.isFinite(point.y), `canvas上のクリック座標を計算できる: ${JSON.stringify({ rect, grid: { w: grid.w, h: grid.h }, x, y, height, point })}`);
+  const azimuthDeg = await currentAzimuthDeg();
+  const elevationDeg = await currentElevationDeg();
+  const point = projectGridPoint(rect, grid, x, y, height, azimuthDeg, elevationDeg);
+  assert.ok(Number.isFinite(point.x) && Number.isFinite(point.y), `canvas上のクリック座標を計算できる: ${JSON.stringify({ rect, grid: { w: grid.w, h: grid.h }, x, y, height, azimuthDeg, elevationDeg, point })}`);
   await page.mouse.click(point.x, point.y);
 }
 const battleSeed = async () => {
@@ -64,12 +80,16 @@ async function selectMove(grid, to) {
   await page.waitForTimeout(100); // Reactの描画後にThree.jsの選択ハンドラも更新される
   await clickGridPoint(grid, to.x, to.y);
   await page.locator('[data-hero-action="moved"]').waitFor();
+  // 移動でheroの向きが変わると、カメラのazimuth追従(useEffect)が1レンダリング遅れて反映される。
+  await page.waitForTimeout(100);
 }
 async function selectAttack(grid, target, height) {
   await heroButton("攻撃").click();
   await page.locator('[data-hero-action="attack"]').waitFor();
   await page.waitForTimeout(100); // Reactの描画後にThree.jsの選択ハンドラも更新される
-  await clickGridPoint(grid, target.x, target.y, height * 0.45);
+  // 対象が瓦礫の上に乗っている場合、その高さぶんクリック位置を持ち上げないとraycastが外れる
+  // (敵が動けるようになった分、瓦礫の上で被弾するケースが増えて顕在化した)。
+  await clickGridPoint(grid, target.x, target.y, elevationAt(grid, target.x, target.y) + height * 0.45);
   await page.waitForFunction(() => !document.querySelector('[data-hero-action="attack"]'), null, { timeout: 1500 });
 }
 // 現在の戦闘を勝利済みとして地図へ戻す。移動・攻撃・カメラ演出は既に実クリックで
@@ -226,57 +246,74 @@ await page.locator("svg[aria-label='探索地図']").waitFor();
 
 await travelTo("fight-0");
 await page.locator("[data-battle-layout='corridor-3x7']").waitFor();
-assert.equal(await page.locator("[data-battle-layout='corridor-3x7']").count(), 1, "通常遭遇は3x7通路盤面");
 const corridor = page.locator("[data-battle-layout='corridor-3x7']");
-const blockCount = Number(await corridor.getAttribute("data-obstacle-count"));
-assert.ok(blockCount >= EXPEDITION_BATTLE_CONFIG.board.obstacles.min && blockCount <= EXPEDITION_BATTLE_CONFIG.board.obstacles.max, `通路のブロック数がConfig範囲ではない: ${blockCount}`);
 const view = corridor.locator("[data-camera]");
 const near = (actual, expected) => Math.abs(actual - expected) < 0.001;
 const facings = () => view.getAttribute("data-unit-facings").then(JSON.parse);
-assert.equal(await view.getAttribute("data-view-direction"), "0", "初期視点は0方向");
-assert.deepEqual(JSON.parse(await view.getAttribute("data-model-facing-offsets")), {
-  hero: EXPEDITION_BATTLE_CONFIG.presentation.modelFacingOffset.party,
-  mage: EXPEDITION_BATTLE_CONFIG.presentation.modelFacingOffset.party,
-  enemy: EXPEDITION_BATTLE_CONFIG.presentation.modelFacingOffset.enemy,
-}, "GLBの向きはConfigのroot offsetだけで決める");
+// 敵が先手を取る(aiThinkMs後に動き出す)ため、初期対峙の検証は表示直後に最優先で取得する。
 const initialPositions = await positions();
 const initialFacing = await facings();
+const facingOffsets = JSON.parse(await view.getAttribute("data-model-facing-offsets"));
+const enemyIds = enemyIdsOf(facingOffsets);
+assert.equal(enemyIds.length, 2, "通路戦は錆喰いが2匹編成");
+// 味方の初期の向きは1体目の敵(enemy-0)を基準に決まる(makeStateの仕様)。
+const firstFoe = initialPositions[enemyIds[0]];
 assert.ok(
-  near(initialFacing.hero, Math.atan2(initialPositions.enemy.x - initialPositions.hero.x, initialPositions.enemy.y - initialPositions.hero.y)) &&
-  near(initialFacing.mage, Math.atan2(initialPositions.enemy.x - initialPositions.mage.x, initialPositions.enemy.y - initialPositions.mage.y)) &&
-  near(initialFacing.enemy, Math.atan2(initialPositions.hero.x - initialPositions.enemy.x, initialPositions.hero.y - initialPositions.enemy.y)),
+  near(initialFacing.hero, Math.atan2(firstFoe.x - initialPositions.hero.x, firstFoe.y - initialPositions.hero.y)) &&
+  near(initialFacing.mage, Math.atan2(firstFoe.x - initialPositions.mage.x, firstFoe.y - initialPositions.mage.y)) &&
+  enemyIds.every(id => near(initialFacing[id], Math.atan2(initialPositions.hero.x - initialPositions[id].x, initialPositions.hero.y - initialPositions[id].y))),
   "通路端で横並びの味方と敵が正面から対峙する"
 );
+assert.equal(await page.locator("[data-battle-layout='corridor-3x7']").count(), 1, "通常遭遇は3x7通路盤面");
+const blockCount = Number(await corridor.getAttribute("data-obstacle-count"));
+assert.ok(blockCount >= EXPEDITION_BATTLE_CONFIG.board.obstacles.min && blockCount <= EXPEDITION_BATTLE_CONFIG.board.obstacles.max, `通路のブロック数がConfig範囲ではない: ${blockCount}`);
+// 初期視点は固定の0方向ではなく、heroの向き(敵と対峙する向き)を画面奥にする角度になる。
+const initialAzimuth = Number(await view.getAttribute("data-camera-azimuth-deg"));
+assert.ok(angleDiff(initialAzimuth, azimuthForFacing(initialFacing.hero)) < 0.1,
+  `初期視点はheroの向きを画面奥にする角度になる: actual=${initialAzimuth} expected=${azimuthForFacing(initialFacing.hero)}`);
+assert.equal(facingOffsets.hero, EXPEDITION_BATTLE_CONFIG.presentation.modelFacingOffset.party, "GLBの向きはConfigのroot offsetだけで決める(hero)");
+assert.equal(facingOffsets.mage, EXPEDITION_BATTLE_CONFIG.presentation.modelFacingOffset.party, "GLBの向きはConfigのroot offsetだけで決める(mage)");
+for (const id of enemyIds) assert.equal(facingOffsets[id], EXPEDITION_BATTLE_CONFIG.presentation.modelFacingOffset.enemy, `GLBの向きはConfigのroot offsetだけで決める(${id})`);
 await page.screenshot({ path: "/tmp/expedition-corridor-open.png" });
 await page.screenshot({ path: "/tmp/expedition-facing-start.png" });
 
 const corridorGrid = await battleLayout(false);
 assert.equal(await page.getByRole("button", { name: "接近／攻撃" }).count(), 0, "曖昧な自動行動ボタンを表示しない");
-assert.ok((await text()).includes("隣接する敵がいないため、移動または待機"), "隣接敵なしをHUDで表示する");
+// 敵が先手を取るため、HUDのheroステータス確認はhero手番を待ってから行う。
 await waitForHero();
+assert.ok((await text()).includes("隣接する敵がいないため、移動または待機"), "隣接敵なしをHUDで表示する");
 await heroButton("待機").click();
 await page.getByText("リディアの手番").waitFor({ timeout: 3000 });
-await page.getByText("リディアは魔法の射程へ移動した。").waitFor({ timeout: 3000 });
-const magePosition = (await positions()).mage;
-assert.ok(near((await facings()).mage, Math.atan2(magePosition.x - initialPositions.mage.x, magePosition.y - initialPositions.mage.y)), "リディアは移動先の方向を向く");
 await waitForHero();
-const enemyPosition = (await positions()).enemy;
-assert.notDeepEqual(enemyPosition, initialPositions.enemy, "敵は主人公手番までに接近する");
-assert.ok(near((await facings()).enemy, Math.atan2(enemyPosition.x - 6, enemyPosition.y - 1)), "敵は移動先の方向を向く");
+// 敵が先手で近づいた分、リディアが初手から射程内でcastできることもある(移動するとは限らない)。
+if ((await text()).includes("リディアは魔法の射程へ移動した。")) {
+  const magePosition = (await positions()).mage;
+  assert.ok(near((await facings()).mage, Math.atan2(magePosition.x - initialPositions.mage.x, magePosition.y - initialPositions.mage.y)), "リディアは移動先の方向を向く");
+} else {
+  assert.ok((await text()).includes("リディアは魔法を放った。"), "敵が先に近づいた分、リディアが初手から魔法を放つこともある");
+}
+await waitForHero();
+const positionsAfterEnemyTurn = await positions();
+const movedFoeId = enemyIds.find(id => positionsAfterEnemyTurn[id].x !== initialPositions[id].x || positionsAfterEnemyTurn[id].y !== initialPositions[id].y);
+assert.ok(movedFoeId, "少なくとも1体の敵は主人公手番までに接近する");
+const movedFoe = positionsAfterEnemyTurn[movedFoeId];
+assert.ok(near((await facings())[movedFoeId], Math.atan2(movedFoe.x - initialPositions[movedFoeId].x, movedFoe.y - initialPositions[movedFoeId].y)), "動いた敵は移動先の方向を向く");
 
-// 移動→攻撃: 青マスを実クリックしてから、隣接した敵を実クリックする。
+// 移動→攻撃: 青マスを実クリックしてから、隣接した敵(2体のうちどちらか)を実クリックする。
 let beforeMove, moveToAttack;
 for (let i = 0; i < 3 && !moveToAttack; i += 1) {
   beforeMove = await positions();
   const reachable = await reachCells();
-  moveToAttack = reachable.find(cell => isAdjacent(cell, beforeMove.enemy));
+  moveToAttack = reachable.find(cell => enemiesOf(beforeMove).some(foe => isAdjacent(cell, foe)));
   if (!moveToAttack) { await heroButton("待機").click(); await waitForHero(); }
 }
 assert.ok(moveToAttack, "移動後に攻撃できる青マスがある");
 await selectMove(corridorGrid, moveToAttack);
 assert.equal(await corridor.getAttribute("data-hero-action"), "moved", "青マスを1回選ぶと移動済みになる");
 assert.ok((await text()).includes("移動済み：攻撃できます"), "移動済みをHUDで表示する");
-await selectAttack(corridorGrid, (await positions()).enemy, EXPEDITION_BATTLE_CONFIG.units.enemy.height);
+const adjacentFoe = enemiesOf(await positions()).find(foe => isAdjacent(moveToAttack, foe));
+assert.ok(adjacentFoe, "移動先に隣接する敵がいる");
+await selectAttack(corridorGrid, adjacentFoe, EXPEDITION_BATTLE_CONFIG.units.corridorEnemy.height);
 await page.locator("[data-camera='combat']").waitFor({ timeout: 1200 });
 await page.screenshot({ path: "/tmp/expedition-combat-camera.png" });
 await page.locator("[data-camera='iso']").waitFor({ timeout: 3500 });
@@ -285,7 +322,7 @@ assert.equal(await page.locator("[data-camera='iso']").count(), 1, "移動後の
 // 2回目の主人公手番でも、隣接中に移動を実行できることまで確認する。
 await waitForHero();
 const beforeAdjacentMove = await positions();
-assert.ok(isAdjacent(beforeAdjacentMove.hero, beforeAdjacentMove.enemy), "敵に隣接した主人公手番になる");
+assert.ok(enemiesOf(beforeAdjacentMove).some(foe => isAdjacent(beforeAdjacentMove.hero, foe)), "敵に隣接した主人公手番になる");
 const sideStep = (await reachCells())[0];
 assert.ok(sideStep, "隣接中にも移動先が残る");
 await heroButton("移動").click();
@@ -313,21 +350,28 @@ const secondGrid = await battleLayout(false);
 let secondMove;
 for (let i = 0; i < 3 && !secondMove; i += 1) {
   const now = await positions();
-  secondMove = (await reachCells()).find(cell => isAdjacent(cell, now.enemy));
+  secondMove = (await reachCells()).find(cell => enemiesOf(now).some(foe => isAdjacent(cell, foe)));
   if (!secondMove) { await heroButton("待機").click(); await waitForHero(); }
 }
 assert.ok(secondMove, "攻撃のみの確認前に敵へ近づける");
 await selectMove(secondGrid, secondMove);
-await selectAttack(secondGrid, (await positions()).enemy, EXPEDITION_BATTLE_CONFIG.units.enemy.height);
+const secondAdjacentFoe = enemiesOf(await positions()).find(foe => isAdjacent(secondMove, foe));
+await selectAttack(secondGrid, secondAdjacentFoe, EXPEDITION_BATTLE_CONFIG.units.corridorEnemy.height);
 // ダイスはseedから決まる(会心・外れも起こる)。1撃目とその後のリディアの自動追撃だけで
 // 決着することがある。waitForHero()はcanvasが無くなっても素通りするので、
 // 「2撃必要」を前提にせず、待った後にもう一度canvasを見てから重複手番の検査を行う。
+// 瀕死の敵は自動離脱(fleeHpRatio)することがあるため、隣接していない場合はこの先の
+// 検査をスキップする(離脱の有無自体は別途ブラウザ確認済み)。
 await waitForHero();
 if (await page.locator("canvas").count()) {
   const attackOnly = await positions();
-  assert.ok(isAdjacent(attackOnly.hero, attackOnly.enemy), "攻撃だけを選べる距離にいる");
-  await selectAttack(secondGrid, attackOnly.enemy, EXPEDITION_BATTLE_CONFIG.units.enemy.height);
-  assert.equal(((await text()).match(/リディアの攻撃/g) || []).length, 1, "リディアの自動手番が重複しない");
+  const stillAdjacentFoe = enemiesOf(attackOnly).find(foe => isAdjacent(attackOnly.hero, foe));
+  if (stillAdjacentFoe) {
+    await selectAttack(secondGrid, stillAdjacentFoe, EXPEDITION_BATTLE_CONFIG.units.corridorEnemy.height);
+    // 敵が2体になった分、この時点までにリディアの手番が来ているとは限らない(0回もあり得る)。
+    // ここで検出したいのは「重複」なので、2回以上でなければよい。
+    assert.ok(((await text()).match(/リディアの攻撃/g) || []).length <= 1, "リディアの自動手番が重複しない");
+  }
 }
 // 移動・攻撃・リディアの重複手番は実クリックで確認済み。残りはダイス次第で長引くので勝利済みへ飛ばす。
 await skipBattleToVictory();

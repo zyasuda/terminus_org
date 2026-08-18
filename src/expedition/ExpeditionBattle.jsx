@@ -13,29 +13,50 @@ const unitFrom = (id, side, config, start, faceTo, combat) => ({
   facing: facingToward(start, faceTo),
   modelFacingOffset: EXPEDITION_BATTLE_CONFIG.presentation.modelFacingOffset[side],
   ...combat,
+  defenseDc: config.defenseDc,
+  fleeHpRatio: config.fleeHpRatio ?? 0,
   agility: config.agility,
   height: config.height,
   canClimb: config.canClimb,
   maxObstacleHeight: EXPEDITION_BATTLE_CONFIG.movement.maxObstacleHeight,
   modelId: config.modelId,
+  ...(config.tint !== undefined ? { tint: config.tint } : {}),
 });
 
 const makeState = (guardian, layout, equipment = {}, party = {}, seed = 0) => {
-  const { hero: heroConfig, mage: mageConfig, enemy: enemyConfig, guardian: guardianConfig } = EXPEDITION_BATTLE_CONFIG.units;
-  const foeConfig = guardian ? guardianConfig : enemyConfig;
+  const { hero: heroConfig, mage: mageConfig, enemy: enemyConfig, corridorEnemy: corridorEnemyConfig, guardian: guardianConfig } = EXPEDITION_BATTLE_CONFIG.units;
+  // 通路戦だけ2体編成(corridorEnemy)。三叉路・守護者戦は従来どおり1体。
+  const foeConfig = guardian ? guardianConfig : layout === "corridor" ? corridorEnemyConfig : enemyConfig;
   // 最大HPは core.partyMaxHp が正本。地図画面と戦闘画面で違う値を出さないよう式を複製しない。
   const hero = { atk: atkOf(heroConfig.atk, equipment.hero), hp: partyMaxHp("hero", equipment) };
   const mage = { atk: atkOf(mageConfig.atk, equipment.mage), hp: partyMaxHp("mage", equipment) };
   const battleLayout = guardian ? "guardian" : layout;
   const { grid, starts } = createExpeditionBattleLayout(battleLayout, seed);
+  // 味方の初期の向きは1体目の敵に対して決める(2体目は少し離れた位置に見えるだけでよい)。
+  const foeFaceTo = starts.enemies[0];
+  const foes = starts.enemies.map((pos, i) =>
+    unitFrom(starts.enemies.length > 1 ? `enemy-${i}` : "enemy", "enemy", foeConfig, pos, starts.hero, { hp: foeConfig.hp, maxHp: foeConfig.hp, atk: foeConfig.atk }));
   const units = [
-    unitFrom("hero", "party", heroConfig, starts.hero, starts.enemy, { hp: Math.min(hero.hp, party.hero ?? hero.hp), maxHp: hero.hp, atk: hero.atk }),
-    unitFrom("mage", "party", mageConfig, starts.mage, starts.enemy, { hp: Math.min(mage.hp, party.mage ?? mage.hp), maxHp: mage.hp, atk: mage.atk }),
-    unitFrom("enemy", "enemy", foeConfig, starts.enemy, starts.hero, { hp: foeConfig.hp, maxHp: foeConfig.hp, atk: foeConfig.atk }),
+    unitFrom("hero", "party", heroConfig, starts.hero, foeFaceTo, { hp: Math.min(hero.hp, party.hero ?? hero.hp), maxHp: hero.hp, atk: hero.atk }),
+    unitFrom("mage", "party", mageConfig, starts.mage, foeFaceTo, { hp: Math.min(mage.hp, party.mage ?? mage.hp), maxHp: mage.hp, atk: mage.atk }),
+    ...foes,
   ];
-  return { grid, units, order: turnOrder(units).map(u => u.id), turn: 0, log: [guardian ? "守護者が宝箱を守っている。" : layout === "junction" ? "坑道の獣が三叉路を塞いだ。" : "坑道の獣が狭い通路を塞いだ。"] };
+  // 遭遇は稀に不意打ちで、敵が先手を取ることがある(既定20%)。+555はダイス用rng(+777)や
+  // 盤面生成用rng(seedそのまま)とは別系列にするためのオフセット。
+  const enemyFirst = makeRng(seed + 555)() < EXPEDITION_BATTLE_CONFIG.encounter.enemyFirstChance;
+  return { grid, units, order: turnOrder(units, { enemyFirst }).map(u => u.id), turn: 0, log: [guardian ? "守護者が宝箱を守っている。" : layout === "junction" ? "坑道の獣が三叉路を塞いだ。" : "坑道の獣が2匹、狭い通路を塞いだ。"] };
 };
 const alive = (units, side) => units.some(u => u.side === side && u.hp > 0);
+// heroの向いている方向(facing)を画面奥にする水平角度(度)。カメラ位置→原点の視線方向が
+// heroの向きの逆になるように定める(=heroが向いている敵と、画面奥で正対する構図を保つ)。
+// 厳密に180度正対させると、hero自身が画面上で奥の敵と重なって隠してしまうため、
+// 少しだけ角度をずらす(既定20度)。
+const AZIMUTH_OFFSET_DEG = 20;
+const azimuthForFacing = facing => {
+  const rad = Math.atan2(-Math.cos(facing), -Math.sin(facing));
+  const deg = ((rad * 180 / Math.PI) % 360 + 360) % 360;
+  return (deg - AZIMUTH_OFFSET_DEG + 360) % 360;
+};
 export default function ExpeditionBattle({ guardian, layout = "corridor", order, equipment = {}, party = {}, seed = 0, tonics = 0, onUseTonic, onFinish }) {
   const battleLayout = guardian ? "guardian" : layout;
   const mount = useRef(null), scene = useRef(null), [state, setState] = useState(() => makeState(guardian, battleLayout, equipment, party, seed));
@@ -44,9 +65,47 @@ export default function ExpeditionBattle({ guardian, layout = "corridor", order,
   const rng = useRef(null);
   if (!rng.current) rng.current = makeRng(seed + 777);
   const roll = () => 1 + Math.floor(rng.current() * 20);
-  const [command, setCommand] = useState(order), [moved, setMoved] = useState(false), [heroAction, setHeroAction] = useState(null), [busy, setBusy] = useState(false), [combatShot, setCombatShot] = useState(false), [viewDirection, setViewDirection] = useState(0);
+  const [command, setCommand] = useState(order), [moved, setMoved] = useState(false), [heroAction, setHeroAction] = useState(null), [busy, setBusy] = useState(false), [combatShot, setCombatShot] = useState(false);
+  // カメラの水平の向き(度)。初期値はheroの初期の向き(敵と対峙する向き)を画面奥にする角度。
+  // 「視点を回す」ボタンとスライダーの両方から同じ値を操作する。
+  const [cameraAzimuthDeg, setCameraAzimuthDegState] = useState(() => {
+    const hero = state.units.find(u => u.id === "hero");
+    return hero ? azimuthForFacing(hero.facing) : 45;
+  });
+  const setAzimuth = deg => { const normalized = ((deg % 360) + 360) % 360; setCameraAzimuthDegState(normalized); scene.current?.setCameraAzimuthDeg(normalized); };
+  // 表示・スモークテスト用の0-3方向ラベルは、実際の角度から逆算する派生値にする(正本はcameraAzimuthDeg)。
+  const viewDirection = Math.round(((cameraAzimuthDeg - 45 + 360) % 360) / 90) % 4;
+  // heroの向きが変わるたび(移動・攻撃の対峙で向きが変わる)、常にその向きを画面奥にするよう追従する。
+  const heroFacing = state.units.find(u => u.id === "hero")?.facing;
+  useEffect(() => { if (heroFacing !== undefined) setAzimuth(azimuthForFacing(heroFacing)); }, [heroFacing]);
+  // heroが敵に隣接している間は、対峙する敵をhero自身が隠しやすい(azimuthForFacingで正対する
+  // 構図になるため)。見下ろし角を上げて、隠れにくくする。
+  const heroAdjacentToEnemy = (() => {
+    const hero = state.units.find(u => u.id === "hero");
+    return !!hero && state.units.some(u => u.side === "enemy" && u.hp > 0 && isAdjacent(hero, u));
+  })();
+  const ADJACENT_ELEVATION_DEG = 60;
   // カメラの見下ろし角を見た目を見ながら調整するスライダー。正本はConfig側で、ここでは動かして確認するだけ。
-  const [cameraElevationDeg, setCameraElevationDeg] = useState(EXPEDITION_BATTLE_CONFIG.presentation.cameraElevationDeg);
+  const [cameraElevationDeg, setCameraElevationDeg] = useState(() =>
+    heroAdjacentToEnemy ? ADJACENT_ELEVATION_DEG : EXPEDITION_BATTLE_CONFIG.presentation.cameraElevationDeg);
+  const setElevation = deg => { setCameraElevationDeg(deg); scene.current?.setCameraElevationDeg(deg); };
+  useEffect(() => {
+    setElevation(heroAdjacentToEnemy ? ADJACENT_ELEVATION_DEG : EXPEDITION_BATTLE_CONFIG.presentation.cameraElevationDeg);
+  }, [heroAdjacentToEnemy]);
+  // 演出の見た目調整用(BattleView.jsxの検証パネルと同じもの)。ゲームの状態には影響しない。
+  const [fogOn, setFogOn] = useState(false);
+  const [fogLevel, setFogLevel] = useState(1);
+  const [fogColor, setFogColor] = useState("#161a22");
+  const [dustOn, setDustOn] = useState(false);
+  const [rainOn, setRainOn] = useState(false);
+  const [wallsOn, setWallsOn] = useState(EXPEDITION_BATTLE_CONFIG.presentation.showBackdropWalls);
+  const [bgColor, setBgColor] = useState("#161a22");
+  const [lightPreset, setLightPreset] = useState("night");
+  const [obstaclesOn, setObstaclesOn] = useState(true);
+  const [waterOn, setWaterOn] = useState(true);
+  const [holesOn, setHolesOn] = useState(true);
+  // プレイヤー(hero)のカンテラの点灯/消灯。暗闇の戦闘での主光源なので既定は点灯。
+  const [heroLanternOn, setHeroLanternOn] = useState(true);
   const active = state.units.find(u => u.id === state.order[state.turn] && u.hp > 0);
   const partyAlive = alive(state.units, "party"), enemyAlive = alive(state.units, "enemy");
   const playerTurn = active?.id === "hero" && partyAlive && enemyAlive;
@@ -72,11 +131,20 @@ export default function ExpeditionBattle({ guardian, layout = "corridor", order,
   const damage = (attacker, target, ranged = false) => {
     const result = ranged ? resolveRanged({ attacker, target, units: state.units, grid: state.grid, roll }) : resolveMelee({ attacker, target, units: state.units, grid: state.grid, roll });
     if (!result.ok) return false;
-    if (ranged) scene.current?.playRanged(attacker.x, attacker.y, target.x, target.y);
-    scene.current?.setCombatCamera(attacker, target); setCombatShot(true);
-    setTimeout(() => { scene.current?.setCameraFocus(null); setCombatShot(false); }, EXPEDITION_BATTLE_CONFIG.timing.attackCameraMs);
-    scene.current?.[result.hit ? "playHit" : "playMiss"](target.x, target.y, { damage: result.damage, unitId: target.id });
-    setState(s => ({ ...s, units: s.units.map(u => u.id === target.id ? { ...u, hp: Math.max(0, u.hp - (result.hit ? result.damage : 0)) } : u.id === attacker.id ? { ...u, facing: facingToward(attacker, target, u.facing) } : u), log: [...s.log, ...(ranged ? [`${attacker.name}は魔法を放った。`] : []), result.hit ? `${attacker.name}の攻撃。${result.damage}ダメージ。` : `${attacker.name}の攻撃は外れた。`] }));
+    // 判定はここで確定させる(見た目の都合で結果を変えない)。近接は即座に演出するが、
+    // 遠隔は弾が着弾するまで、ダメージ演出とstate更新を遅らせる(playRangedのonImpactで発火)。
+    const applyResult = () => {
+      scene.current?.setCombatCamera(attacker, target); setCombatShot(true);
+      setTimeout(() => { scene.current?.setCameraFocus(null); setCombatShot(false); }, EXPEDITION_BATTLE_CONFIG.timing.attackCameraMs);
+      scene.current?.[result.hit ? "playHit" : "playMiss"](target.x, target.y, { damage: result.damage, unitId: target.id });
+      setState(s => ({ ...s, units: s.units.map(u =>
+        // 命中した攻撃の的(enemy側)は、直近に自分を攻撃してきた相手をaggroIdに覚える(簡易ヘイト)。
+        u.id === target.id ? { ...u, hp: Math.max(0, u.hp - (result.hit ? result.damage : 0)), ...(result.hit && u.side === "enemy" ? { aggroId: attacker.id } : {}) }
+        : u.id === attacker.id ? { ...u, facing: facingToward(attacker, target, u.facing) } : u
+      ), log: [...s.log, ...(ranged ? [`${attacker.name}は魔法を放った。`] : []), result.hit ? `${attacker.name}の攻撃。${result.damage}ダメージ。` : `${attacker.name}の攻撃は外れた。`] }));
+    };
+    if (ranged) scene.current?.playRanged(attacker.x, attacker.y, target.x, target.y, { onImpact: applyResult });
+    else applyResult();
     return true;
   };
   const moveUnit = (unit, to, line) => {
@@ -84,9 +152,30 @@ export default function ExpeditionBattle({ guardian, layout = "corridor", order,
     setState(s => ({ ...s, units: s.units.map(u => u.id === unit.id ? { ...u, ...to, facing: facingToward(unit, to, u.facing) } : u), log: [...s.log, line] }));
   };
   useEffect(() => {
-    const grid = state.grid; const s = createBattleScene(mount.current, grid, { voidBoundaryWalls: battleLayout === "junction", cameraElevationDeg: EXPEDITION_BATTLE_CONFIG.presentation.cameraElevationDeg }); scene.current = s; s.setWallsEnabled(EXPEDITION_BATTLE_CONFIG.presentation.showBackdropWalls); s.setEnemiesVisible(true);
+    const grid = state.grid; const s = createBattleScene(mount.current, grid, { voidBoundaryWalls: battleLayout === "junction", cameraElevationDeg: EXPEDITION_BATTLE_CONFIG.presentation.cameraElevationDeg }); scene.current = s;
+    s.setFogEnabled(fogOn); s.setFogIntensity(fogLevel); s.setFogColor(fogColor);
+    s.setDustEnabled(dustOn); s.setRainEnabled(rainOn); s.setWallsEnabled(wallsOn);
+    s.setBackgroundColor(bgColor); s.setLightPreset(lightPreset);
+    s.setObstaclesEnabled(obstaclesOn); s.setWaterEnabled(waterOn); s.setHolesEnabled(holesOn);
+    s.setLanternEnabled("hero", heroLanternOn);
+    s.setCameraAzimuthDeg(cameraAzimuthDeg);
+    s.setCameraElevationDeg(cameraElevationDeg);
+    s.setEnemiesVisible(true);
     return () => s.dispose();
   }, []);
+  // 演出パネルの設定を、盤面を作り直さず既存シーンへその場で効かせる。
+  useEffect(() => { scene.current?.setFogEnabled(fogOn); }, [fogOn]);
+  useEffect(() => { scene.current?.setFogIntensity(fogLevel); }, [fogLevel]);
+  useEffect(() => { scene.current?.setFogColor(fogColor); }, [fogColor]);
+  useEffect(() => { scene.current?.setDustEnabled(dustOn); }, [dustOn]);
+  useEffect(() => { scene.current?.setRainEnabled(rainOn); }, [rainOn]);
+  useEffect(() => { scene.current?.setWallsEnabled(wallsOn); }, [wallsOn]);
+  useEffect(() => { scene.current?.setBackgroundColor(bgColor); }, [bgColor]);
+  useEffect(() => { scene.current?.setLightPreset(lightPreset); }, [lightPreset]);
+  useEffect(() => { scene.current?.setObstaclesEnabled(obstaclesOn); }, [obstaclesOn]);
+  useEffect(() => { scene.current?.setWaterEnabled(waterOn); }, [waterOn]);
+  useEffect(() => { scene.current?.setHolesEnabled(holesOn); }, [holesOn]);
+  useEffect(() => { scene.current?.setLanternEnabled("hero", heroLanternOn); }, [heroLanternOn]);
   useEffect(() => {
     const s = scene.current; if (!s) return;
     const targets = heroAction === "attack" ? adjacentTargets : [];
@@ -113,9 +202,9 @@ export default function ExpeditionBattle({ guardian, layout = "corridor", order,
         if (act.type === "wait") setState(s => ({ ...s, log: [...s.log, act.line] }));
         scheduleNextTurn(expectedTurn, act.type === "cast" ? EXPEDITION_BATTLE_CONFIG.timing.attackSettleMs : EXPEDITION_BATTLE_CONFIG.timing.moveSettleMs);
       } else {
-        const act = chooseEnemyAction(state.grid, active, state.units);
+        const act = chooseEnemyAction(state.grid, active, state.units, { fleeHpRatio: active.fleeHpRatio });
         if (act.type === "attack") { const t = state.units.find(u => u.id === act.targetId); if (t) damage(active, t); }
-        if (act.type === "move") moveUnit(active, act.to, `${active.name}は${state.units.find(u => u.id === act.targetId)?.name || "あなた"}へ接近した。`);
+        if (act.type === "move") moveUnit(active, act.to, act.intent === "flee" ? `${active.name}は傷を負い、後退した。` : `${active.name}は${state.units.find(u => u.id === act.targetId)?.name || "あなた"}へ接近した。`);
         if (act.type === "wait") setState(s => ({ ...s, log: [...s.log, `${active.name}は進路を探している。`] }));
         scheduleNextTurn(expectedTurn, act.type === "move" ? EXPEDITION_BATTLE_CONFIG.timing.moveSettleMs : EXPEDITION_BATTLE_CONFIG.timing.attackSettleMs);
       }
@@ -140,7 +229,7 @@ export default function ExpeditionBattle({ guardian, layout = "corridor", order,
     data-hero-action={playerTurn ? (heroAction || (moved ? "moved" : "choose")) : ""}
     data-adjacent-enemies={adjacentTargets.length}
     data-reach-cells={JSON.stringify(heroReach.map(({ x, y }) => ({ x, y })))}>
-    <div ref={mount} style={S.canvas} data-camera={combatShot ? "combat" : "iso"} data-view-direction={viewDirection}/>
+    <div ref={mount} style={S.canvas} data-camera={combatShot ? "combat" : "iso"} data-view-direction={viewDirection} data-camera-azimuth-deg={cameraAzimuthDeg} data-camera-elevation-deg={cameraElevationDeg}/>
     <div style={S.hud}>
       <b>{!partyAlive ? "敗北" : !enemyAlive ? "勝利" : `${active?.name}の手番`}</b>
       <div style={S.row}>{state.units.map(u => <span key={u.id} style={S.chip}>{u.name} {u.hp}/{u.maxHp}</span>)}</div>
@@ -148,7 +237,7 @@ export default function ExpeditionBattle({ guardian, layout = "corridor", order,
         <span>相棒指示:</span>
         {[["attack", "攻撃"], ["guard", "護衛"], ["retreat", "退却"]].map(([id, label]) =>
           <button key={id} disabled={busy} style={{ ...S.btn, ...(command === id ? S.active : {}) }} onClick={() => setCommand(id)}>{label}</button>)}
-        <button style={S.btn} onClick={() => { scene.current?.rotate(1); setViewDirection(direction => (direction + 1) % 4); }}>視点を回す</button>
+        <button style={S.btn} onClick={() => setAzimuth(cameraAzimuthDeg + 90)}>視点を回す</button>
         {playerTurn && <button disabled={busy || moved} style={{ ...S.btn, ...(heroAction === "move" ? S.active : {}) }}
           onClick={() => { setHeroAction("move"); setState(s => ({ ...s, log: [...s.log, "移動先の青いマスを選ぶ。"] })); }}>移動</button>}
         {playerTurn && <button disabled={busy || !adjacentTargets.length} style={{ ...S.btn, ...(heroAction === "attack" ? S.active : {}) }}
@@ -164,8 +253,63 @@ export default function ExpeditionBattle({ guardian, layout = "corridor", order,
       <div style={S.row}>
         <span>カメラの高さ:</span>
         <input type="range" min="20" max="80" step="1" value={cameraElevationDeg}
-          onChange={e => { const deg = Number(e.target.value); setCameraElevationDeg(deg); scene.current?.setCameraElevationDeg(deg); }}/>
+          onChange={e => setElevation(Number(e.target.value))}/>
         <span>{cameraElevationDeg}度</span>
+      </div>
+      <div style={S.row}>
+        <span>カメラの向き:</span>
+        <input type="range" min="0" max="359" step="1" value={cameraAzimuthDeg} onChange={e => setAzimuth(Number(e.target.value))}/>
+        <span>{cameraAzimuthDeg}度</span>
+      </div>
+      {/* 演出の見た目調整(検証用)。盤面のルールには影響しない */}
+      <div style={S.row}>
+        <label style={S.toggle}>
+          <input type="checkbox" checked={fogOn} onChange={e => setFogOn(e.target.checked)} />
+          霧
+        </label>
+        <input type="range" min={0} max={1} step={0.05} value={fogLevel} disabled={!fogOn}
+          onChange={e => setFogLevel(Number(e.target.value))} style={{ width: 90 }}/>
+        <input type="color" value={fogColor} disabled={!fogOn}
+          onChange={e => setFogColor(e.target.value)} style={{ width: 28, height: 20, padding: 0, border: "none", background: "none" }}/>
+        <label style={S.toggle}>
+          <input type="checkbox" checked={dustOn} onChange={e => setDustOn(e.target.checked)} />
+          塵
+        </label>
+        <label style={S.toggle}>
+          <input type="checkbox" checked={rainOn} onChange={e => setRainOn(e.target.checked)} />
+          雨
+        </label>
+        <label style={S.toggle}>
+          <input type="checkbox" checked={wallsOn} onChange={e => setWallsOn(e.target.checked)} />
+          壁
+        </label>
+        <label style={S.toggle}>
+          背景
+          <input type="color" value={bgColor} onChange={e => setBgColor(e.target.value)} style={{ width: 28, height: 20, padding: 0, border: "none", background: "none" }}/>
+        </label>
+        <label style={S.toggle}>
+          光
+          <select value={lightPreset} onChange={e => setLightPreset(e.target.value)} style={S.select}>
+            <option value="night">夜</option>
+            <option value="day">昼</option>
+          </select>
+        </label>
+        <label style={S.toggle}>
+          <input type="checkbox" checked={obstaclesOn} onChange={e => setObstaclesOn(e.target.checked)} />
+          障害物
+        </label>
+        <label style={S.toggle}>
+          <input type="checkbox" checked={waterOn} onChange={e => setWaterOn(e.target.checked)} />
+          水溜り
+        </label>
+        <label style={S.toggle}>
+          <input type="checkbox" checked={holesOn} onChange={e => setHolesOn(e.target.checked)} />
+          穴
+        </label>
+        <label style={S.toggle}>
+          <input type="checkbox" checked={heroLanternOn} onChange={e => setHeroLanternOn(e.target.checked)} />
+          カンテラ
+        </label>
       </div>
     </div>
   </div>;
@@ -181,4 +325,6 @@ const S = {
   active: { background: "#3d7fb5" },
   hint: { color: "#9ca8bd", marginTop: 5 },
   log: { marginTop: 5, color: "#d8c98c" },
+  toggle: { display: "flex", alignItems: "center", gap: 4, color: "#8b93a7", fontSize: 12, cursor: "pointer" },
+  select: { background: "#2b303c", color: "#e6e8ee", border: "1px solid #3c4354", borderRadius: 4, font: "inherit" },
 };
