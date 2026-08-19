@@ -50,7 +50,16 @@ export function getSnapshot() { return snapshot; }
 export function subscribe(fn) { listeners.add(fn); return () => listeners.delete(fn); }
 export function setStore(patch) {
   snapshot = { ...snapshot, ...(typeof patch === "function" ? patch(snapshot) : patch) };
-  listeners.forEach(fn => fn());
+  /* 購読側で例外が出ても、状態更新を呼んだゲーム進行まで巻き込んで止めない。
+     素のforEachだと、演出レイヤー(PhaserFx)がフラッシュに失敗しただけで例外が
+     setStoreの呼び出し元へ遡り、手番が途中で中断してゲームが固まる。
+     2026-08-19に発生。0×0のcanvasでcameras.main.flashが投げていた。
+     発火元はaddDice、つまり戦闘に限らず「全てのダイス判定」のクリティカル/
+     ファンブルなので、秘密の開示判定でも起きる。
+     演出や表示の失敗はログに出して、進行は続けさせる。回帰テスト: store.test.mjs */
+  listeners.forEach(fn => {
+    try { fn(); } catch (e) { console.error("store購読側で例外(進行は継続):", e); }
+  });
 }
 export function pushChat(entry) {
   const withId = { id: nextId++, ...entry };

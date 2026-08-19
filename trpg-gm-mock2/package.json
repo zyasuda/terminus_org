@@ -21,9 +21,10 @@
     "test:voice": "node src/engine/voice.test.mjs",
     "test:resume": "node src/engine/resume.test.mjs",
     "test:llmjson": "node src/engine/llmJson.test.mjs",
+    "test:store": "node src/engine/store.test.mjs",
     "test:dictlane": "node src/engine/dictLane.test.mjs",
     "corpus:declarations": "node scripts/extract-declarations.mjs",
-    "test": "npm run test:progression && npm run test:playthrough && npm run test:playthrough:hybrid && npm run test:scenario && npm run test:inventory && npm run test:battle && npm run test:healpotion && npm run test:verbchip && npm run test:voice && npm run test:resume && npm run test:llmjson && npm run test:dictlane"
+    "test": "npm run test:progression && npm run test:playthrough && npm run test:playthrough:hybrid && npm run test:scenario && npm run test:inventory && npm run test:battle && npm run test:healpotion && npm run test:verbchip && npm run test:voice && npm run test:resume && npm run test:llmjson && npm run test:dictlane && npm run test:store"
   },
   "dependencies": {
     "@litert-lm/core": "^0.14.0",
