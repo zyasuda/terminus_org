@@ -240,6 +240,12 @@ export function restoreGame(saved) {
      読み替えたあと items は消す。両方残すと以後どちらが正か分からなくなる */
   state.inventory = inv.normalizeInventory(state);
   delete state.items;
+  /* 旧セーブに visited が無い。当時は分岐を辿った記録が残っていないので、
+     復元できる最良の近似として 0..sceneIndex を訪問済みとみなす(従来のクロニクルの
+     解釈と同じ)。以後の遷移からは実際の訪問が積まれる */
+  if (!Array.isArray(state.visited) || !state.visited.length) {
+    state.visited = Array.from({ length: (state.sceneIndex ?? 0) + 1 }, (_, i) => i);
+  }
   (CAMPAIGN.companions || []).forEach(c => c?.id && inv.ensureOwner(state.inventory, c.id));
   chron = saved.chron || [];
   history = saved.history || [];
@@ -1919,6 +1925,9 @@ function advanceScene(targetIndex) {
   const idx = targetIndex !== undefined ? targetIndex : state.sceneIndex + 1;
   if (idx >= 0 && idx < SCENARIO.scenes.length) {
     state.sceneIndex = idx;
+    // 訪問の記録。進捗・到達済み一覧の唯一の根拠(sceneIndexは今いる場所しか表さない)
+    state.visited = state.visited || [];
+    if (!state.visited.includes(idx)) state.visited.push(idx);
     state.sceneTalkTurns = 0; // talkTurnsMin条件(報告シーン等)のカウンタはシーンごとにリセット
     setSceneBackdrop(SCENARIO.scenes[state.sceneIndex]);
     state.enemy = null;

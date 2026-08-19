@@ -10,6 +10,12 @@ export function initialState() {
            inventory: normalizeInventory({ items: ["ランタン", "ロープ", "ナイフ"] }),
            healPotions: 0, // 回復薬の所持数。inventory(一意な品名の集合)とは別枠のスタック可能な消耗品
            sceneIndex: 0, turn: 0,
+           /* 訪問したシーンのindex(重複なし・訪問順)。sceneIndexは「今いる場所」であって
+              「どこまで進んだか」ではない。分岐する章では順路が配列順と一致しないため、
+              進捗や到達済みの一覧をsceneIndexから導くと嘘になる(2026-08-19のクロニクルで
+              7場面すべてを回って結末に達したのに「シーン4/7」と出た)。旧セーブには無いので
+              restoreGameで 0..sceneIndex を訪問済みとみなして補う */
+           visited: [0],
            enemy: null, defeated: [], lastCompanionTurnByWho: {},
            banterCharge: {},
            pendingRetort: null,
