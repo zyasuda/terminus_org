@@ -13,6 +13,19 @@ design/*.psd
 .env
 **/.env
 
+# 配布されたシナリオデータ(生成物)。正本は scenario/ だけを追跡する。
+# 復元は リポジトリ直下で node scripts/distribute-scenario.mjs --write
+# 新しくcloneした直後はこれらが無いのでゲームが起動しない。先に配布コマンドを実行する。
+TAS/data/chapter_*.json
+TAS/data/campaign.json
+trpg-gamebook/data/chapter_*.json
+trpg-gm-mock2/public/data/campaigns/*/chapter_*.json
+trpg-gm-mock2/public/data/campaigns/*/campaign.json
+
+# Claude Code のローカル状態(端末ごと。共有しない)
+.claude/worktrees/
+.claude/settings.local.json
+
 # OS artifacts
 .DS_Store
 *.swp

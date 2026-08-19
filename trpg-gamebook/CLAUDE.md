@@ -1,5 +1,7 @@
 # gamebook専用作業ガイド
 
+共通ルールは [Terminus/CLAUDE.md](../CLAUDE.md) を参照する。
+
 ## 適用範囲
 
 このファイルは `trpg-gamebook` 内の編集・検証作業に適用します。実装経緯、個別シナリオ、設計の背景はBORGまたは `docs/` を参照します。
@@ -25,7 +27,28 @@
 npm run serve                 # → http://localhost:8123/（キャッシュ無効。http.serverは使わない）
 ```
 
-出典はmock2 spike（`codex/mock2-candidate-spike`）の `chapter_01.json`。**mock2側のJSONは正本ではない**（main側はシーン3の出口が壊れ、spike側はシーン4の出口が欠落していた。`data/` のコピーだけが両方を満たす）。mock2側のJSONを編集・上書きしない。
+**`data/chapter_01.json` は正本ではない。配布された生成物である。**（2026-08-19に方針変更）
+
+正本は `Terminus/scenario/<キャンペーンID>/` のみ。詳細は [Terminus/CLAUDE.md](../CLAUDE.md) の「シナリオデータの正本」を参照する。
+
+```
+scenario/lanternhill/chapter_01.json   ← 直すのはここだけ
+        ↓  node scripts/distribute-scenario.mjs --write   （リポジトリ直下で実行）
+trpg-gamebook/data/chapter_01.json
+```
+
+- `data/` を直接編集しない。直しても次の配布で消える
+- 以前は「`data/` のコピーだけが正しい」という運用だった。その結果 `chapter_01.json` が5箇所に別内容で分岐し、同期する仕組みも無かったため、1箇所へ統合した
+- エディタ（`editor.html`）の編集結果は localStorage の下書きに入る。ファイルにするには `.jsonを書き出す` を押すが、**書き出した .json は Downloads に落ちるだけで正本には反映されない。** 正本へ入れるには内容を `scenario/` へ移してから配布する
+
+### このエンジン固有の制約（章データを書くとき）
+
+正本は複数のクライアントが読む。gamebook側には次の制約があるため、章データがこれを踏むと gamebook だけ壊れる。
+
+- **候補は3件で打ち切る**（`src/progression.js` の `actionCandidates`）。1つのノードに未開示の秘密が3件以上あると**出口が候補から押し出され、進めなくなる**
+- 候補のボタン文言は `<match[0]>へ進む` で作る。`match[0]` に「〜へ戻る」を置くと「柵の場所へ戻るへ進む」になる（`inspect()` が警告する）。**`match[0]` は行き先の名詞にする**
+- 単独の「進む」を照合語に入れない。移動を表すあらゆる宣言に部分一致し、戻る出口の入力まで吸う
+- `loot` は秘密の開示と同時に自動付与される（拾う操作は無い）
 
 ## 状態・セーブ・進行
 
