@@ -85,6 +85,14 @@ export default function App() {
   }
   // 吹き出しはペットのいる側と逆へ伸ばす(右半分にいれば左へ、左半分にいれば右へ)
   const bubbleOnLeft = petPos.x > 50;
+  /* ポップアップ(判定オーバーレイ・結果や被弾の通知)が出ている間は吹き出しを一切出さない。
+     裏で誰かが喋ると、読み手はどちらを見ればいいのか分からなくなる(2026-08-19の指摘)。
+     engine側でも発話の順番を待たせているが、被弾の通知のようにポップアップと同時に
+     語りが確定する経路があるため、最後の砦として表示側でも止める。
+     keyにこのフラグを混ぜてあるので、ポップアップを閉じた瞬間に出し直され、
+     フェードのアニメーションが最初から再生される(閉じた後に読む時間が残る) */
+  const popupOpen = (eng.popups?.length || 0) > 0 || Boolean(eng.pendingRoll);
+  const bubbleKeySuffix = popupOpen ? "-held" : "";
   // 素材は右側配置(既定x:92)向けの向き。画面中心をまたいで左半分に来たら左右反転する
   const gmFlipped = petPos.x <= 50;
 
@@ -152,6 +160,23 @@ export default function App() {
     if (gmLogRef.current) gmLogRef.current.scrollTop = gmLogRef.current.scrollHeight;
   }, [eng.chat, eng.underPanelOpen]);
 
+  /* 敵スプライトの被弾・回避・踏み込み。body.shakeと同じ手法で、クラスを外して
+     offsetWidthを読んでから貼り直し、同じ演出が連続しても必ず再生させる。
+     #enemySpriteはstyleで背景画像を持つのでkeyでの再マウントは使わない
+     (再マウントするとspriteInの登場アニメが毎回やり直しになる) */
+  useEffect(() => {
+    const fx = eng.battleFx;
+    if (!fx || !fx.seq || !fx.kind) return;
+    const el = document.getElementById("enemySprite");
+    if (!el) return;
+    const cls = "fx-" + fx.kind;
+    ["fx-hit", "fx-crit", "fx-miss", "fx-lunge"].forEach(c => el.classList.remove(c));
+    void el.offsetWidth;
+    el.classList.add(cls);
+    const t = setTimeout(() => el.classList.remove(cls), 1000);
+    return () => clearTimeout(t);
+  }, [eng.battleFx?.seq]);
+
   // クリティカル/ファンブル時の画面シェイクはdocument.bodyへの副作用(旧app.jsのscreenFxと同じ手法)
   useEffect(() => {
     if (!eng.shakeSeq) return;
@@ -211,12 +236,22 @@ export default function App() {
           ></div>
         )}
 
+        {/* 浮かび上がるダメージ数値。keyにseqを入れて、同じ値が連続しても必ず出し直す。
+            ポップアップ中は出さない(吹き出しと同じ理由。裏で動かさない) */}
+        {eng.battleFx?.text && !popupOpen && (
+          <div
+            id="battleFloat"
+            key={"float" + eng.battleFx.seq}
+            className={eng.battleFx.kind === "crit" ? "crit" : ""}
+          >{eng.battleFx.text}</div>
+        )}
+
         {/* シーンNPC(依頼人マイラ等)の吹き出し。GM/同行者と同じ見た目で、中央のnpcSpriteの上に出す(下向きの尻尾)。
             応答の生成中は「…」の考え中表示に差し替える */}
         {eng.thinking.npc ? (
           <div className="npcBubble thinking"><ThinkingDots /></div>
-        ) : eng.npcBubble.text && !eng.npcBubble.hidden && (
-          <div key={"npcbub" + eng.npcBubble.seq} className="npcBubble">{eng.npcBubble.text}</div>
+        ) : eng.npcBubble.text && !eng.npcBubble.hidden && !popupOpen && (
+          <div key={"npcbub" + eng.npcBubble.seq + bubbleKeySuffix} className="npcBubble">{eng.npcBubble.text}</div>
         )}
 
         {/* パーティ立ち絵(4枠)。テーブルを囲む配置で、下部の左右に外側+内側の2枠ずつ。
@@ -250,10 +285,10 @@ export default function App() {
             return <div key={s.slot + "-think"} className={cls + " thinking"}><ThinkingDots /></div>;
           }
           const b = eng.companionBubbles[s.who];
-          if (!b || !b.text || b.hidden) return null;
+          if (!b || !b.text || b.hidden || popupOpen) return null;
           return (
             <div
-              key={s.slot + "-bub" + b.seq}
+              key={s.slot + "-bub" + b.seq + bubbleKeySuffix}
               className={cls}
             >{b.text}</div>
           );
@@ -293,10 +328,10 @@ export default function App() {
               ? { right: (100 - petPos.x + 5.5) + "%", top: petPos.y + "%" }
               : { left: (petPos.x + 5.5) + "%", top: petPos.y + "%" }}
           ><ThinkingDots /></div>
-        ) : eng.gmBubble.text && !eng.gmBubble.hidden && (
+        ) : eng.gmBubble.text && !eng.gmBubble.hidden && !popupOpen && (
           <div
             id="gmBubble"
-            key={"bub" + eng.gmBubble.seq}
+            key={"bub" + eng.gmBubble.seq + bubbleKeySuffix}
             className={bubbleOnLeft ? "tailRight" : "tailLeft"}
             style={bubbleOnLeft
               ? { right: (100 - petPos.x + 5.5) + "%", top: petPos.y + "%" }

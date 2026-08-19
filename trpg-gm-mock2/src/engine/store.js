@@ -17,6 +17,10 @@ let snapshot = {
   sceneInfo: { num: 1, total: 1, brief: "", report: false }, // 左パネルに常時表示する現在シーンの要約。report=依頼人への報告シーン
   clues: [],            // 開示済み手がかり(secretのtext)。左パネルに永続表示
   enemySprite: null,    // {src, identified} 交戦中の敵スプライト。未識別はCSSで黒シルエット→判明時に実体化
+  /* 敵スプライトの被弾・回避の演出トリガー(2026-08-19)。engine側がkindとseqを立て、
+     App.jsxがCSSアニメーションを貼り直す。textは浮かぶダメージ数値(空なら出さない)。
+     kind: "hit"|"crit"|"miss"|"lunge"。演出時間はengine側のBATTLE_FX_MSと一致させる */
+  battleFx: { kind: "", seq: 0, text: "" },
   sceneNpcName: null,   // enemySpriteが実際はNPC(依頼人マイラ等)表示の時だけ名前が入る。敵の時はnull
   gmBubble: { text: "", emotion: "Neutral", seq: 0 }, // GMペットの吹き出し(最新のGM発言+感情)。感情はCE仕様の5種、表情アニメの駆動用
   companionBubbles: {},  // 同行者の吹き出し {who: {text, seq}}。立ち絵スロットの脇にGMと同じ形式で表示

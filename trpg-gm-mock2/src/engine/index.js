@@ -547,7 +547,41 @@ function trimNarration(text) {
 // 感情はCONVERSATION_ENGINE.mdの定義に合わせる。GMペットの表情アニメ(将来の差分フレーム)の駆動データ
 const EMOTIONS = ["Happy", "Angry", "Fear", "Sad", "Neutral"];
 const normalizeEmotion = e => (EMOTIONS.includes(e) ? e : "Neutral");
+/* 判定の見出し。誰の判定かを必ず頭に付ける。以前はプレイヤーだけ無名にしていたため、
+   同行者は「ガレス: 錆喰いへの攻撃」なのに本人は「坑道蝙蝠への攻撃」で、
+   ポップアップだけを見ると誰の手番か分からなかった(2026-08-19の指摘) */
+function rollReason(actorName, what) {
+  return `${actorName || "あなた"}: ${what}`;
+}
+
+/* 直前に吹き出しへ出した文。次の話者が「読み終わる頃合いまで待って、消してから話す」ために使う。
+   吹き出しはCSSで8〜10.6秒表示され続けるので、消さずに次が話すと画面上で必ず重なる
+   (runSpeechSequenceの原則を、通常の手番でも守るためのもの) */
+let lastBubbleText = "";
+/* ポップアップ(ダイスの判定オーバーレイ・結果や被弾の通知)が開いている間は誰も喋らない。
+   閉じるのはプレイヤーの操作なので、ここは「閉じるまで待つ」ことになる。
+   裏で吹き出しが動くと、読み手はどちらを見ればいいのか分からなくなる(2026-08-19の指摘)。
+   閉じられないまま固まった時に進行を殺さないよう、上限を置いて諦める */
+const POPUP_WAIT_CAP_MS = 20000;
+async function awaitPopupsClear() {
+  const until = Date.now() + POPUP_WAIT_CAP_MS;
+  while (Date.now() < until) {
+    const s = getSnapshot();
+    if (!s.pendingRoll && !(s.popups || []).length) return true;
+    await sleep(150);
+  }
+  return false; // 上限に達した。以後は待たずに進む(沈黙で詰まらせない)
+}
+/* 前の話者から次の話者へ渡す。読了目安だけ待ち、ポップアップが引くのを待ってから、
+   前の吹き出しを消す。前の発言が無ければ最小の間だけ置く(無言の手番でテンポを落とさない) */
+async function handOffBubble() {
+  await sleep(lastBubbleText ? readDelayMs(lastBubbleText) : SHORT_PACING_MS);
+  await awaitPopupsClear();
+  clearAllBubbles();
+}
+
 const addGm = (t, emotion) => {
+  lastBubbleText = t || "";
   const emo = normalizeEmotion(emotion);
   chron.push({ t: state.turn, ts: Date.now(), kind: "gm", text: t, emotion: emo });
   addMsg("gm", t);
@@ -636,6 +670,7 @@ const addCompanion = (t, who = Object.keys(CAST)[0]) => {
   const name = (CAST[who] && CAST[who].name) || who;
   t = sanitizeSay(t);
   if (!t) return;
+  lastBubbleText = t;
   chron.push({ t: state.turn, ts: Date.now(), kind: "companion", who, text: t });
   addMsg("companion companion-" + who, name + "「" + t + "」");
   // GMペットと同じ形式の吹き出しを、その同行者の立ち絵の脇に出す(約8秒でフェードアウト)
@@ -651,6 +686,7 @@ const addNpc = (t, speaker) => {
   if (!npc) return;
   t = sanitizeSay(t);
   if (!t) return;
+  lastBubbleText = t;
   chron.push({ t: state.turn, ts: Date.now(), kind: "npc", name: npc.name, text: t });
   addMsg("companion companion-npc", npc.name + "「" + t + "」");
   // GM/同行者と同じ形式の吹き出しを、中央のnpcSprite(#enemySprite)の上に出す
@@ -717,6 +753,17 @@ function firePhaserFx(type, payload) {
   setStore(s => ({ phaserFx: { type, seq: s.phaserFx.seq + 1, ...payload } }));
 }
 const sleep = ms => new Promise(r => setTimeout(r, ms));
+
+/* 戦闘の手触り(2026-08-19の依頼)。「自分→ガレス→リディア→敵」の判定通知が連続するだけで、
+   当たった/避けられたが画面で見えないという指摘への対処。CSSアニメーションだけで作り、
+   新しい依存は入れない。engine側はkindとseqを立てて、その長さだけ待つ。
+   待つのが要点で、この「間」があるから同行者の一言が演出の後に来る。 */
+const BATTLE_FX_MS = { hit: 460, crit: 760, miss: 420, lunge: 480 };
+async function playBattleFx(kind, text = "") {
+  if (!getSnapshot().enemySprite) return; // 敵の絵が無い場面では何もしない(待たない)
+  setStore(s => ({ battleFx: { kind, seq: s.battleFx.seq + 1, text } }));
+  await sleep(BATTLE_FX_MS[kind] || 400);
+}
 function screenFx(kind) {
   if (USE_PHASER_FX) {
     firePhaserFx(kind);
@@ -992,7 +1039,10 @@ async function revealTurnBeats(r, addressed) {
   const companion = resolveCompanion(r);
   const willSpeak = companion && companion.who && shouldShowCompanion(companion, addressed);
   if (willSpeak) setThinking(companion.who, true);
-  await sleep(SHORT_PACING_MS);
+  /* 同行者が話すなら、GMの語りを読み終わる頃合いまで待ってから吹き出しを消す。
+     以前は350msだけ待って消さずに話していたため、GMと同行者の吹き出しが並んで出ていた */
+  if (willSpeak) await handOffBubble();
+  else await sleep(SHORT_PACING_MS);
   if (willSpeak) setThinking(companion.who, false);
   return maybeCompanion(r, addressed, companion);
 }
@@ -1041,7 +1091,9 @@ function npcAgentReply(playerText, revealGate) {
     const raw = ((data && data.content) || []).map(b => b.text || "").join("");
     const r = parseLlmJson(raw);
     const say = sanitizeSay(String(r.say || "").slice(0, 120));
-    if (revealGate && await revealGate) await sleep(SHORT_PACING_MS);
+    // 同行者の一言が先に出ていたら、それを読み終わる頃合いまで待ってから吹き出しを消して話す
+    if (revealGate) await revealGate;
+    await handOffBubble();
     // 前回と同じ一言は表示しない(固定化の再発防止。沈黙の方が壊れて見えない)
     if (!say || say === state.lastNpcLine || tooLateToSpeak()) return;
     state.lastNpcLine = say;
@@ -1300,7 +1352,7 @@ async function tryCombatTurn(text) {
 
   const attackOnce = async (who, auto) => {
     const dc = enemy.defenseDc || 12;
-    const reason = `${who === "あなた" ? "" : who + ": "}${enemyName(enemy)}への攻撃`;
+    const reason = rollReason(who, `${enemyName(enemy)}への攻撃`);
     const roll = auto ? rollD20() : await requestPlayerRoll(reason, dc, who);
     const crit = roll === 20, fumble = roll === 1;
     const ok = crit || (!fumble && roll >= dc);
@@ -1310,8 +1362,10 @@ async function tryCombatTurn(text) {
       const dmg = crit ? 2 : 1;
       enemy.hp = Math.max(0, enemy.hp - dmg);
       fact(`${who}の攻撃が${crit ? "深々と" : ""}命中! ${enemyName(enemy)}に${dmg}ダメージ(敵HP ${enemy.hp}/${enemy.maxHp})`);
+      await playBattleFx(crit ? "crit" : "hit", `-${dmg}`); // のけぞり+閃光+ダメージ数値
     } else {
       fact(`${who}の攻撃は${fumble ? "大きく外れ、体勢を崩した" : "外れた"}`);
+      await playBattleFx("miss"); // 横へ身をかわす
     }
     return { ok, fumble };
   };
@@ -1388,6 +1442,7 @@ async function tryCombatTurn(text) {
       const roll = rollD20();
       const hit = roll >= 10;
       addNote(`⚔ ${enemyName(enemy)}の行動: d20=${roll} → ${hit ? "攻撃が届く" : "外れ/牽制"}`);
+      await playBattleFx("lunge"); // 敵が前へ踏み込む(当たり判定の前に見せる)
       if (hit) {
         const dmg = Math.max(0, (enemy.atk || 1) - defending);
         if (dmg > 0) {
@@ -1426,6 +1481,9 @@ async function tryCombatTurn(text) {
           if (lines.length) {
             const line = lines[Math.floor(Math.random() * lines.length)];
             state.lastBattleMutter = { ...(state.lastBattleMutter || {}), [a.id]: line };
+            /* 戦闘中はこの直前に判定・被弾のポップアップが出ている。渡しを通さないと
+               ポップアップの裏で吹き出しが動く(2026-08-19の実測で戦闘中に最大3つ同時) */
+            await handOffBubble();
             addCompanion(line, a.id);
           } else await attackOnce(a.name, true);
         }
@@ -1436,8 +1494,9 @@ async function tryCombatTurn(text) {
   const downedName = state.enemy ? state.enemy.name : null;
   const downed = checkEnemyDown(); // 撃破処理(正体判明・revealOnDefeat開示)は従来関数に集約
   if (downed) {
+    await handOffBubble(); // 撃破時の判定ポップアップが引くのを待つ
     addGm(`とどめだ! ${downedName}は動かなくなった。`, "Happy");
-    companionBattleEndLine("win");
+    await companionBattleEndLine("win"); // GMのとどめの一行を読み終えてから同行者が言う
   }
   // 戦闘中はLLMを一切呼ばない(ウォーム6秒でもテンポを壊す。2026-07-17(4)で確認)。
   // 進行はターンごとの⚔行+ダメージ通知で全て見えているので、追加の語りは不要
@@ -1475,12 +1534,15 @@ function pickCompanionSceneArrivalLine() {
   return { who, text };
 }
 
-function companionBattleEndLine(outcome) {
+/* 戦闘の締めの一言。前の話者(GMのとどめの一行など)を読み終え、ポップアップが引いてから話す。
+   awaitしない呼び出し元(逃走・撃退)でも、話すのは渡しの後になる */
+async function companionBattleEndLine(outcome) {
   const candidates = Object.entries(CAST)
     .map(([id, c]) => ({ id, lines: (c.battleEnd || {})[outcome] || [] }))
     .filter(c => c.lines.length);
   if (!candidates.length) return;
   const pick = candidates[Math.floor(Math.random() * candidates.length)];
+  await handOffBubble();
   addCompanion(pick.lines[Math.floor(Math.random() * pick.lines.length)], pick.id);
 }
 
@@ -1586,7 +1648,7 @@ async function scriptedExamine(secret, actorName = "あなた") {
   state.examineFails = state.examineFails || {};
   const failures = state.examineFails[secret.id] || 0;
   const diff = examineDifficulty(secret, failures);
-  const reason = (actorName === "あなた" ? "" : `${actorName}: `) + `${secret.entity}を調べる`;
+  const reason = rollReason(actorName, `${secret.entity}を調べる`);
   const roll = await requestPlayerRoll(reason, diff, actorName);
   const crit = roll === 20, fumble = roll === 1;
   const ok = crit || (!fumble && roll >= diff);
@@ -1626,7 +1688,12 @@ function revealFlavor(secret) {
     const r = parseLlmJson(raw);
     // 話者が同行者に解決できなければ捨てる(リディアへの機械的フォールバックは誤帰属のもと)
     const flavorWho = normalizeWho(r.who, null);
-    if (r.say && flavorWho && !tooLateToSpeak()) addCompanion(fixCompanionVoice(String(r.say).slice(0, 80), flavorWho), flavorWho);
+    if (!r.say || !flavorWho || tooLateToSpeak()) return;
+    // 開示の地の文(GM)が出た直後に届くため、読了目安まで待って前の吹き出しを消してから話す
+    return handOffBubble().then(() => {
+      if (tooLateToSpeak()) return;
+      addCompanion(fixCompanionVoice(String(r.say).slice(0, 80), flavorWho), flavorWho);
+    });
   }).catch(() => {});
 }
 
@@ -2502,7 +2569,7 @@ async function turnFreeform(text, ctx) {
     // 誰の判定か(同行者に任せた行動はLLMがcheck.actorで申告)。ダイスは名義を出してプレイヤーが振る
     const actor = normalizeWho(r.check.actor, "player");
     const actorName = actor === "player" ? "あなた" : CAST[actor].name;
-    const reason = (actor === "player" ? "" : `${actorName}: `) + (r.check.reason || "判定");
+    const reason = rollReason(actor === "player" ? "あなた" : actorName, r.check.reason || "判定");
     const roll = await requestPlayerRoll(reason, diff, actorName);
     const crit = roll === 20, fumble = roll === 1;
     const ok = crit || (!fumble && roll >= diff);

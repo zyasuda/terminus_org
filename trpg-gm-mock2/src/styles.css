@@ -79,15 +79,18 @@ body {
 #chat {
   position: absolute;
   left: 30.16%;
-  top: 31.3%;
+  /* 敵の動きが読めるよう、ログの領域を下半分へ寄せて上を空ける(2026-08-19)。
+     下端の位置は変えず、topを下げて高さを縮めているので、見える行数だけが減る */
+  top: 46%;
   width: 39.79%;
   /* チップ列はsafe-bottomぶん上へ逃げるので、ログの下端も同じ量だけ詰めて重なりを防ぐ */
-  height: calc(50.38% - var(--safe-bottom));
+  height: calc(35.68% - var(--safe-bottom));
   z-index: 21; /* 下パネル(20)より前。立ち絵の外側枠(22)より後ろ */
   overflow-y: auto;
-  /* 上に行くほど文字が透けて消えていく(スクロール中の古いログのフェード) */
-  -webkit-mask-image: linear-gradient(to bottom, rgba(0, 0, 0, 0) 0%, rgba(0, 0, 0, .3) 28%, rgba(0, 0, 0, 1) 70%);
-  mask-image: linear-gradient(to bottom, rgba(0, 0, 0, 0) 0%, rgba(0, 0, 0, .3) 28%, rgba(0, 0, 0, 1) 70%);
+  /* 上に行くほど文字が透けて消えていく(スクロール中の古いログのフェード)。
+     薄くなり始める位置を下げてあるので、はっきり読めるのは下の数行だけになる */
+  -webkit-mask-image: linear-gradient(to bottom, rgba(0, 0, 0, 0) 0%, rgba(0, 0, 0, .12) 40%, rgba(0, 0, 0, 1) 82%);
+  mask-image: linear-gradient(to bottom, rgba(0, 0, 0, 0) 0%, rgba(0, 0, 0, .12) 40%, rgba(0, 0, 0, 1) 82%);
   color: #fff;
   font-size: 1.41vw;
   line-height: 2vw;
@@ -140,7 +143,11 @@ body {
 #enemySprite {
   position: absolute;
   left: 50%;
-  bottom: 10%;
+  /* 中央のログと重ならないよう、既定より上へ置く(2026-08-19)。
+     panelUp側の値も一緒に動かすこと(下の#stage.panelUp参照)。
+     上げすぎるとpanelUp時に箱の上端がステージ外へ出て、絵の頭が切れる。
+     bottom + height(55%) が 100% を超えない値に収めること */
+  bottom: 18%;
   width: 30%;
   height: 55%;
   transform: translateX(-50%);
@@ -160,9 +167,82 @@ body {
 }
 /* 下パネル表示中: シーン上のキャラ(NPC/敵)も背景と一緒にパネル高さ(24.94%)分だけ上へ。
    transformのtranslateYは自身の高さ基準になるため、ステージ基準のbottomで動かす */
-#stage.panelUp #enemySprite { bottom: 34.94%; /* 10% + パネル24.94% */ }
+#stage.panelUp #enemySprite { bottom: 42.94%; /* 18% + パネル24.94%。42.94+55=97.94% で収まる */ }
 
 @keyframes spriteIn { from { opacity: 0; } }
+
+/* ---- 戦闘の手触り(2026-08-19)。敵スプライトの被弾・回避・踏み込み。
+   engine側のplayBattleFx()がstore.battleFxを立て、App.jsxがクラスを貼り直す。
+   長さはengineのBATTLE_FX_MSと揃える(engineはこの時間だけ待ってから次の発言へ進む)。
+   #enemySpriteは transform: translateX(-50%) が既定なので、
+   アニメーション側でも必ず -50% を含めた変形を書く(書き忘れると中央からずれる)。
+   平常時のゆらぎ(idleSway)はアニメーションが無い時だけ効かせる。 ---- */
+#enemySprite.identified:not(.fx-hit):not(.fx-crit):not(.fx-miss):not(.fx-lunge) {
+  animation: idleSway 3.6s ease-in-out infinite;
+}
+@keyframes idleSway {
+  0%, 100% { transform: translateX(-50%) translateY(0) rotate(0deg); }
+  50%      { transform: translateX(-50%) translateY(-1.1%) rotate(-0.6deg); }
+}
+/* 被弾: 奥へのけぞり、白く閃く */
+#enemySprite.fx-hit { animation: fxHit .46s ease-out; }
+@keyframes fxHit {
+  0%   { transform: translateX(-50%) translateX(0) scale(1); filter: brightness(1) blur(0); }
+  18%  { transform: translateX(-50%) translateX(3%) scale(.97); filter: brightness(3.2) blur(0); }
+  55%  { transform: translateX(-50%) translateX(-1%) scale(1.01); filter: brightness(1.4) blur(0); }
+  100% { transform: translateX(-50%) translateX(0) scale(1); filter: brightness(1) blur(0); }
+}
+/* 会心: 大きくのけぞり、赤い閃光を混ぜて震える */
+#enemySprite.fx-crit { animation: fxCrit .76s cubic-bezier(.2,.8,.2,1); }
+@keyframes fxCrit {
+  0%   { transform: translateX(-50%) translateX(0) scale(1) rotate(0deg); filter: brightness(1); }
+  12%  { transform: translateX(-50%) translateX(6%) scale(.94) rotate(3deg); filter: brightness(4) saturate(2); }
+  30%  { transform: translateX(-50%) translateX(-3%) scale(1.03) rotate(-2deg); filter: brightness(2) saturate(1.6); }
+  50%  { transform: translateX(-50%) translateX(2%) scale(.99) rotate(1.2deg); filter: brightness(1.4); }
+  72%  { transform: translateX(-50%) translateX(-1%) scale(1.01) rotate(-.6deg); filter: brightness(1.1); }
+  100% { transform: translateX(-50%) translateX(0) scale(1) rotate(0deg); filter: brightness(1); }
+}
+/* 回避: 横へ滑って戻る(当たらなかったことを動きで見せる) */
+#enemySprite.fx-miss { animation: fxMiss .42s ease-in-out; }
+@keyframes fxMiss {
+  0%   { transform: translateX(-50%) translateX(0); }
+  35%  { transform: translateX(-50%) translateX(-9%) skewX(3deg); }
+  70%  { transform: translateX(-50%) translateX(4%) skewX(-1.5deg); }
+  100% { transform: translateX(-50%) translateX(0); }
+}
+/* 踏み込み: 手前へ寄って大きくなり、戻る */
+#enemySprite.fx-lunge { animation: fxLunge .48s ease-out; }
+@keyframes fxLunge {
+  0%   { transform: translateX(-50%) scale(1) translateY(0); }
+  40%  { transform: translateX(-50%) scale(1.1) translateY(2.5%); }
+  100% { transform: translateX(-50%) scale(1) translateY(0); }
+}
+/* 未識別(黒い影)の間はblurが効いているので、被弾の閃光でぼけを解除しない */
+#enemySprite:not(.identified).fx-hit,
+#enemySprite:not(.identified).fx-crit { filter: brightness(0) blur(5px); }
+
+/* 浮かび上がるダメージ数値。敵スプライトの上に出て、上へ流れて消える */
+#battleFloat {
+  position: absolute;
+  left: 50%;
+  bottom: 58%;
+  transform: translateX(-50%);
+  z-index: 6; /* 敵スプライト(5)の上、パネル(15)の下 */
+  pointer-events: none;
+  font-size: 3.4vw;
+  font-weight: 700;
+  color: #ffe9a8;
+  text-shadow: 0 0 .35em rgba(0, 0, 0, .95), 0 .06em .12em rgba(0, 0, 0, .9);
+  animation: floatUp .9s ease-out forwards;
+}
+#battleFloat.crit { color: #ffd0c0; font-size: 4.6vw; }
+@keyframes floatUp {
+  0%   { opacity: 0; transform: translateX(-50%) translateY(.5em) scale(.7); }
+  22%  { opacity: 1; transform: translateX(-50%) translateY(0) scale(1.12); }
+  45%  { opacity: 1; transform: translateX(-50%) translateY(-.25em) scale(1); }
+  100% { opacity: 0; transform: translateX(-50%) translateY(-1.5em) scale(1); }
+}
+#stage.panelUp #battleFloat { bottom: 82.94%; /* 敵スプライトと同じだけ上へ逃がす */ }
 
 /* ---- パーティ立ち絵(4枠)。テーブルを囲む配置(Figma 10:30)。
    外側(L1/R1)が手前、内側(L2/R2)が奥で少し小さい。素材がない枠は描画されない。 ---- */
