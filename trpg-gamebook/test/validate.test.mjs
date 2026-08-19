@@ -88,7 +88,9 @@ console.log("ok 9 - 自動プレイの分岐を人間向けの言葉で集計す
 {
   const result = inspect(copy());
   assert.equal(result.structure.filter(({ level }) => level === "error").length, 0);
-  for (const name of ["回復薬"]) {
+  // 例に使う品は「入手できるが使い道が無い」ものであること。回復薬は2026-08-19に
+  // healingへ載って使い道ができたので、開始所持品のナイフに替えた
+  for (const name of ["ナイフ"]) {
     assert.ok(result.structure.some(({ message }) => message.includes(`「${name}」は入手できるが`)), name);
   }
   assert.ok(result.structure.filter(({ message }) => message.includes("入手できるが") || message.includes("反応するものが無い") || message.includes("同じものですか")).every(({ level }) => level === "warn"));
