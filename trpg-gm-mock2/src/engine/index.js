@@ -133,7 +133,7 @@ function showDialogueNode(node) {
   const gmText = node.brief || node.text || "";
   // NPCの第一声は作者がnode.greetingを書いた場合のみ。GMの発言に続けて話す
   const steps = [{ text: gmText, speak: () => addGm(gmText, "Neutral") }];
-  if (node.npc && node.greeting) {
+  if (node.npc && !node.npc.silent && node.greeting) {
     steps.push({ text: node.greeting, speak: () => addNpc(node.greeting, node.npc) });
   }
   runSpeechSequence(steps);
@@ -993,7 +993,11 @@ async function revealTurnBeats(r, addressed) {
 // コンテキストを持つため、briefの複写や他キャラとの混同が構造的に起きない
 function npcAgentReply(playerText, revealGate) {
   const npc = sceneNpc();
-  if (!npc) return;
+  /* npc.silent=true のNPCは一言も生成しない。存在感は佇まいと所作(GMの地の文)と立ち絵で出す。
+     灯りの番人のように「そこに居るが言葉を持たない」相手のための設定。
+     sceneNpc()自体をnullにしないのは、立ち絵と名前の表示・報告先の判定が同じnpcを見ているため
+     (ここでnullにすると姿まで消える)。 */
+  if (!npc || npc.silent) return;
   const sc = SCENARIO.scenes[state.sceneIndex];
   const direction = sc.report ? reportDirection() : (sc.direction || "");
   // 直近のやり取り(プレイヤー宣言・GM語り・自分の過去の発言)だけを渡す。未開示の真相は渡らない
@@ -1925,7 +1929,7 @@ function advanceScene(targetIndex) {
     const sceneNo = state.sceneIndex + 1;
     const arrivalLine = gmSceneArrivalLine(sceneNo, newScene.name || "");
     const steps = [{ text: arrivalLine, speak: () => addGm(arrivalLine, "Happy") }];
-    if (newScene.npc && newScene.greeting) {
+    if (newScene.npc && !newScene.npc.silent && newScene.greeting) {
       steps.push({ text: newScene.greeting, speak: () => addNpc(newScene.greeting, newScene.npc) });
     }
     const companionLine = pickCompanionSceneArrivalLine();
@@ -2088,7 +2092,11 @@ function sceneCompleteAllowed(sc) {
    一致2: 宣言文・判定名・targetEntityに、entityの部分語かaliases(章データの別名辞書)が含まれるか
    0件・複数件なら開示しない——誤った秘密を漏らすより「開示なし」の方が三層モデルとして安全 */
 function unlockSecret(secret) {
-  const sc = SCENARIO.scenes[state.sceneIndex];
+  /* lootを見るのは「いま居るノード」。導入・終端でも秘密を開けるようになったため、
+     ここでシーンを固定していると、イントロでの開示なのにシーン1のlootを勘定してしまう */
+  const sc = state.pendingIntro ? SCENARIO.intro
+    : state.pendingEnding ? SCENARIO.ending
+    : SCENARIO.scenes[state.sceneIndex];
   const before = new Set(availableLoot(sc));
   revealed.add(secret.id);
   addReveal(secret);
@@ -2309,7 +2317,26 @@ async function callGm(userContent, extraSystem) {
    3つとも通常シーンのロジックより先に解決し、決着したらこの手番を終える。
    sendActionのtryブロックより手前で走るので、後始末(busy解除・renderDebug)は
    finallyを通らない——finish()で自前に行う。trueなら呼び出し側はそのままreturnする */
-function turnDialogueNodes(text) {
+/* 導入・終端ノードでも「調べる」を成立させる。
+   pickExamineSecret / matchSecretByText / scriptedExamine はどれも node.secrets しか見ない
+   汎用処理なので、シーンとまったく同じ手順をそのまま当てられる。
+   これが無いと、作者が intro / ending に書いた秘密は一度も開かない
+   (2026-08-19判明。廃坑の灯の intro_face / intro_mine / intro_map / intro_sound の4件が該当し、
+    「見取り図をよく見る」がマイラとの雑談として消費されていた)。
+   llmモードでは従来どおりLLMに任せる。 */
+async function tryExamineOnDialogueNode(node, text) {
+  if (gmMode === "llm" || !(node.secrets || []).length) return false;
+  const ctx = { revealed, inventory: state.inventory };
+  if (!EXAMINE_RE.test(text) && !matchSecretByTrigger(node, text, ctx)) return false;
+  const { actorName, rest } = extractActor(text);
+  const { secret } = pickExamineSecret(node, text, rest, ctx);
+  if (secret) { await scriptedExamine(secret, actorName); return true; }
+  const known = matchSecretByText(node, rest, true, undefined, ctx);
+  if (known) { addGm("改めて確かめる。" + (known.playerText || known.text), "Neutral"); return true; }
+  return false; // 秘密に当たらない宣言は、従来どおり会話として扱う
+}
+
+async function turnDialogueNodes(text) {
   const finish = () => { setBusy(false); renderDebug(); return true; };
 
   // 導入受諾後は、参加者ごとの応答が揃うまでシーンへ進めない。
@@ -2327,6 +2354,7 @@ function turnDialogueNodes(text) {
     if (!exit) {
       /* 照合語に外れた宣言は、依頼人との会話として扱う(死んだターンにしない)。
          受諾を確定させるのは照合語の一致だけなので、ここで話が進んでしまうことはない */
+      if (await tryExamineOnDialogueNode(intro, text)) return finish();
       if (intro.npc && intro.npc.name) dialogueNodeReply(intro, text);
       else addGm(intro.blockedText || "どう答えるか、はっきりしない。別の言い方を試してくれ。", "Neutral");
     } else if (!requiresMet(exit.requires, { revealed, inventory: state.inventory })) {
@@ -2346,6 +2374,8 @@ function turnDialogueNodes(text) {
     const ending = SCENARIO.ending;
     const exit = resolveExit(ending, text);
     if (!exit) {
+      // introと同じ欠落を抱えていたので同じ手当をする(アウトロに秘密を書いても開かない状態だった)
+      if (await tryExamineOnDialogueNode(ending, text)) return finish();
       if (ending.npc && ending.npc.name) dialogueNodeReply(ending, text);
       else addGm(ending.blockedText || "どう締めくくるか、はっきりしない。別の言い方を試してくれ。", "Neutral");
     } else if (!requiresMet(exit.requires, { revealed, inventory: state.inventory })) {
@@ -2535,7 +2565,7 @@ export async function sendAction(text) {
   const previousAskedBack = !!state.unknownTarget?.lastTurnAskedBack;
   state.unknownTarget = { lastTurnAskedBack: false, candidates: [] };
 
-  if (turnDialogueNodes(text)) return;
+  if (await turnDialogueNodes(text)) return;
 
   applySceneStateUpdates(text); // 宣言文中の条件語句からflag_setを発火(プレイヤーの選択によるフラグ確定)
 
