@@ -880,7 +880,7 @@ function applyUpdates(u, opts = {}) {
   if (Array.isArray(u.add_items)) {
     const allowed = availableLoot(SCENARIO.scenes[state.sceneIndex]); // requires付きは開示前は入手不可
     u.add_items.slice(0, 2).forEach(i => {
-      if (typeof i === "string" && allowed.includes(i) && inv.give(state.inventory, i)) {
+      if (typeof i === "string" && allowed.includes(i) && grantItem(i)) {
         logSceneEvent(`「${i}」を手に入れた`);
       }
     });
@@ -1501,6 +1501,15 @@ export function mentionsHealPotionUse(text) {
 function canUseHealPotion(text) {
   return state.healPotions > 0 && mentionsHealPotionUse(text);
 }
+/* 品物を渡す唯一の入口。回復薬だけは state.inventory(一意な品名の集合)ではなく
+   state.healPotions(個数)で持つ約束になっているため、ここで振り分ける。
+   これを通さずに inv.give を直接呼ぶと、鞄には見えるのに飲めない回復薬ができる
+   (2026-08-19の実プレイで発生: 場面5のlootで入手 → 「回復薬はもう残っていない」)。
+   ponytail: 特別扱いは回復薬1品だけ。2品目が出たら消耗品の一般表現へ寄せる */
+function grantItem(name) {
+  if (name === HEAL_POTION_NAME) { state.healPotions++; return true; }
+  return inv.give(state.inventory, name);
+}
 // 呼び出し前にcanUseHealPotion()を確認していること。満タンなら消費せずnullを返す
 function useHealPotion() {
   if (state.hp >= state.maxHp) return null;
@@ -1715,7 +1724,7 @@ async function tryScripted(text) {
   if (TAKE_RE.test(text)) {
     const item = availableLoot(sc).find(n => text.includes(n));
     if (item) {
-      if (inv.give(state.inventory, item)) {
+      if (grantItem(item)) {
         logSceneEvent(`「${item}」を手に入れた`);
         addGm(`${item}を手に入れた。`, "Happy");
       } else {
@@ -1828,7 +1837,7 @@ targetの規則(厳守):
 function grantAuthoredItems(names) {
   if (!Array.isArray(names)) return;
   names.forEach(n => {
-    if (!inv.give(state.inventory, n)) return;
+    if (!grantItem(n)) return;
     logSceneEvent(`「${n}」を手に入れた`);
   });
 }
@@ -2729,7 +2738,7 @@ export async function sendAction(text) {
         // 分類器の対象幻覚ガード(investigateと同様): 対象名が文中に一切現れず、既存の所持品への
         // 言及があるなら分類器のtargetを信用しない(「ロープを触る」→心石の欠片 のような誤紐付け対策)
         if (item && !text.includes(item) && inv.held(state.inventory).some(i => text.includes(i))) item = null;
-        if (item && inv.give(state.inventory, item)) {
+        if (item && grantItem(item)) {
           logSceneEvent(`「${item}」を手に入れた`);
           addGm(`${item}を手に入れた。`, "Happy");
           done(false);

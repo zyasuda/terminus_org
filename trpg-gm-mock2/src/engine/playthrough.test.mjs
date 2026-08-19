@@ -238,8 +238,12 @@ function availableLootNames(sc, revealed) {
     .map(i => i.name);
 }
 
+/* 個数で持つ消耗品(回復薬)は表示名が「回復薬×2」になるため、末尾の個数を落として正名に戻す。
+   落とさないと「入手できたか」の検査が品名の完全一致で外れる(2026-08-19) */
 function heldItems() {
-  return (getSnapshot().inventoryByOwner || []).flatMap(o => o.items || []);
+  return (getSnapshot().inventoryByOwner || [])
+    .flatMap(o => o.items || [])
+    .map(n => String(n).replace(/×\d+$/, ""));
 }
 
 /* 出口の選び方: 前へ進むものを優先する。同じ場所を行き来して手番を使い切るのを防ぐ。
