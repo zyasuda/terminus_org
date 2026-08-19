@@ -78,7 +78,12 @@ campaigns/<campaignId>/chapter_XX.json
 | 所持品 | `src/inventory.js` |
 | 戦闘ロジック | `src/battle/core.js` |
 | 素材検証 | `scripts/check-assets.mjs` |
-| TAS連携時のパララックス契約 | `scripts/_tas_prompt.md` |
+| TAS連携時のパララックス契約 | `scripts/_tas_prompt.md` (注記あり↓) |
+
+`scripts/_tas_prompt.md` は元々TASへ一度渡すための連絡メモとして書かれ、冒頭に
+「内容をコピーしたら削除してください」と書かれている。しかしその後この表からパララックス契約の
+参照先として指され、実質的に契約の正本になっている。**冒頭の記述に従って削除しないこと。**
+契約として使い続けるなら `docs/` へ移して名前と冒頭を書き換えるべきで、それは未実施(2026-08-19)。
 
 ## 検証
 

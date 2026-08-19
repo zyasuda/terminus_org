@@ -41,6 +41,5 @@ chronicles/
 # mock2側で個別に管理するローカルファイル
 trpg-gm-mock2/images/Gemini_Generated_Image_8tyb3c8tyb3c8tyb.png
 
-# ローカルツール設定・作業用スクリプト(gitでは追跡しない)
+# ローカルツール設定(gitでは追跡しない)
 .codex/
-trpg-gm-mock2/scripts/
