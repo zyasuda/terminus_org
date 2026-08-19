@@ -29,9 +29,13 @@ function deriveFootprints() {
   const reached = state.sceneIndex + 1;
   if (state.hp <= 0) { f.push("坑道の奥で力尽きた"); return f; }
   if (state.defeated.includes("錆喰い")) f.push("錆喰いとの戦いを制した");
-  if (state.defeated.includes("灯の番人")) f.push("灯の番人を退けた");
-  // シーン3を「通過した」場合のみ(在室中はまだ決着していない=日記の原則で先走らない)
-  else if (state.sceneIndex >= 3) f.push("灯の番人と刃を交えず、対話か回避で切り抜けた");
+  /* 番人の呼び名は章データが正本(2026-08-19)。ここに文字列で持つと表記が揺れる。
+     silent:trueのNPCなので「対話で切り抜けた」とは書けない(会話は起こりえない)。
+     判断はsceneIndexではなく、正体を実際に見たか(s3aの開示)で行う——分岐のある章では
+     sceneIndexは「どこまで進んだか」を表さない */
+  const keeper = SCENARIO.scenes.find(s => String(s.id) === "3")?.npc?.name;
+  if (keeper && state.defeated.includes(keeper)) f.push(`${keeper}を退けた`);
+  else if (keeper && revealed.has("s3a")) f.push(`${keeper}と刃を交えずに切り抜けた`);
   if (has(state.inventory, "心石の欠片")) f.push("心石の欠片を持ち帰った");
   f.push(reached > SCENARIO.scenes.length - 1 ? "依頼を果たし、村へ帰還した" : `シーン${reached}まで足を進めた`);
   return f;
@@ -65,7 +69,8 @@ function deriveStoryReference() {
   [...new Set(chron.filter(e => e.kind === "companion").map(e => e.who))]
     .forEach(w => { if (CAST[w]) cast.push(CAST[w].name + "(同行者)"); });
   state.defeated.forEach(n => cast.push(n + "(退けた相手)"));
-  if (state.sceneIndex >= 2 && !state.defeated.includes("灯の番人")) cast.push("灯の番人(対峙した存在)");
+  const keeper = SCENARIO.scenes.find(s => String(s.id) === "3")?.npc?.name;
+  if (keeper && revealed.has("s3a") && !state.defeated.includes(keeper)) cast.push(`${keeper}(対峙した存在)`);
   if (state.sceneIndex >= SCENARIO.scenes.length - 1) cast.push("マイラ・ヴェイン(依頼人)");
   // 重要アイテム
   const startingItems = baseItems();
@@ -134,7 +139,11 @@ export function exportChronicleFile() {
 
   const highlights = [
     ...crits.map(d => `- T${d.t}: 「${d.reason}」で出目20のクリティカル!`),
-    ...fumbles.map(d => `- T${d.t}: 「${d.reason}」で出目1のファンブル。手痛い代償を払った`)
+    /* ファンブルの結末は判定の種類で違う。攻撃なら反撃を受けるが、調べる判定の失敗は
+       次回の難易度が下がる(examineDifficulty)ので「代償」ではない。一律に代償と書くと
+       ログと食い違う(2026-08-19のクロニクルで、調べる判定の失敗3件が代償と書かれていた) */
+    ...fumbles.map(d => `- T${d.t}: 「${d.reason}」で出目1のファンブル。` +
+      (/への攻撃/.test(d.reason) ? "手痛い代償を払った" : "だが、この粘りが次の糸口になった"))
   ].join("\n") || "- クリティカルもファンブルもない、手堅い冒険だった";
 
   const synopsis =
@@ -142,7 +151,7 @@ export function exportChronicleFile() {
       ? `冒険者は${sc.brief.slice(0, 20)}…で力尽きた。`
       : `冒険者はシーン${state.sceneIndex + 1}「${sc.brief.slice(0, 24)}…」まで到達した。`) +
     (state.defeated.length ? ` 道中、${state.defeated.join("、")}を退けた。` : "") +
-    (reveals.length ? ` ${reveals.length}つの真相が明らかになった。` : "");
+    (reveals.length ? ` ${reveals.length}件の真相が明らかになった。` : "");
 
   const footprints = deriveFootprints();
   const discoveries = deriveDiscoveries();
@@ -161,7 +170,7 @@ theme: ${(rf.themes || []).join(" / ") || "-"}
 mood: ${rf.mood || "-"}
 party: ${partyLine}
 main_characters: ${ref.cast.join(" / ")}
-system: d20判定 / trpg-gm-mock
+system: d20判定 / trpg-gm-mock2
 progress: シーン${state.sceneIndex + 1}/${SCENARIO.scenes.length}、HP ${state.hp}/${state.maxHp}
 playtime: ${playtimeLabel}
 ---
