@@ -108,7 +108,15 @@ function ownerDisplayName(ownerId) {
 /* LLMへ渡す所持品。誰が何を持つかまで渡す。品名は正式名のまま。
    持ち物が空の同行者は出さない(プロンプトを短く保つ) */
 function inventoryForPrompt() {
-  const rows = inv.byOwner(state.inventory, ownerDisplayName).filter(r => r.items.length);
+  /* 回復薬は state.healPotions(個数)で持つため state.inventory に入っていない。
+     合流させないとLLMには「回復薬」がそもそも見えず、持っているのか使い切ったのかを
+     判断できない。2026-08-19のプレイでは、飲み終えたあとの手番で同行者が
+     「その回復薬をしっかり持っておくんね」と言った(存在しない品への言及)。
+     表示側(renderDebugのinventoryByOwner)と同じ合流をここでも行う */
+  const merged = state.healPotions > 0
+    ? { ...state.inventory, [inv.PLAYER]: [...(state.inventory[inv.PLAYER] || []), `${HEAL_POTION_NAME}×${state.healPotions}`] }
+    : state.inventory;
+  const rows = inv.byOwner(merged, ownerDisplayName).filter(r => r.items.length);
   if (!rows.length) return "なし";
   return rows.map(r => `${r.name}=${JSON.stringify(r.items)}`).join(" / ");
 }
@@ -997,6 +1005,15 @@ async function revealTurnBeats(r, addressed) {
 // NPCの部分エージェント化: revealFlavorと同じ「専用の小さな呼び出し・非同期・本編を待たせない」
 // パターンで、シーンNPC(依頼人マイラ等)の一言を生成する。メインGMのJSONから独立した
 // コンテキストを持つため、briefの複写や他キャラとの混同が構造的に起きない
+/* 章が決着したあとに届いた非同期の一言は捨てる。
+   NPC・同行者の一言はLLM呼び出しの結果を待って数秒遅れで着地するため、締めの直後に
+   割り込むことがある(2026-08-19のクロニクルで「物語は決着した」の次の行に村人の
+   「無事でよかった……！ それで、奥で何があったの？」が出た)。
+   決着の記録より後には何も足さない。 */
+function tooLateToSpeak() {
+  return Boolean(state.chapterEnded);
+}
+
 function npcAgentReply(playerText, revealGate) {
   const npc = sceneNpc();
   /* npc.silent=true のNPCは一言も生成しない。存在感は佇まいと所作(GMの地の文)と立ち絵で出す。
@@ -1026,7 +1043,7 @@ function npcAgentReply(playerText, revealGate) {
     const say = sanitizeSay(String(r.say || "").slice(0, 120));
     if (revealGate && await revealGate) await sleep(SHORT_PACING_MS);
     // 前回と同じ一言は表示しない(固定化の再発防止。沈黙の方が壊れて見えない)
-    if (!say || say === state.lastNpcLine) return;
+    if (!say || say === state.lastNpcLine || tooLateToSpeak()) return;
     state.lastNpcLine = say;
     addNpc(say);
   }).catch(() => {}).finally(() => setThinking("npc", false));
@@ -1060,6 +1077,7 @@ function dialogueNodeReply(node, playerText) {
   }).then(data => {
     const raw = ((data && data.content) || []).map(b => b.text || "").join("");
     const say = sanitizeSay(String(parseLlmJson(raw).say || "").slice(0, 120));
+    if (tooLateToSpeak()) return; // 締めの後には足さない(受け皿も呼ばない)
     if (!say || say === state.lastNpcLine) { dialogueNodeFallback(node, accept); return; }
     state.lastNpcLine = say;
     // 話者を必ず渡す。導入ノードはシーン配列の外なので、渡さないとaddNpcが
@@ -1073,6 +1091,7 @@ function dialogueNodeReply(node, playerText) {
    無料枠のレート制限(429)は server.cjs が最大65秒待ってリトライするため、実際に起こりうる。
    次の一手が分かる形で返すこと——プレイヤーを手詰まりにしない */
 function dialogueNodeFallback(node, accept) {
+  if (tooLateToSpeak()) return; // 締めの後に「どう答えるか分からない」と促さない
   const hint = (accept || []).length ? `「${accept[0]}」のように答えてくれ。` : "";
   addGm(node.blockedText || `どう答えるか、はっきりしない。${hint}`, "Neutral");
 }
@@ -1607,7 +1626,7 @@ function revealFlavor(secret) {
     const r = parseLlmJson(raw);
     // 話者が同行者に解決できなければ捨てる(リディアへの機械的フォールバックは誤帰属のもと)
     const flavorWho = normalizeWho(r.who, null);
-    if (r.say && flavorWho) addCompanion(fixCompanionVoice(String(r.say).slice(0, 80), flavorWho), flavorWho);
+    if (r.say && flavorWho && !tooLateToSpeak()) addCompanion(fixCompanionVoice(String(r.say).slice(0, 80), flavorWho), flavorWho);
   }).catch(() => {});
 }
 
