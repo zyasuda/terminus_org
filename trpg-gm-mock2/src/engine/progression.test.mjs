@@ -38,7 +38,17 @@ function section(title) { results.push(`\n── ${title}`); }
 
 /* すべての開示条件を満たした「全知」の状態。到達可能性の上限を見るために使う */
 const allSecretIds = new Set(scenes.flatMap(s => (s.secrets || []).map(x => x.id)));
-const omniscient = { revealed: allSecretIds, inventory: [] };
+/* 全知の在庫。secretsを全部開示済みとして扱うのと同じ理屈で、章内のlootと出口のaddItemsで
+   手に入る品物は「入手済み」として扱う。ここを空配列にしていたため、品物で開く出口
+   (灯りの部屋→奥の間が requires.itemsAll:["回復薬"])を到達判定が永久に通れず、
+   データが正しいのに到達不能と報告していた(2026-08-19)。
+   品物が本当に入手できるかは検査8が別に見ているので、ここで二重に厳しくする必要はない。 */
+const allItemNames = [
+  ...scenes.flatMap(s => (s.loot || []).map(x => (typeof x === "string" ? x : x.name))),
+  ...scenes.flatMap(s => (s.exits || []).flatMap(e => e.addItems || [])),
+  ...Object.values(chapter.startingInventory || {}).flat(),
+].filter(Boolean);
+const omniscient = { revealed: allSecretIds, inventory: [...new Set(allItemNames)] };
 
 // ───────────────────────────────────────────────
 section("1. 開示条件の参照先が存在する（typoは恒久的な進行不能になる）");
@@ -99,8 +109,16 @@ while (queue.length) {
   for (const t of nexts) if (!reached.has(t)) { reached.add(t); queue.push(t); }
 }
 const unreachable = scenes.map((s, i) => ({ s, i })).filter(x => !reached.has(x.i));
-ok(reached.has(scenes.length - 1),
-  `最終シーン(${scenes[scenes.length - 1].name})へ到達できる`,
+/* 「配列の最後が最終シーン」とは限らない。奥の間のような寄り道部屋を末尾に足すと崩れる。
+   章の終わりは to:"end"/"ending" を持つシーンなので、そこへ到達できるかを見る
+   (2026-08-19に7場面構成で判明。末尾の奥の間は場面4へ戻る寄り道だった)。 */
+const finaleIdxs = scenes
+  .map((s, i) => ({ s, i }))
+  .filter(x => (x.s.exits || []).some(e => e.to === "end" || e.to === "ending"))
+  .map(x => x.i);
+const finales = finaleIdxs.length ? finaleIdxs : [scenes.length - 1];
+ok(finales.some(i => reached.has(i)),
+  `章を終えられるシーン(${finales.map(i => scenes[i].name).join(" / ")})へ到達できる`,
   `到達できたのは ${[...reached].map(i => scenes[i].name).join(" → ")} まで`);
 ok(unreachable.length === 0, "到達できないシーンが無い",
   `到達不能: ${unreachable.map(x => `シーン${x.s.id} ${x.s.name}`).join(", ")}`);
@@ -118,8 +136,9 @@ const PHRASES = [
   [1, "座って休む", null],
   [2, "右へ向かう", "to_scean03"],
   [2, "木柵を越えて進む", "to_scean03"],
-  // 左(崩落)は「隙間」が秘密s2cの別名でもシーン3への出口ではない。蝙蝠を倒すまでは行き止まりのまま(2026-08-06に出口を削除)
-  [2, "左の隙間をくぐる", null],
+  /* 左(崩落)は2026-08-06に出口を消していたが、2026-08-19に作者が復活を決めた。
+     崩れた坑道はシーン5として実在し、そこにしか壊れた機械人形と回復薬が無い */
+  [2, "左の隙間をくぐる", "to_scean05"],
   [3, "村へ戻る", "to_cean04"],
 ];
 for (const [sceneId, text, expected] of PHRASES) {
@@ -177,17 +196,27 @@ const EXAMINE = [
   [1, "線路を辿ってみる", "s1b"],
   [2, "木柵に触れてみる", "s2a"],
   [2, "油くさいにおいを確かめる", "s2b"],
-  /* シーン3は「灯りの主の正体/胸の光るもの」から「機械人形/心石/心石の欠片」へ作者が設計変更した。
-     秘密のidは既存のs3a/s3bを引き継いでおり、entityだけが変わっている(2026-08-10に実データで確認) */
+  /* シーン3の秘密はidをs3a/s3bのまま、entityを何度か作者が入れ替えている。
+     2026-08-19に「灯りの番人の正体/胸の光るもの」へ確定し、呼び名も番人へ統一した。
+     aliasesは入力照合用なので「灯りの主」「青い石」など旧来の言い回しも引き続き拾う */
   [3, "灯りの主の姿をよく見る", "s3a"],
+  [3, "番人をよく見る", "s3a"],
   [3, "青い石を確かめる", "s3b"],
-  [3, "欠片を探す", "ch1_s3_item_3"],
+  /* 心石の欠片は秘密ではなく奥の間(シーン7)のlootになった(2026-08-19の作者判断)。
+     シーン3で探しても何も出ないのが正しい */
+  [3, "欠片を探す", null],
+  [7, "青白い岩肌を調べる", "s7a"],
 ];
 for (const [sceneId, text, expected] of EXAMINE) {
   const sc = scenes.find(s => String(s.id) === String(sceneId));
   const hit = sc ? uniqueBestSecretTextMatch(sc.secrets || [], text) : null;
-  ok(hit?.id === expected, `シーン${sceneId} 「${text}」→ ${hit ? hit.id : "開示なし"}`,
-    `期待は ${expected}。この言い回しでは調べても何も出ない`);
+  /* expected=null は「この言い回しでは何も出ないのが正しい」の表明。
+     hit?.id は未ヒット時に undefined になり null と一致しないため、?? null で揃える
+     (揃えていなかったため、負の期待を1件も書けなかった。2026-08-19に判明) */
+  ok((hit?.id ?? null) === expected,
+    `シーン${sceneId} 「${text}」→ ${hit ? hit.id : "開示なし"}`,
+    expected === null ? "この言い回しでは何も出ないはずが、開示されている"
+                      : `期待は ${expected}。この言い回しでは調べても何も出ない`);
 }
 
 // ───────────────────────────────────────────────

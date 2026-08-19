@@ -23,7 +23,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { encounterRequiredElementsMet } from "./progression.js";
+import { encounterRequiredElementsMet, requiresMet } from "./progression.js";
 
 /* MOCK2_PUBLIC_DIR で上書きできるようにする。Nodeはメインスクリプトのimport.meta.urlを
    symlink解決してしまうため(実測済み: symlink経由で起動しても、表示されるURLは常に
@@ -244,13 +244,33 @@ function heldItems() {
 
 /* 出口の選び方: 前へ進むものを優先する。同じ場所を行き来して手番を使い切るのを防ぐ。
    requiresは既に「そのノードの秘密と品を全部揃える」方針で満たしているので、条件では絞らない */
-function pickExit(node, state) {
+/* 出口の選び方。「配列の最初の前進出口」だけを見ていたため、分岐のある章では
+   寄り道部屋(崩れた坑道・奥の間)へ一度も入らず、そこにしか無い秘密と品物を
+   取りこぼしたまま本線を進み、後段の itemsAll で詰んでいた(2026-08-19に7場面構成で判明)。
+   実際のプレイヤーに近い順で選ぶ:
+     1. いま条件を満たしていて通れる出口だけを候補にする
+     2. その中で未訪問の行き先を優先する(寄り道を先に消化する)
+     3. 同じなら手前のシーンから。寄り道は本線より前に置かれているので自然にそちらへ入る
+   通れる出口が1つも無い場合は、従来どおり先頭を返して呼び出し側に停止理由を作らせる。 */
+function pickExit(node, state, visitedIdx = new Set()) {
   const exits = (node.exits || []).filter(e => e && e.to !== null && e.to !== undefined && (e.match || []).length);
   if (!exits.length) return null;
   const here = state.sceneIndex;
   const idxOf = e => SCENARIO.scenes.findIndex(s => String(s.id) === String(e.to).replace(/^scene:/, ""));
-  const forward = exits.filter(e => idxOf(e) > here);
-  return (forward.length ? forward : exits)[0];
+  const { revealed } = readSaved();
+  const ctx = { revealed, inventory: heldItems() };
+  const passable = exits.filter(e => requiresMet(e.requires, ctx));
+  const pool = passable.length ? passable : exits;
+  const forward = pool.filter(e => idxOf(e) > here);
+  const cands = forward.length ? forward : pool;
+  const rank = e => {
+    const i = idxOf(e);
+    return [visitedIdx.has(i) ? 1 : 0, i];
+  };
+  return [...cands].sort((a, b) => {
+    const [av, ai] = rank(a), [bv, bi] = rank(b);
+    return av - bv || ai - bi;
+  })[0];
 }
 
 /* ---------------- 自動プレイ ---------------- */
@@ -259,6 +279,7 @@ section("1. 章を通しでプレイできる（実物のsendActionを1手番ず
 const MAX_TURNS = 400;
 const EXAMINE_TRIES = 8; // examineDifficultyは失敗ごとにDCを2下げ、下限2で止まる
 const visited = [];
+const visitedSceneIdx = new Set(); // 寄り道を一度で済ませるため、訪れたシーンを覚える
 const revealLog = [];
 let stalled = null;
 const hybridNarrated = new Set();
@@ -268,6 +289,7 @@ while (turns < MAX_TURNS) {
   const cur = currentNode();
   if (cur.kind === "ended") break;
   visited.push(cur.label);
+  if (cur.kind === "scene") visitedSceneIdx.add(cur.state.sceneIndex);
 
   // 辞書外の自由文は分類後にGM語りへ届く。進行を決める返答は一切受け取らない。
   if (mode === "hybrid" && cur.kind === "scene" && !hybridNarrated.has(cur.state.sceneIndex)) {
@@ -358,7 +380,7 @@ while (turns < MAX_TURNS) {
 
   // (3) 出口へ進む
   const before = nodeSignature();
-  const exit = pickExit(cur.node, cur.state);
+  const exit = pickExit(cur.node, cur.state, visitedSceneIdx);
   if (!exit) {
     // 出口が無いノードは completeRequires での完了を待つ。1手番だけ促してみる
     await say("先へ進む");
