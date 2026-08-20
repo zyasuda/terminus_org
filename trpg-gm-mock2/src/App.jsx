@@ -469,7 +469,7 @@ export default function App() {
         </div>
 
         <div id="underPanel" className={eng.underPanelOpen ? "open" : ""}>
-          {(eng.introHints.length > 0 || eng.revealedEntities.length > 0 || eng.verbChips.length > 0) && (
+          {(eng.introHints.length > 0 || eng.revealedEntities.length > 0 || eng.verbChips.length > 0 || eng.moveChips.length > 0) && (
             <div id="entityChips">
               {/* 名詞(既定の目的語+イントロのヒント+開示済みオブジェクト)→動詞(使用頻度順)の
                   2タップで指示が完成する。助詞は動詞側が持つ(「扉を調べる」「坑道に進む」)ので
@@ -480,9 +480,20 @@ export default function App() {
                   {name}
                 </button>
               ))}
-              {eng.verbChips.map(({ v, p }) => (
+              {/* 移動チップと同じ語(「進む」)が動詞チップにも学習されているため、
+                  移動チップを出す間は動詞側から外す(同じ文字の異なる動きのチップが
+                  2つ並ぶのを防ぐ。動詞側は組み立て、移動側は単体で完成) */}
+              {eng.verbChips.filter(({ v }) => !(eng.moveChips.includes(v))).map(({ v, p }) => (
                 <button key={"v" + v} className="entityChip verbChip" onClick={() => setInput(prev => prev + joinParticle(prev, p) + v)}>
                   {v}
+                </button>
+              ))}
+              {/* 移動チップ。名詞・動詞と違い単体で完成した宣言なので、押したら入力欄を
+                  置き換える(組み立て途中の文の後ろに足すと「周辺進む」になる)。
+                  行き先は載せない(作者の判断: 並べると探索の余地が消える) */}
+              {eng.moveChips.map(text => (
+                <button key={"m" + text} className="entityChip moveChip" onClick={() => setInput(text)}>
+                  {text}
                 </button>
               ))}
             </div>

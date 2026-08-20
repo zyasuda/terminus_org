@@ -34,6 +34,10 @@ let snapshot = {
   secrets: [],          // {open, text}[]
   revealedEntities: [], // 開示済みsecretのentity名(重複なし)。入力補助チップに使う
   introHints: [], // イントロ中だけ出す固定チップ(「依頼について」等)。タップでそのまま入力欄に入る
+  /* 通れる出口へ行くための宣言文(「奥へ進む」等)。名詞・動詞チップと違い、それ単体で
+     完成した宣言なので、タップは入力欄を「置き換える」。移動だけは組み立てさせない
+     (組み立てると作者の照合語を外して詰む。2026-08-20) */
+  moveChips: [],
   verbChips: [],        // 使用頻度順の動詞チップ(プレイをまたいで端末に蓄積)。名詞チップと組み合わせて2タップで指示を作る
   pendingRoll: null,    // {reason, diff, actorName} プレイヤーの「ダイスを振る!」待ち。同行者の判定も名義を表示して本人が振る
   gmMode: "hybrid",     // GMモード: hybrid(移動・調査はscripted、他はLLM) / scripted(LLMゼロ) / llm(従来)

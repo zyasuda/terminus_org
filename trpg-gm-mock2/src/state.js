@@ -22,6 +22,13 @@ export function initialState() {
            tokens: { in: 0, out: 0, calls: 0 },
            lastAction: null,
            noProgressTurns: 0,
+           /* 停滞の見張り(2026-08-20)。noProgressTurnsはLLMレーンでしか数えないため、
+              全レーンで効く別の数え方を持つ。stuckTurnsは手番の前後で状態指紋が
+              変わらなかった回数、hintedScenesは既にGMが促した場面の番号 */
+           stuckTurns: 0,
+           /* 場面ごとの促しの段。{ [sceneIndex]: { stage: 1|2, word } }。
+              stage1=ぼかした一言、stage2=名指し。wordはチップにも出す語 */
+           hints: {},
            pendingInjuryConcern: false,
            pendingFailedCheck: null,
            unknownTarget: { lastTurnAskedBack: false, candidates: [] }, // 直前の聞き返しと、入力チップへ出す安全な候補

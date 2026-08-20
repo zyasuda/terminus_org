@@ -23,7 +23,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { encounterRequiredElementsMet, requiresMet } from "./progression.js";
+import { encounterRequiredElementsMet, requiresMet, exitDeclaration } from "./progression.js";
 
 /* MOCK2_PUBLIC_DIR で上書きできるようにする。Nodeはメインスクリプトのimport.meta.urlを
    symlink解決してしまうため(実測済み: symlink経由で起動しても、表示されるURLは常に
@@ -392,19 +392,29 @@ while (turns < MAX_TURNS) {
     check(true, `${cur.label} 出口を持たないノードから完了で先へ進めた`);
     continue;
   }
-  /* 照合語は「奥」のような名詞だけのこともある。exits[].matchは部分一致なので出口自体は
-     選べるが、移動の宣言だと認識されない(scriptedの辞書は述語を見る)。まず作者が書いた
-     語をそのまま言い、動かなければ移動の述語を足して言い直す。どちらで通ったかは記録する */
-  let used = exit.match[0];
+  /* 移動は画面と同じ文で言う。以前はここで作者のmatch[0]をそのまま打ち、駄目なら
+     述語を足して言い直していた。それは「完璧な入力を与えればエンジンは進める」ことの
+     証明にしかならず、画面のチップが作る文(名詞+助詞+動詞)は再現していなかった。
+     2026-08-20の実プレイでは、チップの「奥に進む」が作者の「奥へ進む」に一致せず
+     シーン6で詰んだのに、この検査は通っていた。
+     exitDeclarationは移動チップ・GMの聞き返しと同じ文を作るので、ここが通れば
+     「画面から押せる操作で進める」ことの証明になる。
+     言い直しはしない——1回で通らないなら、画面から通せない出口である */
+  /* 導入・終端は会話ノードで、出口は移動ではなく返事(「引き受け」等)。移動チップも
+     出さない場所なので、作者の照合語をそのまま言う。シーンだけが移動チップを持つ */
+  let used = cur.kind === "scene" ? "進む" : exit.match[0];
   await say(used);
   if (nodeSignature() === before) {
-    used = /[へにをのと]$/.test(exit.match[0]) ? `${exit.match[0]}進む` : `${exit.match[0]}へ進む`;
+    /* 出口が複数あって聞き返された。GMが提示した語(exitDeclarationが作る)で言い直す。
+       これがプレイヤーの実際の手順である。言い直しは1回だけ——それで通らないなら、
+       画面からは通せない出口である */
+    used = exitDeclaration(exit);
     await say(used);
   }
   if (nodeSignature() === before) {
     stalled = {
       at: cur.label,
-      why: `出口「${exit.match[0]}」→ ${exit.to} で動かない（述語を足しても不可）。`
+      why: `「進む」→「${used}」(出口 ${exit.match[0]} → ${exit.to})の順で言っても動かない。`
         + `拒否文言: ${JSON.stringify(getSnapshot().gmBubble.text).slice(0, 120)}`
     };
     break;

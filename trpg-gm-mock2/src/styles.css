@@ -841,6 +841,14 @@ body {
   color: var(--accent);
   background: rgba(255, 153, 0, .08);
 }
+/* 移動チップは、名詞・動詞(断片を組み立てる)とは役割が違う。それ単体で完成した宣言で、
+   押せば必ずその出口へ通る。見分けがつくよう塗りを持たせる(2026-08-20) */
+.entityChip.moveChip {
+  border-color: var(--success);
+  color: var(--success);
+  background: rgba(90, 200, 140, .12);
+  font-weight: 600;
+}
 
 /* テキスト入力(Figma 10:42): 行動ボタンをバー内の右端に収める */
 #inputRow {
