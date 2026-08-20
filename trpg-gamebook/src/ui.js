@@ -201,7 +201,10 @@ function paintLantern() {
    絵が無い場面・欠けたファイルでは、静かに何も出さない（テキストだけで成立する） */
 const IMG_DIR = "./images/";
 
-function swapImage(el, file) {
+/* foe は立つ側（true=右, false=左）。位置は「絵を差し替える瞬間」にだけ変える。
+   消えるときは変えない。消えかけの絵が左右に飛ぶのは、倒した敵が
+   一瞬だけ反対側へ移動して見える原因になる */
+function swapImage(el, file, foe) {
   const src = file ? IMG_DIR + file : "";
   if (el.dataset.file === (file || "")) return;
   el.dataset.file = file || "";
@@ -211,6 +214,7 @@ function swapImage(el, file) {
   probe.onload = () => {
     if (el.dataset.file !== file) return;   // 読み込み中に場面が変わった
     el.src = src;
+    if (foe !== undefined) el.classList.toggle("foe", foe);
     el.classList.add("on");
   };
   probe.src = src;                          // 読めなければ何も出さない
@@ -228,8 +232,7 @@ function paintScenery() {
   swapImage($("sceneryBg"), n?.parallax?.fg || n?.img);
   swapImage($("sceneryFar"), n?.parallax?.sky);
   const foe = state?.enemy?.sprite;
-  $("actor").classList.toggle("foe", !!foe);   // 敵は左、NPCは右に立たせる
-  swapImage($("actor"), foe || n?.npcSprite);
+  swapImage($("actor"), foe || n?.npcSprite, !!foe);
 }
 
 /* ── 選択肢 ─────────────────────────────────── */

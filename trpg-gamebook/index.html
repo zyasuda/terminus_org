@@ -31,12 +31,14 @@
 
   /* 情景の見せ方。本文の可読性が上限を決めるので、ここを上げすぎない。
      作者が触るのはこの3つだけ（値の意味はCSSの #scenery を参照）*/
-  --scenery-opacity: .30;   /* 背景写真の濃さ */
+  --scenery-opacity: .35;   /* 背景写真の濃さ */
   --scenery-blur:    1px;   /* 背景写真のにじみ。文字と競合させないため */
-  --scenery-inset:   3%;    /* 背景を画面から引かせる余白。大きいほど遠景になる */
-  --actor-opacity:   .55;   /* NPC・敵の立ち絵の濃さ */
+  --scenery-inset:   4%;    /* 背景を画面から引かせる余白。大きいほど遠景になる */
+  --actor-opacity:   .75;   /* NPC・敵の立ち絵の濃さ */
   --actor-height:    38vh;  /* 立ち絵の背丈。窓が小さいほど小さくなる */
-  --actor-max:       17rem; /* 立ち絵の背丈の上限。大きい窓で寄りすぎないため */
+  --actor-max:       27rem; /* 立ち絵の背丈の上限。大きい窓で寄りすぎないため */
+  --actor-gap-npc:   12rem;  /* NPC(左)と本文欄の間隔。小さいほど本文に近づく */
+  --actor-gap-foe:   12rem; /* 敵(右)と本文欄の間隔。小さいほど本文に近づく */
 }
 
 @property --pool { syntax: '<percentage>'; inherits: true; initial-value: 0%; }
@@ -93,7 +95,7 @@ body {
    足元は選択肢の帯の上端に合わせる(--stage-bottom は ui.js が実測して入れる)。
    bottom:0 にすると帯(不透明88%)に足元が隠れ、切り落とされた絵に見える */
 #actor {
-  left: max(1rem, calc(50% - var(--col) / 2 - 15rem));
+  left: max(1rem, calc(50% - var(--col) / 2 - var(--actor-gap-npc)));
   bottom: var(--stage-bottom, 0px);
   height: min(var(--actor-height), var(--actor-max));
   object-fit: contain; object-position: bottom left;
@@ -105,7 +107,7 @@ body {
 /* NPCは左、敵は右。話す相手と襲ってくるものを、立つ側で区別する */
 #actor.foe {
   left: auto;
-  right: max(1rem, calc(50% - var(--col) / 2 - 15rem));
+  right: max(1rem, calc(50% - var(--col) / 2 - var(--actor-gap-foe)));
   object-position: bottom right;
 }
 /* 狭い画面では本文が画面幅いっぱいに寄るので、立ち絵を消すのではなく
