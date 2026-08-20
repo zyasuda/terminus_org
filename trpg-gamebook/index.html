@@ -93,15 +93,21 @@ body {
    足元は選択肢の帯の上端に合わせる(--stage-bottom は ui.js が実測して入れる)。
    bottom:0 にすると帯(不透明88%)に足元が隠れ、切り落とされた絵に見える */
 #actor {
-  right: max(1rem, calc(50% - var(--col) / 2 - 15rem));
+  left: max(1rem, calc(50% - var(--col) / 2 - 15rem));
   bottom: var(--stage-bottom, 0px);
   height: min(var(--actor-height), var(--actor-max));
-  object-fit: contain; object-position: bottom right;
+  object-fit: contain; object-position: bottom left;
   filter: saturate(.8) contrast(1.05);
   -webkit-mask-image: linear-gradient(to bottom, #000 78%, transparent 100%);
           mask-image: linear-gradient(to bottom, #000 78%, transparent 100%);
 }
 #actor.on { opacity: var(--actor-opacity); }
+/* NPCは左、敵は右。話す相手と襲ってくるものを、立つ側で区別する */
+#actor.foe {
+  left: auto;
+  right: max(1rem, calc(50% - var(--col) / 2 - 15rem));
+  object-position: bottom right;
+}
 /* 狭い画面では本文が画面幅いっぱいに寄るので、立ち絵を消すのではなく
    小さく・薄くして本文の邪魔をしない位置まで下げる。
    窓を縮めた途端に人物が消えるのは、いなくなったように見えて誤解を生む */
@@ -112,7 +118,8 @@ body {
     --scenery-blur: 6px;
     --actor-height: 32vh; --actor-max: 12rem; --actor-opacity: .45;
   }
-  #actor { right: .4rem; }
+  #actor { left: .4rem; }
+  #actor.foe { right: .4rem; left: auto; }
 }
 
 /* ── ランタンの光溜まり ────────────────────────

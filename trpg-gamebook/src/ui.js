@@ -227,7 +227,9 @@ function paintScenery() {
   const n = node();
   swapImage($("sceneryBg"), n?.parallax?.fg || n?.img);
   swapImage($("sceneryFar"), n?.parallax?.sky);
-  swapImage($("actor"), state?.enemy?.sprite || n?.npcSprite);
+  const foe = state?.enemy?.sprite;
+  $("actor").classList.toggle("foe", !!foe);   // 敵は左、NPCは右に立たせる
+  swapImage($("actor"), foe || n?.npcSprite);
 }
 
 /* ── 選択肢 ─────────────────────────────────── */
