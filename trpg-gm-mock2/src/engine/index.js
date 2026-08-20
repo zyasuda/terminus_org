@@ -272,17 +272,25 @@ export function restoreGame(saved) {
   // GM/NPC/同行者、それぞれの立ち絵にも直前の発言を喋らせる(左パネルの履歴と同期。
   // タップでの再表示もここから効くようになる)。以前はgmBubbleしか復元しておらず、
   // リロード直後にマイラや同行者をタップしても何も出ない不具合があった
-  const lastGm = [...chron].reverse().find(e => e.kind === "gm");
-  if (lastGm) setStore(s => ({ gmBubble: { text: lastGm.text, emotion: lastGm.emotion || "Neutral", seq: s.gmBubble.seq + 1 } }));
-  const lastNpc = [...chron].reverse().find(e => e.kind === "npc");
-  if (lastNpc) setStore(s => ({ npcBubble: { text: lastNpc.text, seq: s.npcBubble.seq + 1 } }));
+  /* 復元はhidden:trueで積む。可視にするのは最後に喋った1人だけ。
+     hiddenを付けずに3人分を復元していたため、再開直後の画面にGM・マイラ・同行者の
+     吹き出しが同時に並んでいた(2026-08-19の指摘。会話が破綻して見える主因) */
+  const rev = [...chron].reverse();
+  const lastGm = rev.find(e => e.kind === "gm");
+  if (lastGm) setStore(s => ({ gmBubble: { text: lastGm.text, emotion: lastGm.emotion || "Neutral", hidden: true, seq: s.gmBubble.seq + 1 } }));
+  const lastNpc = rev.find(e => e.kind === "npc");
+  if (lastNpc) setStore(s => ({ npcBubble: { text: lastNpc.text, hidden: true, seq: s.npcBubble.seq + 1 } }));
   Object.keys(CAST).forEach(who => {
-    const lastLine = [...chron].reverse().find(e => e.kind === "companion" && e.who === who);
+    const lastLine = rev.find(e => e.kind === "companion" && e.who === who);
     if (lastLine) {
       setStore(s => ({ companionBubbles: { ...s.companionBubbles,
-        [who]: { text: lastLine.text, seq: ((s.companionBubbles[who] || {}).seq || 0) + 1 } } }));
+        [who]: { text: lastLine.text, hidden: true, seq: ((s.companionBubbles[who] || {}).seq || 0) + 1 } } }));
     }
   });
+  const newest = rev.find(e => ["gm", "npc", "companion"].includes(e.kind));
+  if (newest && newest.kind === "gm") replayGmBubble();
+  else if (newest && newest.kind === "npc") replayNpcBubble();
+  else if (newest) replayCompanionBubble(newest.who);
   setSceneInfo(state);
   renderDebug();
 }
@@ -580,31 +588,52 @@ async function handOffBubble() {
   clearAllBubbles();
 }
 
+/* 吹き出しは画面に常に1つだけ。前の話者を消す責任を呼び出し側(clearAllBubbles/
+   handOffBubble)に置いていたため、それを通らない経路で複数が並んでいた(2026-08-19の指摘)。
+   実際に並んでいた経路:
+   - 立ち絵タップの replay*Bubble(): 消さずに hidden=false にするだけなので、
+     リディア→ガレス→マイラと続けて叩くと3人の古い発言が同時に出る
+   - dialogueNodeReply(導入・終端ノードのNPC)の非同期着地: handOffBubbleを通らない
+   出す側で一本化する。hiddenBubblesは同じsetStore内で適用し、1回の再描画で切り替える */
+function hiddenBubbles(s) {
+  return {
+    gmBubble: { ...s.gmBubble, hidden: true },
+    npcBubble: { ...s.npcBubble, hidden: true },
+    companionBubbles: Object.fromEntries(
+      Object.entries(s.companionBubbles).map(([who, b]) => [who, { ...b, hidden: true }]))
+  };
+}
+
 const addGm = (t, emotion) => {
   lastBubbleText = t || "";
   const emo = normalizeEmotion(emotion);
   chron.push({ t: state.turn, ts: Date.now(), kind: "gm", text: t, emotion: emo });
   addMsg("gm", t);
-  setStore(s => ({ gmBubble: { text: t, emotion: emo, hidden: false, seq: s.gmBubble.seq + 1 } }));
+  setStore(s => ({ ...hiddenBubbles(s), gmBubble: { text: t, emotion: emo, hidden: false, seq: s.gmBubble.seq + 1 } }));
 };
 // GMペットをタップした時: 最後の発言の吹き出しを出し直す(seqの増分で再マウント→フェードが再スタート)
 export function replayGmBubble() {
-  setStore(s => s.gmBubble.text ? { gmBubble: { ...s.gmBubble, hidden: false, seq: s.gmBubble.seq + 1 } } : {});
+  setStore(s => s.gmBubble.text
+    ? { ...hiddenBubbles(s), gmBubble: { ...s.gmBubble, hidden: false, seq: s.gmBubble.seq + 1 } }
+    : {});
 }
 // 同行者の立ち絵をタップした時: その同行者の最後の発言の吹き出しを出し直す。
 // まだ一度も喋っていない場面では反応が無く「壊れている」ように見えるので、
 // CAST[who].idleLine(scenario.jsが一人称から既定値を用意する)で受け答えする
 export function replayCompanionBubble(who) {
   setStore(s => {
+    const base = hiddenBubbles(s);
     const b = s.companionBubbles[who];
-    if (b && b.text) return { companionBubbles: { ...s.companionBubbles, [who]: { ...b, hidden: false, seq: b.seq + 1 } } };
-    const idle = (CAST[who] && CAST[who].idleLine) || "…どうした?";
-    return { companionBubbles: { ...s.companionBubbles, [who]: { text: idle, hidden: false, seq: ((b || {}).seq || 0) + 1 } } };
+    const text = b && b.text ? b.text : ((CAST[who] && CAST[who].idleLine) || "…どうした?");
+    return { ...base, companionBubbles: { ...base.companionBubbles,
+      [who]: { text, hidden: false, seq: ((b || {}).seq || 0) + 1 } } };
   });
 }
 // NPC(依頼人マイラ等)の立ち絵をタップした時: 最後の発言の吹き出しを出し直す
 export function replayNpcBubble() {
-  setStore(s => s.npcBubble.text ? { npcBubble: { ...s.npcBubble, hidden: false, seq: s.npcBubble.seq + 1 } } : {});
+  setStore(s => s.npcBubble.text
+    ? { ...hiddenBubbles(s), npcBubble: { ...s.npcBubble, hidden: false, seq: s.npcBubble.seq + 1 } }
+    : {});
 }
 // AI応答待ちの「考え中(…)」表示。key: "gm" | 同行者id | "npc"
 function setThinking(key, on) {
@@ -674,8 +703,11 @@ const addCompanion = (t, who = Object.keys(CAST)[0]) => {
   chron.push({ t: state.turn, ts: Date.now(), kind: "companion", who, text: t });
   addMsg("companion companion-" + who, name + "「" + t + "」");
   // GMペットと同じ形式の吹き出しを、その同行者の立ち絵の脇に出す(約8秒でフェードアウト)
-  setStore(s => ({ companionBubbles: { ...s.companionBubbles,
-    [who]: { text: t, hidden: false, seq: ((s.companionBubbles[who] || {}).seq || 0) + 1 } } }));
+  setStore(s => {
+    const base = hiddenBubbles(s);
+    return { ...base, companionBubbles: { ...base.companionBubbles,
+      [who]: { text: t, hidden: false, seq: ((s.companionBubbles[who] || {}).seq || 0) + 1 } } };
+  });
   highlightPortrait(who);
 };
 // シーンNPC(依頼人マイラ等)の台詞。話者名はシーン定義から取る(モデルに選ばせない)
@@ -690,7 +722,7 @@ const addNpc = (t, speaker) => {
   chron.push({ t: state.turn, ts: Date.now(), kind: "npc", name: npc.name, text: t });
   addMsg("companion companion-npc", npc.name + "「" + t + "」");
   // GM/同行者と同じ形式の吹き出しを、中央のnpcSprite(#enemySprite)の上に出す
-  setStore(s => ({ npcBubble: { text: t, hidden: false, seq: s.npcBubble.seq + 1 } }));
+  setStore(s => ({ ...hiddenBubbles(s), npcBubble: { text: t, hidden: false, seq: s.npcBubble.seq + 1 } }));
   saveGame(); // 非同期(npcAgentReply)でターン確定後に届くため、ここで保存しないとリロードで消える
 };
 /* ---------------- 表示シーケンス ----------------
@@ -721,12 +753,7 @@ function clearCompanionBubble(who) {
     : {}));
 }
 function clearAllBubbles() {
-  clearGmBubble();
-  clearNpcBubble();
-  setStore(s => ({
-    companionBubbles: Object.fromEntries(
-      Object.entries(s.companionBubbles).map(([who, b]) => [who, { ...b, hidden: true }]))
-  }));
+  setStore(s => hiddenBubbles(s));
 }
 /* steps: [{ text, speak(), clear() }, ...]。各stepの直前にclear()(省略時はclearAllBubbles)
    を呼んで前の話者の吹き出しを消し、speak()を呼ぶ。次のstepまではreadDelayMs(text)だけ待つ。
@@ -985,8 +1012,29 @@ function normalizeWho(w, fallback) {
 }
 
 // 現在のシーンに常在するNPC(依頼人マイラ等)。同行者(CAST)とは別の話者区分
+/* 今いるノードのNPC。導入(intro)・終端(ending)はシーン配列の外なので、
+   scenes[sceneIndex]を見ると導入中に「シーン1のNPC(いない)」を答えてしまう。
+   背景の選択と同じ分岐(currentBackdropNode)に合わせる */
 function sceneNpc() {
-  return SCENARIO.scenes[state.sceneIndex].npc || null;
+  return currentBackdropNode().npc || null;
+}
+/* 秘密の開示テキストが丸ごと台詞(「…」)なら、それは地の文ではなく誰かの発言である。
+   作者は導入の秘密を「マイラに尋ねた答え」として書く(章1のintro_sound「坑道の奥から
+   微かに響いているわ」等)。これをGMの語りへ流していたため、GMが女性語で喋っていた
+   (2026-08-19の指摘)。その場にNPCがいればNPCの吹き出しへ、いなければ従来どおりGMへ。
+   作者はデータを台詞のまま書けて、話者だけが正しくなる。回帰テスト: revealVoice.test.mjs */
+function isQuotedLine(t) { return /^「[^「」]*」$/.test(String(t || "").trim()); }
+function speakReveal(text, emotion = "Neutral") {
+  const t = String(text || "").trim();
+  const npc = sceneNpc();
+  if (npc && npc.name && isQuotedLine(t)) { addNpc(t.slice(1, -1), npc); return; }
+  addGm(t, emotion);
+}
+/* 既に開示済みの秘密をもう一度確かめた時。台詞ならNPCが言い直す(「改めて確かめる。」を
+   前置きするとGMの地の文と台詞が1つの吹き出しに混ざる) */
+function speakRecheck(text) {
+  if (isQuotedLine(text) && sceneNpc()) { speakReveal(text); return; }
+  addGm("改めて確かめる。" + text, "Neutral");
 }
 // whoがシーンNPCを指しているか(名前・id・部分一致で判定)
 function matchesNpc(w, npc) {
@@ -1064,6 +1112,15 @@ function tooLateToSpeak() {
   return Boolean(state.chapterEnded);
 }
 
+/* 非同期の一言(NPC・導入ノードのNPC)は、生成を待つ間にプレイヤーが次の宣言を
+   済ませていることがある。その場合は場面がもう変わっているため、古い手番の一言は捨てる。
+   2026-08-19の画面では、導入で「受ける」を促すマイラの一言が、調べる手番のあとまで
+   出続けていた。turnはsendActionの先頭で1つ進むので、手番の同一性の判定に使える */
+function turnGuard() {
+  const at = state.turn;
+  return () => state.turn !== at || tooLateToSpeak();
+}
+
 function npcAgentReply(playerText, revealGate) {
   const npc = sceneNpc();
   /* npc.silent=true のNPCは一言も生成しない。存在感は佇まいと所作(GMの地の文)と立ち絵で出す。
@@ -1081,6 +1138,7 @@ function npcAgentReply(playerText, revealGate) {
       : `${npc.name}(あなた): ${e.text}`)
     .join("\n");
   setThinking("npc", true); // 非同期でターン終了後に届くため、GM/同行者とは別に自前で消す
+  const stale = turnGuard();
   callGmApi({
     system: `ソロTRPGの登場人物「${npc.name}」として一言だけ返す。${direction}\n` +
       `日本語の口語。40字以内で言い切る。直前の自分の発言と同じ文・同じ問いを繰り返すな。` +
@@ -1095,7 +1153,7 @@ function npcAgentReply(playerText, revealGate) {
     if (revealGate) await revealGate;
     await handOffBubble();
     // 前回と同じ一言は表示しない(固定化の再発防止。沈黙の方が壊れて見えない)
-    if (!say || say === state.lastNpcLine || tooLateToSpeak()) return;
+    if (!say || say === state.lastNpcLine || stale()) return;
     state.lastNpcLine = say;
     addNpc(say);
   }).catch(() => {}).finally(() => setThinking("npc", false));
@@ -1116,6 +1174,7 @@ function dialogueNodeReply(node, playerText) {
     .join("\n");
   const accept = (node.exits || []).flatMap(e => e.match || []).filter(Boolean).slice(0, 6);
   setThinking("npc", true);
+  const stale = turnGuard();
   callGmApi({
     system: `ソロTRPGの登場人物「${npc.name}」として一言だけ返す。${node.direction || ""}\n` +
       `場面: ${node.brief || ""}\n` +
@@ -1129,13 +1188,13 @@ function dialogueNodeReply(node, playerText) {
   }).then(data => {
     const raw = ((data && data.content) || []).map(b => b.text || "").join("");
     const say = sanitizeSay(String(parseLlmJson(raw).say || "").slice(0, 120));
-    if (tooLateToSpeak()) return; // 締めの後には足さない(受け皿も呼ばない)
+    if (stale()) return; // 締めの後・次の手番が始まったあとには足さない(受け皿も呼ばない)
     if (!say || say === state.lastNpcLine) { dialogueNodeFallback(node, accept); return; }
     state.lastNpcLine = say;
     // 話者を必ず渡す。導入ノードはシーン配列の外なので、渡さないとaddNpcが
     // SCENARIO.scenes[sceneIndex].npc を見て何も出さずに終わる(addNpcのコメント参照)
     addNpc(say, npc);
-  }).catch(() => dialogueNodeFallback(node, accept))
+  }).catch(() => { if (!stale()) dialogueNodeFallback(node, accept); })
     .finally(() => setThinking("npc", false));
 }
 /* 導入・終端ノードでLLMが応答しなかった時の受け皿。ここを黙って落とすと、この手番の出力が
@@ -1656,7 +1715,7 @@ async function scriptedExamine(secret, actorName = "あなた") {
   if (ok) {
     delete state.examineFails[secret.id];
     unlockSecret(secret);
-    addGm(secret.playerText || secret.text, "Happy");
+    speakReveal(secret.playerText || secret.text, "Happy");
     state.noProgressTurns = 0;
     revealFlavor(secret); // 開示の余韻(同行者の一言)を非同期で追加。失敗しても進行に影響なし
   } else {
@@ -1790,7 +1849,7 @@ async function tryScripted(text) {
     const { secret } = pickExamineSecret(sc, text, rest, ctx);
     if (secret) { await scriptedExamine(secret, actorName); return true; }
     const known = matchSecretByText(sc, rest, true, undefined, ctx);
-    if (known) { addGm("改めて確かめる。" + (known.playerText || known.text), "Neutral"); return true; }
+    if (known) { speakRecheck(known.playerText || known.text); return true; }
     if (gmMode === "scripted") { addGm("特に変わったものは見つからない。", "Neutral"); return true; }
     return false; // hybrid: secretのない対象の描写はLLMの領分
   }
@@ -2436,7 +2495,7 @@ async function tryExamineOnDialogueNode(node, text) {
   const { secret } = pickExamineSecret(node, text, rest, ctx);
   if (secret) { await scriptedExamine(secret, actorName); return true; }
   const known = matchSecretByText(node, rest, true, undefined, ctx);
-  if (known) { addGm("改めて確かめる。" + (known.playerText || known.text), "Neutral"); return true; }
+  if (known) { speakRecheck(known.playerText || known.text); return true; }
   return false; // 秘密に当たらない宣言は、従来どおり会話として扱う
 }
 
@@ -2559,7 +2618,7 @@ async function turnFreeform(text, ctx) {
     const already = SCENARIO.scenes[state.sceneIndex].secrets
       .find(s => revealed.has(s.id) && s.entity === r.check.targetEntity);
     if (already) {
-      addGm("改めて確かめる。" + (already.playerText || already.text), "Neutral");
+      speakRecheck(already.playerText || already.text);
       r.check = null;
     }
   }
@@ -2807,7 +2866,7 @@ export async function sendAction(text) {
           if (!mentionsTarget && mentionsItem) hit = null;
         }
         if (hit && revealed.has(hit.id)) {
-          addGm("改めて確かめる。" + (hit.playerText || hit.text), "Neutral");
+          speakRecheck(hit.playerText || hit.text);
           done(false);
           return;
         }
