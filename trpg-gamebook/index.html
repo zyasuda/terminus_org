@@ -28,6 +28,15 @@
   --col: 32em;         /* 全角32文字前後。小説の一行に近い */
   --approach: 0;
   --reveal-char-delay: 33.333ms;
+
+  /* 情景の見せ方。本文の可読性が上限を決めるので、ここを上げすぎない。
+     作者が触るのはこの3つだけ（値の意味はCSSの #scenery を参照）*/
+  --scenery-opacity: .30;   /* 背景写真の濃さ */
+  --scenery-blur:    1px;   /* 背景写真のにじみ。文字と競合させないため */
+  --scenery-inset:   3%;    /* 背景を画面から引かせる余白。大きいほど遠景になる */
+  --actor-opacity:   .55;   /* NPC・敵の立ち絵の濃さ */
+  --actor-height:    38vh;  /* 立ち絵の背丈。窓が小さいほど小さくなる */
+  --actor-max:       17rem; /* 立ち絵の背丈の上限。大きい窓で寄りすぎないため */
 }
 
 @property --pool { syntax: '<percentage>'; inherits: true; initial-value: 0%; }
@@ -49,6 +58,61 @@ body {
   display: flex;
   flex-direction: column;
   overflow: hidden;
+}
+
+/* ── 情景 ──────────────────────────────────────
+   場面の背景写真と、その場にいる者の立ち絵。ランタンより「奥」に敷く
+   (z-index:0、DOM順でlanternが上)。写真の上に光溜まりと錆が乗る。
+   本文(z-index:2)より必ず奥。ここを前に出すと読めなくなる。 */
+#scenery {
+  position: fixed; inset: 0; z-index: 0; pointer-events: none;
+  overflow: hidden;
+}
+#scenery img {
+  position: absolute;
+  opacity: 0;
+  transition: opacity .9s ease;
+}
+/* coverだと窓が小さいほど絵が切り抜かれて「寄った」絵になる。
+   containで画に全体を入れ、--scenery-insetで更に引かせる。
+   containは縁が直線で出るので、四辺をぼかして闇へ溶かす */
+#sceneryBg, #sceneryFar {
+  inset: var(--scenery-inset);
+  width: calc(100% - var(--scenery-inset) * 2);
+  height: calc(100% - var(--scenery-inset) * 2);
+  object-fit: contain;
+  filter: blur(var(--scenery-blur)) saturate(.75);
+  -webkit-mask-image: radial-gradient(100% 95% at 50% 45%, #000 18%, transparent 86%);
+          mask-image: radial-gradient(100% 95% at 50% 45%, #000 18%, transparent 86%);
+}
+#sceneryBg.on, #sceneryFar.on { opacity: var(--scenery-opacity); }
+/* 遠景(parallax.sky)は背景より更に奥。無い場面では出さない */
+#sceneryFar { filter: blur(calc(var(--scenery-blur) * 2)) saturate(.6); }
+
+/* 立ち絵は本文カラム(--col)の外、右下に置く。本文の下に潜り込ませない。
+   足元は選択肢の帯の上端に合わせる(--stage-bottom は ui.js が実測して入れる)。
+   bottom:0 にすると帯(不透明88%)に足元が隠れ、切り落とされた絵に見える */
+#actor {
+  right: max(1rem, calc(50% - var(--col) / 2 - 15rem));
+  bottom: var(--stage-bottom, 0px);
+  height: min(var(--actor-height), var(--actor-max));
+  object-fit: contain; object-position: bottom right;
+  filter: saturate(.8) contrast(1.05);
+  -webkit-mask-image: linear-gradient(to bottom, #000 78%, transparent 100%);
+          mask-image: linear-gradient(to bottom, #000 78%, transparent 100%);
+}
+#actor.on { opacity: var(--actor-opacity); }
+/* 狭い画面では本文が画面幅いっぱいに寄るので、立ち絵を消すのではなく
+   小さく・薄くして本文の邪魔をしない位置まで下げる。
+   窓を縮めた途端に人物が消えるのは、いなくなったように見えて誤解を生む */
+@media (max-width: 62em) {
+  /* 縦長の窓では背景が細い帯になり、上下の直線が見えてしまう。
+     blurは中身と一緒に帯の縁もぼかすので、狭い窓では強めにして溶かす */
+  :root {
+    --scenery-blur: 6px;
+    --actor-height: 32vh; --actor-max: 12rem; --actor-opacity: .45;
+  }
+  #actor { right: .4rem; }
 }
 
 /* ── ランタンの光溜まり ────────────────────────
@@ -235,11 +299,13 @@ body {
   #log .in { animation: none; }
   :root { --reveal-char-delay: 0ms; }
   #lantern, #lantern::after { transition: none; }
+  #scenery img { transition: none; }
   #log { scroll-behavior: auto; }
 }
 </style>
 </head>
 <body>
+  <div id="scenery"><img id="sceneryFar" alt=""><img id="sceneryBg" alt=""><img id="actor" alt=""></div>
   <div id="lantern"></div>
 
   <header id="rail">

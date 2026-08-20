@@ -193,6 +193,43 @@ function paintLantern() {
   $("lantern").style.setProperty("--pool", `${lv * 9}%`);
 }
 
+/* ── 情景 ───────────────────────────────────── */
+
+/* 章データが既に持っている絵の参照をそのまま画面へ出す。ここでは何も判定しない。
+   背景 scene.img / 遠景 scene.parallax.sky / 立ち絵 scene.npcSprite・敵の sprite。
+   敵がいる間は敵を優先する（その場で見るべきものは敵だから）。
+   絵が無い場面・欠けたファイルでは、静かに何も出さない（テキストだけで成立する） */
+const IMG_DIR = "./images/";
+
+function swapImage(el, file) {
+  const src = file ? IMG_DIR + file : "";
+  if (el.dataset.file === (file || "")) return;
+  el.dataset.file = file || "";
+  el.classList.remove("on");
+  if (!file) return;
+  const probe = new Image();
+  probe.onload = () => {
+    if (el.dataset.file !== file) return;   // 読み込み中に場面が変わった
+    el.src = src;
+    el.classList.add("on");
+  };
+  probe.src = src;                          // 読めなければ何も出さない
+}
+
+/* 立ち絵の足元を選択肢の帯の上端に合わせる。帯の高さは選択肢の数で変わるので実測する */
+function measureStage() {
+  document.documentElement.style.setProperty("--stage-bottom", `${$("choices").offsetHeight}px`);
+}
+addEventListener("resize", measureStage);
+
+function paintScenery() {
+  measureStage();
+  const n = node();
+  swapImage($("sceneryBg"), n?.parallax?.fg || n?.img);
+  swapImage($("sceneryFar"), n?.parallax?.sky);
+  swapImage($("actor"), state?.enemy?.sprite || n?.npcSprite);
+}
+
 /* ── 選択肢 ─────────────────────────────────── */
 
 function paintChoices() {
@@ -247,6 +284,7 @@ async function choose(c) {
   paintRail();
   paintLantern();
   paintChoices();
+  paintScenery();   // 帯の高さを実測するので、選択肢を組んだ後に呼ぶ
 }
 
 /* ── 起動 ───────────────────────────────────── */
@@ -268,6 +306,7 @@ function start(clearLog = false) {
   paintRail();
   paintLantern();
   paintChoices();
+  paintScenery();   // 帯の高さを実測するので、選択肢を組んだ後に呼ぶ
 }
 
 $("restart").addEventListener("click", () => start(true));
