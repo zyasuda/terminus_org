@@ -39,7 +39,21 @@ trpg-gamebook/data/chapter_01.json
 
 - `data/` を直接編集しない。直しても次の配布で消える
 - 以前は「`data/` のコピーだけが正しい」という運用だった。その結果 `chapter_01.json` が5箇所に別内容で分岐し、同期する仕組みも無かったため、1箇所へ統合した
-- エディタ（`editor.html`）の編集結果は localStorage の下書きに入る。ファイルにするには `.jsonを書き出す` を押すが、**書き出した .json は Downloads に落ちるだけで正本には反映されない。** 正本へ入れるには内容を `scenario/` へ移してから配布する
+- エディタ（`editor.html`）の編集結果は localStorage の下書きに入る。`.jsonを書き出す` で落ちる .json は Downloads に置かれるだけで、**正本には反映されない**
+
+### 遊んでいて気づいた1行を、正本へ戻す（2026-08-20 追加）
+
+エディタの `正本への修正案を書き出す` は、下書きと配布済みの章データを比べて**差分だけ**を `proposal_chapter_01.json` として書き出す。取り込みはリポジトリ直下のコマンドで行う。
+
+```bash
+node scripts/apply-proposal.mjs ~/Downloads/proposal_chapter_01.json           # 中身の確認（既定）
+node scripts/apply-proposal.mjs ~/Downloads/proposal_chapter_01.json --write   # 正本へ取り込む
+node scripts/distribute-scenario.mjs --write                                   # 配布
+```
+
+- 修正案の形式は `src/playlog.js` の fix と同じ。書き換えてよい欄は `FIX_FIELDS` が決める。**照合キー（`entity` / `match`）・数値（`dc` 等）・場面や秘密の増減は修正案にできない**（`src/proposal.js` が `unsupported` として理由付きで返し、エディタが画面に出す）。これらは `.jsonを書き出す` で丸ごと持ち帰る
+- 取り込み側は各 fix の `before` を正本の現在の文と突き合わせる。**1件でも食い違えば何も書かずに止まる**（部分適用はしない）。同じ修正案を2回流すのは安全
+- ブラウザからリポジトリへ直接書く経路は作っていない。何が変わるかを見てから入れるため
 
 ### このエンジン固有の制約（章データを書くとき）
 

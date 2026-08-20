@@ -2,6 +2,7 @@ import { inspect } from "./validate.js";
 import { decisionInputResolves } from "./progression.js";
 import { getKey, setKey, getModel, setModel, hasKey, listModels, ask, reviewPlaylog, backupModel, newId, proposalData, decisionProposalResolves, applyProposal } from "./ai.js";
 import { revisionOf, locate, currentText, applyFix } from "./playlog.js";
+import { buildProposal } from "./proposal.js";
 
 const $ = id => document.getElementById(id);
 const esc = value => String(value ?? "").replace(/[&<>\"]/g, char => ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;" }[char]));
@@ -228,6 +229,23 @@ $("gemini-model").addEventListener("change", event => { setModel(event.target.va
 $("ai-open").addEventListener("click", openSettings);
 $("gemini-close").addEventListener("click", () => $("ai-settings").close());
 $("export").addEventListener("click", () => { const link = document.createElement("a"); link.href = URL.createObjectURL(new Blob([JSON.stringify(chapter, null, 2)], { type:"application/json" })); link.download = "chapter_01.json"; link.click(); URL.revokeObjectURL(link.href); });
+/* 下書きを正本へ持ち帰るための修正案を書き出す。章データ全体ではなく差分だけを出す。
+   比べる相手はその場で取り直した data/chapter_01.json(=配布された正本)。下書きを
+   開いたままにしている間に正本が動いていても、取り込む側が before を見て止められる */
+$("propose").addEventListener("click", async () => {
+  const response = await fetch("./data/chapter_01.json", { cache:"no-store" });
+  if (!response.ok) { alert(`元の章データを読み込めませんでした（${response.status}）。修正案は作れません。`); return; }
+  const { fixes, unsupported } = buildProposal(await response.json(), chapter);
+  if (!fixes.length && !unsupported.length) { alert("元の章データとの違いがありません。書き出すものがありません。"); return; }
+  if (!fixes.length) { alert(`文字の直しが見つかりませんでした。\n\n修正案に載せられない変更が${unsupported.length}件あります（${unsupported.slice(0, 3).map(item => item.where).join(" / ")}）。\nこれは「.jsonを書き出す」で丸ごと持ち帰ってください。`); return; }
+  const link = document.createElement("a");
+  link.href = URL.createObjectURL(new Blob([JSON.stringify({ chapter:"chapter_01", revision:chapter.revision || "", fixes, unsupported }, null, 2) + "\n"], { type:"application/json" }));
+  link.download = "proposal_chapter_01.json";
+  link.click();
+  URL.revokeObjectURL(link.href);
+  // 落としたものは黙って伏せない。何が載って何が載らなかったかを、その場で見せる
+  alert(`修正案を書き出しました（${fixes.length}件）。${unsupported.length ? `\n\n載せられなかった変更が${unsupported.length}件あります:\n${unsupported.slice(0, 5).map(item => `・${item.where} — ${item.why}`).join("\n")}` : ""}\n\n正本へ取り込む手順:\nnode scripts/apply-proposal.mjs <このファイル>          （中身の確認）\nnode scripts/apply-proposal.mjs <このファイル> --write  （取り込み）\nnode scripts/distribute-scenario.mjs --write            （配布）`);
+});
 $("import").addEventListener("click", () => $("import-file").click());
 $("playlog").addEventListener("click", () => { if (!hasKey()) { openSettings(); return; } $("playlog-file").click(); });
 $("playlog-file").addEventListener("change", async event => { const input = event.target, file = input.files[0]; try { if (!file) return; const playlog = await file.text(); playlogReview = { revision:revisionOf(playlog), fixes:[], pending:true }; renderPlaylogReview(); $("playlog-review").showModal(); try { const result = await reviewPlaylog({ chapter, playlog, onStatus:status => { playlogReview.status = status; renderPlaylogReview(); } }); // 今と案が同じ案が返ってくる(実測4件中3件)。押しても何も変わらないカードは出さない

@@ -28,6 +28,7 @@ TAS/data/ · trpg-gm-mock2/public/data/campaigns/<id>/ · trpg-gm-isometric/… 
 ```
 
 - **クライアント側のコピーを直接編集しない。** 直しても次の配布で消える
+- 例外は経路が1本だけある。gamebookのエディタで直した分は `正本への修正案を書き出す` → `node scripts/apply-proposal.mjs <file> --write` で**正本へ戻してから**配布する(2026-08-20追加。詳細は `trpg-gamebook/CLAUDE.md`)
 - 配布は既定がdry-run。`--write` で実行する。配る前にJSON構文を検証する
 - 配布先には `TAS/data/` も含む。ここが古いままだとTASから出力した瞬間に旧版へ戻る
 - 配布したら、少なくとも mock2 の `npm test` と `npm run check:assets`、gamebook の `npm test` を通す
