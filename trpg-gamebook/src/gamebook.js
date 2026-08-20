@@ -118,14 +118,17 @@ export function candidates(state) {
   const decision = node.decision;
   if (decision && !state.flags[`decision:${decision.id}`]) return decision.choices.map(({ id, label, input }) => ({ id, label, input }));
   const labels = node.authoring?.actionCandidateLabels || {};
-  const choices = actionCandidates(state.enemy ? { ...node, secrets: [], encounters: [], exits: [] } : node, state, labels);
-  const availableChoices = choices.filter(choice => {
-    if (!choice.id.startsWith("secret:")) return true;
-    const secret = node.secrets?.find(({ id }) => id === choice.id.slice("secret:".length));
-    return secret && requiresMet(secret.requires, state);
+  /* requires を満たさない秘密は、候補を組む前に外す。actionCandidates は
+     3件で打ち切るので、後から弾くと「打ち切りで消えた枠」が戻らない。
+     未開示の秘密が3件以上ある場面では、最後に並ぶ出口が押し出され、
+     引き返せない場面ができていた(場面5「崩落した場所」) */
+  const visible = state.enemy
+    ? { ...node, secrets: [], encounters: [], exits: [] }
+    : { ...node, secrets: (node.secrets || []).filter(secret => requiresMet(secret.requires, state)) };
   // 同じ言葉を送るボタンが2つ出ないようにする。遭遇のきっかけと出口のmatchが同じ言葉だと
   // 「左へ進む」と「左の坑道へ入る」が並び、押し分けられるように見えてしまう(実際は同じ)
-  }).filter((choice, index, all) => all.findIndex(other => other.input === choice.input) === index);
+  const availableChoices = actionCandidates(visible, state, labels)
+    .filter((choice, index, all) => all.findIndex(other => other.input === choice.input) === index);
   const weakness = weaknessFor(state);
   if (state.enemy && weakness?.triggers?.some(trigger => inv.held(state.inventory).some(name => name.includes(trigger)))) {
     const trigger = weakness.triggers.find(term => inv.held(state.inventory).some(name => name.includes(term)));

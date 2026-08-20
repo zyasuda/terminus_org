@@ -276,3 +276,30 @@ console.log("ok 10 - 敵の残りHPが閾値以下なら弱りを記録する");
   assert.ok(events.some(({ text }) => String(text).includes("傷が無い")));
 }
 console.log("ok 17 - 傷が無いときは回復薬を消費しない");
+
+/* 未開示の秘密が3件以上ある場面で、出口が候補から押し出されないこと。
+   requires の判定を候補の打ち切り(progression.js の slice(0,3))より前に
+   移すまで、場面5「崩落した場所」は入った直後に引き返せなかった */
+{
+  const collapse = chapter.scenes.findIndex(scene => scene.id === 5);
+  assert.ok(collapse >= 0, "場面5が見つからない");
+  const state = newGame(chapter, { rng: () => 0.95 });
+  state.node = "scene";
+  state.sceneIndex = collapse;
+  state.sceneEnteredTurn = state.turn;
+
+  const labelsAt = () => candidates(state).map(({ label }) => label);
+  assert.ok(labelsAt().includes("分かれ道へ戻る"), "入った直後に戻れない");
+  assert.ok(!labelsAt().includes("壊れた機械人形を調べる"), "機械人形が最初から見えている");
+
+  act(state, candidates(state).find(({ id }) => id === "secret:s5a").input);
+  assert.ok(!labelsAt().includes("壊れた機械人形を調べる"), "押しつぶされたものより先に機械人形が出る");
+
+  act(state, candidates(state).find(({ id }) => id === "secret:s5b").input);
+  assert.ok(!labelsAt().includes("壊れた機械人形を調べる"), "人型より先に機械人形が出る");
+
+  act(state, candidates(state).find(({ id }) => id === "secret:s5c").input);
+  assert.ok(labelsAt().includes("壊れた機械人形を調べる"), "人型を調べても機械人形が出ない");
+  assert.ok(labelsAt().includes("分かれ道へ戻る"), "機械人形が出た途端に戻れなくなる");
+}
+console.log("ok 19 - 秘密が増えても出口が候補から押し出されない");
