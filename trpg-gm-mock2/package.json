@@ -25,14 +25,15 @@
     "test:bubble": "node src/engine/bubble.test.mjs",
     "test:dictlane": "node src/engine/dictLane.test.mjs",
     "corpus:declarations": "node scripts/extract-declarations.mjs",
-    "test": "npm run test:progression && npm run test:movechip && npm run test:briefchip && npm run test:stagnation && npm run test:asyncguard && npm run test:playthrough && npm run test:playthrough:hybrid && npm run test:scenario && npm run test:inventory && npm run test:battle && npm run test:healpotion && npm run test:verbchip && npm run test:voice && npm run test:resume && npm run test:llmjson && npm run test:dictlane && npm run test:store && npm run test:bubble && npm run test:revealvoice && npm run test:scriptedllm && npm run test:chronicle",
+    "test": "npm run test:progression && npm run test:movechip && npm run test:briefchip && npm run test:stagnation && npm run test:paneltiming && npm run test:asyncguard && npm run test:playthrough && npm run test:playthrough:hybrid && npm run test:scenario && npm run test:inventory && npm run test:battle && npm run test:healpotion && npm run test:verbchip && npm run test:voice && npm run test:resume && npm run test:llmjson && npm run test:dictlane && npm run test:store && npm run test:bubble && npm run test:revealvoice && npm run test:scriptedllm && npm run test:chronicle",
     "test:chronicle": "node src/chronicle.test.mjs",
     "test:revealvoice": "node src/engine/revealVoice.test.mjs",
     "test:scriptedllm": "node src/engine/scriptedNoLlm.test.mjs",
     "test:movechip": "node src/engine/moveChip.test.mjs",
     "test:briefchip": "node src/engine/briefChip.test.mjs",
     "test:stagnation": "node src/engine/stagnationHint.test.mjs",
-    "test:asyncguard": "node src/engine/asyncGuard.test.mjs"
+    "test:asyncguard": "node src/engine/asyncGuard.test.mjs",
+    "test:paneltiming": "node src/engine/panelTiming.test.mjs"
   },
   "dependencies": {
     "@litert-lm/core": "^0.14.0",

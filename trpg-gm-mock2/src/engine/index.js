@@ -15,7 +15,7 @@ import {
 import { callGmApi } from "../llm.js";
 import { CAST, GM, BANTER, SCENARIO, CAMPAIGN, CONTENT_SELECTION, loadScenarioData } from "../scenario.js";
 import { pushChat, clearChat, setStore, getSnapshot } from "./store.js";
-import { openUnderPanelAfterOverlay, setDialogueNodeInfo, setSceneInfo, showSceneOverlay } from "./scene-ui.js";
+import { closeUnderPanelForScene, openUnderPanel, setDialogueNodeInfo, setSceneInfo } from "./scene-ui.js";
 import { gmGreeting, gmVoiceRule, voiceRule, fixCompanionVoice } from "./voice.js";
 import {
   EXAMINE_RE, MOVE_RE, BACK_RE, exitDeclaration,
@@ -137,14 +137,17 @@ function showDialogueNode(node) {
     companionBubbles: {},
     npcBubble: { text: "", seq: 0 }
   });
-  openUnderPanelAfterOverlay();
+  /* 下パネルを開けるのは語り終わってから。場面遷移(advanceScene)と同じ扱いにする
+     (2026-08-21 作者の要望)。以前は1秒後に開く固定タイマーで、依頼人の第一声を
+     読んでいる途中でパネルが上がって主画面が狭くなっていた。
+     閉じる操作は上の setStore({ underPanelOpen: false }) が済ませている */
   const gmText = node.brief || node.text || "";
   // NPCの第一声は作者がnode.greetingを書いた場合のみ。GMの発言に続けて話す
   const steps = [{ text: gmText, speak: () => addGm(gmText, "Neutral") }];
   if (node.npc && !node.npc.silent && node.greeting) {
     steps.push({ text: node.greeting, speak: () => addNpc(node.greeting, node.npc) });
   }
-  runSpeechSequence(steps);
+  runSpeechSequence(steps, openUnderPanel);
   renderDebug();
 }
 
@@ -169,8 +172,11 @@ export function dismissPopup() {
       if (state.pendingIntro) {
         showDialogueNode(SCENARIO.intro);
       } else {
-        showSceneOverlay(); // 下パネルのスライドインだけ行う(showSceneOverlay内)
-        setTimeout(() => addGm(gmGreeting(), "Happy"), 1000);
+        // 会話ノードを持たない章の開幕。ここも自己紹介を語り終えてから開ける
+        closeUnderPanelForScene();
+        const greeting = gmGreeting(); // 毎回引き直さない(語りと待ち時間で同じ文を使う)
+        setTimeout(() => runSpeechSequence(
+          [{ text: greeting, speak: () => addGm(greeting, "Happy") }], openUnderPanel), 1000);
       }
     }, 1200);
   }
@@ -206,6 +212,19 @@ function currentBackdropNode() {
 }
 
 // chronの1件をstoreへ再生する(chronへの再pushはしない=保存済みログをそのまま画面に描き直すだけ)
+/* その発言がどの場面のものかを表す印。再開時に「前の場面の発言」を復元しないために使う。
+   sceneIndexだけでは足りない——イントロ中も sceneIndex は 0 で、シーン1と同じ値になる。
+   2026-08-21の実プレイ: シーン1のターン3で再開したのに、リディアがイントロ最後の
+   「わたしも賛成。あなたが受けるなら、同行するわ。」を喋ったままだった */
+function speechScope() {
+  /* pendingIntro は受諾した瞬間に落ちるが、そのあと依頼人の返事と同行者の同意が続く。
+     そこまでは「イントロでの発言」として扱う。introTail が無いと、同意の台詞が
+     シーン1(sceneIndex 0)の発言として記録され、再開時に持ち込まれてしまう */
+  if (state.pendingIntro || state.introTail) return "intro";
+  if (state.pendingEnding || state.chapterEnded) return "ending";
+  return state.sceneIndex;
+}
+
 function renderChronEntry(e) {
   switch (e.kind) {
     case "gm": pushChat({ kind: "msg", cls: "gm", text: e.text }); break;
@@ -277,7 +296,12 @@ export function restoreGame(saved) {
   /* 復元はhidden:trueで積む。可視にするのは最後に喋った1人だけ。
      hiddenを付けずに3人分を復元していたため、再開直後の画面にGM・マイラ・同行者の
      吹き出しが同時に並んでいた(2026-08-19の指摘。会話が破綻して見える主因) */
-  const rev = [...chron].reverse();
+  /* 復元するのは「いまの場面での発言」だけ。場面を移ったら、その前の発言は持ち込まない
+     (2026-08-21 作者の指摘。シーン1で再開したのにリディアがイントロ最後の台詞を
+     喋ったままだった)。印(sc)を持たない古いセーブの発言は復元しない——その場合、
+     立ち絵をタップすると replayCompanionBubble が既定の一言(idleLine)で受け答えする */
+  const scope = speechScope();
+  const rev = [...chron].reverse().filter(e => e.sc === scope);
   const lastGm = rev.find(e => e.kind === "gm");
   if (lastGm) setStore(s => ({ gmBubble: { text: lastGm.text, emotion: lastGm.emotion || "Neutral", hidden: true, seq: s.gmBubble.seq + 1 } }));
   const lastNpc = rev.find(e => e.kind === "npc");
@@ -386,6 +410,7 @@ export function resetGame() {
   bumpGeneration();
   cancelPendingRoll();
   clearSave();
+  clearVerbFreq(); // 学習した動詞チップも初期化する(シードの6語に戻る)
   state = initialState();
   /* 章開始時の所持品。chapter.startingInventory(キャラクター別)が正。
      無ければ campaign.initialInventory(平坦な配列)をプレイヤーの持ち物として読む */
@@ -431,6 +456,7 @@ export function resetGame() {
   history.push({ role: "user", content: "【システム】セッションが始まった。" });
   history.push({ role: "assistant", content: JSON.stringify({ narration: openingBrief, companion: null, npc: null, check: null, state_updates: null, engage_enemy: false, flee_enemy: false, scene_complete: false, meta_request: null }) });
   renderDebug();
+  pushVerbChips(); // 動詞チップはrenderDebugの外なので、初期化した結果を明示的に反映する
   // 新形式introにはポップアップを挟まない。既存の幕開けと同じく、説明を表示してから入力を受ける。
   if (introIsObject && popups.length === 0) showDialogueNode(intro);
 }
@@ -471,6 +497,17 @@ export function joinParticle(prev, particle) {
   return particle;
 }
 function canonVerb(v) { return VERB_CANON[v] || v; }
+/* 「最初から」で学習した動詞を捨てる(2026-08-21 作者の判断)。
+   この辞書はセーブとは別枠(localStorage)で7日間持つため、消さないと前の周の動詞が
+   新しい周のチップに並ぶ。実プレイ動画では、導入で使った「受け取る」がシーン1でも
+   出ていて、前の場面の残りに見えた。
+   セーブの外に置いてあるのは「使うほど育つ」実験のためだが、周を跨いで育てる必要は無い
+   ——最初からやり直したなら、覚えた語も最初からでよい。
+   VERB_KEY は他のどこからも読んでいない(チップ表示の3箇所だけ。宣言コーパスの
+   corpus:declarations はクロニクルを読むので影響しない) */
+function clearVerbFreq() {
+  try { localStorage.removeItem(VERB_KEY); } catch (e) { /* no-op */ }
+}
 function loadVerbFreq() {
   // 旧形式 {verb: count} は {verb: {n, t}} へ移行する(tは最終使用時刻。旧データはt=0で「古い」扱い)
   try {
@@ -614,7 +651,7 @@ function hiddenBubbles(s) {
 const addGm = (t, emotion) => {
   lastBubbleText = t || "";
   const emo = normalizeEmotion(emotion);
-  chron.push({ t: state.turn, ts: Date.now(), kind: "gm", text: t, emotion: emo });
+  chron.push({ t: state.turn, sc: speechScope(), ts: Date.now(), kind: "gm", text: t, emotion: emo });
   addMsg("gm", t);
   setStore(s => ({ ...hiddenBubbles(s), gmBubble: { text: t, emotion: emo, hidden: false, seq: s.gmBubble.seq + 1 } }));
 };
@@ -707,7 +744,7 @@ const addCompanion = (t, who = Object.keys(CAST)[0]) => {
   t = sanitizeSay(t);
   if (!t) return;
   lastBubbleText = t;
-  chron.push({ t: state.turn, ts: Date.now(), kind: "companion", who, text: t });
+  chron.push({ t: state.turn, sc: speechScope(), ts: Date.now(), kind: "companion", who, text: t });
   addMsg("companion companion-" + who, name + "「" + t + "」");
   // GMペットと同じ形式の吹き出しを、その同行者の立ち絵の脇に出す(約8秒でフェードアウト)
   setStore(s => {
@@ -726,7 +763,7 @@ const addNpc = (t, speaker) => {
   t = sanitizeSay(t);
   if (!t) return;
   lastBubbleText = t;
-  chron.push({ t: state.turn, ts: Date.now(), kind: "npc", name: npc.name, text: t });
+  chron.push({ t: state.turn, sc: speechScope(), ts: Date.now(), kind: "npc", name: npc.name, text: t });
   addMsg("companion companion-npc", npc.name + "「" + t + "」");
   // GM/同行者と同じ形式の吹き出しを、中央のnpcSprite(#enemySprite)の上に出す
   setStore(s => ({ ...hiddenBubbles(s), npcBubble: { text: t, hidden: false, seq: s.npcBubble.seq + 1 } }));
@@ -970,7 +1007,8 @@ function renderDebug() {
      導入で押せるのは作者が書いたhintChips(「依頼について」等)だけにする(2026-08-20)。
      終端(pendingEnding)は除外しない。あそこは最後のシーンに立ったまま依頼人と話す場面で、
      場面の名詞を消すと「渡す」以外の話題に触れられなくなる(hintChipsも持たない) */
-  const sceneNarrated = !state.pendingIntro;
+  // 旧セーブに sceneNarrated が無い場合は「語り終えている」とみなす(undefined !== false)
+  const sceneNarrated = !state.pendingIntro && state.sceneNarrated !== false;
   SCENARIO.scenes.forEach(sc => sc.secrets.forEach(s => {
     const open = revealed.has(s.id);
     secrets.push({ open, text: open ? s.text : "シーン" + sc.id + "の未開示情報(判定成功で開放)" });
@@ -2313,6 +2351,8 @@ function advanceScene(targetIndex) {
     if (!state.visited.includes(idx)) state.visited.push(idx);
     state.sceneTalkTurns = 0; // talkTurnsMin条件(報告シーン等)のカウンタはシーンごとにリセット
     setSceneBackdrop(SCENARIO.scenes[state.sceneIndex]);
+    state.sceneNarrated = false; // 場面説明を語り終えるまで、その場面の名詞チップは出さない
+    state.introTail = false; // ここから先の発言は、この場面のものとして記録する
     state.enemy = null;
     state.pendingFailedCheck = null; state.blockedMove = false;
     state.lastBattleMutter = {};
@@ -2323,13 +2363,31 @@ function advanceScene(targetIndex) {
     const newScene = SCENARIO.scenes[state.sceneIndex];
     const newBrief = newScene.brief;
     setSceneInfo(state);
-    showSceneOverlay();
+    closeUnderPanelForScene(); // 開けるのは到着の語りが終わってから(下のonDone)
     // GMペットの吹き出し・語り履歴が前のシーンへの回答のまま残らないよう、
     // 下パネルが開き直す(1s)のを待ってGM→NPC(いれば)→同行者の順に語らせる。
     // 各stepの間隔・前の吹き出しを消すタイミングはrunSpeechSequenceに一本化してある
     const sceneNo = state.sceneIndex + 1;
     const arrivalLine = gmSceneArrivalLine(sceneNo, newScene.name || "");
+    /* 場面説明(brief)を実際に語らせる。2026-08-21の実プレイ動画で作者が気づいた不具合:
+       briefは history(LLMへの履歴)とプロンプトへ入るだけで、画面に出る経路が1つも
+       無かった。つまりLLMには「お前はこう語った」と伝えているのに、プレイヤーは
+       一度も読んでいない。到着の一言「第1話「坑道の入り口」だ。さて、どうする?」しか
+       出ないので、その場に何があるのか分からないまま行動を促されていた。
+       名詞チップはbriefの語から作るため、読んでいない語のボタンが並ぶことにもなっていた。
+       語る順は「到着の一言 → 場面説明」。到着の一言は話数と場面名を告げる見出しなので先に置く */
     const steps = [{ text: arrivalLine, speak: () => addGm(arrivalLine, "Happy") }];
+    if (newBrief) {
+      steps.push({ text: newBrief, speak: () => {
+        addGm(newBrief, "Neutral");
+        /* 説明を語り終えてから名詞チップを出す。同期して出すと、到着の一言すら
+           まだ出ていない時点(実測: 説明より約5秒早い)でチップだけが次の場面へ
+           切り替わり、画面の文章と手元のボタンが食い違って見えた */
+        state.sceneNarrated = true;
+        renderDebug();
+        saveGame();
+      } });
+    }
     if (newScene.npc && !newScene.npc.silent && newScene.greeting) {
       steps.push({ text: newScene.greeting, speak: () => addNpc(newScene.greeting, newScene.npc) });
     }
@@ -2337,7 +2395,8 @@ function advanceScene(targetIndex) {
     if (companionLine) {
       steps.push({ text: companionLine.text, speak: () => addCompanion(companionLine.text, companionLine.who) });
     }
-    setTimeout(() => runSpeechSequence(steps), 1000);
+    // 語り終わってから下パネルを開ける。1000msは背景が切り替わる間合い
+    setTimeout(() => runSpeechSequence(steps, openUnderPanel), 1000);
     history.push({ role: "user", content: "【システム】シーンが切り替わった。" });
     history.push({ role: "assistant", content: JSON.stringify({ narration: newBrief, companion: null, npc: null, check: null, state_updates: null, engage_enemy: false, flee_enemy: false, scene_complete: false, meta_request: null }) });
   } else {
@@ -2762,6 +2821,12 @@ async function turnDialogueNodes(text) {
       addGm(exit.blockedText || "まだ準備ができていない。", "Neutral");
     } else {
       state.pendingIntro = false;
+      /* 導入を抜けてから場面説明が語られるまでには、同行者の同意のやり取りが挟まる
+         (実測で約5秒)。pendingIntroだけを見ていると、その間ずっと次の場面の名詞チップが
+         並んでしまい、画面の文章(まだ導入の話)と手元のボタンが食い違う。
+         ここで先に伏せておき、advanceSceneが場面説明を語り終えた時に出す */
+      state.sceneNarrated = false;
+      state.introTail = true; // 依頼人の返事と同行者の同意が終わるまでは、まだイントロ
       const targetIdx = exit.to === null || exit.to === undefined ? 0 : resolveExitTargetIndex(exit.to);
       /* 導入で作者が渡す支度品(章1なら「干し肉と水袋」)。ending側だけが同じ処理を持ち、
          ここが抜けていたため、マイラが「これを持って行って」と言うのに何も入らなかった
