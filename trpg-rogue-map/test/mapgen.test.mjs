@@ -42,6 +42,7 @@ assert.deepEqual(linksOf({ scenes: [
   { id: 1, exits: [{ to: 2 }, { to: "ending" }] }, { id: 2, exits: [{ to: 1 }] },
 ] }), [{ a: 1, b: 2 }], "linksOfはendingを捨て、双方向を1本にする");
 
+let outwardViolations = 0;
 for (const map of maps) {
   assert.equal(map.rooms.size, chapter.scenes.length, "1. 全部屋を配置する");
   for (const room of map.rooms.values()) {
@@ -64,11 +65,31 @@ for (const map of maps) {
     assert.ok(touchingRooms(corridor.path.at(-1), map.rooms).some((room) => room.id === corridor.b), "8. 通路の終点はbの出入口に接する");
   }
   assert.equal(corridorAdjacencies(map), 0, "9. 通路は無関係な通路に隣接しない");
-  assert.deepEqual(new Set(map.corridors.map(({ a, b }) => linkKey(a, b))), new Set(linksOf(chapter).map(({ a, b }) => linkKey(a, b)), "4. 全接続を通路にする"));
+  assert.deepEqual(new Set(map.corridors.map(({ a, b }) => linkKey(a, b))), new Set(linksOf(chapter).map(({ a, b }) => linkKey(a, b))), "4. 全接続を通路にする");
   assert.equal(Object.keys(distances(map)).length, chapter.scenes.length, "5. 入口から全部屋へ到達できる");
-  const actualDepths = distances(map);
-  for (const [id, depth] of Object.entries(depthOf(chapter))) assert.equal(actualDepths[id], depth, "7. 深い部屋ほど通路数が少なくならない");
+  /* 条件7は「distances(map.corridors)」と「depthOf(linksOf(chapter))」を比べていたが、
+     条件4が両者の集合の一致を保証しているので同じグラフであり、距離は必ず一致する=恒真だった。
+     実証: seed 42 の地図で最も深い部屋と入口隣の部屋の座標を入れ替えても緑のままだった。
+     D5(入口から遠ざかる向きに置く)は幾何の話なので、幾何で見る。
+     局所版「通路の先(深い側)の部屋は入口から遠い」を数える。実測(100 seed):
+     そのままなら違反6件、座標を入れ替えると302件・100/100 seedで検出。閾値20で分離する */
+  const entranceRoom = map.rooms.get(map.entrance);
+  const centerOf = (room) => ({ x: room.x + room.w / 2, y: room.y + room.h / 2 });
+  const origin = centerOf(entranceRoom);
+  const distanceFromEntrance = (id) => {
+    const c = centerOf(map.rooms.get(id));
+    return Math.hypot(c.x - origin.x, c.y - origin.y);
+  };
+  const chapterDepths = depthOf(chapter);
+  for (const corridor of map.corridors) {
+    const [nearer, farther] = chapterDepths[corridor.a] <= chapterDepths[corridor.b]
+      ? [corridor.a, corridor.b] : [corridor.b, corridor.a];
+    if (chapterDepths[nearer] === chapterDepths[farther]) continue; // 同じ深さ同士は順序を問わない
+    if (distanceFromEntrance(farther) <= distanceFromEntrance(nearer)) outwardViolations += 1;
+  }
 }
+assert.ok(outwardViolations <= 20,
+  `7. 深い部屋は入口から遠くに置く（100 seedの違反 ${outwardViolations}件。実測の平常値は6件、壊すと302件）`);
 
 const first = generateWithRetry(chapter, 42).map;
 const second = generateWithRetry(chapter, 42).map;

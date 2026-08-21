@@ -13,7 +13,11 @@ const VIEW = {
   tilt: 24,
   perspective: 2600,
 };
-const DRAG_Y_SCALE = 1 / Math.cos(VIEW.tilt * Math.PI / 180);
+/* 倒し込み(rotateX)の補正はここでは掛けない。ドラッグ量の基準に使う矩形は
+   #map の getBoundingClientRect() で、これは倒し込み前の素の大きさである(cameraSize も
+   同じ矩形を使う)。以前は svg の矩形(倒し込み後。実測で素の0.924倍)を基準にした上に
+   1/cos(24°)=1.095 を掛けており、縦に100px引くと111.3px分動いていた(実測)。
+   横も svg の矩形では4.7%不足していた。基準を1つに揃えれば縦横とも合う(2026-08-20) */
 const STEP_INTERVAL = 220;
 let map;
 let state;
@@ -41,12 +45,44 @@ const roomIsSeen = (room) => {
   }
   return false;
 };
-const cameraSize = () => {
-  const rect = mapElement.getBoundingClientRect();
-  const height = VIEW.width * (rect.height || 1) / (rect.width || 1);
-  return { width: VIEW.width, height };
+
+/* 部屋のうち「見えたマス」だけを切り出すための矩形。
+   部屋は1つの角丸矩形として描く（draw.js の方針。マス単位で描くと斜めの角に隙間が残る）。
+   そのままだと、通路から灯りが対岸の部屋の角を1マス舐めた瞬間に間取りが丸ごと出ていた
+   （実測: 300 seed × 未訪問6部屋 = 1800件すべてで、丸ごと描き始めた時点の既視マスは
+   ちょうど1マス。部屋の平均5.0%しか見ていない）。通路は keepCell でマス単位に切って
+   いるのに部屋だけ切っていない非対称だった。
+   描く図形は1つのまま、clip-path で見えた範囲に限る。切り抜きの矩形はマスぴったりで
+   隣と辺を共有するので、マス単位で描いた時のような隙間は出ない（2026-08-20） */
+const roomClipCells = (room, has) => {
+  const out = [];
+  for (let y = room.y; y < room.y + room.h; y += 1) for (let x = room.x; x < room.x + room.w; x += 1) {
+    if (has(`${x},${y}`)) out.push(`<rect x="${x}" y="${y}" width="1" height="1"/>`);
+  }
+  return out.join("");
 };
 const centerOnPlayer = () => ({ x: state.pos.x + 0.5, y: state.pos.y + 0.5 });
+
+/* 拡大は固定しない。探索済みが入りきる分だけ引き、VIEW.width を上限にする。
+   固定にしていたら、開始時は1部屋しか無いのに26マス分を映し、地図領域の
+   1.8%しか絵が無い画面になっていた（実測。作者の指摘「一部屋しかありませんぜ」）。
+   26マスは3部屋歩いた状態のチューナーで決めた値で、開始時には合っていなかった。 */
+const MIN_VIEW = 11;
+const cameraSize = () => {
+  const rect = mapElement.getBoundingClientRect();
+  const aspect = (rect.width || 1) / (rect.height || 1);
+  const player = centerOnPlayer();
+  let width = MIN_VIEW;
+  for (const key of state.seen) {
+    const [x, y] = key.split(",").map(Number);
+    width = Math.max(width,
+      (Math.abs(x + .5 - player.x) + 1.5) * 2,
+      (Math.abs(y + .5 - player.y) + 1.5) * 2 * aspect);
+    if (width >= VIEW.width) break;
+  }
+  width = Math.min(width, VIEW.width);
+  return { width, height: width / aspect };
+};
 
 /* 見回してもプレイヤーを画面の外へ出さない。出てしまうと、どこに居るか分からないまま
    地図だけが動くことになり、「戻す」を押すまで現在地を見失う。
@@ -98,6 +134,11 @@ function render() {
       center: { x: item.x + item.w / 2, y: item.y + item.h / 2 },
       memory: roomShapes(map.rooms, (candidate) => candidate.id === item.id),
       light: roomShapes(map.rooms, (candidate) => candidate.id === item.id),
+      // 部屋は見えたマスの範囲だけに限る。通路は corridorShapes が既にマス単位で切るので clips は持たない
+      clips: {
+        memory: roomClipCells(item, (key) => state.seen.has(key)),
+        light: roomClipCells(item, (key) => visible.has(key)),
+      },
     })),
     ...map.corridors.filter((corridor) => corridor.path.some(seenCell)).map((corridor) => {
       const middle = corridor.path[Math.floor(corridor.path.length / 2)];
@@ -111,15 +152,25 @@ function render() {
   const size = cameraSize();
   const left = camera.x - size.width / 2;
   const top = camera.y - size.height / 2;
-  const glowRadius = VIEW.width / 2.6;
+  // 灯りの広がりは【いま映している範囲】に対する比で決める。VIEW.width(上限)に対する
+  // 比で固定すると、寄った時に画面全体が光で飛ぶ（実測: 11マスに寄ると床が白く潰れた）。
+  const glowRadius = size.width / 2.6;
   const filters = pieces.map((piece, index) => carved(`m${index}`, piece.center, lamp, false)
     + carved(`l${index}`, piece.center, lamp, true)).join("");
-  const layer = (kind, className) => pieces.map((piece, index) =>
-    `<g class="floor ${className}" filter="url(#${kind === "light" ? "l" : "m"}${index})">${piece[kind]}</g>`).join("");
+  /* 中身が空の clipPath は「何も描かない」を意味する。部屋は clips を必ず持つので、
+     1マスも見えていない部屋は灯り層に出ない(空文字を「切り抜き無し」と扱ってはならない) */
+  const clips = pieces.map((piece, index) => (piece.clips
+    ? `<clipPath id="cm${index}" clipPathUnits="userSpaceOnUse">${piece.clips.memory}</clipPath>`
+      + `<clipPath id="cl${index}" clipPathUnits="userSpaceOnUse">${piece.clips.light}</clipPath>`
+    : "")).join("");
+  const layer = (kind, className) => pieces.map((piece, index) => {
+    const clip = piece.clips ? ` clip-path="url(#${kind === "light" ? "cl" : "cm"}${index})"` : "";
+    return `<g class="floor ${className}" filter="url(#${kind === "light" ? "l" : "m"}${index})"${clip}>${piece[kind]}</g>`;
+  }).join("");
   const anchors = [...map.rooms.values()].filter((item) => state.visited.has(item.id))
     .map((item) => `<circle class="anchor" data-name="${item.name}" cx="${item.x + item.w / 2}" cy="${item.y - .35}" r=".02" fill="none"/>`).join("");
   mapElement.innerHTML = `<button type="button" id="reset-view">戻す</button><div id="floor"><svg viewBox="${left} ${top} ${size.width} ${size.height}" data-room-count="${map.rooms.size}" data-corridor-count="${map.corridors.length}" data-cell-count="${map.cells.size}" data-floor-count="${pieces.length}" aria-label="探索地図" role="img">
-    <defs>${filters}
+    <defs>${filters}${clips}
       <radialGradient id="torch" gradientUnits="userSpaceOnUse" cx="${lamp.x}" cy="${lamp.y}" r="${glowRadius * .86}"><stop stop-color="white" stop-opacity=".96"/><stop offset=".55" stop-color="white" stop-opacity=".38"/><stop offset="1" stop-color="black" stop-opacity="0"/></radialGradient>
       <mask id="torch-mask" maskUnits="userSpaceOnUse" x="${left}" y="${top}" width="${size.width}" height="${size.height}"><rect class="torch-mask" x="${left}" y="${top}" width="${size.width}" height="${size.height}" fill="url(#torch)"/></mask>
       <radialGradient id="glow" gradientUnits="userSpaceOnUse" cx="${lamp.x}" cy="${lamp.y}" r="${glowRadius}">
@@ -148,7 +199,7 @@ function render() {
     labelLayer.append(element);
   }
   placeElement.textContent = room?.name || "通路";
-  chapterElement.textContent = revision;
+  chapterElement.textContent = `${revision} / seed ${mapSeed}`;
   controlsElement.innerHTML = directions.map((dir) => {
     const [arrow, name] = labels[dir];
     return `<button type="button" data-dir="${dir}">${arrow}<span>${name}</span></button>`;
@@ -193,11 +244,18 @@ function stopWalking(event) {
 controlsElement.addEventListener("pointerup", stopWalking);
 controlsElement.addEventListener("pointercancel", stopWalking);
 
+let dragPointer = null;
 mapElement.addEventListener("pointerdown", (event) => {
   if (event.target.closest("#reset-view")) return;
+  /* 基準点(dragX/dragY/viewX/viewY)は1組しか持てない。pointerIdで区別せずに
+     上書きしていたため、2本目の指を置いた後に1本目を動かすと視点が飛ぶ作りだった。
+     最初の指だけを受け付ける(ピンチ操作は未実装なので、増えた指は無視でよい) */
+  if (dragPointer !== null) return;
+  dragPointer = event.pointerId;
   const svg = mapElement.querySelector("svg");
   if (!svg) return;
-  const rect = svg.getBoundingClientRect();
+  // 基準は #map の素の大きさ。cameraSize() と同じ矩形を使う(svgは倒し込み後の投影サイズ)
+  const rect = mapElement.getBoundingClientRect();
   mapElement.setPointerCapture(event.pointerId);
   mapElement.dataset.dragX = event.clientX;
   mapElement.dataset.dragY = event.clientY;
@@ -215,14 +273,17 @@ mapElement.addEventListener("pointermove", (event) => {
   camera = {
     follows: false,
     x: Number(mapElement.dataset.viewX) - (event.clientX - Number(mapElement.dataset.dragX)) * size.width / width,
-    y: Number(mapElement.dataset.viewY) - (event.clientY - Number(mapElement.dataset.dragY)) * size.height / height * DRAG_Y_SCALE,
+    y: Number(mapElement.dataset.viewY) - (event.clientY - Number(mapElement.dataset.dragY)) * size.height / height,
   };
   render();
 });
 
-mapElement.addEventListener("pointerup", (event) => {
+const endDrag = (event) => {
   if (mapElement.hasPointerCapture(event.pointerId)) mapElement.releasePointerCapture(event.pointerId);
-});
+  if (dragPointer === event.pointerId) dragPointer = null;
+};
+mapElement.addEventListener("pointerup", endDrag);
+mapElement.addEventListener("pointercancel", endDrag);
 
 mapElement.addEventListener("click", (event) => {
   if (!event.target.closest("#reset-view")) return;
@@ -231,9 +292,21 @@ mapElement.addEventListener("click", (event) => {
 });
 
 const chapter = await fetch("./data/lanternhill_ch1.json", { cache: "no-store" }).then((response) => response.json());
-({ map } = generateWithRetry(chapter, 1));
+/* seedを画面に出す。生成は完全に決定的(1000 seedを昇順・降順で作ってSHA1一致)なので、
+   seedが分かれば「この地図が変」という報告をそのまま再現できる。出ていなかったため、
+   作者が見た地図を手元で開く手段が無かった(2026-08-20) */
+let mapSeed;
+({ map, seed: mapSeed } = generateWithRetry(chapter, 1));
 state = start(map);
 revision = chapter.revision;
 mapElement.style.setProperty("--tilt", `${VIEW.tilt}deg`);
 mapElement.style.setProperty("--depth", `${VIEW.perspective}px`);
+/* 画面の大きさが変わったら描き直す。viewBoxもラベルの座標もrender()の中で
+   #mapの実寸から決めているので、呼ばれなければ両方が古い値のまま残る。
+   実測(390x844→900x400): viewBoxが更新されず地図が使える幅の約23%に縮み、
+   部屋名が X-135.7px / Y+197.5px ずれていた。方向ボタンを1回押すと直る
+   =render()が呼ばれれば直る、という症状だった。スマホの回転でも同じ。
+   visualViewportはソフトキーボードやピンチでも動くので、両方を見る(2026-08-20) */
+addEventListener("resize", render);
+visualViewport?.addEventListener("resize", render);
 render();
