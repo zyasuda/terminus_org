@@ -52,7 +52,10 @@ function check(label, cond) {
 }
 
 await eng.boot();
-await tick();
+/* 開幕が落ち着くまで待つ。2026-08-21に場面の切り替えへ暗転を入れてから、イントロの
+   語りはsetTimeout(暗転ぶんの待ち)の後に始まるようになった。tick1回だとGMの吹き出しが
+   まだ空で、後の「更新されない」検査が空→イントロ文の変化を拾って落ちる */
+for (let i = 0; i < 200; i++) await tick();
 
 function drainPopups() {
   let guard = 0;

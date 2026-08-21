@@ -532,8 +532,9 @@ export default function App() {
         <div id="fx" className={eng.fx}></div>
         <PhaserFx />
 
-        {/* 新規開始の幕: 依頼ポップアップの間は背景を隠し、「はじめる」でフェードアウトして開ける */}
-        <div id="curtain" className={eng.curtain ? "" : "lifted"}></div>
+        {/* 幕: 依頼ポップアップの間は背景を隠し、「はじめる」でフェードアウトして開ける。
+            場面の切り替え・アウトロでも同じ幕で暗転する(quick=0.6s、開幕は1.2s) */}
+        <div id="curtain" className={[eng.curtain ? "" : "lifted", eng.curtainFade].filter(Boolean).join(" ")}></div>
 
         {eng.pendingRoll && <D20Overlay
           open

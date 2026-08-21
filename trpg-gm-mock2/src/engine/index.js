@@ -147,7 +147,9 @@ function showDialogueNode(node) {
   if (node.npc && !node.npc.silent && node.greeting) {
     steps.push({ text: node.greeting, speak: () => addNpc(node.greeting, node.npc) });
   }
-  runSpeechSequence(steps, openUnderPanel);
+  /* 明転(0.6s)を待ってから語り始める。イントロは幕が開いた直後、アウトロは
+     fadeThroughBlack の暗転中にこの関数が呼ばれるので、どちらも「見えてから喋る」になる */
+  setTimeout(() => runSpeechSequence(steps, openUnderPanel), SCENE_FADE_MS);
   renderDebug();
 }
 
@@ -193,6 +195,26 @@ function setSceneBackdrop(sc) {
     : "linear-gradient(135deg, #151720 0%, #1e2230 100%)";
   // parallaxがあれば空レイヤー+透過前景の2層で表示(素材が404の間は単層imgにフォールバック)
   setStore({ sceneBg: value, parallax: (sc && sc.parallax) || null });
+}
+
+/* 場面の切り替えを黒でつなぐ(2026-08-21 作者の要望)。以前は背景画像が1フレームで
+   入れ替わっていたので、前の場所から次の場所へ「移動した」感じが出ていなかった。
+   専用のレイヤーは作らず、開幕の幕(#curtain)を使い回す——全面を覆う黒で、
+   透明度の遷移をCSSが持っており、ポップアップより下・演出より上という重なりも既に正しい。
+   速さだけが違うので、curtainFadeでCSSの継続時間を0.6sへ差し替える。
+   swap()は暗転しきってから呼ぶ。SCENE_FADE_MSはstyles.cssの #curtain.quick と同値。 */
+const SCENE_FADE_MS = 600;  // 暗転・明転それぞれの長さ。styles.cssの .6s と必ず一致させる
+/* 真っ黒で止める時間。背景の差し替えをこの中で行う。0にすると、暗転しきった
+   まさにそのフレームで明転が始まるため、フレームの巡り合わせで差し替えが素見えする */
+const SCENE_HOLD_MS = 200;
+const SCENE_FADE_TOTAL_MS = SCENE_FADE_MS * 2 + SCENE_HOLD_MS; // 暗転→止め→明転の合計
+
+function fadeThroughBlack(swap) {
+  setStore({ curtain: true, curtainFade: "quick" });
+  setTimeout(() => {
+    swap(); // 真っ黒の中で差し替える
+    setTimeout(() => setStore({ curtain: false }), SCENE_HOLD_MS); // ここから明転(0.6s)
+  }, SCENE_FADE_MS);
 }
 
 /* 現在の進行状態(イントロ中/アウトロ中/通常シーン)に応じて、背景に使うノードを1箇所で決める。
@@ -427,7 +449,6 @@ export function resetGame() {
   const intro = SCENARIO.intro;
   const introIsObject = intro && typeof intro === "object";
   state.pendingIntro = introIsObject; // currentBackdropNode()より先に立てる(この状態を見て背景を選ぶ)
-  setSceneBackdrop(currentBackdropNode());
   clearChat();
   // 依頼導入(intro)は通知型ポップアップで提示し、シーン説明(brief)は主画面オーバーレイ+左パネルへ。
   // 下パネルのチャットは会話専用にする(UI_REDESIGN.md / EVENT_MAP.mdの「シナリオ開始=依頼ポップアップ」)。
@@ -447,9 +468,19 @@ export function resetGame() {
   }
   setStore({
     diceLog: [], popups,
-    curtain: popups.length > 0,
+    /* 幕は必ず降ろす。ポップアップがある章は「はじめる」で上がり(1.2s、枠の色)。
+       ポップアップの無い章(lanternhill)は "instant" ——「最初から」を押した瞬間に
+       真っ黒へ落とし、直後のshowDialogueNodeが0.6sで明転させる。
+       遷移させて暗転すると、この関数が差し替えた次の場面が暗くなっていく様子が
+       見えてしまう(2026-08-21 作者の指摘「マイラの部屋が表示されてからフェードインが始まる」)。
+       以前はポップアップの無い章だけ幕を張らず、イントロが黒を経ずに現れていた */
+    curtain: true, curtainFade: popups.length === 0 ? "instant" : "",
     leftPanelOpen: false, rightPanelOpen: false, underPanelOpen: false
   });
+  /* 背景の差し替えは幕を降ろした後に行う。先に差し替えると、ストア上に
+     「次の場面が幕なしで見えている」状態が一瞬できる。instantなら描画上は
+     同じフレームに畳まれるが、順番を正しくしておく(検査もこの順番を見る) */
+  setSceneBackdrop(currentBackdropNode());
   setSceneInfo(state);
   const introNarration = introIsObject ? (intro.brief || "") : (typeof intro === "string" && intro ? intro : "");
   const openingBrief = introIsObject ? introNarration : (introNarration ? introNarration + "\n\n" : "") + SCENARIO.scenes[0].brief;
@@ -457,8 +488,12 @@ export function resetGame() {
   history.push({ role: "assistant", content: JSON.stringify({ narration: openingBrief, companion: null, npc: null, check: null, state_updates: null, engage_enemy: false, flee_enemy: false, scene_complete: false, meta_request: null }) });
   renderDebug();
   pushVerbChips(); // 動詞チップはrenderDebugの外なので、初期化した結果を明示的に反映する
-  // 新形式introにはポップアップを挟まない。既存の幕開けと同じく、説明を表示してから入力を受ける。
-  if (introIsObject && popups.length === 0) showDialogueNode(intro);
+  /* 新形式introにはポップアップを挟まない。既存の幕開けと同じく、説明を表示してから入力を受ける。
+     真っ黒のまま少し止めてから明転する。同じフレームでshowDialogueNodeが幕を上げると、
+     黒が一度も描画されずCSSの遷移が始まらない(実測: 降りると上がるの間が11msだった) */
+  if (introIsObject && popups.length === 0) {
+    setTimeout(() => showDialogueNode(intro), SCENE_FADE_MS + SCENE_HOLD_MS);
+  }
 }
 
 /* ---------------- 動詞チップ(入力補助の実験) ----------------
@@ -2350,7 +2385,8 @@ function advanceScene(targetIndex) {
     state.visited = state.visited || [];
     if (!state.visited.includes(idx)) state.visited.push(idx);
     state.sceneTalkTurns = 0; // talkTurnsMin条件(報告シーン等)のカウンタはシーンごとにリセット
-    setSceneBackdrop(SCENARIO.scenes[state.sceneIndex]);
+    // 背景の差し替えは暗転しきってから(明転が終わるまでの間に語り始めないよう、下の待ちも合わせる)
+    fadeThroughBlack(() => setSceneBackdrop(SCENARIO.scenes[state.sceneIndex]));
     state.sceneNarrated = false; // 場面説明を語り終えるまで、その場面の名詞チップは出さない
     state.introTail = false; // ここから先の発言は、この場面のものとして記録する
     state.enemy = null;
@@ -2395,8 +2431,9 @@ function advanceScene(targetIndex) {
     if (companionLine) {
       steps.push({ text: companionLine.text, speak: () => addCompanion(companionLine.text, companionLine.who) });
     }
-    // 語り終わってから下パネルを開ける。1000msは背景が切り替わる間合い
-    setTimeout(() => runSpeechSequence(steps, openUnderPanel), 1000);
+    /* 語り出しは明転が終わってから。待つのは暗転(0.6s)+真っ黒(0.2s)+明転(0.6s)。
+       ここを短くすると、まだ暗い画面に向かってGMが到着を告げることになる */
+    setTimeout(() => runSpeechSequence(steps, openUnderPanel), SCENE_FADE_TOTAL_MS);
     history.push({ role: "user", content: "【システム】シーンが切り替わった。" });
     history.push({ role: "assistant", content: JSON.stringify({ narration: newBrief, companion: null, npc: null, check: null, state_updates: null, engage_enemy: false, flee_enemy: false, scene_complete: false, meta_request: null }) });
   } else {
@@ -2406,7 +2443,7 @@ function advanceScene(targetIndex) {
     const chapterEnding = SCENARIO.ending;
     if (chapterEnding && typeof chapterEnding === "object") {
       state.pendingEnding = true;
-      showDialogueNode(chapterEnding);
+      fadeThroughBlack(() => showDialogueNode(chapterEnding)); // アウトロへも暗転してから入る
       return;
     }
     // 旧形式(ending=nullを含む)は従来通り、定型文で即時終了する。

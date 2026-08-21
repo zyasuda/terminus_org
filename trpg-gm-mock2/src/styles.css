@@ -954,6 +954,28 @@ body {
   transition: opacity 1.2s ease;
 }
 #curtain.lifted { opacity: 0; visibility: hidden; transition: opacity 1.2s ease, visibility 0s 1.2s; }
+/* 場面の切り替え・アウトロ・開幕の暗転。開幕の依頼ポップアップ用の幕(クラス無し)は
+   1.2s・枠の色のままにしたいので、クラスで差し替える。
+
+   色: 場面の暗転は真っ黒でなければならない。クラス無しの var(--frame-bg) は #24283a
+   (枠の色)で、作者から「フェード中が灰色」という指摘になった(2026-08-21)。
+
+   継続時間: engine側の SCENE_FADE_MS と同じ値にする。ずれると、暗転しきる前に背景が
+   入れ替わって切り替えが素見えする。
+
+   visibility: transitionは幕が上がる .lifted 側だけに置く。非lifted側にも置くと
+   delay 0.6s のあいだ visibility:hidden が残り、暗転が一切描画されない
+   (2026-08-21測定: transition-delay が "0s, 0.6s" になっていた)。
+
+   instant: 「最初から」用。降りる側は遷移なしで即座に黒へ落とす。遷移させると、
+   resetGameが既に差し替えた次の場面(マイラの部屋)が0.6秒かけて暗くなる様子が
+   見えてしまう——暗転で隠すべき画面と、暗転の先に見せる画面が同じになる。
+   上がる側(.lifted)は quick と同じ0.6sで明転させる。 */
+#curtain.quick, #curtain.instant { background: #000; }
+#curtain.quick { transition: opacity .6s ease; }
+#curtain.quick.lifted { transition: opacity .6s ease, visibility 0s .6s; }
+#curtain.instant { transition: none; }
+#curtain.instant.lifted { transition: opacity .6s ease, visibility 0s .6s; }
 
 /* ---- Phaser演出レイヤー(ダイスロール・フラッシュ)。ポップアップ(60)より下、fx(50)より上 ---- */
 #phaserFx {

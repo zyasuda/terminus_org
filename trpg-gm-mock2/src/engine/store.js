@@ -44,6 +44,10 @@ let snapshot = {
   partySlots: [],       // 同行者の立ち絵スロット {slot, who, img, flip}[]。campaign.jsonのcompanions[].spriteから起動時に組み立てる
   gmSprite: "gm_mascot.png", // GMペットの画像。campaign.jsonのgmSpriteで差し替え可
   curtain: false,       // 新規開始の依頼ポップアップ中は背景を幕で隠す。「はじめる」でfalseになり背景が現れる
+  /* 幕の速さと入り方。"" = 開幕の依頼ポップアップ用(1.2sで明転、色は枠の色)
+     "quick"   = 場面の切り替え・アウトロ。0.6sで暗転→0.6sで明転、真っ黒
+     "instant" = 「最初から」。暗転は遷移なし(今の画面を見せない)、明転だけ0.6s */
+  curtainFade: "",
   apiViewText: "(まだ通信なし)",
   contentCatalog: [],
   selectedCampaignId: "",
