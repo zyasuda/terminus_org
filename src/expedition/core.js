@@ -16,7 +16,11 @@ const EXPEDITION_CHAPTER = { scenes: [
 // 部屋とドアの位置は変えずに通路の曲がり方だけ引き直す(守護者撃破時に付与する)。
 export const mapForFloor = floor => {
   const { map } = generateWithRetry(EXPEDITION_CHAPTER, floor.seed);
-  return floor.corridorSeed ? rerouteCorridorsWithRetry(map, floor.corridorSeed).map : map;
+  if (!floor.corridorSeed) return map;
+  // 引き直せない corridorSeed が保存されていても地図は出す(旧セーブの保険)。
+  // 引き直しは演出なので、失敗したら元の通路のままにする
+  const rerouted = rerouteCorridorsWithRetry(map, floor.corridorSeed);
+  return rerouted ? rerouted.map : map;
 };
 const restoreMapState = (floor, map) => {
   const initial = start(map);
@@ -122,9 +126,15 @@ export function walk(floor, direction) {
 // (作者の要望:「リルートしたら部屋だけ見えて通路はそこに行くまで見えない。通路をロストした感じ」)。
 export function rerouteFloorCorridors(floor, seed = Date.now()) {
   const before = mapForFloor(floor);
+  /* 引き直せることを確かめてから保存する。以前は seed を検証せずに置いていたため、
+     引き直せない間取り(実測 2.25%)では通路が変わらないのに探索の記憶(seen)だけが
+     削られ、歩いた通路をもう一度暗闇から辿り直すことになっていた。
+     成功した seed をそのまま保存するので、mapForFloor は offset 0 で引き当てる */
+  const found = rerouteCorridorsWithRetry(before, seed >>> 0);
+  if (!found) return {}; // 地図も記憶もそのまま。守護者を倒した演出だけが起きない
   const corridorCells = new Set(before.corridors.flatMap(c => c.path.map(cell => `${cell.x},${cell.y}`)));
   return {
-    corridorSeed: seed >>> 0,
+    corridorSeed: found.seed >>> 0,
     seen: floor.seen.filter(key => !corridorCells.has(key)),
     walked: [],
   };

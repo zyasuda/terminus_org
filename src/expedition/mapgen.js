@@ -171,6 +171,33 @@ export function generate(chapter, seed) {
     }
     if (!placed) return null;
   }
+  /* 全域木を張り終えたら、章が要求する残りの接続(非木リンク)を掘る。
+     この段は移植(2026-08-15)で落ちていた。実測: 3部屋の循環章(1-2, 1-3, 2-3)で
+     300/300 でリンクが欠落し、作者が書いた接続が1本だけ黙って掘られなかった
+     (元の trpg-rogue-map/src/mapgen.js:187-203 にはある)。
+     現在の遠征章は6部屋5リンクの木なので実害は無いが、近道を1本足した瞬間に効く。
+     スロット式に読み替えてある——親子どちらも「方向:スロット」で空き口を探す */
+  const present = new Set(corridors.map(({ a, b }) => linkKey(a, b)));
+  for (const link of links) {
+    if (present.has(linkKey(link.a, link.b))) continue;
+    const fromOptions = DIRECTIONS.flatMap(d => openSlots(sizes.get(link.a), d.name).map(slot => ({ name: d.name, slot })));
+    const toOptions = DIRECTIONS.flatMap(d => openSlots(sizes.get(link.b), d.name).map(slot => ({ name: d.name, slot })));
+    const pairs = shuffled(fromOptions.flatMap(from => toOptions.map(to => ({ from, to }))), rng);
+    let connected = false;
+    for (const { from, to } of pairs) {
+      if (usedPorts.get(link.a).has(`${from.name}:${from.slot}`)) continue;
+      if (usedPorts.get(link.b).has(`${to.name}:${to.slot}`)) continue;
+      const path = routeBetween(portal(rooms.get(link.a), from.name, from.slot),
+        portal(rooms.get(link.b), to.name, to.slot), rooms, corridors, rng);
+      if (!path || !hasOnlyDoors(path, rooms, link.a, link.b)) continue;
+      corridors.push({ a: link.a, b: link.b, path, door: { direction: from.name, slot: from.slot } });
+      usedPorts.get(link.a).add(`${from.name}:${from.slot}`);
+      usedPorts.get(link.b).add(`${to.name}:${to.slot}`);
+      connected = true;
+      break;
+    }
+    if (!connected) return null;
+  }
   const cells = new Map();
   for (const room of rooms.values()) for (const cell of roomCells(room)) cells.set(keyOf(cell.x, cell.y), { kind: room.kind, id: room.id });
   for (const corridor of corridors) for (const cell of corridor.path) cells.set(keyOf(cell.x, cell.y), { kind: "corridor" });
@@ -179,7 +206,32 @@ export function generate(chapter, seed) {
   return { rooms, corridors, cells, bounds, entrance };
 }
 
+/* 入口から辿れる部屋の数。非連結な章は何回引いても地図にならないので、
+   200回回して「地図を200回生成できませんでした」と出す前に理由を言う。
+   実測(旧): 到達不能な部屋を含む章で11msを費やし、原因(グラフが非連結)とは
+   無関係な文言が出ていた(元のrogue-mapには depthOf による事前判定がある) */
+export function reachableRoomCount(chapter) {
+  const scenes = chapter.scenes || [];
+  if (!scenes.length) return 0;
+  const adjacent = new Map(scenes.map(scene => [scene.id, []]));
+  for (const { a, b } of linksOf(chapter)) {
+    if (adjacent.has(a)) adjacent.get(a).push(b);
+    if (adjacent.has(b)) adjacent.get(b).push(a);
+  }
+  const seen = new Set([scenes[0].id]);
+  const queue = [scenes[0].id];
+  for (let i = 0; i < queue.length; i += 1) for (const next of adjacent.get(queue[i]) || []) {
+    if (!seen.has(next)) { seen.add(next); queue.push(next); }
+  }
+  return seen.size;
+}
+
 export function generateWithRetry(chapter, seed, maxTries = 200) {
+  const total = (chapter.scenes || []).length;
+  const reachable = reachableRoomCount(chapter);
+  if (total && reachable !== total) {
+    throw new Error(`章のグラフが繋がっていません(入口から辿れる部屋 ${reachable}/${total})`);
+  }
   for (let offset = 0; offset < maxTries; offset += 1) {
     const map = generate(chapter, Number(seed) + offset);
     if (map) return { map, seed: Number(seed) + offset };
@@ -243,10 +295,15 @@ export function rerouteCorridors(map, seed) {
 // 遠回り(routeWithDetour)は普通の生成より1回あたりの成功率が低いため、
 // generateWithRetryの既定(200)より多めに持たせる(実測: 40地図中2件が200回では
 // 足りず、226回・299回で成功した)。
+/* 引き直せない時は throw ではなく null を返す。以前は投げていたため、描画中(RogueMap の
+   useMemo)で例外になり、Reactツリーごと消えて白画面になった。実測: createFloor の間取り
+   400件のうち9件(2.25%)は既定500回の窓で引き直せず、その間取りでは corridorSeed 5000通りの
+   成功が4〜19件(0.1〜0.4%)しかない。守護者を倒した瞬間に、地図の約2%で遠征が完走不能だった。
+   通路の引き直しは演出であって、ゲームを止める理由が無い(2026-08-20) */
 export function rerouteCorridorsWithRetry(map, seed, maxTries = 500) {
   for (let offset = 0; offset < maxTries; offset += 1) {
     const rerouted = rerouteCorridors(map, Number(seed) + offset);
     if (rerouted) return { map: rerouted, seed: Number(seed) + offset };
   }
-  throw new Error(`通路を${maxTries}回引き直せませんでした`);
+  return null;
 }

@@ -42,7 +42,11 @@ for (let sourceSeed = 0; sourceSeed < 20; sourceSeed += 1) {
   const original = new Map(map.corridors.map(corridor => [linkKey(corridor), corridor]));
   let changed = false;
   for (const rerouteSeed of [1000, 2000, 3000]) {
-    const { map: rerouted, seed } = rerouteCorridorsWithRetry(map, rerouteSeed);
+    const found = rerouteCorridorsWithRetry(map, rerouteSeed);
+    // 引き直せない時は null が返る契約(2026-08-20)。ここで受け止めないと、
+    // 分割代入が「undefinedのプロパティ」で落ちて原因が読めなくなる
+    assert.ok(found, `seed ${generatedSeed}: 乱数列${rerouteSeed}で500回引き直せなかった`);
+    const { map: rerouted, seed } = found;
     checkedReroutes += 1;
     maxRerouteRetries = Math.max(maxRerouteRetries, seed - rerouteSeed);
     assert.strictEqual(rerouted.rooms, map.rooms, `seed ${generatedSeed}/${seed}: 部屋を共有する`);
@@ -82,4 +86,20 @@ for (let sourceSeed = 0; sourceSeed < 20; sourceSeed += 1) {
   if (changed) changedMaps += 1;
 }
 assert.equal(changedMaps, 20, "全地図で少なくとも1本の通路形状が変わる");
+
+/* 引き直せない時に throw せず null を返すこと。以前は throw していたため、描画中
+   (RogueMapのuseMemo)で例外になりReactツリーが消えた。実測では間取り400件中9件が
+   既定500回では引き直せないので、この経路は実際に踏まれる。
+   窓を1回に絞れば必ず失敗させられるので、乱数の当たり外れに依存せず検査できる */
+{
+  const { map } = generateWithRetry(chapter, 0);
+  let exhausted = null;
+  for (let s = 1; s <= 200 && exhausted === null; s += 1) {
+    if (rerouteCorridorsWithRetry(map, s, 1) === null) exhausted = s;
+  }
+  assert.ok(exhausted !== null, "1回だけの窓で失敗する乱数列が見つかる(検査の前提)");
+  assert.equal(rerouteCorridorsWithRetry(map, exhausted, 1), null,
+    `引き直せない時はnullを返す(throwしない): seed ${exhausted}`);
+  console.log(`引き直せない場合: seed ${exhausted} で null を返す(throwしない)`);
+}
 console.log(`通路引き直し: 20地図 × 3乱数列 = ${checkedReroutes}件、形状変化 ${changedMaps}/20地図、最大再試行 ${maxRerouteRetries}回`);

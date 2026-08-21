@@ -18,7 +18,10 @@ const party = () => [
 
 const enemies = () => [
   { id: "rust1", modelId: "rust-eater", name: "錆喰い", side: "enemy", x: 6, y: 3, hp: 10, maxHp: 10, atk: 2, agility: 5, defenseDc: 12, height: 0.8 },
-  { id: "rust2", modelId: "rust-eater", name: "錆喰い(2)", side: "enemy", x: 6, y: 2, hp: 10, maxHp: 10, atk: 2, agility: 5, defenseDc: 12, height: 0.8 }
+  /* (6,2)は ROWS[2]="###.#.###" の壁。錆喰い(2)が岩の中に立ち、canOccupyCellがfalseを
+     返すので誰もそのマスへ入れず、盤面規則の外から攻撃してくる駒になっていた。
+     木柵(5,1)の手前の床(5,2)へ移す——枝道から出てくる位置として読める(2026-08-20) */
+  { id: "rust2", modelId: "rust-eater", name: "錆喰い(2)", side: "enemy", x: 5, y: 2, hp: 10, maxHp: 10, atk: 2, agility: 5, defenseDc: 12, height: 0.8 }
 ];
 
 const block = (grid, x, y, kind) => {
@@ -39,7 +42,7 @@ export function createJunctionStage() {
       arrival: { x: 4, y: 5 },
       collapse: { x: 3, y: 1 },
       barrier: { x: 5, y: 1 },
-      ambush: { x: 6, y: 2 }
+      ambush: { x: 5, y: 2 } // 錆喰い(2)の出現位置と揃える(旧: (6,2)は壁)
     },
     investigations: [
       { secretId: "s2a", anchor: "barrier", speakerId: "lydia" },

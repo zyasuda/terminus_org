@@ -67,7 +67,9 @@ section("2. 出口の移動先が実在するシーンを指している");
 for (const { label, node } of exitNodes) {
   for (const e of node.exits || []) {
     if (e.to === null || e.to === undefined) continue; // 行き止まりは意図的
-    if (e.to === "end") continue; // 章の完了。シーンを指さない正当な行き先
+    // 章の完了。シーンを指さない正当な行き先。エンジン(index.js)は "end" と "ending" の
+    // 両方を完了として扱うので、検査も両方を認める(片方だけだと正しいデータが落ちる)
+    if (e.to === "end" || e.to === "ending") continue;
     const idx = exitTargetIndexIn(scenes, e.to);
     ok(idx >= 0, `${label} 出口${e.id} の移動先 ${e.to} が実在する`,
       `該当するidのシーンが無い。移動しようとした瞬間に詰む`);
@@ -117,7 +119,7 @@ const PHRASES = [
   [1, "座って休む", null],
   [2, "右へ向かう", "to_scean03"],
   [2, "木柵を越えて進む", "to_scean03"],
-  [2, "左の隙間をくぐる", "to_scene03_collapse"],
+  [2, "左の隙間をくぐる", "to_scean05"], // 出口idは章データに追随させる(旧: to_scene03_collapse。データ側に存在しない)
   [3, "村へ戻る", "to_cean04"],
 ];
 for (const [sceneId, text, expected] of PHRASES) {
