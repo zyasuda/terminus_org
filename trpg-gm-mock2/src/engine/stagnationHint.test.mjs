@@ -9,6 +9,10 @@
  *   - 促す語は、作者が場面説明へ書いた語である(シナリオに無い語を作らない)
  *   - 1つの場面で2度は言わない(答えを配らない)
  *
+ * 併せて、名詞チップに何を出すかも見る(2026-08-20)。導入では出さない、場面へ入ったら
+ * その場面説明の語を出す、場面が変われば落ちる、開いた秘密は落ちる。
+ * 語の選び方そのものは briefChip.test.mjs。
+ *
  * 使い方: node src/engine/stagnationHint.test.mjs
  */
 import fs from "node:fs";
@@ -58,12 +62,13 @@ function check(label, cond, detail) {
 await eng.boot();
 await tick();
 
-async function say(text) {
+// rollを渡すと出目を固定できる(省略時は乱数)。開示を確実にしたい手番で使う
+async function say(text, roll) {
   let settled = false;
   const p = eng.sendAction(text).then(v => { settled = true; return v; }, () => { settled = true; });
   for (let i = 0; i < 2000 && !settled; i++) {
     await tick();
-    if (getSnapshot().pendingRoll) eng.performRoll();
+    if (getSnapshot().pendingRoll) eng.performRoll(roll);
     if (getSnapshot().popups.length) eng.dismissPopup();
   }
   await p;
@@ -75,10 +80,19 @@ const VAGUE = "調べていないものがあるみたいだね。";
 const NAMED = /^(.+)は、まだ確かめていないね。$/;
 const chips = () => getSnapshot().revealedEntities;
 
+/* ゲーム開始時(導入=依頼人との会話)は、まだどの場面の描写も読んでいないので名詞チップは空。
+   読んでいない語を押せてしまうと、坑道に着く前に「木の札」「レール」を知ってしまう */
+check("ゲーム開始時の名詞チップが空", chips().length === 0, JSON.stringify(chips()));
+
 // 導入を抜けてシーン1へ入る
 await say("受ける");
 const scene1 = scenarioMod.SCENARIO.scenes[0];
 check(`前提: シーン1にいる（${scene1.name}）`, getSnapshot().sceneInfo.num === 1);
+// 場面へ入ったら、GMが今説明した語が押せる。出るのは必ず場面説明にある語だけ
+check(`シーン1へ入ると場面説明の語が押せる（${JSON.stringify(chips())}）`, chips().length > 0);
+check("シーン1のチップは全て場面説明にある語",
+  chips().every(w => (scene1.brief || "").includes(w)),
+  `場面説明: ${scene1.brief}`);
 
 /* 何も起きない宣言を繰り返す。「周辺を調べる」は空振りする(秘密に当たらない)ので
    状態指紋が変わらず、空転として数えられる。1手番ずつ、どの段で何が出るかを見る */
@@ -118,16 +132,31 @@ const named = ((fired[1]?.促し || "").match(NAMED) || [])[1] || "";
   await say("木の札を調べる");
   const nagged = gmLines().slice(before).filter(t => t === VAGUE || NAMED.test(t));
   check("前進した手番では促さない", nagged.length === 0);
+  /* 開いた秘密はチップから落ちる(2026-08-20 作者の判断)。用が済んでおり、内容は
+     左パネルの手がかりに載る。押せる状態で残すと、済んだものを総当たりし直すことになる。
+     store.secretsは全シーンの秘密を宣言順に平坦化した配列なので、同じ順で引き当てる */
+  const flat = scenarioMod.SCENARIO.scenes.flatMap(sc => sc.secrets.map(s => ({ s, sc })));
+  const opened = flat.filter((row, i) => row.sc === scene1 && getSnapshot().secrets[i]?.open).map(r => r.s);
+  check(`開いた秘密「${opened.map(s => s.entity).join("・")}」がチップから消えている`,
+    opened.length > 0 && !opened.some(s => chips().includes(s.entity)
+      || chips().includes(briefWordOf(s, scene1))),
+    `チップ: ${JSON.stringify(chips())}`);
 }
 
 /* シーン2は、出口の前提(崩れた坑道・抜け道)がどちらも場面説明に無い。
    場面説明の語(封鎖の木柵)は既にチップなので、それを名指ししても詰まりは解けない。
    出口の前提になっている秘密を先に名指しすること、そして usage:"event" の
-   「抜け道」(調べても開かない)を名指ししないことを確かめる */
+   「抜け道」(調べても開かない)を名指ししないことを確かめる。
+   併せて、場面が変わった時点で前の場面の名詞が落ちることを見る */
 {
+  const before = chips();
   await say("進む");
   const scene2 = scenarioMod.SCENARIO.scenes[1];
   check(`前提: シーン2にいる（${scene2.name}）`, getSnapshot().sceneInfo.num === 2);
+  check(`シーン2へ入ると前の場面の名詞が落ちる（${JSON.stringify(before)} → ${JSON.stringify(chips())}）`,
+    before.length > 0 && !chips().some(w => before.includes(w)));
+  check("シーン2のチップは全て場面説明にある語",
+    chips().every(w => (scene2.brief || "").includes(w)), `場面説明: ${scene2.brief}`);
   let line = "";
   for (let i = 0; i < 4 && !NAMED.test(line); i++) {
     const before = gmLines().length;
@@ -141,6 +170,10 @@ const named = ((fired[1]?.促し || "").match(NAMED) || [])[1] || "";
     `出口の前提: ${JSON.stringify([...gated])} / 名指し: ${word}(${target?.id})`);
   check(`「${word}」は調べて開く秘密である（usage:"event"を名指ししない）`, target?.usage !== "event");
   check(`「${word}」がチップに出ている`, chips().includes(word), `チップ: ${JSON.stringify(chips())}`);
+  // 名指しで開いた秘密も、開いたらチップから落ちる(開示済みを出さない規則は促しの語にも効く)
+  await say(`${word}を調べる`, 20);
+  check(`開いた「${word}」がチップから消えている`, !chips().includes(word),
+    `チップ: ${JSON.stringify(chips())}`);
 }
 function briefWordOf(secret, scene) {
   return [secret.entity, ...(secret.aliases || [])].find(w => (scene.brief || "").includes(w)) || "";

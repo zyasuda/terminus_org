@@ -20,7 +20,7 @@ import { gmGreeting, gmVoiceRule, voiceRule, fixCompanionVoice } from "./voice.j
 import {
   EXAMINE_RE, MOVE_RE, BACK_RE, exitDeclaration,
   encounterRequiredElementsMet, resolveEncounterFoe,
-  matchSecretByText, matchSecretByTrigger, pickExamineSecret, examineDifficulty, requiresMet,
+  matchSecretByText, matchSecretByTrigger, pickExamineSecret, examinable, findableSecret, examineDifficulty, requiresMet,
   resolveExit, normalizeExit, exitTargetIndexIn, resolveSecretTarget
 } from "./progression.js";
 
@@ -895,14 +895,18 @@ const STAGNATION_NAME = STAGNATION_SOFT + 1; // 名指しは、ぼかした一�
 
 /* 名指しする対象を1つ選ぶ。出口の前提になっている秘密を先に挙げる——そこが本当の
    詰まりだからである。場面説明にある語(=既にチップ)を挙げても、詰まりは解けない。
-   usage:"event" の秘密は調べても開かない(撃破など出来事で開く)ので挙げない。
+   調べても開かない秘密(撃破など出来事だけで開くもの)は挙げない。判別はexaminable()に
+   任せる——エンジンが「調べる」の対象にするかどうかと同じ規則で選ばないと、押しても
+   開かない語を名指しすることになる(usage:"event"で判別していた時は、場面3の
+   「人影」を挙げられず、代わりに手・銘を挙げていた。実データではあれがeventである)。
    名前は「場面説明に書かれた語」を優先し、無ければ作者が付けたentityを使う。
    どちらもシナリオにある語で、こちらで語を作ることはしない */
 function stagnationTarget(sc) {
   const examined = state.examined || [];
   const gated = new Set((sc.exits || []).flatMap(e => (e.requires && e.requires.secretsAll) || []));
+  const ctx = { revealed, inventory: state.inventory };
   const usable = (sc.secrets || []).filter(s =>
-    !revealed.has(s.id) && !examined.includes(s.entity) && s.usage !== "event");
+    findableSecret(s, ctx) && !examined.includes(s.entity) && examinable(s));
   const target = [...usable.filter(s => gated.has(s.id)), ...usable.filter(s => !gated.has(s.id))][0];
   return target ? (briefWord(target, sc.brief || "") || target.entity) : "";
 }
@@ -910,6 +914,7 @@ function stagnationTarget(sc) {
 /* 同じ場所で手番を空転させているプレイヤーへ、GMが2段階で声をかける。
  *   3手番: 「調べていないものがあるみたいだね。」   — 何があるかは言わない
  *   4手番: 「封鎖の木柵は、まだ確かめていないね。」 — 名指しし、以後その語をチップに出す
+ * 調べる先が残っていない場面では段を踏まず、3手番で「先へ進めそうだ」だけを言う。
  *
  * 名指しに使うのは作者が書いた語だけである。シナリオデータに無い語は作らない——
  * だからLLMは呼ばない。scriptedでも同じに動く。
@@ -924,16 +929,22 @@ async function stagnationHint() {
   if (!sc) return;
   state.hints ||= {}; // 旧セーブデータ(このキーが無い)の互換
   const done = state.hints[idx] || { stage: 0, word: "" };
+  const target = stagnationTarget(sc);
   let line = "", next = null;
-  if (done.stage < 1 && state.stuckTurns >= STAGNATION_SOFT) {
+  /* 調べる先が残っているかで、言うことが変わる。残っていないのに「調べていないものが
+     あるみたいだね」と言うと、無いものを探させることになる(2026-08-20 実測。全部開示した
+     場面でこれが出ていた)。残っていなければぼかす段は飛ばし、先へ促す一言だけにする */
+  if (!target) {
+    if (done.stage < 2 && state.stuckTurns >= STAGNATION_SOFT) {
+      line = viableExits(sc).length ? "ここでできることは、あらかた確かめたか。先へ進めそうだ。" : "";
+      next = { stage: 2, word: "" }; // ぼかす段は使い終わったものとして飛ばす
+    }
+  } else if (done.stage < 1 && state.stuckTurns >= STAGNATION_SOFT) {
     line = "調べていないものがあるみたいだね。";
     next = { stage: 1, word: done.word };
   } else if (done.stage < 2 && state.stuckTurns >= STAGNATION_NAME) {
-    const word = stagnationTarget(sc);
-    // 調べる先が残っていない時だけ、先へ促す(通れる出口がある場合に限る)
-    line = word ? `${word}は、まだ確かめていないね。`
-      : (viableExits(sc).length ? "ここでできることは、あらかた確かめたか。先へ進めそうだ。" : "");
-    next = { stage: 2, word };
+    line = `${target}は、まだ確かめていないね。`;
+    next = { stage: 2, word: target };
   }
   if (!line || !next) return;
   const stale = turnGuard();
@@ -953,21 +964,39 @@ function renderDebug() {
   const secrets = [];
   const revealedEntities = [];
   const clues = [];
+  /* 名詞チップは「GMがその場面を説明した」ことが前提である。導入は場面ではなく会話で、
+     この時点でプレイヤーが読んでいるのは依頼人との話だけ——坑道の描写はまだ読んでいない。
+     ここを見ていなかったため、ゲーム開始時にシーン1の「木の札」「レール」が並んでいた(実測)。
+     導入で押せるのは作者が書いたhintChips(「依頼について」等)だけにする(2026-08-20)。
+     終端(pendingEnding)は除外しない。あそこは最後のシーンに立ったまま依頼人と話す場面で、
+     場面の名詞を消すと「渡す」以外の話題に触れられなくなる(hintChipsも持たない) */
+  const sceneNarrated = !state.pendingIntro;
   SCENARIO.scenes.forEach(sc => sc.secrets.forEach(s => {
     const open = revealed.has(s.id);
     secrets.push({ open, text: open ? s.text : "シーン" + sc.id + "の未開示情報(判定成功で開放)" });
     // 名詞チップは現在のシーンの分だけ(チップ列が横に伸び続けるのを防ぐ。過去の手がかりは左パネルで参照)。
-    // 開示済みに加え、一度でも判定を振った対象(examined)も出す(失敗後の再挑戦を2タップに)
-    const known = open || (state.examined || []).includes(s.entity);
+    // シーンが変われば前の場面の名詞は自動的に落ちる——ここが唯一の絞り込みである
+    /* 前提(secret.requires)を満たしていない対象はチップにしない。押しても
+       「特に変わったものは見つからない。」になるので、押せる状態で見せてはいけない。
+       章1の場面3では「ランタン」がこれに当たる——銘を読むには先に正体と手を見る */
+    const inScene = sc === curScene && sceneNarrated
+      && requiresMet(s.requires, { revealed, inventory: state.inventory });
+    const attempted = (state.examined || []).includes(s.entity);
+    const known = open || attempted;
+    /* 判定を振ったが開かなかった対象だけを出す(失敗後の再挑戦を2タップに)。
+       開示済み(open)は出さない——用が済んでおり、内容は左パネルの手がかりに載る。
+       もう一度調べても「改めて確かめる」と読み直すだけで進行は動かないので、
+       押せる状態で残しておくと、済んだものを総当たりし直すことになる(2026-08-20 作者の判断)。
+       これで1つの場面のチップは「まだ手が付いていない」「試したが開かない」の2種類に揃う */
     const chipLabel = s.entity; // aliasesは入力照合用の別名辞書。表示は作者が書いたentityを使う
-    if (known && chipLabel && sc === curScene && !revealedEntities.includes(chipLabel)) revealedEntities.push(chipLabel);
+    if (attempted && !open && chipLabel && inScene && !revealedEntities.includes(chipLabel)) revealedEntities.push(chipLabel);
     /* まだ調べていない対象でも、場面説明(brief)に書かれている語はチップに出す。
        プレイヤーは左パネルとGMの語りでその語を既に読んでいるので、読んでいない情報は
        漏れない。逆に、読んだ語に触れられないのは不便だった——シーン1の「レール」は
        場面説明にあるのに、一度手で打つまでチップにならなかった(2026-08-20 作者の判断)。
        表示するのは必ずbriefに出てくる語そのもの。entity名を出すと「柵の内側」のように
        場面説明より踏み込んだ名前が漏れる */
-    if (!known && sc === curScene) {
+    if (!known && inScene) {
       const word = briefWord(s, curScene.brief || "");
       if (word && !revealedEntities.includes(word)) revealedEntities.push(word);
     }
@@ -977,8 +1006,13 @@ function renderDebug() {
      場面説明に無い対象——シーン2の「崩れた坑道」のように、出口の前提なのに
      読んだだけでは気づけないもの——は、ここで初めて押せるようになる。
      促す前に出すことはしない。段を踏んで初めて開く */
-  const hinted = (state.hints || {})[state.sceneIndex];
-  if (hinted && hinted.word && !revealedEntities.includes(hinted.word)) revealedEntities.push(hinted.word);
+  const hinted = sceneNarrated ? (state.hints || {})[state.sceneIndex] : null;
+  /* 名指しの語も、その秘密が開いたら落とす(開示済みを出さない規則に揃える)。
+     hintsには語しか入っていないので、名指しした時と同じ辻褄——entity名か場面説明の語——で
+     秘密を引き当てる。saveGameで保存済みのhintsに秘密idが無いため、語から辿るしかない */
+  const hintedOpen = hinted && hinted.word && (curScene.secrets || []).some(s =>
+    revealed.has(s.id) && (s.entity === hinted.word || briefWord(s, curScene.brief || "") === hinted.word));
+  if (hinted && hinted.word && !hintedOpen && !revealedEntities.includes(hinted.word)) revealedEntities.push(hinted.word);
   // 交戦中の敵は名詞チップの先頭に出す(未識別は「不気味な影」、正体判明で「錆喰い」に切り替わる)
   if (state.enemy) revealedEntities.unshift(enemyName(state.enemy));
   (state.unknownTarget?.candidates || []).forEach(name => {
@@ -1870,6 +1904,24 @@ function emptyHandedNote() {
   return notes[state.turn % notes.length];
 }
 
+/* 調べたが、指した対象が場に無かった時の一文。
+   状態を見ずに「特に変わったものは見つからない。」だけを返していたため、全部開示した
+   場面でも同じ文が延々と返り、まだ何か残っているのか、もう無いのかが区別できなかった
+   (2026-08-20 実測。促しは1場面1回なので、5手番目以降は手がかりが何も無くなる)。
+   見つけられる秘密が残っているかで言い分ける。総当たりを止める合図になる。
+   通れる出口も無い場合だけ、手立てが要ることまで言う——出口があるなら促しの一言が
+   別に出るので、ここで重ねて急かさない。
+   文はコードに置いてある。campaign.styleへ作者用の枠を作るのはデータ契約の変更なので、
+   承認を得てからにする(style.emptyHandedは「調べたが分からなかった」別経路の枠) */
+function emptySearchNote(sc) {
+  const ctx = { revealed, inventory: state.inventory };
+  const remains = (sc.secrets || []).some(s => findableSecret(s, ctx) && examinable(s));
+  if (remains) return "特に変わったものは見つからない。";
+  return viableExits(sc).length
+    ? "ここはもう見尽くした。"
+    : "ここはもう見尽くした。先へ進むには、何か手立てが要るようだ。";
+}
+
 /* 調査の難易度。失敗を重ねるほど下がる。
    進行に必須な秘密がダイス運のゲートの奥にあると、同じ宣言を成功するまで連打するだけの
    体験になる(設計メモ3節が「初期モックの失敗」として名指しした構造)。失敗を無駄にせず、
@@ -2032,7 +2084,7 @@ async function tryScripted(text) {
     if (secret) { await scriptedExamine(secret, actorName); return true; }
     const known = matchSecretByText(sc, rest, true, undefined, ctx);
     if (known) { speakRecheck(known.playerText || known.text); return true; }
-    if (gmMode === "scripted") { addGm("特に変わったものは見つからない。", "Neutral"); return true; }
+    if (gmMode === "scripted") { addGm(emptySearchNote(sc), "Neutral"); return true; }
     return false; // hybrid: secretのない対象の描写はLLMの領分
   }
   if (mentionsHealPotionUse(text)) {

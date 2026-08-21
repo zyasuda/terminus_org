@@ -11,7 +11,7 @@
 import fs from "node:fs";
 import { resolveExit, requiresMet, exitTargetIndexIn, uniqueBestSecretTextMatch,
   encounterRequiredElementsMet, resolveEncounterFoe, pickExamineSecret, resolveSecretTarget,
-  examineDifficulty, matchSecretByTrigger, EXAMINE_RE } from "./progression.js";
+  examineDifficulty, matchSecretByTrigger, examinable, findableSecret, EXAMINE_RE } from "./progression.js";
 
 /* CHAPTER=別の章.json で対象を差し替えられる。故意に壊したデータを通して
    「このハーネスが本当に落ちるか」を確かめるためにも使う */
@@ -274,9 +274,17 @@ section("12. 作者が書いた開示方法(trigger)で、その秘密自身が�
    実物の決定関数(pickExamineSecret と resolveSecretTarget)へ trigger の文をそのまま通す */
 const triggerSecrets = scenes.flatMap(s => (s.secrets || []).filter(sec => String(sec.trigger || "").trim()));
 let triggerChecks = 0;
+/* 照合する文脈は「その秘密の前提だけを満たした状態」にする。secret.requiresは作者が
+   書いた調べる順であって、triggerの書き方の正しさとは別の話である。前提未達で開かないのは
+   正しい挙動なので、そこを検査で固定すると requires を有効にできない(2026-08-20)。
+   逆にこの作り方だと、順序の途中の秘密も「その手前まで開けた状態」で1件ずつ検証できる */
+const ctxAfterPrereqs = sec => ({
+  revealed: new Set([...((sec.requires || {}).secretsAll || []), ...((sec.requires || {}).secretsAny || [])]),
+  inventory: omniscient.inventory
+});
 for (const s of scenes) {
-  const unrevealed = { revealed: new Set() }; // まだ何も開示していない状態
   for (const sec of s.secrets || []) {
+    const unrevealed = ctxAfterPrereqs(sec);
     for (const t of String(sec.trigger || "").split(/[,、]/).map(x => x.trim().replace(/[。.]$/, ""))) {
       if (t.length < 2) continue;
       triggerChecks++;
@@ -510,6 +518,62 @@ if (fs.existsSync(structurePath)) {
    実装したため撤去した。今はagility/retortDriveと同じく「キーが無くても文言の
    既定値で埋まる」設計になっており、campaign.json側の欠落はもう欠陥ではない。
    詳細はBORGの引き継ぎノート、または scenario.js の DEFAULT_* 定数を参照 */
+
+/* 「調べる」で開き得る秘密かどうかの判別。ここを usage で判定していたため、詰まった
+   プレイヤーへGMが名指しする対象が場面3で外れていた(2026-08-20 実測: 「人影」を挙げず、
+   その先の「番人の手」を挙げていた)。usageは章1の中で2つの意味に使われている——
+   s3aは"event"だがtriggerとdcを持ち調べて開く、s2a_gapは撃破でしか開かない。
+   判別できるのは trigger / aliases の有無だけである */
+section("18. 調べて開く秘密の判別(examinable)");
+{
+  const all = scenes.flatMap(s => (s.secrets || []).map(x => ({ scene: s.id, s: x })));
+  const events = all.filter(r => r.s.usage === "event");
+  ok(events.length > 0, `前提: usage:"event" の秘密がある(${events.length}件)`);
+  // usageでは判別できないことを、実データで示す(両方の向きが同じ章に存在する)
+  ok(events.some(r => examinable(r.s)) && events.some(r => !examinable(r.s)),
+    'usage:"event" には調べて開くものと開かないものが混在する(usageでは判別できない)',
+    events.map(r => `${r.s.id}:${examinable(r.s) ? "調べられる" : "調べられない"}`).join(" "));
+  for (const { scene, s } of all) {
+    // dc(判定の難易度)を書いた秘密は、作者が調べさせる意図で書いている
+    if (s.dc) ok(examinable(s), `シーン${scene} ${s.entity}: dcがあるなら調べて開く`,
+      `trigger=${JSON.stringify(s.trigger)} aliases=${(s.aliases || []).length}件`);
+    // 逆にtrigger・aliasesの両方が無いものは、調べる対象にしてはならない
+    if (!s.trigger && !(s.aliases || []).length)
+      ok(!examinable(s), `シーン${scene} ${s.entity}: 入口が無いので調べる対象にしない`);
+  }
+  // pickExamineSecret と同じ判別を使っていること(規則が2箇所に分かれると片方だけ直る)
+  const s3a = scenes.find(s => String(s.id) === "3")?.secrets?.find(x => x.id === "s3a");
+  if (s3a) {
+    const hit = pickExamineSecret(scenes.find(s => String(s.id) === "3"), "光の源に意識を集中させる",
+      "人影", { revealed: new Set(), inventory: [] });
+    ok(hit.secret?.id === "s3a" && examinable(s3a),
+      "場面3「人影」は調べる対象であり、examinableも同じ判断をする",
+      `pickExamineSecret=${hit.secret?.id} examinable=${examinable(s3a)}`);
+  }
+}
+
+/* secret.requires が実際に効いていること。2026-08-20まで exits と loot でしか見ておらず、
+   秘密に書かれた前提は無視されていた(章1では6箇所。作者はランタンの銘を「番人の手のあと」に
+   置いたのに、最初から読めた)。開示の入口3つすべてで前提を見ることを固定する */
+section("19. 秘密の前提(secret.requires)が効いている");
+{
+  const gatedSecrets = scenes.flatMap(s => (s.secrets || [])
+    .filter(sec => (sec.requires || {}).secretsAll || (sec.requires || {}).secretsAny)
+    .map(sec => ({ scene: s, sec })));
+  ok(gatedSecrets.length > 0, `前提: requiresを持つ秘密がある(${gatedSecrets.length}件)`);
+  const nothing = { revealed: new Set(), inventory: [] };
+  for (const { scene, sec } of gatedSecrets) {
+    const word = String(sec.trigger || "").split(/[,、]/)[0].trim().replace(/[。.]$/, "") || sec.entity;
+    // 前提未達: 調べる宣言・LLM経由のどちらでも、この秘密には決まらない
+    ok(pickExamineSecret(scene, word, word, nothing).secret !== sec,
+      `シーン${scene.id} ${sec.entity}: 前提${JSON.stringify((sec.requires || {}).secretsAll || (sec.requires || {}).secretsAny)}が未達なら「${word}」で開かない`);
+    ok(resolveSecretTarget(scene, sec.entity, "", word, nothing) !== sec,
+      `シーン${scene.id} ${sec.entity}: 前提が未達ならLLM経由でも開かない`);
+    ok(!findableSecret(sec, nothing), `シーン${scene.id} ${sec.entity}: 前提が未達なら見つけられない`);
+    // 前提を満たせば見つけられる(閉じっぱなしにしていないことの確認。ここが無いと進行不能を検査で固定してしまう)
+    ok(findableSecret(sec, ctxAfterPrereqs(sec)), `シーン${scene.id} ${sec.entity}: 前提を満たせば見つけられる`);
+  }
+}
 
 // ───────────────────────────────────────────────
 console.log(results.join("\n"));

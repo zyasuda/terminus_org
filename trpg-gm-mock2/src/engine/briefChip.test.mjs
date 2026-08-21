@@ -5,6 +5,9 @@
  * 「作者が場面説明へ書いた語」だけに限る。entity名やaliasesをそのまま並べると、
  * 「柵の内側」「灯りの番人の正体」のように場面説明より踏み込んだ名前が漏れる。
  *
+ * ここは語の選び方(純関数briefWord)だけを見る。「いつチップに出すか」——導入では出さず、
+ * 場面へ入ってから出す、場面が変わったら落とす——は stagnationHint.test.mjs で見る。
+ *
  * 使い方: node src/engine/briefChip.test.mjs
  */
 import fs from "node:fs";

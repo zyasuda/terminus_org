@@ -75,10 +75,19 @@ export function matchSecretByText(sc, text, wantRevealed, minTermLength, ctx) {
   return uniqueBestSecretTextMatch(pool, text, minTermLength);
 }
 
+/* 今この場面で「見つけられる」秘密か。まだ開示されておらず、作者がsecret.requiresへ書いた
+   前提を満たすもの。requiresはexits・lootでは効いていたが、secretでは2026-08-20まで
+   どこも見ていなかった——章1では6箇所で使われており(番人の手←正体、ランタンの銘←手 など)、
+   作者が書いた調べる順が効かず、銘を最初に読めてしまう状態だった。
+   開示の入口は3つある(調べる宣言・作者のtrigger・LLMの対象指定)。3つ全部がこの述語を通る */
+export function findableSecret(secret, ctx) {
+  return !ctx.revealed.has(secret.id) && requiresMet(secret.requires, ctx);
+}
+
 // 作者がsecret.triggerへ書いた発火条件との照合。複数の秘密が該当したら曖昧なので決めない。
 export function matchSecretByTrigger(sc, text, ctx) {
   const hits = (sc.secrets || []).filter(s => {
-    if (ctx.revealed.has(s.id) || !s.trigger) return false;
+    if (!s.trigger || !findableSecret(s, ctx)) return false;
     return String(s.trigger).split(/[,、]/)
       .map(t => t.trim().replace(/[。.]$/, ""))
       .filter(t => t.length >= 2)
@@ -87,16 +96,22 @@ export function matchSecretByTrigger(sc, text, ctx) {
   return hits.length === 1 ? hits[0] : null;
 }
 
+/* 「調べる」で開き得る秘密か。trigger・aliasesを両方持たない秘密は絶対に開かない
+   (revealOnDefeat等、別の決定論的な経路だけが開示手段だという作者の意図を守る。
+   entityだけを持たせているのはチップ・reveal表示用の名称であって、examineの入口にはしない)。
+   usage:"event" では判別できない——章1のs3a「灯りの番人の正体」はeventだがtriggerとdcを
+   持ち、調べて開く。逆にs2a_gap「抜け道」はaliasesもtriggerも無く、撃破でしか開かない。
+   詰まった時にGMが名指しする対象もこの規則で選ぶ(index.jsのstagnationTarget) */
+export function examinable(secret) {
+  return Boolean(secret && (secret.trigger || (secret.aliases || []).length));
+}
+
 /* 調べる宣言に対して、どの秘密を対象にするかを1箇所で決める。
    対象の特定はentity/aliasesを優先する。ただし1文字の別名一致は例外で、
    作者が明示したtriggerに劣後させる。 */
 export function pickExamineSecret(sc, triggerText, entityText, ctx) {
   const triggerHit = matchSecretByTrigger(sc, triggerText, ctx);
-  // trigger・aliasesを両方持たない秘密は「調べる」では絶対に開かない(revealOnDefeat等、
-  // 別の決定論的な経路だけが開示手段だという作者の意図をここで守る。entityだけを持たせて
-  // いるのはチップ・reveal表示用の名称であって、examineの入口にはしない)
-  const pool = (sc.secrets || []).filter(s =>
-    !ctx.revealed.has(s.id) && (s.trigger || (s.aliases || []).length));
+  const pool = (sc.secrets || []).filter(s => findableSecret(s, ctx) && examinable(s));
   const textHit = uniqueBestSecretTextMatch(pool, entityText, triggerHit ? 2 : 1);
   return { secret: textHit || triggerHit, triggerHit, textHit };
 }
@@ -143,7 +158,7 @@ export function exitTargetIndexIn(scenes, to) {
 
 /* 開示対象のマッチング。0件・複数件なら開示しない。 */
 export function resolveSecretTarget(sc, targetEntity, reason, playerText, ctx) {
-  const candidates = (sc.secrets || []).filter(s => !ctx.revealed.has(s.id));
+  const candidates = (sc.secrets || []).filter(s => findableSecret(s, ctx));
   if (!candidates.length) return null;
   if (targetEntity) {
     const exact = candidates.filter(s => s.entity === String(targetEntity).trim());
