@@ -317,7 +317,7 @@ body {
   font-size: 1.6vw;
   line-height: 2.8vw;
   text-shadow: 0 1px 4px rgba(0, 0, 0, .6);
-  animation: bubbleIn .25s ease, bubbleOut .6s ease 10s forwards; /* 約10秒表示。ペットのタップで再表示 */
+  animation: bubbleIn .25s ease, bubbleOut .6s ease 8s forwards; /* 約8秒表示。ペットのタップで再表示 */
 }
 #gmBubble.tailRight::after { /* 右側(ペット側)へ向く尻尾 */
   content: "";
@@ -375,7 +375,7 @@ body {
   font-size: 1.45vw;
   line-height: 2.3vw;
   text-shadow: 0 1px 4px rgba(0, 0, 0, .6);
-  animation: bubbleIn .25s ease, bubbleOut .6s ease 8s forwards; /* GMより短め(台詞が短いため)の約8秒表示 */
+  animation: bubbleIn .25s ease, bubbleOut .6s ease 6s forwards; /* GMより短め(台詞が短いため)の約6秒表示 */
 }
 /* 立ち絵の頭の高さ(上端59〜63%)の脇に置く。R系は立ち絵の左側へ、L系は右側へ伸ばす */
 .charBubble.slotR1 { right: 15.7%; top: 66%; }
@@ -454,7 +454,7 @@ body {
   line-height: 2.3vw;
   text-align: center;
   text-shadow: 0 1px 4px rgba(0, 0, 0, .6);
-  animation: bubbleIn .25s ease, bubbleOut .6s ease 8s forwards;
+  animation: bubbleIn .25s ease, bubbleOut .6s ease 6s forwards; /* 同行者と揃えて約6秒表示 */
 }
 /* 下パネル表示中: スプライトが24.94%上がるので、吹き出しも同じ量だけ上げる */
 #stage.panelUp .npcBubble { top: 4%; }
