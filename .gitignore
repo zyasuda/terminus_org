@@ -1,5 +1,9 @@
 # Generated media and large files
+# .mp4 は既定、.mov は macOS の画面収録、.webm は Playwright の録画が吐く形式。
+# videos/VIDEO_PROMPTS.md のような文書は追跡を続ける(拡張子で切っているので影響しない)
 videos/*.mp4
+videos/*.mov
+videos/*.webm
 presentation/*.pptx
 
 # Working/brainstorm documents
