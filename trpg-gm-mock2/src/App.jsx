@@ -219,7 +219,10 @@ export default function App() {
         {eng.enemySprite && (
           <div
             id="enemySprite"
-            className={eng.enemySprite.identified ? "identified" : ""}
+            /* npc: このスロットが敵ではなくシーンNPC(依頼人マイラ等)の立ち絵である印。
+               平常時のゆらぎ(idleSway)は戦闘の手触りなので、NPCには効かせない
+               (2026-08-21 作者の指摘「マイラが上下にゆらゆらする。不要な処理」) */
+            className={[eng.enemySprite.identified ? "identified" : "", eng.sceneNpcName ? "npc" : ""].filter(Boolean).join(" ")}
             /* CSSの#enemySpriteはpointer-events:none(敵スプライトがパネルのスワイプを邪魔しないため)。
                NPC表示の時だけタップを受け取れるように上書きする */
             style={{

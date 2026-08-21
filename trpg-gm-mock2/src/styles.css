@@ -176,8 +176,11 @@ body {
    長さはengineのBATTLE_FX_MSと揃える(engineはこの時間だけ待ってから次の発言へ進む)。
    #enemySpriteは transform: translateX(-50%) が既定なので、
    アニメーション側でも必ず -50% を含めた変形を書く(書き忘れると中央からずれる)。
-   平常時のゆらぎ(idleSway)はアニメーションが無い時だけ効かせる。 ---- */
-#enemySprite.identified:not(.fx-hit):not(.fx-crit):not(.fx-miss):not(.fx-lunge) {
+   平常時のゆらぎ(idleSway)はアニメーションが無い時だけ効かせる。
+   .npc(シーンNPCの立ち絵。App.jsxがsceneNpcNameから付ける)には効かせない。
+   ゆらぎは戦闘の手触りとして敵へ入れたもので、立って話しているだけの依頼人が
+   常時ゆらゆら動くのは演出として誤り(2026-08-21 作者の指摘)。 ---- */
+#enemySprite.identified:not(.npc):not(.fx-hit):not(.fx-crit):not(.fx-miss):not(.fx-lunge) {
   animation: idleSway 3.6s ease-in-out infinite;
 }
 @keyframes idleSway {
