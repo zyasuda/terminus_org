@@ -3,10 +3,12 @@
   "configurations": [
     {
       "name": "mock2",
-      "runtimeExecutable": "npm",
-      "runtimeArgs": ["run", "dev", "--", "--host", "127.0.0.1", "--port", "5173"],
+      "// なぜ sh -c か": "npm はこのファイルの場所(Terminus直下)で起動される。ここに package.json は無く、vite も index.html を見つけられないので、プロジェクトへ移動してから実行する",
+      "// なぜ NO_SSL=1 か": "vite.config.js は既定で basicSsl を挟み https で出す。自己署名証明書のためプレビュー用ブラウザが接続を拒否するので、ローカル確認では平文にする。iPhone実機からLAN越しに見るときは NO_SSL を外して https で起動する",
+      "runtimeExecutable": "sh",
+      "runtimeArgs": ["-c", "cd trpg-gm-mock2 && NO_SSL=1 npm run dev -- --host 127.0.0.1 --port 5173"],
       "port": 5173,
-      "url": "https://127.0.0.1:5173"
+      "url": "http://127.0.0.1:5173"
     }
   ]
 }
