@@ -48,7 +48,7 @@ const loadModel = path => {
 // cameraElevationDegを省略した呼び出し(本編の会話バトル画面など)はこれまで通りの見た目になる。
 const TRUE_ISO_ELEVATION_DEG = Math.atan(1 / Math.SQRT2) * 180 / Math.PI;
 
-export function createBattleScene(container, grid, { voidBoundaryWalls = false, cameraElevationDeg = TRUE_ISO_ELEVATION_DEG } = {}) {
+export function createBattleScene(container, grid, { voidBoundaryWalls = false, cameraElevationDeg = TRUE_ISO_ELEVATION_DEG, cameraZoom: initialCameraZoom = 1 } = {}) {
   let cameraElevation = cameraElevationDeg * Math.PI / 180;   // setCameraElevationDeg()で見た目を確認しながら調整できる
   const scene = new THREE.Scene();
   scene.background = new THREE.Color(COLOR.bg);
@@ -90,7 +90,9 @@ export function createBattleScene(container, grid, { voidBoundaryWalls = false, 
   const worldOf = (x, y) => [x - offX, y - offZ];
 
   /* --- カメラ(戦闘は正射影、会話相手は一人称の透視投影) --- */
-  const baseViewSize = Math.max(grid.w, grid.h) + 4;
+  const gridViewSize = Math.max(grid.w, grid.h) + 4;
+  let cameraZoom = Math.max(0.5, initialCameraZoom);
+  let baseViewSize = gridViewSize / cameraZoom;
   let viewSize = baseViewSize;
   const isoCamera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0.1, 200);
   const firstPersonCamera = new THREE.PerspectiveCamera(90, 1, 0.05, 200);
@@ -543,6 +545,14 @@ export function createBattleScene(container, grid, { voidBoundaryWalls = false, 
           const source = Array.isArray(obj.material) ? obj.material : [obj.material];
           const cloned = source.map(material => {
             const copy = material.clone();
+            if (unit.modelId?.endsWith("-standee") && copy.map) {
+              // スタンディーの輪郭はPNGのアルファで抜く。GLBのMASK指定だけに任せず
+              // Three.js側でも明示して、板全体が表示される環境差を避ける。
+              copy.transparent = true;
+              copy.alphaTest = 0.02;
+              copy.side = THREE.DoubleSide;
+              copy.needsUpdate = true;
+            }
             // 個体差の色調(例: 守護者を同じモデルのまま黒っぽくする)。元の色に乗算するだけなので、
             // テクスチャの模様そのものは変えない。
             if (unit.tint !== undefined) copy.color.multiply(new THREE.Color(unit.tint));
@@ -555,7 +565,10 @@ export function createBattleScene(container, grid, { voidBoundaryWalls = false, 
         fallback.visible = false;
         g.add(model);
         if (g.userData.occluded) setUnitOccluded(g, true);
-      }).catch(() => {});
+      }).catch(error => {
+        // 開発中だけモデル読込失敗を見えるようにし、代替フィギュアへ黙って落ちないようにする。
+        if (import.meta.env?.DEV) console.error(`[battle] model load failed: ${path}`, error);
+      });
     };
 
     if (unit.side === "party" || unit.side === "npc") {
@@ -1189,6 +1202,14 @@ export function createBattleScene(container, grid, { voidBoundaryWalls = false, 
     // 見た目を確認しながらカメラの見下ろし角を調整するための検証用API。
     // 正本はbattleConfig.jsのpresentation.cameraElevationDeg。ここでは反映するだけ。
     setCameraElevationDeg(deg) { cameraElevation = deg * Math.PI / 180; applyFogRange(); placeCamera(); },
+    // ズーム倍率をその場で反映する。1より大きいほど盤面へ近づく。
+    setCameraZoom(zoom) {
+      cameraZoom = Math.max(0.5, Number(zoom) || 1);
+      baseViewSize = gridViewSize / cameraZoom;
+      viewSize = baseViewSize;
+      applyFrustum();
+      placeCamera();
+    },
     // 水平方向の向きをスライダーでリニアに操作するためのAPI。「視点を回す」(rotate)と
     // 同じdirIndex/camAngleを共有するが、なめらかな追従は挟まず即座に反映する
     // (ドラッグ操作の追従遅れを避けるため。挙動はcameraElevationDegと合わせてある)。

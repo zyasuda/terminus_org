@@ -5,6 +5,11 @@ import { ITEMS, partyMaxHp } from "./core.js";
 import { EXPEDITION_BATTLE_CONFIG } from "./battleConfig.js";
 import { chooseCompanionAction, createExpeditionBattleLayout, facingToward } from "./battleState.js";
 
+// 開発用URLに ?standee=1 を付けたときだけ、味方2人のGLBをスタンディー版へ差し替える。
+// 通常URLと既存のセーブ・テストの表示は変更しない。
+const USE_STANDEES = typeof window !== "undefined" && new URLSearchParams(window.location.search).has("standee");
+const standeeModelId = modelId => USE_STANDEES && (modelId === "lydia" || modelId === "gareth") ? `${modelId}-standee` : modelId;
+
 const atkOf = (baseAtk, gear = {}) => baseAtk + [gear.weapon, gear.charm].reduce((n, id) => n + (id && ITEMS[id]?.stat === "atk" ? ITEMS[id].power : 0), 0);
 // 味方も敵も同じ形で組む。歩ける高さや見た目のような共通属性を、3か所へ書き分けないため。
 // combat(hp/maxHp/atk)だけは、装備と遠征中の残HPで決まるので呼ぶ側から渡す。
@@ -19,7 +24,7 @@ const unitFrom = (id, side, config, start, faceTo, combat) => ({
   height: config.height,
   canClimb: config.canClimb,
   maxObstacleHeight: EXPEDITION_BATTLE_CONFIG.movement.maxObstacleHeight,
-  modelId: config.modelId,
+  modelId: standeeModelId(config.modelId),
   ...(config.tint !== undefined ? { tint: config.tint } : {}),
 });
 
@@ -89,6 +94,12 @@ export default function ExpeditionBattle({ guardian, layout = "corridor", order,
   const [cameraElevationDeg, setCameraElevationDeg] = useState(() =>
     heroAdjacentToEnemy ? ADJACENT_ELEVATION_DEG : EXPEDITION_BATTLE_CONFIG.presentation.cameraElevationDeg);
   const setElevation = deg => { setCameraElevationDeg(deg); scene.current?.setCameraElevationDeg(deg); };
+  const [cameraZoom, setCameraZoomState] = useState(() => EXPEDITION_BATTLE_CONFIG.presentation.cameraZoom);
+  const setZoom = zoom => {
+    const normalized = Math.max(0.75, Math.min(2, Number(zoom) || EXPEDITION_BATTLE_CONFIG.presentation.cameraZoom));
+    setCameraZoomState(normalized);
+    scene.current?.setCameraZoom(normalized);
+  };
   useEffect(() => {
     setElevation(heroAdjacentToEnemy ? ADJACENT_ELEVATION_DEG : EXPEDITION_BATTLE_CONFIG.presentation.cameraElevationDeg);
   }, [heroAdjacentToEnemy]);
@@ -152,7 +163,7 @@ export default function ExpeditionBattle({ guardian, layout = "corridor", order,
     setState(s => ({ ...s, units: s.units.map(u => u.id === unit.id ? { ...u, ...to, facing: facingToward(unit, to, u.facing) } : u), log: [...s.log, line] }));
   };
   useEffect(() => {
-    const grid = state.grid; const s = createBattleScene(mount.current, grid, { voidBoundaryWalls: battleLayout === "junction", cameraElevationDeg: EXPEDITION_BATTLE_CONFIG.presentation.cameraElevationDeg }); scene.current = s;
+    const grid = state.grid; const s = createBattleScene(mount.current, grid, { voidBoundaryWalls: battleLayout === "junction", cameraElevationDeg: EXPEDITION_BATTLE_CONFIG.presentation.cameraElevationDeg, cameraZoom: EXPEDITION_BATTLE_CONFIG.presentation.cameraZoom }); scene.current = s;
     s.setFogEnabled(fogOn); s.setFogIntensity(fogLevel); s.setFogColor(fogColor);
     s.setDustEnabled(dustOn); s.setRainEnabled(rainOn); s.setWallsEnabled(wallsOn);
     s.setBackgroundColor(bgColor); s.setLightPreset(lightPreset);
@@ -176,6 +187,7 @@ export default function ExpeditionBattle({ guardian, layout = "corridor", order,
   useEffect(() => { scene.current?.setWaterEnabled(waterOn); }, [waterOn]);
   useEffect(() => { scene.current?.setHolesEnabled(holesOn); }, [holesOn]);
   useEffect(() => { scene.current?.setLanternEnabled("hero", heroLanternOn); }, [heroLanternOn]);
+  useEffect(() => { scene.current?.setCameraZoom(cameraZoom); }, [cameraZoom]);
   useEffect(() => {
     const s = scene.current; if (!s) return;
     const targets = heroAction === "attack" ? adjacentTargets : [];
@@ -229,7 +241,7 @@ export default function ExpeditionBattle({ guardian, layout = "corridor", order,
     data-hero-action={playerTurn ? (heroAction || (moved ? "moved" : "choose")) : ""}
     data-adjacent-enemies={adjacentTargets.length}
     data-reach-cells={JSON.stringify(heroReach.map(({ x, y }) => ({ x, y })))}>
-    <div ref={mount} style={S.canvas} data-camera={combatShot ? "combat" : "iso"} data-view-direction={viewDirection} data-camera-azimuth-deg={cameraAzimuthDeg} data-camera-elevation-deg={cameraElevationDeg}/>
+    <div ref={mount} style={S.canvas} data-camera={combatShot ? "combat" : "iso"} data-view-direction={viewDirection} data-camera-azimuth-deg={cameraAzimuthDeg} data-camera-elevation-deg={cameraElevationDeg} data-camera-zoom={cameraZoom}/>
     <div style={S.hud}>
       <b>{!partyAlive ? "敗北" : !enemyAlive ? "勝利" : `${active?.name}の手番`}</b>
       <div style={S.row}>{state.units.map(u => <span key={u.id} style={S.chip}>{u.name} {u.hp}/{u.maxHp}</span>)}</div>
@@ -260,6 +272,11 @@ export default function ExpeditionBattle({ guardian, layout = "corridor", order,
         <span>カメラの向き:</span>
         <input type="range" min="0" max="359" step="1" value={cameraAzimuthDeg} onChange={e => setAzimuth(Number(e.target.value))}/>
         <span>{cameraAzimuthDeg}度</span>
+      </div>
+      <div style={S.row}>
+        <span>カメラのズーム:</span>
+        <input type="range" min="0.75" max="2" step="0.05" value={cameraZoom} onChange={e => setZoom(Number(e.target.value))}/>
+        <span>×{cameraZoom.toFixed(2)}</span>
       </div>
       {/* 演出の見た目調整(検証用)。盤面のルールには影響しない */}
       <div style={S.row}>

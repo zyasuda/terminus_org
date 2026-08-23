@@ -135,6 +135,8 @@ export const EXPEDITION_BATTLE_CONFIG = {
      * 手前の障害物が奥の盤面・ユニットと重なりにくくなる。注視点と水平距離は変わらない。単位: 度。
      * 戦闘画面下部のスライダーで見た目を見ながら調整できる(この値は既定値)。 */
     cameraElevationDeg: 45,
+    /** 戦闘盤面のズーム倍率。大きいほど盤面が画面いっぱいに近づく。 */
+    cameraZoom: 1.2,
     modelFacingOffset: {
       /** 味方GLBのローカル正面補正。値を変えると見た目だけがY軸回転する。単位: ラジアン。 */
       party: 0,
