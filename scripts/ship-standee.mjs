@@ -58,10 +58,16 @@ const run = (label, cmd, cmdArgs) => {
 for (const name of Object.keys(config.characters)) {
   run(`板テクスチャ ${name}`, process.execPath, ["scripts/build-standee-acrylic.mjs", name]);
 }
+// heightMは実寸(m)。盤面のセル間隔は1ワールド単位なので、1マスの実寸で割って渡す。
+// ここを割らずに実寸のまま渡していたため、1マス=150cmの盤面で人物が1.5倍に
+// 膨らんでいた(2026-08-25、リディアが258cmになっていた)。
+const metresPerTile = config.metresPerTile ?? 1;
 for (const name of Object.keys(config.characters)) {
-  run(`GLB ${name} (実身長 ${config.characters[name].heightM}m)`, BLENDER,
+  const heightM = config.characters[name].heightM;
+  const units = heightM / metresPerTile;
+  run(`GLB ${name} (実身長 ${heightM}m = ${units.toFixed(3)}マス / 1マス${metresPerTile}m)`, BLENDER,
     ["--background", "--python", "tools/standee/create_acrylic_standee.py", "--",
-     name, next, String(config.characters[name].heightM)]);
+     name, next, String(units), String(metresPerTile)]);
 }
 for (const name of Object.keys(config.characters)) {
   run(`受け入れ検査 ${name}`, process.execPath, ["scripts/check-standee-pair.mjs", name]);

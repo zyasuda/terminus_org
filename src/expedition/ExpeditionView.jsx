@@ -25,20 +25,19 @@ const load = () => {
       village: newVillage(saved.village || saved),
       floor: migrateFloor(saved.floor),
       haul: saved.haul || [],
-      command: saved.command || "attack",
       message: saved.message || "村で遠征準備をする。",
       battleId: saved.battleId || null,
     };
   } catch {
     // ponytail: 壊れたセーブは黙って村からやり直す。直後のuseEffectが同じキーを上書きするので、
     // 中断していた遠征は復旧できない。惜しくなったら、捨てる前に作者へ知らせる導線を足す。
-    return { village: newVillage(), floor: null, haul: [], command: "attack", message: "村で遠征準備をする。", battleId: null };
+    return { village: newVillage(), floor: null, haul: [], message: "村で遠征準備をする。", battleId: null };
   }
 };
 export default function ExpeditionView() {
   const saved = useState(load)[0];
-  const [village, setVillage] = useState(saved.village), [floor, setFloor] = useState(saved.floor), [battle, setBattle] = useState(() => saved.floor?.events.find(e => e.id === saved.battleId) || null), [command, setCommand] = useState(saved.command), [haul, setHaul] = useState(saved.haul), [message, setMessage] = useState(saved.message);
-  useEffect(() => { localStorage.setItem(SAVE, JSON.stringify({ village, floor, haul, command, message, battleId: battle?.id || null })); }, [village, floor, haul, command, message, battle]);
+  const [village, setVillage] = useState(saved.village), [floor, setFloor] = useState(saved.floor), [battle, setBattle] = useState(() => saved.floor?.events.find(e => e.id === saved.battleId) || null), [haul, setHaul] = useState(saved.haul), [message, setMessage] = useState(saved.message);
+  useEffect(() => { localStorage.setItem(SAVE, JSON.stringify({ village, floor, haul, message, battleId: battle?.id || null })); }, [village, floor, haul, message, battle]);
   const start = () => { setFloor(createFloor(Date.now() >>> 0)); setHaul([]); setMessage("リディア「宝箱があるなら、寄り道も悪くないですね。」"); };
   const move = direction => setFloor(f => { const next = walk(f, direction); const e = eventAt(next); if (e) setBattle(e); return next; });
   useEffect(() => {
@@ -65,7 +64,7 @@ export default function ExpeditionView() {
   const equip = (id, index) => { if (ITEMS[id]?.slot !== "consumable") setVillage(v => equipFromStash(v, owner, index)); };
   const useTonic = () => { const i = village.stash.indexOf("tonic"); if (i < 0) return false; setVillage(v => ({ ...v, stash: v.stash.filter((_, n) => n !== i) })); return true; };
   if (battle) return <>
-    <ExpeditionBattle guardian={battle.kind === "guardian"} layout={battle.kind === "junction" ? "junction" : "corridor"} order={command} equipment={village.equipment} party={floor.party} seed={(floor.seed + [...battle.id].reduce((n, char) => n + char.charCodeAt(0), 0)) >>> 0} tonics={village.stash.filter(i => i === "tonic").length} onUseTonic={useTonic} onFinish={finishBattle}/>
+    <ExpeditionBattle guardian={battle.kind === "guardian"} layout={battle.kind === "junction" ? "junction" : "corridor"} equipment={village.equipment} party={floor.party} seed={(floor.seed + [...battle.id].reduce((n, char) => n + char.charCodeAt(0), 0)) >>> 0} tonics={village.stash.filter(i => i === "tonic").length} onUseTonic={useTonic} onFinish={finishBattle}/>
     {DEBUG && <button style={S.debugSkip} onClick={() => finishBattle("victory", floor.party)}>[debug] 戦闘スキップ</button>}
   </>;
   if (!floor) return <div style={S.page}>
@@ -140,9 +139,6 @@ export default function ExpeditionView() {
             </div>)
             : <div style={S.muted}>変更できる装備はありません。</div>}
         </section>
-        <b>リディアへの指示</b>
-        {[["attack", "攻撃"], ["guard", "護衛"], ["retreat", "退却"]].map(([id, label]) =>
-          <button key={id} style={{ ...S.btn, ...(command === id ? S.selected : {}) }} onClick={() => setCommand(id)}>{label}</button>)}
         <p>矢印キーまたは地図下のボタンで移動します。通路は次の部屋まで自動で通過します。三叉路では止まります。</p>
         {e && <button style={S.primary} onClick={() => setBattle(e)}>戦闘を開始</button>}
         {chest && <button style={S.primary} onClick={openChest}>宝箱を開ける</button>}

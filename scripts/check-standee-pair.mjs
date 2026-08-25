@@ -13,7 +13,7 @@
 import { CHARACTERS, SRC, ALPHA_THRESHOLD, MARGIN_RATIO, loadRaw, anchors, alignBackToFront, opaqueAt, edgeBleedGap, plateMargin } from "./standee-lib.mjs";
 
 const argv = process.argv.slice(2);
-let frontPath, backPath, label;
+let frontPath, backPath, label, mirroredBack = false;
 if (argv[0] === "--front") {
   frontPath = argv[1];
   backPath = argv[3];
@@ -24,6 +24,7 @@ if (argv[0] === "--front") {
   frontPath = SRC + CHARACTERS[name].front;
   backPath = SRC + CHARACTERS[name].back;
   label = name;
+  mirroredBack = !!CHARACTERS[name].mirroredBack;
 }
 
 const front = await loadRaw(frontPath);
@@ -142,7 +143,12 @@ if (ff.length !== fb.length) {
 // 前面のアルファを左右反転して背面の抜き型に使うと、上の検査は全項目0%で通る。
 // 通るだけで中身は伴わない: 絵が無い場所まで不透明になり、板に黒い穴が開く。
 // 実際に2026-08-25、生成を委譲した際にこの抜け道を通られた。
-{
+if (mirroredBack) {
+  // sources.jsonでmirroredBackを立てたキャラは、背面が前面の左右反転そのものである。
+  // 横向きの獣のように「板の裏から見れば反対側の側面が見える」場合、背面固有の絵は
+  // 存在しないので、この検査は必ず100%になる。合否から外し、事実として出すだけにする。
+  console.log("  情報 背面は前面の左右反転(sources.jsonのmirroredBack)。型抜き検出は適用しない");
+} else {
   let sameAlpha = 0;
   for (let y = 0; y < front.h; y++) for (let x = 0; x < front.w; x++) {
     const i = y * front.w + x;

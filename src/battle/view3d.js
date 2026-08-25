@@ -14,9 +14,20 @@ import { STANDEE_VERSION } from "./standeeVersion.js";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import { elevationAt, makeRng } from "./core.js";
 
-const TILE = 0.92;       // 床タイルの一辺(セル間にわずかな目地を残す)
-const TILE_H = 0.25;     // 床の厚み(1キューブ=4層の1層ぶん)
+// 床の紙は1マスちょうどで隙間なく敷く。TILEはマス内に物を置くときの
+// 「はみ出さない範囲」の目安として、水溜りや瓦礫の大きさに使う。
+const TILE = 0.92;
 const WALL_H = 1.0;
+
+// ランタンの色と強さ。夜の主光源。
+// 元は0xffa848(濃い橙)だったが、床を石のモノトーンにしたところ床が橙に染まり、
+// グレーに見えなくなった。scripts/lantern-tune.mjs で床の無彩色からの偏りを
+// 実測して詰めた値(2026-08-25、偏り26.4%→3.3%)。橙みは残っているが、
+// ランタンの存在は色ではなく明るさの落ち方で出る(近く明度53 / 遠く明度41)。
+const LANTERN_COLOR = 0xffe3bd;
+const LANTERN_INTENSITY = 4.6;   // 板の明るさの基準にも使う(applyPlateLight)
+const LANTERN_RANGE = 3.0;
+const LIGHT_PRESET_LANTERN_DEFAULT = true;   // 既定は夜プリセット
 
 const COLOR = {
   bg: 0x161a22,
@@ -71,7 +82,10 @@ export function createBattleScene(container, grid, { voidBoundaryWalls = false, 
   const FOG_MAX_DENSITY = 0.88;   // 強さ1: 従来のfar=CAMERA_DIST+10相当
   let FOG_NEAR, FOG_REF_DIST;
   const fogObj = new THREE.Fog(COLOR.bg, 1, 2);
-  scene.fog = fogObj;
+  // 既定はOFF。奥の暗さは距離での暗転(depthStrength)が担い、fogは天候の演出として
+  // 作者が明示的に点けるものにする。以前はここでONにしていたため、呼び出し側が
+  // 必ずOFFにする一方で検証用シーンだけ霧が残る、という食い違いが起きていた。
+  scene.fog = null;
   // setCameraElevationDeg()で角度を変えるたびにも呼び直し、fogが盤面を飲み込まないようにする。
   const applyFogRange = () => {
     const cameraDist = CAMERA_DIST / Math.cos(cameraElevation);
@@ -113,6 +127,28 @@ export function createBattleScene(container, grid, { voidBoundaryWalls = false, 
     isoCamera.updateProjectionMatrix();
   };
 
+  /* --- 距離での暗転(奥ほど暗くする) ---
+     以前はTHREE.Fogでやっていたが、fogには2つの役割が乗っていた:
+     「演出の枠としての奥の暗さ」と「天候としての霧」。呼び出し側2つはどちらも
+     霧を既定OFFにしていたので、枠の方も一緒に消えていた(2026-08-25、検証用シーンだけ
+     霧が残っていて、ゲームと違う絵で明るさを判断しかけた)。
+     枠の方はfogから切り離して自前で持つ。fogは天候の演出として残す。
+     fogと違って、床・障害物・駒の板それぞれに別の曲線を当てられる。
+     とくに板の絵はfogではほとんど暗くならなかった(実測 手前76.2 / 奥72.8、比0.96)ので、
+     fogのままだと奥の駒だけが暗い床から浮いていた。 */
+  // 0で無効、1で最奥が真っ黒。0.8で床と板がほぼ同じ比で沈む(実測 床0.68 / 板0.69)。
+  // 何もしないと奥の方が明るい(比1.33)。key光が(6,12,4)から差していて、
+  // 盤面の奥ほど正面から当たるため。0.5あたりでようやく前後が同じ明るさになる。
+  const DEPTH_DARKENING = 0.8;
+  let depthStrength = DEPTH_DARKENING;
+  const camPos = new THREE.Vector3();
+  let depthNear = 0, depthFar = 1;
+  const paperCells = [];    // 床の紙。頂点カラーで暗くする(材質は共有のまま)
+  const depthTinted = [];   // 障害物・瓦礫・ステージの物。{ material, base }
+  // カメラが動いたときに引き直す。回転中は毎フレーム走るが、
+  // 8x8で64マス×4頂点なので負荷にならない。
+  let onCameraMoved = () => {};
+
   const placeCamera = () => {
     if (camera !== isoCamera) return;
     // 注視点(target)と水平距離(r)は変えず、見下ろし角だけをcameraElevationで変える。
@@ -120,6 +156,16 @@ export function createBattleScene(container, grid, { voidBoundaryWalls = false, 
     const r = CAMERA_DIST, y = r * Math.tan(cameraElevation);
     isoCamera.position.set(Math.cos(camAngle) * r, y, Math.sin(camAngle) * r);
     isoCamera.lookAt(target);
+    onCameraMoved();
+  };
+  // カメラからの距離を0〜1へ正規化して、明るさの係数にする。
+  // 正規化の範囲は盤面のマスの最近・最遠なので、盤面の大きさや見下ろし角が
+  // 変わっても「最奥がどれだけ暗いか」は同じに保たれる。
+  const depthFactorAt = (x, y, z) => {
+    if (!depthStrength || depthFar <= depthNear) return 1;
+    const d = Math.hypot(camPos.x - x, camPos.y - y, camPos.z - z);
+    const t = Math.min(1, Math.max(0, (d - depthNear) / (depthFar - depthNear)));
+    return 1 - depthStrength * t;
   };
 
   /* --- ライト ---
@@ -127,9 +173,12 @@ export function createBattleScene(container, grid, { voidBoundaryWalls = false, 
      暗くするのが目的ではなく、下のランタンの揺らぎが分かるようにするため。
      屋外・昼の場面では背景色を変えるだけだと地面が暗いままで浮くので、
      「昼」プリセットでは太陽光相当まで両方の強さを上げる */
+  // lantern: そのプリセットでランタンを点けるか。
+  // 昼は太陽光(key)だけにする。屋外の昼にランタンが点いていると、
+  // 持ち主の足元だけが橙に染まって太陽光と喧嘩する。
   const LIGHT_PRESET = {
-    night: { ambient: 0.34, key: 0.36, keyColor: 0xdfe6ff },
-    day: { ambient: 0.85, key: 1.05, keyColor: 0xfff3da }
+    night: { ambient: 0.34, key: 0.36, keyColor: 0xdfe6ff, lantern: true },
+    day: { ambient: 0.85, key: 1.05, keyColor: 0xfff3da, lantern: false }
   };
   const ambientLight = new THREE.AmbientLight(0xffffff, LIGHT_PRESET.night.ambient);
   scene.add(ambientLight);
@@ -150,15 +199,153 @@ export function createBattleScene(container, grid, { voidBoundaryWalls = false, 
   // (以前は全員一括on/offだったが、個別に制御したいとの要望で変更した)
   const lanternOverrides = new Map();   // id → boolean(未設定なら既定でtrue)
 
+  /* --- 板の印刷面の明るさ ---
+     スタンディの絵はMeshBasicMaterial(光源を計算しない)で貼っている。陰影が描き
+     込まれた完成イラストなので、直接照らすと濃い衣装だけが白飛びするため。
+     その代わり、カンテラを消しても絵だけ元の明るさのまま残り、暗い床の上で駒が
+     浮いて見えていた(2026-08-25、板の内側の画素が84%完全に同一だと実測)。
+     照らすのではなく、部屋の明るさに応じて絵の色を乗算で落とす。白飛びしない性質は
+     保ったまま、暗さに追随する。
+     LANTERN_LIGHT_WEIGHTは「カンテラが部屋の明るさにどれだけ足しているか」で、
+     床の明度の実測(点灯56.5 / 消灯37.7、環境光+key=0.70)から逆算した値。
+     基準は「夜+カンテラ点灯」で、そこを1.0(絵をそのままの明るさで出す)とする。 */
+  // カンテラが部屋の明るさに足す量。床の明度の見かけ(0.35と見積もっていた)ではなく、
+  // 「点灯/消灯で板と床の明るさの比が変わらない」条件を実測して決めた値。
+  // 0.35では板が床ほど落ちず、消灯するとかえって駒が目立っていた
+  // (実測 板/床が点灯1.41→消灯1.79)。1.8にすると点灯1.38 / 消灯1.36で揃う。
+  // 見かけより大きいのは、色の乗算が線形空間で効くのに対して画面の値がガンマ後だから。
+  let LANTERN_LIGHT_WEIGHT = 1.8;
+  const PLATE_LIGHT_MIN = 0.22;   // 真っ暗にはしない下限
+  // 基準は重みから毎回引き直す。定数にしてしまうと、重みを変えても
+  // 消灯時の分母が古い値のままになり、いくら重みを動かしても効かない。
+  const plateLightRef = () => LIGHT_PRESET.night.ambient + LIGHT_PRESET.night.key + LANTERN_LIGHT_WEIGHT;
+  const plateMaterials = [];     // { material, base, owner } 印刷面だけ。板の縁(Rim)は元から照明を受ける
+  // THREE.PointLight(decay=0, distance=D)の減衰と同じ式。
+  // 板は照明を受けないので、板に当たる光の量はここで自分で計算する必要がある。
+  // three側の実装: attenuation = (1 - (d/D)^4)^2 (saturate済み)。
+  const lanternAttenuation = (dx, dy, dz) => {
+    const d = Math.hypot(dx, dy, dz);
+    const t = Math.max(0, 1 - (d / lanternRange) ** 4);
+    return t * t;
+  };
+  const applyPlateLight = () => {
+    // カンテラの寄与は、点いているかどうかだけでなく
+    //   ・実際の強さ (下げたときに床だけ暗くなって板が浮かないように)
+    //   ・その駒からカンテラまでの距離 (射程を詰めたときに、光の輪の外の駒も暗くなるように)
+    // の両方に比例させる。射程3.0では光の輪の外に出る駒があるので、距離が要る。
+    const share = LANTERN_LIGHT_WEIGHT * (lanternIntensity / LANTERN_INTENSITY);
+    const ref = plateLightRef();
+    for (const { material, base, owner } of plateMaterials) {
+      const p = owner.position;
+      let lantern = 0;
+      for (const l of lanterns) {
+        if (!l.light.visible) continue;
+        const gp = l.light.parent.position;   // カンテラは持ち主のGroupの子
+        lantern += share * lanternAttenuation(gp.x - p.x, gp.y + l.light.position.y - p.y, gp.z - p.z);
+      }
+      const room = ambientLight.intensity + key.intensity + lantern;
+      const roomFactor = Math.max(PLATE_LIGHT_MIN, Math.min(1, room / ref));
+      // 部屋の明るさ × カメラからの距離。床と同じ曲線で沈むので、奥の駒が浮かない。
+      material.color.copy(base).multiplyScalar(roomFactor * depthFactorAt(p.x, p.y, p.z));
+    }
+  };
+  // ランタンの色。元は0xffa848(濃い橙)だったが、床を石のモノトーンにしたところ
+  // 石が橙に染まってグレーに見えなくなった。橙みを残しつつ、床の色の偏りを
+  // 実測して詰めた値(2026-08-25、scripts/lantern-tune.mjsで測定)。
+  let lanternColor = LANTERN_COLOR;
+  let lanternIntensity = LANTERN_INTENSITY;
+  // 届く範囲。減衰0なのでこの距離までほぼ一様に照らし、縁でなめらかに落ちる。
+  // 6.4では8x8の盤面をほぼ全面照らしてしまい「カンテラのまわりだけ明るい」感が
+  // 出なかったので、3.0にして光の輪を作った(2026-08-25、作者が並べて選定)。
+  let lanternRange = LANTERN_RANGE;
+  // プリセット(昼/夜)による一括の点灯。個別のsetLanternEnabledより優先する
+  // (昼はランタンを消す、という決めごとを個別設定で破らせない)。
+  let lanternPresetOn = LIGHT_PRESET_LANTERN_DEFAULT;
+  const lanternVisibleFor = id =>
+    lanternPresetOn && (lanternOverrides.has(id) ? lanternOverrides.get(id) : true);
+  const applyLanternPreset = on => {
+    lanternPresetOn = on !== false;
+    for (const l of lanterns) l.light.visible = lanternVisibleFor(l.id);
+    applyPlateLight();
+  };
+
   // 周期の違う正弦を重ねて、繰り返しに気づきにくいゆらぎを作る。
   // 速い成分を厚めにすると「ゆっくり明滅」ではなく炎のチラつきに寄る
   const flicker = t =>
     0.68 + 0.32 * (Math.sin(t) * 0.34 + Math.sin(t * 2.3) * 0.3 + Math.sin(t * 5.7) * 0.22 + Math.sin(t * 9.1) * 0.14);
 
-  /* --- 床と壁(戦闘中は変化しないので一度だけ作る) --- */
-  const tileGeo = new THREE.BoxGeometry(TILE, TILE_H, TILE);
+  /* --- 床と壁(戦闘中は変化しないので一度だけ作る) ---
+     床はタイルの箱ではなく、厚みのない紙として描く。マスの切れ目ではなく細い線で
+     グリッドを表す。層を3つに分けてあるのが肝:
+       1. 紙   マスごとの平面。材質は1つを共有し、UVを盤面座標から振るので
+               1枚のテクスチャが盤面全体に連続して乗る
+       2. 覆い マスごとの透明な平面。ハイライトの塗りと当たり判定を担う
+       3. 線   全部の辺を1つのLineSegmentsで引く。1ドローコール
+     材質を共有した紙はマスごとに色を塗れないので、ハイライトは2層目が持つ。
+     以前はタイルの材質をcloneして塗り替えていた(2026-08-25にこの形へ変えた)。
+     線を覆いより上に置いてあるのは、ハイライト中もグリッドを見せるため。 */
+  const PAPER_Y = 0;              // 歩く面。箱だった頃の上面(y=0)と同じ高さに保つ
+  const HIGHLIGHT_Y = 0.004;
+  const GRID_LINE_Y = 0.008;
+  const HIGHLIGHT_OPACITY = 0.42;
+  const GRID_LINE_OPACITY = 0.5;   // 比較画像から作者が決めた値(2026-08-25)
+  const FLOOR_TONE = 0.8;          // 同上
+  const FLOOR_TEX_TILES = 3;      // テクスチャ1枚が何マス分か。物理サイズを固定するため
+  const FLOOR_BASE = 0xb4b4b4;    // 石のモノトーン。明度はsetFloorToneで動かす
+
   const wallGeo = new THREE.BoxGeometry(0.98, WALL_H, 0.98);
-  const floorMat = new THREE.MeshLambertMaterial({ color: COLOR.floor });
+  // 石畳のモノトーン。画像ファイルは使わず、水面と同じくcanvasで焼く。
+  // 大きな色むら→細かい粒の順に重ねる。決定論rngなので毎回同じ絵になる。
+  const stoneTexture = () => {
+    const c = document.createElement("canvas");
+    c.width = c.height = 256;
+    const g = c.getContext("2d");
+    g.fillStyle = "#8f8f8f";
+    g.fillRect(0, 0, 256, 256);
+    const rng = makeRng(20260825);
+    for (let i = 0; i < 130; i++) {
+      const v = Math.round(118 + rng() * 62);
+      g.fillStyle = `rgba(${v},${v},${v},0.32)`;
+      g.beginPath();
+      g.ellipse(rng() * 256, rng() * 256, 12 + rng() * 44, 10 + rng() * 36, rng() * Math.PI, 0, Math.PI * 2);
+      g.fill();
+    }
+    for (let i = 0; i < 9000; i++) {
+      const v = Math.round(88 + rng() * 92);
+      g.fillStyle = `rgba(${v},${v},${v},0.2)`;
+      g.fillRect(rng() * 256, rng() * 256, 1.4, 1.4);
+    }
+    const tex = new THREE.CanvasTexture(c);
+    tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+    tex.colorSpace = THREE.SRGBColorSpace;
+    return tex;
+  };
+  const stoneTex = stoneTexture();
+  let floorTone = FLOOR_TONE;
+  const floorMat = new THREE.MeshLambertMaterial({ map: stoneTex, color: FLOOR_BASE, vertexColors: true });
+  const applyFloorTone = () => floorMat.color.setHex(FLOOR_BASE).multiplyScalar(floorTone);
+  // マスごとに、テクスチャ座標を盤面位置から振った紙を1枚作る。
+  // 材質は共有なので、continuityはUVだけで作る(tex.repeatでは出せない)。
+  const paperGeo = new THREE.PlaneGeometry(1, 1);
+  const paperAt = (x, y, wx, wz) => {
+    const geo = paperGeo.clone();
+    const uv = geo.attributes.uv;
+    for (let i = 0; i < uv.count; i++) {
+      uv.setXY(i, (x + uv.getX(i)) / FLOOR_TEX_TILES, (y + uv.getY(i)) / FLOOR_TEX_TILES);
+    }
+    // 距離での暗転を頂点カラーで載せる。材質を共有したままマスごと(さらに頂点ごと)に
+    // 明るさを変えられるのがこの方法の利点。マス単位で塗ると段差が出るので頂点単位にする。
+    geo.setAttribute("color", new THREE.Float32BufferAttribute(new Array(geo.attributes.position.count * 3).fill(1), 3));
+    const m = new THREE.Mesh(geo, floorMat);
+    m.rotation.x = -Math.PI / 2;
+    m.position.set(wx, PAPER_Y, wz);
+    // 頂点のワールド座標。rotation.x=-90度で局所(px,py,0)は世界(px,0,-py)へ写る。
+    const pos = geo.attributes.position;
+    const world = [];
+    for (let i = 0; i < pos.count; i++) world.push([wx + pos.getX(i), wz - pos.getY(i)]);
+    paperCells.push({ mesh: m, world });
+    return m;
+  };
   const wallMat = new THREE.MeshLambertMaterial({ color: COLOR.wall });
   const pillarMat = new THREE.MeshLambertMaterial({ color: COLOR.pillar });
   const rubbleMat = new THREE.MeshLambertMaterial({ color: COLOR.rubble });
@@ -211,6 +398,15 @@ export function createBattleScene(container, grid, { voidBoundaryWalls = false, 
   // 障害物(柱・瓦礫)と水溜りは、それぞれの見え方だけをまとめてon/offできるよう
   // 専用のGroupへ入れる。非表示にしても当たり判定・移動コストはgrid側にそのまま
   // 残るので、盤面のルールには一切影響しない(あくまで見た目の検証用)
+  // 床だけを暗くすると、奥の障害物と瓦礫が明るいまま残って浮く。
+  // これらは個別のメッシュなので、材質をcloneして色を直接落とす。
+  // 盤面あたり十数個なので材質が増えても問題にならない。
+  const depthTint = mesh => {
+    mesh.material = mesh.material.clone();
+    depthTinted.push({ material: mesh.material, base: mesh.material.color.clone(), obj: mesh });
+    return mesh;
+  };
+
   const obstacleGroup = new THREE.Group();
   scene.add(obstacleGroup);
   const waterGroup = new THREE.Group();
@@ -231,24 +427,25 @@ export function createBattleScene(container, grid, { voidBoundaryWalls = false, 
 
         // 木柵はステージ固有の板で描く。通行不可という規則はセル側が持つ。
         if (cell.obstacle?.kind === "barrier") {
-          const floor = new THREE.Mesh(tileGeo, floorMat.clone());
-          floor.position.set(wx, -TILE_H / 2, wz);
-          groundPatchGroup.add(floor);
+          groundPatchGroup.add(paperAt(x, y, wx, wz));
           continue;
         }
 
-        const m = new THREE.Mesh(wallGeo, cell.obstacle ? pillarMat : wallMat);
+        const m = depthTint(new THREE.Mesh(wallGeo, cell.obstacle ? pillarMat : wallMat));
         m.position.set(wx, WALL_H / 2, wz);
         (cell.obstacle ? obstacleGroup : scene).add(m);
 
-        const floor = new THREE.Mesh(tileGeo, floorMat.clone());
-        floor.position.set(wx, -TILE_H / 2, wz);
-        groundPatchGroup.add(floor);
+        groundPatchGroup.add(paperAt(x, y, wx, wz));
         continue;
       }
 
-      const m = new THREE.Mesh(tileGeo, floorMat.clone());
-      m.position.set(wx, -TILE_H / 2, wz);
+      scene.add(paperAt(x, y, wx, wz));
+      // 覆い。opacity 0 で見えないが visible のままなので、当たり判定には常に効く
+      // (visible=falseにするとraycastが素通りしてマスを拾えなくなる)。
+      const m = new THREE.Mesh(paperGeo, new THREE.MeshBasicMaterial({
+        color: COLOR.reach, transparent: true, opacity: 0, depthWrite: false }));
+      m.rotation.x = -Math.PI / 2;
+      m.position.set(wx, HIGHLIGHT_Y, wz);
       m.userData = { kind: "cell", x, y };
       scene.add(m);
       tiles.set(x + "," + y, m);
@@ -256,7 +453,7 @@ export function createBattleScene(container, grid, { voidBoundaryWalls = false, 
       // 乗り越えられる瓦礫。床の上に低い箱を置くだけで、進入は妨げない
       if (cell.obstacle) {
         const h = cell.obstacle.height;
-        const r = new THREE.Mesh(new THREE.BoxGeometry(0.7, h, 0.7), rubbleMat);
+        const r = depthTint(new THREE.Mesh(new THREE.BoxGeometry(0.7, h, 0.7), rubbleMat));
         r.position.set(wx, h / 2, wz);
         obstacleGroup.add(r);
       }
@@ -273,6 +470,105 @@ export function createBattleScene(container, grid, { voidBoundaryWalls = false, 
     }
   }
 
+  /* --- グリッド線 --- */
+  // 盤面にある(voidでない)マスの辺を集めて、1つのLineSegmentsにする。
+  // 隣り合うマスが共有する辺は1本だけ引く(2本重ねると濃さが倍になる)。
+  // LineBasicMaterialのlinewidthはほとんどの環境で無視され常に1pxになる。
+  // ズームで太らせたくなったら、線ではなく細い板に置き換えること。
+  const gridLineVerts = [];
+  {
+    const drawn = new Set();
+    const edge = (ax, az, bx, bz) => {
+      const key = [ax, az, bx, bz].map(n => n.toFixed(3)).join(",");
+      const flipped = [bx, bz, ax, az].map(n => n.toFixed(3)).join(",");
+      if (drawn.has(key) || drawn.has(flipped)) return;
+      drawn.add(key);
+      gridLineVerts.push(ax, GRID_LINE_Y, az, bx, GRID_LINE_Y, bz);
+    };
+    for (let y = 0; y < grid.h; y++) for (let x = 0; x < grid.w; x++) {
+      if (grid.cells[y * grid.w + x].void) continue;
+      const [wx, wz] = worldOf(x, y);
+      const x0 = wx - 0.5, x1 = wx + 0.5, z0 = wz - 0.5, z1 = wz + 0.5;
+      edge(x0, z0, x1, z0); edge(x1, z0, x1, z1); edge(x1, z1, x0, z1); edge(x0, z1, x0, z0);
+    }
+  }
+  // カメラが動いたら、正規化の範囲を測り直して全部を引き直す。
+  const updateDepthDarkening = () => {
+    isoCamera.getWorldPosition(camPos);
+    let min = Infinity, max = -Infinity;
+    for (const c of paperCells) for (const [wx, wz] of c.world) {
+      const d = Math.hypot(camPos.x - wx, camPos.y, camPos.z - wz);
+      if (d < min) min = d;
+      if (d > max) max = d;
+    }
+    if (!Number.isFinite(min)) return;
+    depthNear = min;
+    depthFar = Math.max(max, min + 0.001);
+    for (const c of paperCells) {
+      const attr = c.mesh.geometry.attributes.color;
+      for (let i = 0; i < attr.count; i++) {
+        const [wx, wz] = c.world[i];
+        const f = depthFactorAt(wx, 0, wz);
+        attr.setXYZ(i, f, f, f);
+      }
+      attr.needsUpdate = true;
+    }
+    for (const { material, base, obj } of depthTinted) {
+      const p = obj.getWorldPosition(worldScratch);
+      material.color.copy(base).multiplyScalar(depthFactorAt(p.x, p.y, p.z));
+    }
+    applyPlateLight();
+  };
+  const worldScratch = new THREE.Vector3();
+  onCameraMoved = updateDepthDarkening;
+
+  const gridLineMat = new THREE.LineBasicMaterial({ color: 0x000000, transparent: true, opacity: GRID_LINE_OPACITY });
+  const gridLines = new THREE.LineSegments(
+    new THREE.BufferGeometry().setAttribute("position", new THREE.Float32BufferAttribute(gridLineVerts, 3)),
+    gridLineMat);
+  scene.add(gridLines);
+
+  /* --- 駒の接地影 ---
+     紙の床には厚みが無いので、駒がそのまま浮いて見える。足元に暗い楕円を1枚
+     敷いて接地を作る。大きさはGLBを読み終えてから実測して合わせる(板の幅が
+     キャラごとに違うため、身長からの推定では錆喰いのような横長の駒が合わない)。 */
+  const shadowTexture = () => {
+    const c = document.createElement("canvas");
+    c.width = c.height = 128;
+    const g = c.getContext("2d");
+    const grad = g.createRadialGradient(64, 64, 0, 64, 64, 64);
+    grad.addColorStop(0, "rgba(0,0,0,0.85)");
+    grad.addColorStop(0.55, "rgba(0,0,0,0.42)");
+    grad.addColorStop(1, "rgba(0,0,0,0)");
+    g.fillStyle = grad;
+    g.fillRect(0, 0, 128, 128);
+    const tex = new THREE.CanvasTexture(c);
+    tex.colorSpace = THREE.SRGBColorSpace;
+    return tex;
+  };
+  const shadowTex = shadowTexture();
+  let contactShadowOpacity = 0.55;
+  // 影の広がり。板は薄いので、板の幅どおりに敷くと影が板の真下へ潰れて見えなくなる
+  // (実測: 影あり/なしで違う画素が2001しかなかった)。板より広げて地面へはみ出させる。
+  // 見下ろし角が浅いほど地面は縮んで見えるので、適正値は角度によって変わる。
+  let contactShadowScale = 1.6;
+  const CONTACT_SHADOW_DEPTH = 0.7;   // 幅に対する奥行きの比。1で真円
+  const contactShadows = [];
+  const sizeContactShadow = m => {
+    const w = m.userData.plateWidth * contactShadowScale;
+    m.scale.set(w, w * CONTACT_SHADOW_DEPTH, 1);
+  };
+  const makeContactShadow = () => {
+    const m = new THREE.Mesh(paperGeo, new THREE.MeshBasicMaterial({
+      map: shadowTex, transparent: true, opacity: contactShadowOpacity, depthWrite: false }));
+    m.rotation.x = -Math.PI / 2;
+    m.position.set(0, 0.002, 0);
+    m.userData.plateWidth = 0.55;   // 読込前の暫定。GLBを実測して上書きする
+    sizeContactShadow(m);
+    contactShadows.push(m);
+    return m;
+  };
+
   // ステージ固有の物は盤面規則と切り離して描く。重要物の座標はgrid.stageに残る。
   const propGroup = new THREE.Group();
   scene.add(propGroup);
@@ -283,12 +579,12 @@ export function createBattleScene(container, grid, { voidBoundaryWalls = false, 
     if (prop.kind === "barrier") {
       const fence = new THREE.Group();
       for (const offset of [-0.28, 0, 0.28]) {
-        const plank = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.9, 0.12), woodMat);
+        const plank = depthTint(new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.9, 0.12), woodMat));
         plank.position.set(offset, 0.45, 0);
         fence.add(plank);
       }
       for (const y of [0.28, 0.66]) {
-        const rail = new THREE.Mesh(new THREE.BoxGeometry(0.8, 0.1, 0.12), woodMat);
+        const rail = depthTint(new THREE.Mesh(new THREE.BoxGeometry(0.8, 0.1, 0.12), woodMat));
         rail.position.set(0, y, 0);
         fence.add(rail);
       }
@@ -298,7 +594,7 @@ export function createBattleScene(container, grid, { voidBoundaryWalls = false, 
     }
     if (prop.kind === "collapse") {
       for (const [x, z, size] of [[-0.22, -0.12, 0.34], [0.16, -0.18, 0.26], [0.04, 0.2, 0.3]]) {
-        const rock = new THREE.Mesh(new THREE.DodecahedronGeometry(size, 0), rockMat);
+        const rock = depthTint(new THREE.Mesh(new THREE.DodecahedronGeometry(size, 0), rockMat));
         rock.position.set(wx + x, size * 0.55, wz + z);
         rock.rotation.set(x * 4, z * 5, x - z);
         rock.userData = { kind: "stage-prop", role: prop.role };
@@ -532,6 +828,9 @@ export function createBattleScene(container, grid, { voidBoundaryWalls = false, 
       fallback.add(m);
       return m;
     };
+    const shadow = makeContactShadow();
+    g.add(shadow);
+
     const addModel = (path, scale, y = 0) => {
       loadModel(path).then(template => {
         if (!g.parent) return;
@@ -550,10 +849,15 @@ export function createBattleScene(container, grid, { voidBoundaryWalls = false, 
               // アクリル板の外形と縁はテクスチャに焼き込んであるので、板のうっすらした
               // アルファ(約0.12)が消えないよう、切り捨てのしきい値はそれより低くする。
               copy = new THREE.MeshBasicMaterial({ map: copy.map, alphaMap: copy.alphaMap, transparent: true, alphaTest: 0.04, side: THREE.FrontSide, depthWrite: true });
+              plateMaterials.push({ material: copy, base: copy.color.clone(), owner: g });
             }
             // 個体差の色調(例: 守護者を同じモデルのまま黒っぽくする)。元の色に乗算するだけなので、
             // テクスチャの模様そのものは変えない。
-            if (unit.tint !== undefined) copy.color.multiply(new THREE.Color(unit.tint));
+            if (unit.tint !== undefined) {
+              copy.color.multiply(new THREE.Color(unit.tint));
+              const entry = plateMaterials.find(x => x.material === copy);
+              if (entry) entry.base.copy(copy.color);   // 個体差の色調を基準色に含める
+            }
             opacityMaterials.push({ material: copy, transparent: copy.transparent, opacity: copy.opacity, depthWrite: copy.depthWrite });
             return copy;
           });
@@ -562,7 +866,15 @@ export function createBattleScene(container, grid, { voidBoundaryWalls = false, 
         });
         fallback.visible = false;
         g.add(model);
-        // 実画面テストでも、代替フィギュアではなくGLBまで到達したことを確認できるようにする。
+        // 印刷面は今作られたので、現在の明るさを反映する
+        // (GLBは非同期に届くため、照明の切り替えより後になることがある)。
+        applyPlateLight();
+        // 接地影の大きさを実測して合わせる。板の幅はキャラごとに違うので、
+        // 身長からの推定では錆喰いのような横長の駒に合わない。
+        // 奥行きは板の厚みしかないため、幅の0.42倍に潰した楕円にする。
+        const box = new THREE.Box3().setFromObject(model);
+        shadow.userData.plateWidth = Math.max(0.25, box.max.x - box.min.x);
+        sizeContactShadow(shadow);
         loadedModelPaths.add(path);
         container.dataset.loadedModels = [...loadedModelPaths].join(",");
         if (g.userData.occluded) setUnitOccluded(g, true);
@@ -581,10 +893,10 @@ export function createBattleScene(container, grid, { voidBoundaryWalls = false, 
       // 光源のすぐ隣にある持ち主の体だけが白飛びして陣営の色まで失われる。
       // 減衰を切ると範囲内が一様に照らされ、distanceの縁でなめらかに落ちるので、
       // 「ぼんやり明るい範囲」がそのまま出る
-      const base = 4.6;
-      const light = new THREE.PointLight(0xffa848, base, 6.4, 0);
+      const base = lanternIntensity;
+      const light = new THREE.PointLight(lanternColor, base, lanternRange, 0);
       light.position.set(0, h * 0.9, 0);   // 頭のあたり。光源だけを置き、球体は出さない
-      light.visible = lanternOverrides.has(unit.id) ? lanternOverrides.get(unit.id) : true;
+      light.visible = lanternVisibleFor(unit.id);
       g.add(light);
       if (unit.side === "party") lanterns.push({ id: unit.id, light, base, phase: lanterns.length * 2.7 });
       // スタンディの版は standeeVersion.js が正本。ここに数字を書かない
@@ -598,9 +910,13 @@ export function createBattleScene(container, grid, { voidBoundaryWalls = false, 
         part(new THREE.ConeGeometry(0.07, h * 0.36, 3), x, h * 0.18, z, [Math.PI, 0, 0]);
       }
       const modelId = unit.modelId || "rust-eater";
-      const model = modelId === "mine-bat"
-        ? { path: "/models/mine-bat-v02.glb", scale: [0.62, 0.62, 0.62], y: 0.03 }
-        : { path: "/models/rust-eater-v02.glb", scale: [0.8, 0.8, 0.8], y: 0 };
+      // スタンディ(厚みのあるアクリル板)はGLBが実寸(メートル)で作られているので等倍。
+      // 版は standeeVersion.js が正本なので、ここに数字を書かない。
+      const model = modelId.endsWith("-standee")
+        ? { path: `/models/${modelId}-${STANDEE_VERSION}.glb`, scale: [1, 1, 1], y: 0 }
+        : modelId === "mine-bat"
+          ? { path: "/models/mine-bat-v02.glb", scale: [0.62, 0.62, 0.62], y: 0.03 }
+          : { path: "/models/rust-eater-v02.glb", scale: [0.8, 0.8, 0.8], y: 0 };
       addModel(model.path, model.scale, model.y);
     }
 
@@ -663,10 +979,15 @@ export function createBattleScene(container, grid, { voidBoundaryWalls = false, 
     const unitFacings = {};
     const unitPositions = {};
     const modelFacingOffsets = {};
-    for (const [, m] of tiles) m.material.color.setHex(COLOR.floor);
+    // 駒が動くとカメラからの距離が変わるので、板の明るさを引き直す。
+    applyPlateLight();
+    // ハイライトは覆いの層が持つ。紙の材質は共有なので、マスごとには塗れない。
+    for (const [, m] of tiles) m.material.opacity = 0;
     for (const h of highlights) {
       const t = tiles.get(h.x + "," + h.y);
-      if (t) t.material.color.setHex(h.kind === "target" ? COLOR.target : COLOR.reach);
+      if (!t) continue;
+      t.material.color.setHex(h.kind === "target" ? COLOR.target : COLOR.reach);
+      t.material.opacity = HIGHLIGHT_OPACITY;
     }
 
     for (const u of units) {
@@ -1104,6 +1425,9 @@ export function createBattleScene(container, grid, { voidBoundaryWalls = false, 
 
     elapsed += dt;
     for (const l of lanterns) {
+      // 消えているカンテラは揺らがせない。Three.jsは非表示の光を照明計算から
+      // 除外するので見た目は同じだが、「消灯中は環境光だけ」を意図として明示する。
+      if (!l.light.visible) continue;
       // 係数を上げるほど速くなる。6ではせわしなかったので落としてある
       l.light.intensity = l.base * flicker(elapsed * 3.2 + l.phase);
     }
@@ -1184,6 +1508,27 @@ export function createBattleScene(container, grid, { voidBoundaryWalls = false, 
       const density = FOG_MIN_DENSITY + t * (FOG_MAX_DENSITY - FOG_MIN_DENSITY);
       fogObj.far = FOG_NEAR + (FOG_REF_DIST - FOG_NEAR) / density;
     },
+    // --- 紙の盤面の見た目つまみ(検証パネル用)。盤面の規則には影響しない ---
+    setGridLinesEnabled(on) { gridLines.visible = on; },
+    setGridLineColor(hex) { gridLineMat.color.set(hex); },
+    setGridLineOpacity(t) { gridLineMat.opacity = Math.max(0, Math.min(1, t)); },
+    // 床の明度。石のモノトーンの基準色に掛けるだけなので、色味は変わらない。
+    setFloorTone(t) { floorTone = Math.max(0, Math.min(2, t)); applyFloorTone(); },
+    // テクスチャを外すと、無地のグレーの石になる(テクスチャ差し替え前の状態)。
+    setFloorTextureEnabled(on) { floorMat.map = on ? stoneTex : null; floorMat.needsUpdate = true; },
+    setContactShadowOpacity(t) {
+      contactShadowOpacity = Math.max(0, Math.min(1, t));
+      for (const m of contactShadows) m.material.opacity = contactShadowOpacity;
+    },
+    // 影の広がり。板の幅に対する倍率。1.0で板と同じ幅、大きいほど地面へはみ出す。
+    setContactShadowScale(t) {
+      contactShadowScale = Math.max(0.5, Math.min(4, t));
+      for (const m of contactShadows) sizeContactShadow(m);
+    },
+    // 奥ほど暗くする強さ。0で無効、1で最奥が真っ黒。床・障害物・駒の板に同じ曲線で効く。
+    setDepthDarkening(t) { depthStrength = Math.max(0, Math.min(1, t)); updateDepthDarkening(); },
+    // 調整用。カンテラが部屋の明るさに足す量。大きいほど消灯時に板が暗くなる。
+    setPlateLightWeight(w) { LANTERN_LIGHT_WEIGHT = Math.max(0, w); applyPlateLight(); },
     setDustEnabled(on) { dustGroup.visible = on; },
     setRainEnabled(on) { rainGroup.visible = on; },
     setWallsEnabled(on) { backdropGroup.visible = on; },
@@ -1225,13 +1570,28 @@ export function createBattleScene(container, grid, { voidBoundaryWalls = false, 
     setLanternEnabled(id, on) {
       lanternOverrides.set(id, on);
       const entry = lanterns.find(l => l.id === id);
-      if (entry) entry.light.visible = on;
+      if (entry) entry.light.visible = lanternVisibleFor(id);
+      applyPlateLight();
     },
     setLightPreset(name) {
       const p = LIGHT_PRESET[name] || LIGHT_PRESET.night;
       ambientLight.intensity = p.ambient;
       key.intensity = p.key;
       key.color.setHex(p.keyColor);
+      applyLanternPreset(p.lantern);   // この中でapplyPlateLightも走る
+    },
+    // ランタンの色。橙が濃いほど石が橙に染まる。石をグレーに見せる調整用。
+    setLanternColor(hex) { lanternColor = hex; for (const l of lanterns) l.light.color.set(hex); },
+    setLanternIntensity(t) {
+      lanternIntensity = Math.max(0, t);
+      for (const l of lanterns) l.base = lanternIntensity;
+      applyPlateLight();
+    },
+    // 届く範囲。小さくすると「持ち主のまわりだけ明るい」局所照明になる。
+    setLanternRange(r) {
+      lanternRange = Math.max(0.5, r);
+      for (const l of lanterns) l.light.distance = lanternRange;
+      applyPlateLight();
     },
     // 背景とfogの色は別々に持つ(白い霧など、背景とは違う色にしたい場合があるため)。
     // 呼び出す側(BattleView)で、既定値は揃えて渡している

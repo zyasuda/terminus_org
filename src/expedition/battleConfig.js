@@ -61,6 +61,7 @@ export const EXPEDITION_BATTLE_CONFIG = {
     /** リディアの基礎値。遠隔攻撃の演出と行動順に使う。 */
     mage: {
       /** HUDに表示する相棒名。 */ name: "リディア",
+      /** 攻撃が遠隔か。trueなら隣接ではなく射線(resolveRanged)の通る敵を狙う。 */ ranged: true,
       /** 表示に使うGLBモデルID。厚みのあるアクリル板スタンディ(assets/standee/sources.json)。 */ modelId: "lydia-standee",
       /** 装備前の攻撃力。高いほど魔法のダメージが増える。単位: ダメージ。 */ atk: 2,
       /** 装備前の最大HP。高いほど倒れにくい。単位: HP。 */ hp: 12,
@@ -72,7 +73,7 @@ export const EXPEDITION_BATTLE_CONFIG = {
     /** 三叉路など、通路戦以外の通常遭遇(1体)の基礎値。 */
     enemy: {
       /** HUDとログに表示する敵名。 */ name: "坑道の獣",
-      /** 表示に使うGLBモデルID。 */ modelId: "rust-eater",
+      /** 表示に使うGLBモデルID。厚みのあるアクリル板スタンディ(assets/standee/sources.json)。 */ modelId: "rust-eater-standee",
       /** 敵の攻撃力。高いほど主人公へのダメージが増える。単位: ダメージ。 */ atk: 2,
       /** 敵の最大HP。高いほど撃破までの攻撃回数が増える。単位: HP。 */ hp: 8,
       /** 狙われた時の避けやすさ。低いほど味方の攻撃が当たりやすい。d20の判定基準。単位: 難易度値。 */ defenseDc: 10,
@@ -85,7 +86,7 @@ export const EXPEDITION_BATTLE_CONFIG = {
      * enemyより弱めにしてある。 */
     corridorEnemy: {
       /** HUDとログに表示する敵名。 */ name: "坑道の獣",
-      /** 表示に使うGLBモデルID。 */ modelId: "rust-eater",
+      /** 表示に使うGLBモデルID。厚みのあるアクリル板スタンディ(assets/standee/sources.json)。 */ modelId: "rust-eater-standee",
       /** 敵の攻撃力。高いほど主人公へのダメージが増える。単位: ダメージ。 */ atk: 1,
       /** 敵の最大HP。高いほど撃破までの攻撃回数が増える。単位: HP。 */ hp: 6,
       /** 狙われた時の避けやすさ。低いほど味方の攻撃が当たりやすい。d20の判定基準。単位: 難易度値。 */ defenseDc: 10,
@@ -97,7 +98,7 @@ export const EXPEDITION_BATTLE_CONFIG = {
     /** 宝箱守護者の基礎値。通常敵との差をここだけで調整する。 */
     guardian: {
       /** HUDとログに表示する敵名。 */ name: "宝箱守護者",
-      /** 表示に使うGLBモデルID。 */ modelId: "rust-eater",
+      /** 表示に使うGLBモデルID。厚みのあるアクリル板スタンディ(assets/standee/sources.json)。 */ modelId: "rust-eater-standee",
       /** 守護者の攻撃力。高いほど主人公へのダメージが増える。単位: ダメージ。 */ atk: 3,
       /** 守護者の最大HP。高いほど撃破までの攻撃回数が増える。単位: HP。 */ hp: 9,
       /** 狙われた時の避けやすさ。低いほど味方の攻撃が当たりやすい。d20の判定基準。単位: 難易度値。 */ defenseDc: 10,
@@ -136,8 +137,15 @@ export const EXPEDITION_BATTLE_CONFIG = {
      * 戦闘画面下部のスライダーで見た目を見ながら調整できる(この値は既定値)。
      * スタンディ(垂直なアクリル板)は見下ろすほど絵が短縮されて潰れるため、
      * 2026-08-25に45度から20度へ下げた。角度を下げた分、奥のユニットが手前と
-     * 重なりやすくなる。重なりはAZIMUTH_OFFSET_DEG(ExpeditionBattle.jsx)で外す。 */
+     * 重なりやすくなる。重なりはcameraAzimuthOffsetDegと遮蔽フェードで外す。 */
     cameraElevationDeg: 20,
+    /** heroの向きを画面奥にする水平角度から、さらにずらす角度。
+     * 0にするとheroが向いている敵と画面上で正対し、hero自身が敵を隠しやすくなる。
+     * 0以外にすると隠れにくくなる代わりに、方位角が45度の倍数から外れて
+     * 盤面の格子が菱形にならず、アイソメトリックらしさが崩れる。
+     * 手前の味方が対象を隠すときは遮蔽フェード(view3d.jsのsetUnitOccluded)も
+     * 同じ症状に効くので、この値は0でも成り立つ可能性がある。単位: 度。 */
+    cameraAzimuthOffsetDeg: 20,
     /** 戦闘盤面のズーム倍率。大きいほど盤面が画面いっぱいに近づく。 */
     cameraZoom: 2.0,
     modelFacingOffset: {

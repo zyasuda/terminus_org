@@ -20,16 +20,22 @@ export function facingToward(from, to, fallback = 0) {
 }
 
 // チェビシェフ距離で最も近い生存者。射程判定と同じ距離の測り方に合わせる。
-const nearest = (unit, units) => units.filter(u => u.hp > 0).reduce(
+export const nearestAlive = (unit, units) => units.filter(u => u.hp > 0).reduce(
   (best, u) => !best || Math.max(Math.abs(u.x - unit.x), Math.abs(u.y - unit.y)) < Math.max(Math.abs(best.x - unit.x), Math.abs(best.y - unit.y)) ? u : best,
   null,
 );
 
 // 相棒(リディア)の戦術判断。敵AIの chooseEnemyAction と同じく、判定だけを返して演出はしない。
+//
+// 2026-08-25、リディアはプレイヤーが直接操作するようになったので、ここは誰からも呼ばれていない。
+// 消していないのは、オートバトルを選べるようにする案が残っているため。判定と下のテストは
+// そのまま生きているので、ExpeditionBattle.jsxから呼び直せば元の挙動に戻る。
+// 戻さないと決めたら、この関数と battleState.test.mjs の「相棒の戦術判断」節、
+// battleConfig.js の companion.lowHpRetreatRatio をまとめて消すこと。
 // roll:()=>20 は「当たれば必ず命中する目」で撃てるかどうかだけを試す射線・射程の検査であり、
 // 実際のダメージ判定には使わない。
 export function chooseCompanionAction({ grid, units, mage, command }) {
-  const enemy = nearest(mage, units.filter(u => u.side === "enemy"));
+  const enemy = nearestAlive(mage, units.filter(u => u.side === "enemy"));
   const canCast = !!enemy && resolveRanged({ attacker: mage, target: enemy, units, grid, roll: () => 20 }).ok;
   const approach = (target, moveLine, waitLine) => {
     const to = chooseMoveToward(grid, mage, target, units);

@@ -1,5 +1,6 @@
 {
-  "plateVersion": "v43",
+  "plateVersion": "v47",
+  "metresPerTile": 1.5,
   "characters": {
     "lydia": {
       "front": "lydia-standee-v16-front.png",
@@ -11,6 +12,13 @@
       "back": "gareth-standee-v37-back.png",
       "gradeTo": "lydia",
       "heightM": 1.84
+    },
+    "rust-eater": {
+      "front": "rust-eater-standee-v04-front.png",
+      "back": "rust-eater-standee-v04-back.png",
+      "mirroredBack": true,
+      "heightM": 0.805,
+      "note": "背面は前面の左右反転そのもの。横向きの獣なので板の裏からは反対側の側面が見えるのが正しく、背面固有の絵は無い(mirroredBackで型抜き検出を外す理由)。heightMは実寸。板の横幅がちょうど1マス(150cm)になる高さを逆算した: 板の枠1326x752px・図の高さ712pxから 150*712/1326=80.5cm。絵が縦の1.8倍横に広いので、高さではなく幅で決めている。"
     }
   }
 }

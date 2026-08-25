@@ -15,7 +15,12 @@
 #      u=1がworld x=-0.679に対応するため)。
 #
 # 使い方:
-#   Blender --background --python tools/standee/create_acrylic_standee.py -- <name> <version> <height_m>
+#   Blender --background --python tools/standee/create_acrylic_standee.py -- <name> <version> <height_units> <metres_per_tile>
+#
+# height_units はワールド単位での高さ。盤面のセル間隔が1ワールド単位なので、
+# 「1マス何メートルか」(metres_per_tile)で割った値が渡ってくる。
+# 実寸を直接渡していた頃は、1マス=150cmの盤面で人物が1.5倍に膨らんでいた
+# (2026-08-25、リディアが258cmになっていた)。実寸はここでは使わず、記録だけする。
 import bpy
 import bmesh
 import json
@@ -28,7 +33,10 @@ from mathutils import Vector
 
 PROJECT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 argv = sys.argv[sys.argv.index("--") + 1:] if "--" in sys.argv else []
-NAME, VERSION, HEIGHT_M = argv[0], argv[1], float(argv[2])
+NAME, VERSION = argv[0], argv[1]
+HEIGHT_U = float(argv[2])                                    # ワールド単位(=マス)での高さ
+METRES_PER_TILE = float(argv[3]) if len(argv) > 3 else 1.0    # 1マスの実寸(m)
+HEIGHT_M = HEIGHT_U * METRES_PER_TILE                        # 記録用の実寸
 
 STANDEE = os.path.join(PROJECT, "assets", "standee")
 FRONT_IMAGE = os.path.join(STANDEE, f"{NAME}-standee-{VERSION}-front.png")
@@ -283,9 +291,9 @@ bpy.context.collection.objects.link(obj)
 bpy.context.view_layer.objects.active = obj
 obj.select_set(True)
 
-# --- 4. 実寸スケール。人物の枠(figure)の高さをHEIGHT_Mに合わせ、足元をZ=0にする ---
+# --- 4. スケール。人物の枠(figure)の高さをHEIGHT_U(ワールド単位)に合わせ、足元をZ=0にする ---
 fx0, fy0, fx1, fy1 = LAYOUT["figure"]
-pixel_m = HEIGHT_M / (fy1 - fy0)
+pixel_m = HEIGHT_U / (fy1 - fy0)
 obj.scale = (pixel_m, pixel_m, pixel_m)
 obj.rotation_euler = (math.radians(90), 0, 0)  # ピクセル平面(XY)をXZ平面(Blenderの高さ)へ
 bpy.ops.object.transform_apply(location=False, rotation=True, scale=True)
@@ -332,6 +340,8 @@ for mod_name in ("Thickness", "Round"):
     bpy.ops.object.modifier_apply(modifier=mod_name)
 
 obj["asset_type"] = "acrylic_plate_standee_solid"
+obj["height_units"] = HEIGHT_U
+obj["metres_per_tile"] = METRES_PER_TILE
 obj["height_m"] = HEIGHT_M
 obj["plate_thickness_m"] = PLATE_THICKNESS_M
 
@@ -347,18 +357,18 @@ for light_name, loc, energy in (("Key", (-2.4, -3.4, 4.0), 520), ("Fill", (2.4, 
     light_obj = bpy.data.objects.new(light_name, data)
     bpy.context.collection.objects.link(light_obj)
     light_obj.location = loc
-    look_at(light_obj, (0, 0, HEIGHT_M / 2))
+    look_at(light_obj, (0, 0, HEIGHT_U / 2))
 
 for cam_name, location, path in (
-    ("Preview_Front", (0.0, -2.6, HEIGHT_M * 0.55), FRONT_PREVIEW),
-    ("Preview_Back", (0.0, 2.6, HEIGHT_M * 0.55), BACK_PREVIEW),
+    ("Preview_Front", (0.0, -2.6, HEIGHT_U * 0.55), FRONT_PREVIEW),
+    ("Preview_Back", (0.0, 2.6, HEIGHT_U * 0.55), BACK_PREVIEW),
 ):
     camera_data = bpy.data.cameras.new(cam_name)
     camera_data.lens = 58
     camera = bpy.data.objects.new(cam_name, camera_data)
     bpy.context.collection.objects.link(camera)
     camera.location = location
-    look_at(camera, (0, 0, HEIGHT_M * 0.55))
+    look_at(camera, (0, 0, HEIGHT_U * 0.55))
     scene.camera = camera
     scene.render.filepath = path
     bpy.ops.render.render(write_still=True)

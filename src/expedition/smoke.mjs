@@ -17,12 +17,24 @@ page.on("pageerror", error => errors.push(error.message));
 const text = () => page.locator("body").innerText();
 const saved = () => page.evaluate(() => JSON.parse(localStorage.getItem("ai_companion_expedition_b1")));
 const keyFor = dir => ({ north: "ArrowUp", east: "ArrowRight", south: "ArrowDown", west: "ArrowLeft" })[dir];
-const waitForHero = () => page.waitForFunction(() => {
-  if (!document.querySelector("canvas")) return true;
-  const battle = document.querySelector('[data-active-unit="hero"]');
-  const button = [...(battle?.querySelectorAll("button") || [])].find(item => item.textContent === "待機");
-  return !!button && !button.disabled;
-}, null, { timeout: 8000 });
+// 2026-08-25にリディアも手動操作になり、彼女の手番では盤面が止まるようになった。
+// この関数の目的は「主人公が操作できる状態を待つ」ことなので、途中でリディアの手番が
+// 来たらハーネスが代わりに待機を押して進める(魔法を撃たせる検査はここでは行わない)。
+const waitForHero = async () => {
+  for (let i = 0; i < 10; i += 1) {
+    if ((await page.locator("canvas").count()) === 0) return;
+    await page.waitForFunction(() => {
+      if (!document.querySelector("canvas")) return true;
+      const battle = document.querySelector('[data-active-unit="hero"], [data-active-unit="mage"]');
+      const button = [...(battle?.querySelectorAll("button") || [])].find(item => item.textContent === "待機");
+      return !!button && !button.disabled;
+    }, null, { timeout: 8000 });
+    if ((await page.locator("canvas").count()) === 0) return;
+    if ((await page.locator("[data-active-unit]").getAttribute("data-active-unit")) !== "mage") return;
+    await page.locator('[data-active-unit="mage"] button', { hasText: "待機" }).click();
+  }
+  throw new Error("主人公の手番が来ない");
+};
 const heroButton = name => {
   const buttons = page.locator('[data-active-unit="hero"] button', { hasText: name });
   return name === "攻撃" ? buttons.last() : buttons;
@@ -32,13 +44,12 @@ const reachCells = () => page.locator("[data-reach-cells]").getAttribute("data-r
 // 通路戦は敵が2体("enemy-0"/"enemy-1")、それ以外は1体("enemy")なので、idを問わず動的に拾う。
 const enemyIdsOf = pos => Object.keys(pos).filter(id => id.startsWith("enemy")).sort();
 const enemiesOf = pos => enemyIdsOf(pos).map(id => pos[id]);
-// ExpeditionBattle.jsxのazimuthForFacingと同じ式(heroの向きを画面奥にする水平角度から、
-// hero自身が奥の敵を隠さないよう20度オフセットする)。
-const AZIMUTH_OFFSET_DEG = 20;
+// ExpeditionBattle.jsxのazimuthForFacingと同じ式。オフセット量はbattleConfigから読む
+// (ここに数値を写すと、設定を変えたときにクリック座標だけが古い角度で計算される)。
 const azimuthForFacing = facing => {
   const rad = Math.atan2(-Math.cos(facing), -Math.sin(facing));
   const deg = ((rad * 180 / Math.PI) % 360 + 360) % 360;
-  return (deg - AZIMUTH_OFFSET_DEG + 360) % 360;
+  return (deg - EXPEDITION_BATTLE_CONFIG.presentation.cameraAzimuthOffsetDeg + 360) % 360;
 };
 const angleDiff = (a, b) => { const d = Math.abs(a - b) % 360; return Math.min(d, 360 - d); };
 
