@@ -350,6 +350,12 @@ export default function BattleView() {
   /* --- 敵の手番は自動で進める --- */
   useEffect(() => {
     if (!battleMode || over || !active || active.side !== "enemy") return;
+    // 行動から手番送りまでの待ちも cleanup で回収する。
+    // 以前は内側のタイマーIDを誰も持っていなかったため、この350msの間に「最初から」を
+    // 押すと、古いendTurn(=setState(advanceTurn))が作り直した新しい盤面の手番を進めて
+    // いた。関数更新なので新しい状態に効いてしまい、新規戦闘が味方ではなく敵の行動から
+    // 始まった(2026-08-25、ターン終了から550ms・700msで再現。初手が錆喰い(2)になる)。
+    let settle = null;
     const t = setTimeout(() => {
       const act = chooseEnemyAction(grid, active, units);
       if (act.type === "attack") {
@@ -358,9 +364,9 @@ export default function BattleView() {
       } else if (act.type === "move") {
         moveTo(active, act.to.x, act.to.y, act.path);
       }
-      setTimeout(endTurn, 350);
+      settle = setTimeout(endTurn, 350);
     }, 500);
-    return () => clearTimeout(t);
+    return () => { clearTimeout(t); clearTimeout(settle); };
   }, [active?.id, turn, over, battleMode]);
 
   /* --- ハイライトと入力 --- */

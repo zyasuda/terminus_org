@@ -80,6 +80,26 @@ const finalText = await page.locator("body").innerText();
 console.log(finalText);
 if (!finalText.includes("攻撃")) throw new Error("交戦まで到達しなかった");
 
+// 「最初から」は、敵の手番の途中で押しても新しい盤面が味方の初手から始まること。
+// 敵の手番は「500ms待って行動→350ms待って手番送り」の2段のタイマーで進む。
+// 内側の350msをcleanupで回収していなかった頃は、この窓で押すと古い手番送りが
+// 新しい盤面に効いて、初手が敵になっていた(2026-08-25、550ms/700msで再現)。
+// 待ち時間を振って全部で初手が味方であることを見る。修正が入っていれば全通り通る。
+const firstActor = async () => ((await page.locator("body").innerText()).match(/(\S+) の手番/) || [])[1] || "(なし)";
+const restartRaceDelays = [0, 400, 550, 620, 700, 780];
+for (const delay of restartRaceDelays) {
+  for (let i = 0; i < 10 && (await firstActor()) !== "ガレス"; i++) await page.waitForTimeout(300);
+  await page.locator('button:has-text("ターン終了")').click();
+  await page.waitForTimeout(delay);
+  await page.locator('button:has-text("最初から")').click();
+  await page.waitForTimeout(1000);
+  const actor = await firstActor();
+  if (actor !== "ガレス") {
+    throw new Error(`「最初から」の${delay}ms後に初手が ${actor} になった(味方の初手で始まらない)`);
+  }
+}
+console.log(`battle/smoke: 「最初から」の競合を${restartRaceDelays.length}通りの待ち時間で確認`);
+
 await page.locator('button:has-text("最初から")').click();
 await page.locator('button:has-text("会話モードへ")').click();
 await page.locator('button:has-text("崩れた坑道")').click();
