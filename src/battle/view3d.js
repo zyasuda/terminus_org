@@ -10,6 +10,7 @@
    ========================================================= */
 
 import * as THREE from "three";
+import { STANDEE_VERSION } from "./standeeVersion.js";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import { elevationAt, makeRng } from "./core.js";
 
@@ -95,8 +96,8 @@ export function createBattleScene(container, grid, { voidBoundaryWalls = false, 
   let baseViewSize = gridViewSize / cameraZoom;
   let viewSize = baseViewSize;
   const isoCamera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0.1, 200);
-  const firstPersonCamera = new THREE.PerspectiveCamera(90, 1, 0.05, 200);
   let camera = isoCamera;
+  container.dataset.cameraProjection = "orthographic";
   let dirIndex = 0;
   let camAngle = Math.PI / 4;        // 実際の角度(なめらかに目標へ寄せる)
   const target = new THREE.Vector3(0, 0, 0);
@@ -110,8 +111,6 @@ export function createBattleScene(container, grid, { voidBoundaryWalls = false, 
     isoCamera.top = viewSize / 2;
     isoCamera.bottom = -viewSize / 2;
     isoCamera.updateProjectionMatrix();
-    firstPersonCamera.aspect = aspect;
-    firstPersonCamera.updateProjectionMatrix();
   };
 
   const placeCamera = () => {
@@ -503,8 +502,8 @@ export function createBattleScene(container, grid, { voidBoundaryWalls = false, 
   /* --- ユニット(低ポリの仮フィギュア)と手番マーカー --- */
   const unitMeshes = new Map();  // id → メッシュ
   const unitGroup = new THREE.Group();
+  const loadedModelPaths = new Set();
   let enemiesVisible = true;
-  let firstPersonUnitId = null;
   let occlusionTarget = null;
   scene.add(unitGroup);
 
@@ -544,14 +543,13 @@ export function createBattleScene(container, grid, { voidBoundaryWalls = false, 
           if (!obj.isMesh) return;
           const source = Array.isArray(obj.material) ? obj.material : [obj.material];
           const cloned = source.map(material => {
-            const copy = material.clone();
+            let copy = material.clone();
             if (unit.modelId?.endsWith("-standee") && copy.map) {
-              // スタンディーの輪郭はPNGのアルファで抜く。GLBのMASK指定だけに任せず
-              // Three.js側でも明示して、板全体が表示される環境差を避ける。
-              copy.transparent = true;
-              copy.alphaTest = 0.02;
-              copy.side = THREE.DoubleSide;
-              copy.needsUpdate = true;
+              // 人物絵は印刷面として扱う。光源で直接照らすと、濃い衣装だけが白飛びする。
+              // 表裏は別メッシュなので片面描画にし、PNGのアルファだけで型抜きする。
+              // アクリル板の外形と縁はテクスチャに焼き込んであるので、板のうっすらした
+              // アルファ(約0.12)が消えないよう、切り捨てのしきい値はそれより低くする。
+              copy = new THREE.MeshBasicMaterial({ map: copy.map, alphaMap: copy.alphaMap, transparent: true, alphaTest: 0.04, side: THREE.FrontSide, depthWrite: true });
             }
             // 個体差の色調(例: 守護者を同じモデルのまま黒っぽくする)。元の色に乗算するだけなので、
             // テクスチャの模様そのものは変えない。
@@ -564,6 +562,9 @@ export function createBattleScene(container, grid, { voidBoundaryWalls = false, 
         });
         fallback.visible = false;
         g.add(model);
+        // 実画面テストでも、代替フィギュアではなくGLBまで到達したことを確認できるようにする。
+        loadedModelPaths.add(path);
+        container.dataset.loadedModels = [...loadedModelPaths].join(",");
         if (g.userData.occluded) setUnitOccluded(g, true);
       }).catch(error => {
         // 開発中だけモデル読込失敗を見えるようにし、代替フィギュアへ黙って落ちないようにする。
@@ -586,7 +587,9 @@ export function createBattleScene(container, grid, { voidBoundaryWalls = false, 
       light.visible = lanternOverrides.has(unit.id) ? lanternOverrides.get(unit.id) : true;
       g.add(light);
       if (unit.side === "party") lanterns.push({ id: unit.id, light, base, phase: lanterns.length * 2.7 });
-      addModel(`/models/${unit.modelId || unit.id}-v02.glb`, [1, 1, 1]);
+      // スタンディの版は standeeVersion.js が正本。ここに数字を書かない
+      const modelVersion = unit.modelId?.endsWith("-standee") ? STANDEE_VERSION : "v02";
+      addModel(`/models/${unit.modelId || unit.id}-${modelVersion}.glb`, [1, 1, 1]);
     } else {
       const shell = part(new THREE.DodecahedronGeometry(0.34, 0), 0, h * 0.44, 0);
       shell.scale.set(1.15, 0.7, 0.9);
@@ -669,7 +672,7 @@ export function createBattleScene(container, grid, { voidBoundaryWalls = false, 
     for (const u of units) {
       const g = meshFor(u);
       // 戦闘不能の駒は盤面から退く(その場にはコインが残る)
-      if (u.hp <= 0 || u.id === firstPersonUnitId) { g.visible = false; continue; }
+      if (u.hp <= 0) { g.visible = false; continue; }
 
       const [wx, wz] = worldOf(u.x, u.y);
       unitPositions[u.id] = { x: u.x, y: u.y };
@@ -1131,51 +1134,36 @@ export function createBattleScene(container, grid, { voidBoundaryWalls = false, 
     playMove,
     playRanged,
     rotate(delta) { dirIndex += delta; },
-    // 戦闘専用。会話用の一人称(setCameraFocus)とは違い、攻撃者を画面手前に残す。
-    // 背後から相手を見るため、狭い通路でも「手前の味方／奥の敵」の対面構図になる。
+    // 戦闘専用。投影方式は盤面と同じ正射影のまま、攻撃者と対象へ寄る。
+    // 盤面と攻撃演出で透視投影を混在させると、駒の大きさ・紙の質感が急に変わるため。
     setCombatCamera(attacker, subject) {
       if (!attacker || !subject) return;
-      camera = firstPersonCamera;
-      firstPersonUnitId = null;
-      firstPersonCamera.fov = 55;
-      firstPersonCamera.updateProjectionMatrix();
+      camera = isoCamera;
+      container.dataset.cameraProjection = "orthographic";
       const [ax, az] = worldOf(attacker.x, attacker.y);
       const [sx, sz] = worldOf(subject.x, subject.y);
-      const dx = sx - ax, dz = sz - az, length = Math.hypot(dx, dz) || 1;
-      const eyeY = elevationAt(grid, attacker.x, attacker.y) + Math.max(1.28, (attacker.height ?? 1.6) * .9);
-      // 通路でも二人が重ならないよう、真後ろではなく半歩横から見る。
-      // 画面手前に攻撃者、斜め奥に敵を残すポケモン風の対面構図にする。
-      firstPersonCamera.position.set(ax - dx / length * 4.4 - dz / length * .8, eyeY + .38, az - dz / length * 4.4 + dx / length * .8);
-      const subjectY = elevationAt(grid, subject.x, subject.y) + Math.max(.9, (subject.height ?? 1.2) * .68);
-      firstPersonCamera.lookAt(sx, subjectY, sz);
-      // 攻撃者自身はポケモン風構図の手前に残すため、他の味方だけを透過候補にする。
+      target.set((ax + sx) / 2, 0, (az + sz) / 2);
+      viewSize = Math.max(3.8, baseViewSize * 0.72);
+      applyFrustum();
+      placeCamera();
       setOcclusionTarget(subject, attacker.id);
     },
     setCameraFocus(unit = null, subject = null) {
       if (unit) {
         clearOcclusion();
-        camera = firstPersonCamera;
-        firstPersonUnitId = unit.id;
-        firstPersonCamera.fov = 90;
-        firstPersonCamera.updateProjectionMatrix();
+        camera = isoCamera;
+        container.dataset.cameraProjection = "orthographic";
         const [x, z] = worldOf(unit.x, unit.y);
-        const eyeY = elevationAt(grid, unit.x, unit.y) + Math.max(1.18, (unit.height ?? 1.6) * 0.92);
-        const [subjectX, subjectZ] = subject ? worldOf(subject.x, subject.y) : [x, z - 5];
-        const dx = subjectX - x, dz = subjectZ - z;
-        const length = Math.hypot(dx, dz) || 1;
-        // 自分の頭の内側ではなく、視線方向へ少し出した位置を目線にする。
-        firstPersonCamera.position.set(x + (dx / length) * 0.16, eyeY, z + (dz / length) * 0.16);
-        const subjectY = subject
-          ? elevationAt(grid, subject.x, subject.y) + Math.max(1.12, (subject.height ?? 1.6) * 0.9)
-          : eyeY + 0.04;
-        firstPersonCamera.lookAt(subjectX, subjectY, subjectZ);
+        const [subjectX, subjectZ] = subject ? worldOf(subject.x, subject.y) : [x, z];
+        target.set((x + subjectX) / 2, 0, (z + subjectZ) / 2);
+        viewSize = Math.max(3.8, baseViewSize * 0.72);
+        applyFrustum();
+        placeCamera();
         return;
       }
       clearOcclusion();
       camera = isoCamera;
-      firstPersonUnitId = null;
-      firstPersonCamera.fov = 90;
-      firstPersonCamera.updateProjectionMatrix();
+      container.dataset.cameraProjection = "orthographic";
       viewSize = baseViewSize;
       target.set(0, 0, 0);
       applyFrustum();

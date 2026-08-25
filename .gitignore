@@ -11,3 +11,10 @@ images-unused/
 
 # 検証用スクリーンショットの一時置き場。ソースではない。
 output/
+
+# スタンディの中間生成物。板テクスチャ・外形マスク・blendは
+# `npm run ship:standee -- --rebuild` で作り直せる。
+# 追跡するのは assets/standee/sources.json と、それが参照する元絵だけ。
+assets/blender/*-standee-*.blend
+assets/blender/*.blend1
+tmp/

@@ -5,8 +5,11 @@ import { isAdjacent, elevationAt } from "../battle/core.js";
 import { createFloor, newVillage, route } from "./core.js";
 import { EXPEDITION_BATTLE_CONFIG } from "./battleConfig.js";
 import { createExpeditionBattleLayout } from "./battleState.js";
+import { STANDEE_VERSION as SV } from "../battle/standeeVersion.js";
 
 const URL = process.env.SMOKE_URL || "https://127.0.0.1:5174/expedition";
+const STANDEE_MODE = /[?&]standee(?:=1)?(?:&|$)/.test(URL);
+const STANDEE_ONLY = process.env.STANDEE_ONLY === "1";
 const browser = await chromium.launch();
 const page = await browser.newPage({ ignoreHTTPSErrors: true, viewport: { width: 1100, height: 800 } });
 const errors = [];
@@ -152,8 +155,16 @@ async function checkOccluderFade() {
     scene.sync({ units: [hero, mage, enemy] });
     scene.setCombatCamera(hero, enemy);
     await new Promise(resolve => setTimeout(resolve, 80));
-    const combat = [mount.dataset.occlusionTarget, mount.dataset.occludingUnits, mount.dataset.occlusionOpacity];
-
+    const combat = [mount.dataset.occlusionTarget, mount.dataset.occludingUnits, mount.dataset.occlusionOpacity, mount.dataset.cameraProjection];
+    window.__orthographicCameraCheck = { scene, mount, hero, enemy };
+    return { iso, combat };
+  });
+  await page.screenshot({ path: "/tmp/expedition-orthographic-attack.png" });
+  const recovery = await page.evaluate(async () => {
+    const { scene, mount, hero, enemy } = window.__orthographicCameraCheck;
+    scene.setCameraFocus(hero, enemy);
+    await new Promise(resolve => setTimeout(resolve, 30));
+    const focus = mount.dataset.cameraProjection;
     scene.sync({ units: [hero, enemy] });
     await new Promise(resolve => setTimeout(resolve, 30));
     const removed = mount.dataset.occludingUnits;
@@ -162,9 +173,44 @@ async function checkOccluderFade() {
     const restored = [mount.dataset.occlusionTarget, mount.dataset.occludingUnits, mount.dataset.occlusionOpacity];
     scene.dispose();
     mount.remove();
-    return { iso, combat, removed, restored };
+    delete window.__orthographicCameraCheck;
+    return { focus, removed, restored };
   });
-  assert.deepEqual(result, { iso: ["enemy", "hero", "0.35"], combat: ["enemy", "mage", "0.35"], removed: "", restored: ["", "", ""] }, "遮る味方だけを透過し、対象解除・削除・カメラ復帰で戻す");
+  assert.deepEqual({ ...result, ...recovery }, { iso: ["enemy", "hero", "0.35"], combat: ["enemy", "", "", "orthographic"], focus: "orthographic", removed: "", restored: ["", "", ""] }, "攻撃・接写を含む全カメラ経路が正射影のまま、遮る味方だけを透過し、対象解除・削除・カメラ復帰で戻す");
+}
+
+// スタンディは壁や遮蔽の背後では、絵そのものの判定ができない。
+// 開発URLのstandee指定時だけ、同じ描画器で正面を単独表示して記録する。
+async function checkStandeeRuntime() {
+  const loaded = await page.evaluate(async v => {
+    const { createBattleScene } = await import("/src/battle/view3d.js");
+    const { createGrid } = await import("/src/battle/core.js");
+    const mount = document.createElement("div");
+    mount.id = "standee-runtime-check";
+    mount.style.cssText = "position:fixed;inset:0;z-index:9999;background:#161a22";
+    document.body.append(mount);
+    const scene = createBattleScene(mount, createGrid(Array(7).fill(".......")), { cameraZoom: 1.7 });
+    mount.__standeeScene = scene;
+    scene.sync({ units: [
+      { id: "gareth-check", side: "party", x: 2, y: 3, hp: 10, height: 1.84, modelId: "gareth-standee", facing: 0 },
+      { id: "lydia-check", side: "party", x: 4, y: 3, hp: 10, height: 1.72, modelId: "lydia-standee", facing: 0 },
+    ] });
+    for (let i = 0; i < 40; i += 1) {
+      await new Promise(resolve => setTimeout(resolve, 100));
+      if (mount.dataset.loadedModels?.includes(`lydia-standee-${v}.glb`) && mount.dataset.loadedModels.includes(`gareth-standee-${v}.glb`)) return true;
+    }
+    return false;
+  }, SV);
+  assert.equal(loaded, true, `リディア${SV}とガレスのスタンディGLBが実行時に読込完了する`);
+  await page.screenshot({ path: "/tmp/lydia-standee-runtime.png" });
+  await page.evaluate(() => document.querySelector("#standee-runtime-check")?.__standeeScene?.setCameraAzimuthDeg(225));
+  await page.waitForTimeout(120);
+  await page.screenshot({ path: "/tmp/lydia-standee-runtime-back.png" });
+  await page.evaluate(() => {
+    const mount = document.querySelector("#standee-runtime-check");
+    mount?.__standeeScene?.dispose();
+    mount?.remove();
+  });
 }
 
 async function travelTo(roomId) {
@@ -181,7 +227,16 @@ async function travelTo(roomId) {
 }
 
 await page.goto(URL, { waitUntil: "networkidle" });
+if (STANDEE_ONLY) {
+  assert.equal(STANDEE_MODE, true, "standee専用スモークには ?standee=1 を付ける");
+  await checkStandeeRuntime();
+  assert.deepEqual(errors, [], `ブラウザJSエラー: ${errors.join(" / ")}`);
+  console.log(`expedition/smoke: リディア${SV}スタンディの正背面表示を確認`);
+  await browser.close();
+  process.exit(0);
+}
 await checkOccluderFade();
+if (STANDEE_MODE) await checkStandeeRuntime();
 await page.evaluate(() => { localStorage.removeItem("ai_companion_expedition_b1"); Math.random = () => .9; Date.now = () => 777; });
 await page.reload({ waitUntil: "networkidle" });
 await page.evaluate(() => { Math.random = () => .9; Date.now = () => 777; });
@@ -231,6 +286,9 @@ const junctionVoidBoundaryCount = junctionGrid.cells.reduce((count, cell, index)
   return count + [[0, -1], [1, 0], [0, 1], [-1, 0]].filter(([dx, dy]) => x + dx >= 0 && y + dy >= 0 && x + dx < junctionGrid.w && y + dy < junctionGrid.h && junctionGrid.cells[(y + dy) * junctionGrid.w + x + dx]?.void).length;
 }, 0);
 assert.equal(Number(await junction.locator("[data-camera]").getAttribute("data-void-boundary-wall-count")), junctionVoidBoundaryCount, "三叉路は障害物ではなく盤外との境界だけに壁面を置き、三つの出口は塞がない");
+if (STANDEE_MODE) {
+  await junction.locator(`[data-loaded-models*="lydia-standee-${SV}.glb"][data-loaded-models*="gareth-standee-${SV}.glb"]`).waitFor({ timeout: 8000 });
+}
 await page.screenshot({ path: "/tmp/expedition-junction-battle.png" });
 await finishBattle("junction");
 await page.locator("svg[aria-label='探索地図']").waitFor();

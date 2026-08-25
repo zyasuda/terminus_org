@@ -47,6 +47,74 @@ trpg-gm-isometric/public/data/campaigns/lanternhill/chapter_01.json
 `makeRng(seed)` から引く。系列が重ならないようオフセットを分けてある
 (`floor.seed+91`、`+441`、`+555`、`+777`)。演出(塵・雨・カメラ揺れ)だけは `Math.random` でよい。
 
+### 4. スタンディー(アクリル板の駒)を作るとき
+
+**正本は [`docs/STANDEE_TURNAROUND_SPEC.md`](docs/STANDEE_TURNAROUND_SPEC.md)。作業前に全文読む。**
+
+板の外形は前後で1つしか作れないので、**前後のシルエットが食い違うとその差が
+そのまま「人物のいない余白」になる。** 板の作り方(和・距離場の平均など)をどう
+工夫しても消えない。2026-08-24に3通り試して、いずれも解決しなかった(仕様書 第1節)。
+
+**前面と背面は必ず1回の生成で1枚の横長画像として描かせる。** 別々に生成して
+言葉でポーズを合わせる方法は3回試して一度も収束しなかった(余白5.09%/4.21%、XOR 20%台)。
+1枚生成は1回目で合格した(余白2.50%、XOR 11.81%)。2026-08-25に実測で決着している。
+
+手順はこれだけ。**検査に合格するまで3D化へ進んではならない。**
+
+```bash
+# 1. 依頼文は docs/STANDEE_GENERATION_BRIEF_TEMPLATE.md の【】だけ埋めて使う
+#    (それ以外の条項は毎回同じ。すべて実際の失敗から出たもの)
+
+# 2. 受け入れ検査。切り分け・余白・色・アルファ・穴を一度に見る
+npm run accept:standee assets/standee/<name>-standee-<版>-turnaround.png
+
+# 3. output/<name>-standee-<版>-review.png を必ず目で見る
+#    検査は余白と素性しか測らない。構図が成立しているかは測らない(仕様書 第8.7節)
+
+# 4. 採用。板テクスチャ・外形マスク・GLB・ゲーム側の参照までまとめて更新される
+npm run ship:standee <name> assets/standee/...-front.png assets/standee/...-back.png
+
+# 5. 実画面(別途 dev サーバが要る)
+npm run test:battle && npm run build
+STANDEE_ONLY=1 SMOKE_URL="http://127.0.0.1:5174/expedition?standee=1" node src/expedition/smoke.mjs
+```
+
+**表裏は人が目で見る。** 数値の検査は板の余白と絵の素性しか測らない。
+`ship:standee` が毎回 `output/<キャラ名>-standee-<版>-front.png` / `-back.png` を
+出すので、まずそれを見る。回して確かめたいときは
+`assets/blender/<キャラ名>-standee-<版>.blend` を開く。手順は仕様書 第6.1節。
+**開いたら最初にビューポートを「マテリアルプレビュー」にすること**(既定のソリッド
+表示では灰色の板にしか見えない)。前面はテンキー`1`、背面は`Ctrl`+テンキー`1`。
+
+**版番号をコードに書かない。** 元絵と板の版の正本は `assets/standee/sources.json`。
+`ship:standee` だけが版を上げ、`src/battle/standeeVersion.js` を書き出す。
+view3d.js と smoke.mjs はそこを読む。手で3箇所に書いていた頃、更新漏れで
+「テクスチャを作り直しても画面が変わらない」事故が起きた(仕様書 第8.4節)。
+
+合否を決めるのは**板に出る余白**である(上限5%)。輪郭のずれやシルエットの食い違いは
+参考値で、余白が超えたときに原因の部位を探すために使う。
+原因の部位は `npm run diff:standee <name>` で出る。
+
+2026-08-25時点で、リディア(v16-front + v28-back)・ガレス(v37)とも**合格**している。
+板とGLBは v43。**スタンディは本番のバトルの既定**で、`?standee=1` のような
+URLフラグは廃止した。表示するモデルは `battleConfig.js` の `units.*.modelId` が正本。
+
+板の余白は `standee-lib.mjs` の `MARGIN_RATIO`(3%)、余白のうっすらした色は
+`build-standee-acrylic.mjs` の `PLATE_ALPHA`(0.05)で決める。0.05 は
+`view3d.js` の `alphaTest`(0.04)があるため実質の下限である。
+
+背面画像が無い場合、正面画像や白いシルエットから推測して3D化しない。
+
+#### Skillについて
+
+`sprite-pipeline` はアニメーションスプライトの連番生成用で、**前後2面図の対応付けは
+扱っていない。** 2026-08-24までこれを必須としていたが、タスクに合っていなかった。
+二面図については上記の仕様書に従う。
+
+- **条件付き: `web-3d-asset-pipeline`** — Blenderのメッシュ・法線・材質・GLB出力を検査する場合
+- **条件付き: `game-playtest`** — Blender確認とThree.js実画面をスクリーンショットで検証する場合
+- **条件付き: `imagegen`** — 背面設定画などの2D画像を新規作成・修正する場合
+
 ## 足回り
 
 ```bash

@@ -5,11 +5,6 @@ import { ITEMS, partyMaxHp } from "./core.js";
 import { EXPEDITION_BATTLE_CONFIG } from "./battleConfig.js";
 import { chooseCompanionAction, createExpeditionBattleLayout, facingToward } from "./battleState.js";
 
-// 開発用URLに ?standee=1 を付けたときだけ、味方2人のGLBをスタンディー版へ差し替える。
-// 通常URLと既存のセーブ・テストの表示は変更しない。
-const USE_STANDEES = typeof window !== "undefined" && new URLSearchParams(window.location.search).has("standee");
-const standeeModelId = modelId => USE_STANDEES && (modelId === "lydia" || modelId === "gareth") ? `${modelId}-standee` : modelId;
-
 const atkOf = (baseAtk, gear = {}) => baseAtk + [gear.weapon, gear.charm].reduce((n, id) => n + (id && ITEMS[id]?.stat === "atk" ? ITEMS[id].power : 0), 0);
 // 味方も敵も同じ形で組む。歩ける高さや見た目のような共通属性を、3か所へ書き分けないため。
 // combat(hp/maxHp/atk)だけは、装備と遠征中の残HPで決まるので呼ぶ側から渡す。
@@ -24,7 +19,7 @@ const unitFrom = (id, side, config, start, faceTo, combat) => ({
   height: config.height,
   canClimb: config.canClimb,
   maxObstacleHeight: EXPEDITION_BATTLE_CONFIG.movement.maxObstacleHeight,
-  modelId: standeeModelId(config.modelId),
+  modelId: config.modelId,
   ...(config.tint !== undefined ? { tint: config.tint } : {}),
 });
 
@@ -96,7 +91,7 @@ export default function ExpeditionBattle({ guardian, layout = "corridor", order,
   const setElevation = deg => { setCameraElevationDeg(deg); scene.current?.setCameraElevationDeg(deg); };
   const [cameraZoom, setCameraZoomState] = useState(() => EXPEDITION_BATTLE_CONFIG.presentation.cameraZoom);
   const setZoom = zoom => {
-    const normalized = Math.max(0.75, Math.min(2, Number(zoom) || EXPEDITION_BATTLE_CONFIG.presentation.cameraZoom));
+    const normalized = Math.max(0.75, Math.min(3, Number(zoom) || EXPEDITION_BATTLE_CONFIG.presentation.cameraZoom));
     setCameraZoomState(normalized);
     scene.current?.setCameraZoom(normalized);
   };
@@ -264,7 +259,7 @@ export default function ExpeditionBattle({ guardian, layout = "corridor", order,
       <div style={S.log}>{state.log.slice(-4).map((x, i) => <div key={i}>{x}</div>)}</div>
       <div style={S.row}>
         <span>カメラの高さ:</span>
-        <input type="range" min="20" max="80" step="1" value={cameraElevationDeg}
+        <input type="range" min="10" max="80" step="1" value={cameraElevationDeg}
           onChange={e => setElevation(Number(e.target.value))}/>
         <span>{cameraElevationDeg}度</span>
       </div>
@@ -275,8 +270,18 @@ export default function ExpeditionBattle({ guardian, layout = "corridor", order,
       </div>
       <div style={S.row}>
         <span>カメラのズーム:</span>
-        <input type="range" min="0.75" max="2" step="0.05" value={cameraZoom} onChange={e => setZoom(Number(e.target.value))}/>
+        <input type="range" min="0.75" max="3" step="0.05" value={cameraZoom} onChange={e => setZoom(Number(e.target.value))}/>
         <span>×{cameraZoom.toFixed(2)}</span>
+      </div>
+      {/* いま見えている角度を、そのまま battleConfig.js へ書き写せる形で出す。
+          スライダーで決めた値が既定値に反映されないと、次回また探し直しになる。 */}
+      <div style={S.row}>
+        <span>この値を残すには:</span>
+        <code style={{ fontSize: 11, opacity: 0.8 }}>
+          presentation: {"{"} cameraElevationDeg: {cameraElevationDeg}, cameraZoom: {cameraZoom.toFixed(2)} {"}"}
+          {"  /  方位角 "}{cameraAzimuthDeg.toFixed(0)}{"度(45度の倍数から"}
+          {Math.min(cameraAzimuthDeg % 45, 45 - cameraAzimuthDeg % 45).toFixed(0)}{"度ずれ)"}
+        </code>
       </div>
       {/* 演出の見た目調整(検証用)。盤面のルールには影響しない */}
       <div style={S.row}>

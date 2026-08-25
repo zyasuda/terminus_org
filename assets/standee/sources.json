@@ -1,0 +1,16 @@
+{
+  "plateVersion": "v43",
+  "characters": {
+    "lydia": {
+      "front": "lydia-standee-v16-front.png",
+      "back": "lydia-standee-v28-back.png",
+      "heightM": 1.72
+    },
+    "gareth": {
+      "front": "gareth-standee-v37-front.png",
+      "back": "gareth-standee-v37-back.png",
+      "gradeTo": "lydia",
+      "heightM": 1.84
+    }
+  }
+}

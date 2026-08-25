@@ -50,7 +50,7 @@ export const EXPEDITION_BATTLE_CONFIG = {
     /** 主人公の基礎値。装備の補正はatk/hpへ加算される。 */
     hero: {
       /** HUDに表示する主人公名。 */ name: "あなた",
-      /** 表示に使うGLBモデルID。 */ modelId: "gareth",
+      /** 表示に使うGLBモデルID。厚みのあるアクリル板スタンディ(assets/standee/sources.json)。 */ modelId: "gareth-standee",
       /** 装備前の攻撃力。高いほど通常攻撃のダメージが増える。単位: ダメージ。 */ atk: 3,
       /** 装備前の最大HP。高いほど倒れにくい。単位: HP。 */ hp: 16,
       /** 狙われた時の避けやすさ。低いほど敵の攻撃が当たりやすい。d20の判定基準。単位: 難易度値。 */ defenseDc: 10,
@@ -61,7 +61,7 @@ export const EXPEDITION_BATTLE_CONFIG = {
     /** リディアの基礎値。遠隔攻撃の演出と行動順に使う。 */
     mage: {
       /** HUDに表示する相棒名。 */ name: "リディア",
-      /** 表示に使うGLBモデルID。 */ modelId: "lydia",
+      /** 表示に使うGLBモデルID。厚みのあるアクリル板スタンディ(assets/standee/sources.json)。 */ modelId: "lydia-standee",
       /** 装備前の攻撃力。高いほど魔法のダメージが増える。単位: ダメージ。 */ atk: 2,
       /** 装備前の最大HP。高いほど倒れにくい。単位: HP。 */ hp: 12,
       /** 狙われた時の避けやすさ。低いほど敵の攻撃が当たりやすい。d20の判定基準。単位: 難易度値。 */ defenseDc: 10,
@@ -133,10 +133,13 @@ export const EXPEDITION_BATTLE_CONFIG = {
     showBackdropWalls: true,
     /** カメラの見下ろし角。上げるほど見下ろしが強くなり、
      * 手前の障害物が奥の盤面・ユニットと重なりにくくなる。注視点と水平距離は変わらない。単位: 度。
-     * 戦闘画面下部のスライダーで見た目を見ながら調整できる(この値は既定値)。 */
-    cameraElevationDeg: 45,
+     * 戦闘画面下部のスライダーで見た目を見ながら調整できる(この値は既定値)。
+     * スタンディ(垂直なアクリル板)は見下ろすほど絵が短縮されて潰れるため、
+     * 2026-08-25に45度から20度へ下げた。角度を下げた分、奥のユニットが手前と
+     * 重なりやすくなる。重なりはAZIMUTH_OFFSET_DEG(ExpeditionBattle.jsx)で外す。 */
+    cameraElevationDeg: 20,
     /** 戦闘盤面のズーム倍率。大きいほど盤面が画面いっぱいに近づく。 */
-    cameraZoom: 1.2,
+    cameraZoom: 2.0,
     modelFacingOffset: {
       /** 味方GLBのローカル正面補正。値を変えると見た目だけがY軸回転する。単位: ラジアン。 */
       party: 0,

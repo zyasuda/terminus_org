@@ -10,6 +10,7 @@
     "test:battle": "node src/battle/core.test.mjs && node src/battle/battleResult.test.mjs && node src/stage/junction.test.mjs && node src/expedition/core.test.mjs && node src/expedition/battleState.test.mjs && node src/expedition/mapgen.test.mjs && node src/expedition/chipTemplates.test.mjs && node src/expedition/rerouteCorridors.test.mjs",
     "smoke:battle": "node src/battle/smoke.mjs",
     "smoke:expedition": "node src/expedition/smoke.mjs",
+    "smoke:standee": "STANDEE_ONLY=1 node src/expedition/smoke.mjs",
     "build": "vite build",
     "preview": "vite preview",
     "test:inventory": "node src/inventory.test.mjs",
@@ -17,7 +18,12 @@
     "test:progression": "node src/engine/progression.test.mjs",
     "test:playthrough": "node src/engine/playthrough.test.mjs",
     "test:playthrough:hybrid": "MODE=hybrid node src/engine/playthrough.test.mjs",
-    "test": "npm run test:battle && npm run test:progression && npm run test:scenario && npm run test:inventory && npm run test:playthrough && npm run test:playthrough:hybrid"
+    "test": "npm run test:battle && npm run test:progression && npm run test:scenario && npm run test:inventory && npm run test:playthrough && npm run test:playthrough:hybrid",
+    "check:standee": "node scripts/check-standee-pair.mjs",
+    "build:standee": "node scripts/build-standee-acrylic.mjs",
+    "diff:standee": "node scripts/diff-standee-pair.mjs",
+    "accept:standee": "node scripts/accept-standee.mjs",
+    "ship:standee": "node scripts/ship-standee.mjs"
   },
   "dependencies": {
     "@litert-lm/core": "^0.14.0",
