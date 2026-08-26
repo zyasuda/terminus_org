@@ -1,5 +1,5 @@
 {
-  "plateVersion": "v47",
+  "plateVersion": "v48",
   "metresPerTile": 1.5,
   "characters": {
     "lydia": {
@@ -8,8 +8,8 @@
       "heightM": 1.72
     },
     "gareth": {
-      "front": "gareth-standee-v37-front.png",
-      "back": "gareth-standee-v37-back.png",
+      "front": "gareth-standee-v53-front.png",
+      "back": "gareth-standee-v54-back-canvas.png",
       "gradeTo": "lydia",
       "heightM": 1.84
     },

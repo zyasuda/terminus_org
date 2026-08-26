@@ -50,6 +50,10 @@ BACK_PREVIEW = os.path.join(PROJECT, "output", f"{NAME}-standee-{VERSION}-back.p
 
 PLATE_THICKNESS_M = 0.06   # 実物のアクリル板の厚み相当
 BEVEL_WIDTH_M = 0.006      # 側面の丸みの半径
+# Blender内では1ワールド単位=1マス。実寸指定をそのまま入れると、
+# 1マス=1.5mの盤面では6cmが9cmになってしまう。
+PLATE_THICKNESS_U = PLATE_THICKNESS_M / METRES_PER_TILE
+BEVEL_WIDTH_U = BEVEL_WIDTH_M / METRES_PER_TILE
 CONTOUR_STEP_PX = 5        # 輪郭を間引く弧長間隔
 CHAIKIN_ITERS = 1          # 平滑化の反復回数(多いと頂点が倍々に増える)
 MORPH_OPEN_RADIUS_PX = 5   # 境界追跡が細い突起で詰まるのを防ぐオープニング半径
@@ -320,7 +324,7 @@ for poly in obj.data.polygons:
     poly.material_index = 0
 
 solidify = obj.modifiers.new("Thickness", "SOLIDIFY")
-solidify.thickness = PLATE_THICKNESS_M
+solidify.thickness = PLATE_THICKNESS_U
 solidify.offset = 0
 # Solidifyの命名はやや紛らわしい: material_offsetは「生成される反対側の面」
 # (=裏面)、material_offset_rimは「側面(rim)」に適用される。実測でpoly数の
@@ -330,7 +334,7 @@ solidify.material_offset = 2       # 生成される裏面 → back_mat
 solidify.material_offset_rim = 1   # 側面(rim) → rim_mat
 
 bevel = obj.modifiers.new("Round", "BEVEL")
-bevel.width = BEVEL_WIDTH_M
+bevel.width = BEVEL_WIDTH_U
 bevel.segments = 4
 bevel.limit_method = "ANGLE"
 bevel.angle_limit = math.radians(51)
