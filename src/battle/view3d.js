@@ -1393,7 +1393,7 @@ export function createBattleScene(container, grid, { voidBoundaryWalls = false, 
   const resize = () => {
     const w = container.clientWidth || 1;
     const h = container.clientHeight || 1;
-    renderer.setSize(w, h, false);
+    renderer.setSize(w, h); // 第3引数を省略しCSS寸法も更新する。falseだとDPR2以上でcanvasが2倍にはみ出す
     applyFrustum();
   };
   const ro = new ResizeObserver(resize);
