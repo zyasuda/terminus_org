@@ -703,7 +703,12 @@ export function createBattleScene(container, grid, { voidBoundaryWalls = false, 
     };
     for (let y = 0; y < grid.h; y++) for (let x = 0; x < grid.w; x++) {
       const cell = grid.cells[y * grid.w + x];
-      if (!cell?.walkable) continue;
+      // 判定は walkable ではなく「盤外(void)かどうか」で行う。
+      // 高さ1.0の障害物が置かれたマスは core.scatterObstacles が walkable=false に
+      // するため、walkable で弾くとそのマスの縁の壁と開口部がまるごと欠ける
+      // (作者の指摘 2026-08-27。ブロックの後ろの壁がブロック幅ぶん抜けていた)。
+      // 障害物が乗っていても盤面の一部なので、その外側には壁が必要。
+      if (!cell || cell.void) continue;
       for (const [dx, dy] of [[0, -1], [1, 0], [0, 1], [-1, 0]]) {
         const nx = x + dx, ny = y + dy;
         // グリッド外の三つの枝先は出口として開けておく。ここで描くのは
@@ -753,14 +758,28 @@ export function createBattleScene(container, grid, { voidBoundaryWalls = false, 
     tex.colorSpace = THREE.SRGBColorSpace;
     return tex;
   };
-  // 穴側。アーチの内側だけを不透明な黒で塗る。壁の下端は透けているので、
-  // 黒を四角で置くと下からはみ出る。形をアーチに合わせておく。
+  /* 穴側。アーチの内側だけを塗る。壁の下端は透けているので、四角で塗ると
+     下からはみ出る。形はアーチに合わせておく。
+
+     天井側をいちばん暗く、床側をわずかに明るくする。通路の中に光源は無く、
+     届くのは盤面側のカンテラの光だけなので、床は拾うが天井は何も受けない。
+     床が奥へ続いている示唆にもなる。
+
+     2026-08-27に4案を並べて決めた。落ちた案とその理由:
+       均一な黒        … 輪郭はいちばん立つが、黒が強すぎて浮く
+       壁と同じ向き     … 下端を透明にしたら輪郭が消え、「壁の抜け」に見え方が戻った。
+                         壁は下端を抜いてよいが、抜きもの(穴・入口)は輪郭が情報なので残す
+       奥へ放射で暗く   … 奥行きは出るが輪郭がいちばん柔らかく、壁との境界が曖昧になる */
   const archHoleTexture = tiles => {
     const c = document.createElement("canvas");
     c.width = Math.round(ARCH_PX_PER_TILE * tiles);
     c.height = Math.round(ARCH_PX_PER_TILE * BACKDROP_H);
     const g = c.getContext("2d");
-    g.fillStyle = "rgba(1,2,5,0.99)";
+    const grad = g.createLinearGradient(0, 0, 0, c.height);
+    grad.addColorStop(0, "rgba(0,1,3,0.99)");      // 天井: 何も光を受けない
+    grad.addColorStop(0.55, "rgba(4,6,12,0.98)");
+    grad.addColorStop(1, "rgba(17,22,34,0.95)");   // 床: 手前の光をわずかに拾う
+    g.fillStyle = grad;
     archPath(g, c.width, c.height);
     g.fill();
     const tex = new THREE.CanvasTexture(c);
