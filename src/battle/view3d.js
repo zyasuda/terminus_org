@@ -43,6 +43,9 @@ const COLOR = {
   active: 0xf2df7e       // 手番のユニットを示すマーカー
 };
 
+// ズームの可動域。スライダーと指のピンチで共通の上下限にする(作者の指示 2026-08-27)。
+const ZOOM_MIN = 0.5;
+const ZOOM_MAX = 5.0;
 const CAMERA_DIST = 20;   // placeCamera()の r と同じ値。fogのnear/farはここからの相対距離で決める
 const OCCLUDER_OPACITY = 0.35;
 
@@ -106,7 +109,7 @@ export function createBattleScene(container, grid, { voidBoundaryWalls = false, 
 
   /* --- カメラ(戦闘は正射影、会話相手は一人称の透視投影) --- */
   const gridViewSize = Math.max(grid.w, grid.h) + 4;
-  let cameraZoom = Math.max(0.5, initialCameraZoom);
+  let cameraZoom = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, initialCameraZoom));
   let baseViewSize = gridViewSize / cameraZoom;
   let viewSize = baseViewSize;
   const isoCamera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0.1, 200);
@@ -154,7 +157,9 @@ export function createBattleScene(container, grid, { voidBoundaryWalls = false, 
     // 注視点(target)と水平距離(r)は変えず、見下ろし角だけをcameraElevationで変える。
     // 角度を上げるほど、手前の障害物が奥の盤面と重なりにくくなる。
     const r = CAMERA_DIST, y = r * Math.tan(cameraElevation);
-    isoCamera.position.set(Math.cos(camAngle) * r, y, Math.sin(camAngle) * r);
+    // カメラの位置は注視点からの相対で決める。原点基準にすると、targetを動かしても
+    // カメラが原点に留まったまま向きだけ変わり、寄ったつもりの駒が逆に枠外へ出る。
+    isoCamera.position.set(target.x + Math.cos(camAngle) * r, target.y + y, target.z + Math.sin(camAngle) * r);
     isoCamera.lookAt(target);
     onCameraMoved();
   };
@@ -614,6 +619,26 @@ export function createBattleScene(container, grid, { voidBoundaryWalls = false, 
   // 上ほど見え、下へ向かうほど透過して闇に沈む縦グラデーション。
   // 背景が暗いので、透過させた床際がいちばん暗くなる。
   // CanvasTextureのflipYが既定で有効なので、canvasの上端がそのまま壁の上端になる
+  /* アーチ型の入口の輪郭。下は床まで真っ直ぐ、上は半円。
+     壁のくり抜きと、穴の中の闇で同じ形を使う(別々に書くとふちがずれる)。
+
+     canvasは必ず「1マス=ARCH_PX_PER_TILE ピクセル」の等倍で作る。
+     横だけマス数に比例させて縦を固定すると、半円が楕円に潰れて壁の高さを
+     突き抜ける(2026-08-27に実測。幅3マスで頂点がcanvasの上端を超えていた)。 */
+  const ARCH_PX_PER_TILE = 96;
+  const ARCH_WIDTH_TILES = 1.4;    // 入口の幅。狭い枝では枝幅に収める
+  const ARCH_HEIGHT_TILES = 2.0;   // 入口の高さ(1マス1.5m換算で3m)。人の約1.6倍
+  const archPath = (g, w, h) => {
+    const aw = Math.min(w * 0.72, ARCH_PX_PER_TILE * ARCH_WIDTH_TILES);
+    const x0 = (w - aw) / 2, r = aw / 2;
+    const shoulder = h - ARCH_PX_PER_TILE * ARCH_HEIGHT_TILES + r;   // 半円の中心(canvasは上が0)
+    g.beginPath();
+    g.moveTo(x0, h);
+    g.lineTo(x0, shoulder);
+    g.arc(x0 + r, shoulder, r, Math.PI, 0);
+    g.lineTo(x0 + aw, h);
+    g.closePath();
+  };
   const backdropTexture = () => {
     const c = document.createElement("canvas");
     c.width = 2;
@@ -645,8 +670,13 @@ export function createBattleScene(container, grid, { voidBoundaryWalls = false, 
   // on/offをまとめて切り替えられるようGroupに入れる(検証パネルからのトグル用)
   const backdropGroup = new THREE.Group();
   scene.add(backdropGroup);
-  // [幅, 位置, Y回転] … PlaneGeometryの法線は+Z。Y回転で内側へ向ける
-  [
+  // グリッド外周の書き割り。[幅, 位置, Y回転] … PlaneGeometryの法線は+Z。Y回転で内側へ向ける。
+  //
+  // 三叉路のように盤外セル(void)を含む盤面では出さない。歩けるマスの縁は
+  // 下の voidBoundaryWalls が全て描くので、外周まで出すと壁が2枚平行に並んで見える
+  // (作者の指摘 2026-08-27。7x7の外周と、その内側のT字の縁が二重になっていた)。
+  // グリッドいっぱいに床がある盤面では外周とマスの縁が一致するので、この分岐は効かない。
+  if (!voidBoundaryWalls) [
     [grid.w, [0, BACKDROP_H / 2, -halfH], 0],              // 奥(-Z)側 → +Zを向く
     [grid.w, [0, BACKDROP_H / 2, halfH], Math.PI],         // 手前(+Z)側 → -Zを向く
     [grid.h, [-halfW, BACKDROP_H / 2, 0], Math.PI / 2],    // 左(-X)側 → +Xを向く
@@ -660,6 +690,7 @@ export function createBattleScene(container, grid, { voidBoundaryWalls = false, 
   // 三叉路の内側は、既存の背景壁と同じ片面の書き割りで縁取る。盤外セルを
   // 壁マスに変えないため、移動・射線・障害物の規則には一切影響しない。
   let voidBoundaryWallCount = 0;
+  const openings = [];   // 枝先の縁 {x, y, dx, dy}。dx/dyはグリッド外を向く方向
   if (voidBoundaryWalls) {
     const edgeWall = (x, y, dx, dy) => {
       const [wx, wz] = worldOf(x, y);
@@ -677,12 +708,106 @@ export function createBattleScene(container, grid, { voidBoundaryWalls = false, 
         const nx = x + dx, ny = y + dy;
         // グリッド外の三つの枝先は出口として開けておく。ここで描くのは
         // グリッド内の盤外セルとの境目だけで、T字の凹角も自然に含まれる。
-        if (nx < 0 || ny < 0 || nx >= grid.w || ny >= grid.h) continue;
+        // 枝先は openings に控えておき、下で「奥へ続いている」見せ方を載せる。
+        if (nx < 0 || ny < 0 || nx >= grid.w || ny >= grid.h) { openings.push({ x, y, dx, dy }); continue; }
         if (grid.cells[ny * grid.w + nx]?.void) edgeWall(x, y, dx, dy);
       }
     }
   }
   container.dataset.voidBoundaryWallCount = String(voidBoundaryWallCount);
+
+  /* --- 枝先(通路が続く開口部)の見せ方 ---
+     枝先は壁を立てず開けてある(通路が続く想定)。ただし開口部の先が背景色そのままだと、
+     壁の作り忘れと区別がつかない(作者の指摘 2026-08-27)。
+     そこで枝先も他と同じ書き割りで塞ぎ、そこにアーチ型の入口をくり抜いて、
+     くり抜いた中だけを真っ暗にする。「壁が無い」ではなく「壁に入口が空いている」と読ませる。
+
+     入口の造作(縁取りや石組みの枠)は付けない。他の壁と同じデザインに揃える(作者の指示)。
+     壁のグラデーションは backdropTexture と同じ3点の数値を使う。
+
+     2026-08-27に4案を並べて決めた。採用しなかった案と、なぜ落ちたか:
+       暗い床を2マス置く … 奥へ続く感じは出たが、歩けない床が歩ける床に見える
+       上が暗い書き割り  … 既存の壁と見分けがつかず、壁が増えたようにしか見えない
+       縁の床を暗く落とす … 効果が弱く、開口部の先が背景色である事実が変わらない
+       アーチに縁取りを足す … 造作が不要と判断された(引きでは読めたが実プレイ倍率では
+                              上半分が枠外に出て、明るい縦線2本にしか見えなかった)
+
+     移動・射線・障害物の規則には一切触らない、見た目だけの追加。 */
+  // 壁側。既存の書き割りと同じグラデーションを塗ってから、アーチを抜くだけ。
+  // 縁取りは付けない(作者の指示 2026-08-27。他の壁と同じデザインに揃える)。
+  const archWallTexture = tiles => {
+    const c = document.createElement("canvas");
+    c.width = Math.round(ARCH_PX_PER_TILE * tiles);
+    c.height = Math.round(ARCH_PX_PER_TILE * BACKDROP_H);
+    const g = c.getContext("2d");
+    const grad = g.createLinearGradient(0, 0, 0, c.height);
+    grad.addColorStop(0, "rgba(30,35,49,0.9)");     // backdropTextureと同じ3点
+    grad.addColorStop(0.45, "rgba(15,18,26,0.5)");
+    grad.addColorStop(1, "rgba(5,6,10,0)");
+    g.fillStyle = grad;
+    g.fillRect(0, 0, c.width, c.height);
+    g.globalCompositeOperation = "destination-out";
+    archPath(g, c.width, c.height);
+    g.fill();
+    const tex = new THREE.CanvasTexture(c);
+    tex.colorSpace = THREE.SRGBColorSpace;
+    return tex;
+  };
+  // 穴側。アーチの内側だけを不透明な黒で塗る。壁の下端は透けているので、
+  // 黒を四角で置くと下からはみ出る。形をアーチに合わせておく。
+  const archHoleTexture = tiles => {
+    const c = document.createElement("canvas");
+    c.width = Math.round(ARCH_PX_PER_TILE * tiles);
+    c.height = Math.round(ARCH_PX_PER_TILE * BACKDROP_H);
+    const g = c.getContext("2d");
+    g.fillStyle = "rgba(1,2,5,0.99)";
+    archPath(g, c.width, c.height);
+    g.fill();
+    const tex = new THREE.CanvasTexture(c);
+    tex.colorSpace = THREE.SRGBColorSpace;
+    return tex;
+  };
+  if (openings.length) {
+    // 枝ごとに連続した開口部を1枚の壁へまとめる。1マスずつ立てるとアーチが枝の数だけ並ぶ。
+    const byDir = new Map();
+    for (const o of openings) {
+      const k = `${o.dx},${o.dy}`;
+      if (!byDir.has(k)) byDir.set(k, []);
+      byDir.get(k).push(o);
+    }
+    for (const [k, list] of byDir) {
+      const [dx, dy] = k.split(",").map(Number);
+      const along = dx !== 0 ? "y" : "x";       // 壁が伸びる向き
+      list.sort((a, b) => a[along] - b[along]);
+      const runs = [[list[0]]];
+      for (let i = 1; i < list.length; i++) {
+        const run = runs[runs.length - 1];
+        if (list[i][along] === run[run.length - 1][along] + 1) run.push(list[i]);
+        else runs.push([list[i]]);
+      }
+      for (const seg of runs) {
+        const first = seg[0], last = seg[seg.length - 1];
+        const tiles = seg.length;
+        const [wx, wz] = worldOf((first.x + last.x) / 2, (first.y + last.y) / 2);
+        const rotY = dy < 0 ? 0 : dy > 0 ? Math.PI : dx < 0 ? Math.PI / 2 : -Math.PI / 2;
+        const geo = new THREE.PlaneGeometry(tiles, BACKDROP_H);
+        const wall = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({
+          map: archWallTexture(tiles), transparent: true, depthWrite: false, side: THREE.FrontSide }));
+        wall.position.set(wx + dx * 0.5, BACKDROP_H / 2, wz + dy * 0.5);
+        wall.rotation.y = rotY;
+        // 「壁」のトグルで他の書き割りと一緒に切り替わるよう、同じGroupへ入れる。
+        backdropGroup.add(wall);
+        // 穴の中の闇。壁のわずかに奥へ置いて、アーチの内側だけが黒く見えるようにする。
+        const hole = new THREE.Mesh(geo.clone(), new THREE.MeshBasicMaterial({
+          map: archHoleTexture(tiles), transparent: true, depthWrite: false, side: THREE.FrontSide }));
+        hole.position.set(wx + dx * 0.52, BACKDROP_H / 2, wz + dy * 0.52);
+        hole.rotation.y = rotY;
+        backdropGroup.add(hole);
+      }
+    }
+  }
+  container.dataset.openingCount = String(openings.length);
+  container.dataset.backdropWallCount = String(backdropGroup.children.length);
 
   /* --- 空気感の粒子(ゆらゆら立ち上る塵・埃) ---
      地面から上へ、少量だけゆっくり上がっていく演出。数を少なめにして
@@ -1360,7 +1485,8 @@ export function createBattleScene(container, grid, { voidBoundaryWalls = false, 
     refreshOcclusion();
   }
 
-  const onPointerDown = e => {
+  // 指を離した時に呼ぶ。押した瞬間に拾うと、スワイプやピンチのたびにマスを選んでしまう。
+  const doPick = e => {
     if (!pickHandler) return;
     const r = renderer.domElement.getBoundingClientRect();
     ndc.x = ((e.clientX - r.left) / r.width) * 2 - 1;
@@ -1388,7 +1514,124 @@ export function createBattleScene(container, grid, { voidBoundaryWalls = false, 
   container.appendChild(renderer.domElement);
   renderer.domElement.style.display = "block";
   renderer.domElement.style.touchAction = "none";
+
+  /* --- 指の操作 ---
+     スマホ縦持ちではマウスが無いので、カメラの5つのパラメータを全て指で動かせるようにする。
+       1本指ドラッグ  → 見ている場所を平行移動(上下左右)
+       2本指ピンチ    → ズーム
+       2本指の横移動  → 向き(方位角)
+       2本指の縦移動  → 高さ(見下ろし角)
+       ダブルタップ    → 既定へ戻す(呼び出し側が決める)
+     マスのタップは「指が TAP_SLOP px 以上動かなかった時」だけ成立させる。
+     押した瞬間に拾っていると、スワイプのたびに移動先を選んでしまう。 */
+  const TAP_SLOP = 10;        // これ以下の移動はタップ扱い(px)
+  const DOUBLE_TAP_MS = 400;  // 2回目のタップをダブルタップとみなす間隔(iOSの標準に寄せた)
+  const ORBIT_GAIN = 0.4;     // 横1pxあたり何度回すか
+  const ELEVATION_GAIN = 0.25;// 縦1pxあたり何度起こすか
+  const pointers = new Map();
+  let dragMoved = 0, lastTapAt = 0, lastTapX = 0, lastTapY = 0;
+  let pinchStartDist = 0, pinchStartZoom = 1, twoStartX = 0, twoStartY = 0, twoStartAzim = 0, twoStartElev = 0;
+  let doubleTapHandler = null, cameraChangeHandler = null;
+
+  const centerOf = () => {
+    let x = 0, y = 0;
+    for (const p of pointers.values()) { x += p.x; y += p.y; }
+    return { x: x / pointers.size, y: y / pointers.size };
+  };
+  const distOf = () => {
+    const [a, b] = [...pointers.values()];
+    return Math.hypot(a.x - b.x, a.y - b.y);
+  };
+  // 画面のドラッグ量を、カメラの向きに合わせて盤面上の移動へ変換する。
+  // 指で盤面をつかんで動かす向き(指を右へ→盤面が右へ)にする。
+  const panBy = (dxPx, dyPx) => {
+    const h = container.clientHeight || 1;
+    const perPx = viewSize / h;                 // 正射影なので1pxは常に同じワールド距離
+    const cos = Math.cos(camAngle), sin = Math.sin(camAngle);
+    // 画面右方向の水平ベクトルは (sin, -cos)。画面上方向は視線の逆 (cos, sin)。
+    // 見下ろし角が浅いほど奥行き方向は画面上で潰れるので、その分だけ縦の移動量を伸ばす。
+    const depthScale = 1 / Math.max(0.25, Math.sin(cameraElevation));
+    const dx = -dxPx * perPx, dy = -dyPx * perPx * depthScale;
+    target.x += sin * dx + cos * dy;
+    target.z += -cos * dx + sin * dy;
+    placeCamera();
+  };
+  const notifyCamera = () => cameraChangeHandler?.({
+    azimuthDeg: ((camAngle * 180 / Math.PI) % 360 + 360) % 360,
+    elevationDeg: cameraElevation * 180 / Math.PI,
+    zoom: cameraZoom,
+  });
+  const applyZoom = z => {
+    cameraZoom = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, z));
+    baseViewSize = gridViewSize / cameraZoom;
+    viewSize = baseViewSize;
+    applyFrustum();
+    placeCamera();
+  };
+
+  const beginTwoFinger = () => {
+    pinchStartDist = distOf(); pinchStartZoom = cameraZoom;
+    const c = centerOf(); twoStartX = c.x; twoStartY = c.y;
+    twoStartAzim = camAngle * 180 / Math.PI;
+    twoStartElev = cameraElevation * 180 / Math.PI;
+  };
+  const onPointerDown = e => {
+    renderer.domElement.setPointerCapture?.(e.pointerId);
+    pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (pointers.size === 1) { dragMoved = 0; return; }
+    if (pointers.size === 2) beginTwoFinger();
+  };
+  const onPointerMove = e => {
+    const prev = pointers.get(e.pointerId);
+    if (!prev) return;
+    const dx = e.clientX - prev.x, dy = e.clientY - prev.y;
+    pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    dragMoved += Math.hypot(dx, dy);
+    if (pointers.size === 1) { if (dragMoved > TAP_SLOP) panBy(dx, dy); return; }
+    if (pointers.size !== 2) return;
+    // ピンチ(距離)→ズーム、重心の横→向き、重心の縦→高さ。3つを同時に効かせる。
+    //
+    // 2026-08-27に「最初に大きく動いた成分ひとつに決め打ちする」案を試して撤回した。
+    // 実機ではチャタリングした(指が2本→1本→2本と揺れるたびに軸を取り直すため、
+    // 意図した軸に入らない)。3つ同時のままでも作者の実機確認では違和感が無かった。
+    //
+    // どれも「開始時の値からの差」で決める。1フレームごとの差分を足し込むと、
+    // 指を元の位置へ戻しても値が戻らない。
+    const c = centerOf();
+    if (pinchStartDist > 0) applyZoom(pinchStartZoom * (distOf() / pinchStartDist));
+    const deg = ((twoStartAzim + (c.x - twoStartX) * ORBIT_GAIN) % 360 + 360) % 360;
+    camAngle = deg * Math.PI / 180;
+    dirIndex = (camAngle - Math.PI / 4) / (Math.PI / 2);
+    cameraElevation = Math.max(10, Math.min(80, twoStartElev + (c.y - twoStartY) * ELEVATION_GAIN)) * Math.PI / 180;
+    applyFogRange();
+    placeCamera();
+    notifyCamera();
+  };
+  const onPointerUp = e => {
+    const wasSingle = pointers.size === 1;
+    pointers.delete(e.pointerId);
+    try { renderer.domElement.releasePointerCapture?.(e.pointerId); } catch { /* 既に解放済み */ }
+    if (pointers.size === 2) beginTwoFinger();   // 3本目が離れた時は残り2本で取り直す
+    if (!wasSingle) { if (pointers.size === 0) notifyCamera(); return; }
+    if (dragMoved > TAP_SLOP) { notifyCamera(); return; }
+    // e.timeStampは環境によって基準がまちまちなので、自前の時計で測る。
+    const now = performance.now();
+    const near = Math.hypot(e.clientX - lastTapX, e.clientY - lastTapY) < 40;
+    if (doubleTapHandler && near && now - lastTapAt < DOUBLE_TAP_MS) { lastTapAt = 0; doubleTapHandler({ clientX: e.clientX, clientY: e.clientY }); return; }
+    lastTapAt = now; lastTapX = e.clientX; lastTapY = e.clientY;
+    doPick(e);
+  };
+  // 指が離れた通知を取りこぼすと、次のタップで「2本指」と誤認してマス選択が効かなくなる。
+  // pointercancelとlostpointercaptureも同じように消す。
+  const forgetPointer = e => {
+    pointers.delete(e.pointerId);
+    try { renderer.domElement.releasePointerCapture?.(e.pointerId); } catch { /* 既に解放済み */ }
+  };
   renderer.domElement.addEventListener("pointerdown", onPointerDown);
+  renderer.domElement.addEventListener("pointermove", onPointerMove);
+  renderer.domElement.addEventListener("pointerup", onPointerUp);
+  renderer.domElement.addEventListener("pointercancel", forgetPointer);
+  renderer.domElement.addEventListener("lostpointercapture", forgetPointer);
 
   const resize = () => {
     const w = container.clientWidth || 1;
@@ -1494,6 +1737,11 @@ export function createBattleScene(container, grid, { voidBoundaryWalls = false, 
       placeCamera();
     },
     setPickHandler(fn, { preferCells: nextPreferCells = false } = {}) { pickHandler = fn; preferCells = nextPreferCells; },
+    // 指の操作の通知先。onDoubleTapは「既定へ戻す」、onCameraChangeは
+    // 指で動かしたカメラの値をUI(スライダー)へ返すためのもの。
+    setGestureHandlers({ onDoubleTap = null, onCameraChange = null } = {}) {
+      doubleTapHandler = onDoubleTap; cameraChangeHandler = onCameraChange;
+    },
     // 検証パネル用のトグル・フェーダー。強さ0〜1: 0=ほぼ無効(farを遠くへ逃がす)、
     // 1=現状のチューニング値(near=CAMERA_DIST-1 / far=CAMERA_DIST+10)
     setFogEnabled(on) { scene.fog = on ? fogObj : null; },
@@ -1537,7 +1785,7 @@ export function createBattleScene(container, grid, { voidBoundaryWalls = false, 
     setCameraElevationDeg(deg) { cameraElevation = deg * Math.PI / 180; applyFogRange(); placeCamera(); },
     // ズーム倍率をその場で反映する。1より大きいほど盤面へ近づく。
     setCameraZoom(zoom) {
-      cameraZoom = Math.max(0.5, Number(zoom) || 1);
+      cameraZoom = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, Number(zoom) || 1));
       baseViewSize = gridViewSize / cameraZoom;
       viewSize = baseViewSize;
       applyFrustum();
@@ -1546,6 +1794,30 @@ export function createBattleScene(container, grid, { voidBoundaryWalls = false, 
     // 水平方向の向きをスライダーでリニアに操作するためのAPI。「視点を回す」(rotate)と
     // 同じdirIndex/camAngleを共有するが、なめらかな追従は挟まず即座に反映する
     // (ドラッグ操作の追従遅れを避けるため。挙動はcameraElevationDegと合わせてある)。
+    // 注視点を1マスへ寄せる。縦画面ではズームを上げると、盤面の中心を見ているだけでは
+    // 端の駒が枠外へ出る(iPhone 16縦・ズーム2.5で味方2人が画面外だった)。
+    // 攻撃演出の setCameraFocus と違い、ズーム(viewSize)には触らない。
+    // 手番が回るたびに寄り引きが変わると盤面の読み方が毎回変わってしまうため。
+    // 引数なしで呼ぶと盤面の中心へ戻る。yは足元ではなく駒の胸のあたりを見る高さ。
+    // ダブルタップした画面上の点を、カメラの注視点にする(作者の指示 2026-08-27)。
+    // その点が画面の中心へ来る。床の平面と交わらなかった時は何もしない。
+    // 注視点の高さ(target.y)は今の値を保つ。ズームと見下ろし角にも触らない。
+    lookAtScreenPoint(clientX, clientY) {
+      if (camera !== isoCamera) return false;
+      const r = renderer.domElement.getBoundingClientRect();
+      ndc.x = ((clientX - r.left) / r.width) * 2 - 1;
+      ndc.y = -((clientY - r.top) / r.height) * 2 + 1;
+      raycaster.setFromCamera(ndc, isoCamera);
+      if (!raycaster.ray.intersectPlane(floorPlane, floorPoint)) return false;
+      target.set(floorPoint.x, target.y, floorPoint.z);
+      placeCamera();
+      return true;
+    },
+    setCameraCenter(x, y) {
+      if (x === undefined || x === null) target.set(0, 0, 0);
+      else { const [wx, wz] = worldOf(x, y); target.set(wx, 0.5, wz); }
+      placeCamera();
+    },
     setCameraAzimuthDeg(deg) {
       const rad = deg * Math.PI / 180;
       dirIndex = (rad - Math.PI / 4) / (Math.PI / 2);
@@ -1602,6 +1874,8 @@ export function createBattleScene(container, grid, { voidBoundaryWalls = false, 
       cancelAnimationFrame(raf);
       ro.disconnect();
       renderer.domElement.removeEventListener("pointerdown", onPointerDown);
+      renderer.domElement.removeEventListener("pointermove", onPointerMove);
+      renderer.domElement.removeEventListener("pointerup", onPointerUp);
       renderer.dispose();
       scene.traverse(o => {
         if (o.geometry) o.geometry.dispose();

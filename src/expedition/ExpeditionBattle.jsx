@@ -5,6 +5,11 @@ import { ITEMS, partyMaxHp } from "./core.js";
 import { EXPEDITION_BATTLE_CONFIG } from "./battleConfig.js";
 import { createExpeditionBattleLayout, facingToward, nearestAlive } from "./battleState.js";
 
+// ズームの可動域。view3d.js側の上下限と同じ値にする(片方だけ動かすと、
+// スライダーの端まで動かしてもカメラが追従しない)。
+const ZOOM_MIN = 0.5, ZOOM_MAX = 5.0;
+// コンパスの記号と、北から時計回りに何度ずれているか。
+const COMPASS_POINTS = [["N", 0], ["E", 90], ["S", 180], ["W", 270]];
 const atkOf = (baseAtk, gear = {}) => baseAtk + [gear.weapon, gear.charm].reduce((n, id) => n + (id && ITEMS[id]?.stat === "atk" ? ITEMS[id].power : 0), 0);
 // 味方も敵も同じ形で組む。歩ける高さや見た目のような共通属性を、3か所へ書き分けないため。
 // combat(hp/maxHp/atk)だけは、装備と遠征中の残HPで決まるので呼ぶ側から渡す。
@@ -48,7 +53,8 @@ const makeState = (guardian, layout, equipment = {}, party = {}, seed = 0) => {
   return { grid, units, order: turnOrder(units, { enemyFirst }).map(u => u.id), turn: 0, log: [guardian ? "守護者が宝箱を守っている。" : layout === "junction" ? "坑道の獣が三叉路を塞いだ。" : "坑道の獣が2匹、狭い通路を塞いだ。"] };
 };
 const alive = (units, side) => units.some(u => u.side === side && u.hp > 0);
-// heroの向いている方向(facing)を画面奥にする水平角度(度)。カメラ位置→原点の視線方向が
+// ポケモンアングルの「向き」側。手番の駒が向いている方向(facing)を画面奥にする水平角度(度)。
+// 注視点側は pokemonAngle() が決める。カメラ位置→原点の視線方向が
 // heroの向きの逆になるように定める(=heroが向いている敵と、画面奥で正対する構図を保つ)。
 // 厳密に180度正対させると、hero自身が画面上で奥の敵と重なって隠してしまうため、
 // 少しだけ角度をずらす(既定20度)。
@@ -86,7 +92,7 @@ export default function ExpeditionBattle({ guardian, layout = "corridor", equipm
   const setElevation = deg => { setCameraElevationDeg(deg); scene.current?.setCameraElevationDeg(deg); };
   const [cameraZoom, setCameraZoomState] = useState(() => EXPEDITION_BATTLE_CONFIG.presentation.cameraZoom);
   const setZoom = zoom => {
-    const normalized = Math.max(0.75, Math.min(3, Number(zoom) || EXPEDITION_BATTLE_CONFIG.presentation.cameraZoom));
+    const normalized = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, Number(zoom) || EXPEDITION_BATTLE_CONFIG.presentation.cameraZoom));
     setCameraZoomState(normalized);
     scene.current?.setCameraZoom(normalized);
   };
@@ -94,10 +100,10 @@ export default function ExpeditionBattle({ guardian, layout = "corridor", equipm
   const [fogOn, setFogOn] = useState(false);
   const [fogLevel, setFogLevel] = useState(1);
   const [fogColor, setFogColor] = useState("#161a22");
-  const [dustOn, setDustOn] = useState(false);
+  const [dustOn, setDustOn] = useState(EXPEDITION_BATTLE_CONFIG.presentation.dust);
   const [rainOn, setRainOn] = useState(false);
   const [wallsOn, setWallsOn] = useState(EXPEDITION_BATTLE_CONFIG.presentation.showBackdropWalls);
-  const [bgColor, setBgColor] = useState("#161a22");
+  const [bgColor, setBgColor] = useState(EXPEDITION_BATTLE_CONFIG.presentation.backgroundColor);
   const [lightPreset, setLightPreset] = useState("night");
   const [obstaclesOn, setObstaclesOn] = useState(true);
   const [waterOn, setWaterOn] = useState(true);
@@ -221,15 +227,61 @@ export default function ExpeditionBattle({ guardian, layout = "corridor", equipm
   // 上のazimuth追従で彼女の正対方向が画面奥になる。投影は正射影のままなので
   // マスのクリックはそのまま効く(setCameraFocusは寄るだけで方式を変えない)。
   // 攻撃演出中(combatShot)はそちらのカメラを尊重して触らない。
-  useEffect(() => {
-    const s = scene.current; if (!s || combatShot) return;
-    if (active?.id === "mage") {
+  /* ポケモンアングル ─ 戦闘中の既定のアングル(作者の命名 2026-08-27)。
+     手番の駒と、その駒が狙う敵の中間を注視点にし、駒の背中越しに敵を見る構図にする。
+     azimuthForFacingが向きを、ここが注視点を決める。2つで1つの構図。
+
+     以前はリディアの手番だけこの構図で、ガレスの手番は盤面の中心を見ていた。
+     縦画面(iPhone 16縦・ズーム2.5)では盤面中心のままだと味方2人とも枠外へ出たため、
+     味方全員をこの構図に統一した。
+
+     注視点を動かすのはこの1か所だけにする。2か所から触ると、後から走った方が
+     相手のtargetを上書きして「寄ったはずが盤面中心に戻る」になる。 */
+  const pokemonAngle = () => {
+    const s = scene.current; if (!s || !active) return;
+    if (active.side === "party") {
       const foe = nearestAlive(active, state.units.filter(u => u.side === "enemy"));
       s.setCameraFocus(active, foe || null);
     } else {
+      // 敵の手番は寄りを解除して、その駒を画面の中心に置く。
       s.setCameraFocus(null);
+      s.setCameraCenter(active.x, active.y);
     }
-  }, [active?.id, combatShot, state.units]);
+  };
+  useEffect(() => {
+    if (combatShot) return;   // 攻撃演出中はそちらの構図を尊重する
+    pokemonAngle();
+  }, [active?.id, active?.x, active?.y, combatShot, state.units]);
+  // 視点を既定へ戻す。コンパスのタップから呼ぶ。
+  // 指示はズーム・見下ろし角・注視点の3つだったが、方位角も戻す。指で回した向きが
+  // 残ると盤面が画面の端に寄ったままになり、「戻した」ことにならなかった(実機で確認)。
+  // 方位角の既定は「手番の駒が敵と正対する向きを画面奥にする角度」で、手番の頭でも同じ値を使う。
+  const resetView = () => {
+    const { cameraZoom: z, cameraElevationDeg: e } = EXPEDITION_BATTLE_CONFIG.presentation;
+    setCameraZoomState(z);
+    setCameraElevationDeg(e);
+    scene.current?.setCameraZoom(z);
+    scene.current?.setCameraElevationDeg(e);
+    if (activeFacing !== undefined) setAzimuth(azimuthForFacing(activeFacing));
+    pokemonAngle();
+  };
+  // 指の操作をカメラへ繋ぐ。activeを見ているのでuseEffectで貼り直す(古いactiveを掴まないため)。
+  // 指で動いた値はスライダーの表示にも返す。片方だけが真になると、次にスライダーを
+  // 触った瞬間にカメラが飛ぶ。
+  useEffect(() => {
+    scene.current?.setGestureHandlers({
+      // ダブルタップした点をカメラの注視点にする(作者の指示 2026-08-27)。
+      // その場所が画面の中心へ来る。ズームと見下ろし角はそのまま残す。
+      // せっかく指で合わせた寄りが戻ると困るため。
+      onDoubleTap: ({ clientX, clientY }) => { scene.current?.lookAtScreenPoint(clientX, clientY); },
+      onCameraChange: ({ azimuthDeg, elevationDeg, zoom }) => {
+        // sceneへ返さない。指の操作でsceneは既に動いているので、ここで戻すと二重に効く。
+        setCameraAzimuthDegState(azimuthDeg);
+        setCameraElevationDeg(elevationDeg);
+        setCameraZoomState(zoom);
+      },
+    });
+  }, [active?.id, active?.x, active?.y, state.units]);
   useEffect(() => {
     const s = scene.current; if (!s) return;
     const targets = partyAction === "attack" ? attackTargets : [];
@@ -278,7 +330,31 @@ export default function ExpeditionBattle({ guardian, layout = "corridor", equipm
     data-hero-action={playerTurn ? (partyAction || (moved ? "moved" : "choose")) : ""}
     data-attack-targets={attackTargets.length}
     data-reach-cells={JSON.stringify(activeReach.map(({ x, y }) => ({ x, y })))}>
-    <div ref={mount} style={S.canvas} data-camera={combatShot ? "combat" : "iso"} data-view-direction={viewDirection} data-camera-azimuth-deg={cameraAzimuthDeg} data-camera-elevation-deg={cameraElevationDeg} data-camera-zoom={cameraZoom}/>
+    <div style={S.stage}>
+      <div ref={mount} style={S.canvas} data-camera={combatShot ? "combat" : "iso"} data-view-direction={viewDirection} data-camera-azimuth-deg={cameraAzimuthDeg} data-camera-elevation-deg={cameraElevationDeg} data-camera-zoom={cameraZoom}/>
+      {/* 方位と拡大率。指で自由に回せるようにした結果、いま自分がどちらを向いて
+          どれだけ寄っているかが分からなくなったので、まず状態として出す。
+          タップすると既定(ズーム2.5 / 高さ20度 / 手番の駒)へ戻る(作者の指示 2026-08-27)。
+          状態表示に操作を足す形になるが、地図アプリのコンパスと同じ慣習なので、
+          「いまの向き」と「向きを戻す」は同じ場所にあってよいと判断した。 */}
+      <button type="button" style={S.compass} data-compass-azimuth-deg={Math.round(cameraAzimuthDeg)}
+        aria-label="視点を既定に戻す" onClick={resetView}>
+        <svg width="58" height="58" viewBox="-29 -29 58 58" aria-hidden="true">
+          <circle r="26" fill="rgba(10,14,22,.70)" stroke="#4a5366" strokeWidth="1"/>
+          {COMPASS_POINTS.map(([label, deg]) => {
+            // 画面の上に来るワールド方向はカメラの視線そのもの。北(=y減少)が画面上で
+            // なす角は 90度 - 方位角。各記号はそこから時計回りにdegだけずらす。
+            const a = (90 - cameraAzimuthDeg + deg) * Math.PI / 180;
+            // dominantBaseline=centralで文字の中心を半径上に置く。ベースラインを
+            // 手で足すと、円の下側の記号だけ縁からはみ出す。
+            return <text key={label} x={Math.sin(a) * 16} y={-Math.cos(a) * 16}
+              textAnchor="middle" dominantBaseline="central" fontSize="11" fontWeight={deg === 0 ? 700 : 400}
+              fill={deg === 0 ? "#e8b45c" : "#8f98ac"}>{label}</text>;
+          })}
+        </svg>
+        <div style={S.zoomLabel}>×{cameraZoom.toFixed(2)}</div>
+      </button>
+    </div>
     <div style={S.hud}>
       <b>{!partyAlive ? "敗北" : !enemyAlive ? "勝利" : `${active?.name}の手番`}</b>
       <div style={S.row}>{state.units.map(u => <span key={u.id} style={S.chip}>{u.name} {u.hp}/{u.maxHp}</span>)}</div>
@@ -296,6 +372,10 @@ export default function ExpeditionBattle({ guardian, layout = "corridor", equipm
       </div>
       <div style={S.hint}>{actionStatus || "攻撃時は対面カメラになります。"}</div>
       <div style={S.log}>{state.log.slice(-4).map((x, i) => <div key={i}>{x}</div>)}</div>
+      {/* 調整はプレイヤー向けの操作ではないので、既定で畳んでおく(game-debug-tools)。
+          盤面の面積を食わないことが目的なので、中身は触らずdetailsで包むだけにする。 */}
+      <details style={S.tuner}>
+        <summary style={S.tunerSummary}>調整（開発用）</summary>
       <div style={S.row}>
         <span>カメラの高さ:</span>
         <input type="range" min="10" max="80" step="1" value={cameraElevationDeg}
@@ -309,7 +389,7 @@ export default function ExpeditionBattle({ guardian, layout = "corridor", equipm
       </div>
       <div style={S.row}>
         <span>カメラのズーム:</span>
-        <input type="range" min="0.75" max="3" step="0.05" value={cameraZoom} onChange={e => setZoom(Number(e.target.value))}/>
+        <input type="range" min={ZOOM_MIN} max={ZOOM_MAX} step="0.05" value={cameraZoom} onChange={e => setZoom(Number(e.target.value))}/>
         <span>×{cameraZoom.toFixed(2)}</span>
       </div>
       {/* いま見えている角度を、そのまま battleConfig.js へ書き写せる形で出す。
@@ -372,14 +452,25 @@ export default function ExpeditionBattle({ guardian, layout = "corridor", equipm
           カンテラ
         </label>
       </div>
+      </details>
     </div>
   </div>;
 }
 // 画面の見た目。1トークン1行にして、色や余白を1つ変えた時にdiffがその1行だけになるようにする。
 const S = {
   page: { position: "fixed", inset: 0, background: "#161a22", color: "#e6e8ee", font: "13px/1.6 system-ui", display: "flex", flexDirection: "column" },
-  canvas: { flex: 1, minHeight: 0 },
-  hud: { padding: "10px 14px", background: "rgba(20,24,32,.94)", borderTop: "1px solid #2b303c" },
+  // 3Dは画面の6.5割で固定する。flex:1にするとログの行数で盤面の高さが変わり、
+  // 同じ局面でも見え方が毎回ずれる(作者の指示 2026-08-27)。
+  // 6割→7割→6.5割と実機で見比べて決めた。7割は盤面が大きくなるのではなく下の余白が
+  // 増えるだけだった(盤面の大きさはcanvasの幅とズームで決まり、高さは効かない)。
+  stage: { height: "65%", flex: "none", minHeight: 0, position: "relative", overflow: "hidden" },
+  canvas: { position: "absolute", inset: 0, touchAction: "none" },
+  // 方位と拡大率。safe-areaぶんだけ内側へ寄せる(Dynamic Islandの下に潜らせない)。
+  // タップできるので pointerEvents は生かす。58pxの円は推奨44ptを満たす。
+  compass: { position: "absolute", top: "calc(8px + env(safe-area-inset-top))", right: "calc(8px + env(safe-area-inset-right))", textAlign: "center", userSelect: "none", background: "none", border: 0, padding: 0, cursor: "pointer", WebkitTapHighlightColor: "transparent", touchAction: "manipulation" },
+  zoomLabel: { marginTop: 2, color: "#c3ccdd", fontSize: 12, fontVariantNumeric: "tabular-nums", textShadow: "0 1px 3px rgba(0,0,0,.85)" },
+  // 残り4割がUI。中身が増えた分はUIの中だけでスクロールさせ、盤面は削らない。
+  hud: { height: "35%", padding: "10px 14px calc(10px + env(safe-area-inset-bottom))", background: "rgba(20,24,32,.94)", borderTop: "1px solid #2b303c", overflowY: "auto" },
   row: { display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", marginTop: 6 },
   chip: { border: "1px solid #59647a", borderRadius: 999, padding: "1px 8px" },
   btn: { background: "#2b303c", color: "#e6e8ee", border: "1px solid #3c4354", borderRadius: 6, padding: "5px 11px" },
@@ -387,5 +478,7 @@ const S = {
   hint: { color: "#9ca8bd", marginTop: 5 },
   log: { marginTop: 5, color: "#d8c98c" },
   toggle: { display: "flex", alignItems: "center", gap: 4, color: "#8b93a7", fontSize: 12, cursor: "pointer" },
+  tuner: { marginTop: 6, borderTop: "1px solid #2b303c", paddingTop: 6 },
+  tunerSummary: { color: "#6f7a90", fontSize: 12, cursor: "pointer", padding: "6px 0" },
   select: { background: "#2b303c", color: "#e6e8ee", border: "1px solid #3c4354", borderRadius: 4, font: "inherit" },
 };

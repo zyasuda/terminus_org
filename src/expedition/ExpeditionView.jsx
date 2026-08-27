@@ -8,6 +8,13 @@ const SAVE = "ai_companion_expedition_b1";
 // URLに?debugが付いている時だけ、戦闘を即座に勝利扱いでスキップするボタンを出す。
 // 遠征コアのロジックには一切手を入れず、UI層に1つボタンを足すだけにする。
 const DEBUG = new URLSearchParams(window.location.search).has("debug");
+// ?battle=1 で戦闘画面へ直行する。実機で画面レイアウトを見るたびに
+// 村→遠征→通路の踏破をやり直さずに済ませるための入口(game-debug-tools)。
+// ?battle=corridor / junction / guardian で戦う場面も選べる。
+const BATTLE_NOW = new URLSearchParams(window.location.search).get("battle");
+// ?seed=1234 で盤面を固定する。見た目の案を並べて比べる時に、障害物の位置が
+// 毎回変わると比較にならないため(game-debug-tools)。
+const FIXED_SEED = new URLSearchParams(window.location.search).get("seed");
 const migrateFloor = floor => {
   if (!floor) return null;
   const fresh = createFloor(floor.seed || Date.now());
@@ -40,6 +47,13 @@ export default function ExpeditionView() {
   useEffect(() => { localStorage.setItem(SAVE, JSON.stringify({ village, floor, haul, message, battleId: battle?.id || null })); }, [village, floor, haul, message, battle]);
   const start = () => { setFloor(createFloor(Date.now() >>> 0)); setHaul([]); setMessage("リディア「宝箱があるなら、寄り道も悪くないですね。」"); };
   const move = direction => setFloor(f => { const next = walk(f, direction); const e = eventAt(next); if (e) setBattle(e); return next; });
+  useEffect(() => {
+    if (!BATTLE_NOW || battle) return;
+    const f = floor || createFloor(FIXED_SEED ? Number(FIXED_SEED) >>> 0 : Date.now() >>> 0);
+    const e = f.events.find(x => x.kind === BATTLE_NOW) || f.events[0];
+    if (!floor) setFloor(f);
+    setBattle(e);
+  }, []);
   useEffect(() => {
     if (!floor || battle) return;
     const dirs = { ArrowUp: "north", ArrowDown: "south", ArrowLeft: "west", ArrowRight: "east" };
