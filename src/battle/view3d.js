@@ -1548,6 +1548,13 @@ export function createBattleScene(container, grid, { voidBoundaryWalls = false, 
   const ORBIT_GAIN = 0.4;     // 横1pxあたり何度回すか
   const ELEVATION_GAIN = 0.25;// 縦1pxあたり何度起こすか
   const pointers = new Map();
+  /* 指の本数は touch イベントの e.touches.length を正本にする。
+     pointerup / pointercancel は取りこぼすことがある(iOS Safariでシステムジェスチャに
+     取られた時など)。取り残しがあると pointers.size が2のままになり、1本指で
+     スワイプしただけでズームと向きと高さが動く。
+     2026-08-27に実測した: 片方のtouchEndを送らずに1本だけ動かすと
+     zoom 2.5→1.03 / 向き 107→125度 / 高さ 20→26.25度 になった。 */
+  let touchCount = 0;
   let dragMoved = 0, lastTapAt = 0, lastTapX = 0, lastTapY = 0;
   let pinchStartDist = 0, pinchStartZoom = 1, twoStartX = 0, twoStartY = 0, twoStartAzim = 0, twoStartElev = 0;
   let doubleTapHandler = null, cameraChangeHandler = null;
@@ -1602,12 +1609,16 @@ export function createBattleScene(container, grid, { voidBoundaryWalls = false, 
   };
   const onPointerMove = e => {
     const prev = pointers.get(e.pointerId);
-    if (!prev) return;
+    // 取り残しを刈った直後はMapに無い。ここで登録し直して次のmoveから追う。
+    if (!prev) { pointers.set(e.pointerId, { x: e.clientX, y: e.clientY }); return; }
     const dx = e.clientX - prev.x, dy = e.clientY - prev.y;
     pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
     dragMoved += Math.hypot(dx, dy);
-    if (pointers.size === 1) { if (dragMoved > TAP_SLOP) panBy(dx, dy); return; }
-    if (pointers.size !== 2) return;
+    // touchCountが0ならマウス操作。その時だけMapのサイズを本数として使う。
+    const fingers = touchCount || pointers.size;
+    if (fingers === 1) { if (dragMoved > TAP_SLOP) panBy(dx, dy); return; }
+    // 本数と手元のMapが食い違っている間は何もしない(取り残しがある状態)。
+    if (fingers !== 2 || pointers.size !== 2) return;
     // ピンチ(距離)→ズーム、重心の横→向き、重心の縦→高さ。3つを同時に効かせる。
     //
     // 2026-08-27に「最初に大きく動いた成分ひとつに決め打ちする」案を試して撤回した。
@@ -1646,11 +1657,24 @@ export function createBattleScene(container, grid, { voidBoundaryWalls = false, 
     pointers.delete(e.pointerId);
     try { renderer.domElement.releasePointerCapture?.(e.pointerId); } catch { /* 既に解放済み */ }
   };
+  // 指の本数を追う。全部離れた時点で、取りこぼした分も含めてMapを空にする。
+  const onTouchChange = e => {
+    touchCount = e.touches.length;
+    if (touchCount === 0) pointers.clear();
+    // ここで beginTwoFinger を呼んではいけない。touchmove ごとに開始値が
+    // 更新され、2本指の「開始時からの差」が毎フレームの差分に化ける。
+    // 開始値の取得は pointerdown 側の1回だけにする。
+    // 指の本数を画面へ出す。実機で「1本指のつもりが2本触れている」かを見分けるため。
+    container.dataset.fingers = String(touchCount);
+  };
   renderer.domElement.addEventListener("pointerdown", onPointerDown);
   renderer.domElement.addEventListener("pointermove", onPointerMove);
   renderer.domElement.addEventListener("pointerup", onPointerUp);
   renderer.domElement.addEventListener("pointercancel", forgetPointer);
   renderer.domElement.addEventListener("lostpointercapture", forgetPointer);
+  for (const type of ["touchstart", "touchmove", "touchend", "touchcancel"]) {
+    renderer.domElement.addEventListener(type, onTouchChange, { passive: true });
+  }
 
   const resize = () => {
     const w = container.clientWidth || 1;
@@ -1833,8 +1857,12 @@ export function createBattleScene(container, grid, { voidBoundaryWalls = false, 
       return true;
     },
     setCameraCenter(x, y) {
+      // 高さは 0(床) に合わせる。setCameraFocus も target.set(..., 0, ...) なので、
+      // ここだけ 0.5 にすると経路によって注視点の高さが変わる。さらに
+      // lookAtScreenPoint は床面(y=0)との交点を使うので、0.5 のままだと
+      // ダブルタップした床の点が画面中央に正確に来ない(Codexのレビュー指摘 2026-08-27)。
       if (x === undefined || x === null) target.set(0, 0, 0);
-      else { const [wx, wz] = worldOf(x, y); target.set(wx, 0.5, wz); }
+      else { const [wx, wz] = worldOf(x, y); target.set(wx, 0, wz); }
       placeCamera();
     },
     setCameraAzimuthDeg(deg) {
@@ -1895,10 +1923,25 @@ export function createBattleScene(container, grid, { voidBoundaryWalls = false, 
       renderer.domElement.removeEventListener("pointerdown", onPointerDown);
       renderer.domElement.removeEventListener("pointermove", onPointerMove);
       renderer.domElement.removeEventListener("pointerup", onPointerUp);
+      renderer.domElement.removeEventListener("pointercancel", forgetPointer);
+      renderer.domElement.removeEventListener("lostpointercapture", forgetPointer);
+      for (const type of ["touchstart", "touchmove", "touchend", "touchcancel"]) {
+        renderer.domElement.removeEventListener(type, onTouchChange);
+      }
       renderer.dispose();
+      // materialだけでなく、そこに貼ったテクスチャも捨てる。開口部のアーチは
+      // 戦闘のマウントごとに CanvasTexture を作る(出口3つで壁と穴の6枚)ので、
+      // mapを残すと戦闘の出入りのたびにGPUテクスチャが積む(Codexのレビュー指摘 2026-08-27)。
+      // disposeは冪等なので、共有materialが traverse で何度出てきても問題ない。
+      const disposeMaterial = m => {
+        for (const slot of ["map", "alphaMap", "normalMap", "emissiveMap", "aoMap", "roughnessMap", "metalnessMap"]) {
+          m[slot]?.dispose();
+        }
+        m.dispose();
+      };
       scene.traverse(o => {
         if (o.geometry) o.geometry.dispose();
-        if (o.material) (Array.isArray(o.material) ? o.material : [o.material]).forEach(m => m.dispose());
+        if (o.material) (Array.isArray(o.material) ? o.material : [o.material]).forEach(disposeMaterial);
       });
       if (renderer.domElement.parentNode) renderer.domElement.parentNode.removeChild(renderer.domElement);
     }

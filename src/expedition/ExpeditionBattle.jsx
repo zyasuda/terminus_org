@@ -114,6 +114,16 @@ export default function ExpeditionBattle({ guardian, layout = "corridor", equipm
   // (2026-08-25、床の明るさのばらつきを実測して発覚: 消したはずが2.303、
   //  両方消すと0.001)。消灯時は環境光だけになり、揺らぎは完全に止まる。
   const [lanternOn, setLanternOn] = useState(true);
+  // 画面に出す指の本数。view3dがcanvasのdata属性へ書くので、そこを見に行く。
+  const [fingers, setFingers] = useState(0);
+  useEffect(() => {
+    const el = mount.current;
+    if (!el) return;
+    const read = () => setFingers(Number(el.dataset.fingers || 0));
+    const mo = new MutationObserver(read);
+    mo.observe(el, { attributes: true, attributeFilter: ["data-fingers"] });
+    return () => mo.disconnect();
+  }, []);
   const applyLanterns = (scene, units, on) => {
     for (const u of units) if (u.side === "party") scene?.setLanternEnabled(u.id, on);
   };
@@ -376,6 +386,13 @@ export default function ExpeditionBattle({ guardian, layout = "corridor", equipm
           盤面の面積を食わないことが目的なので、中身は触らずdetailsで包むだけにする。 */}
       <details style={S.tuner}>
         <summary style={S.tunerSummary}>調整（開発用）</summary>
+      {/* 実機で「1本指のつもりが2本触れている」かを見分けるための表示。
+          view3d が touchイベントの e.touches.length をそのまま入れている。 */}
+      <div style={S.row}>
+        <span>いま触れている指:</span>
+        <b style={{ fontVariantNumeric: "tabular-nums" }}>{fingers}</b>
+        <span style={S.hint}>本（2以上なら、意図しない接触でカメラが動きます）</span>
+      </div>
       <div style={S.row}>
         <span>カメラの高さ:</span>
         <input type="range" min="10" max="80" step="1" value={cameraElevationDeg}
