@@ -63,21 +63,92 @@ const loadModel = path => {
 // cameraElevationDegを省略した呼び出し(本編の会話バトル画面など)はこれまで通りの見た目になる。
 const TRUE_ISO_ELEVATION_DEG = Math.atan(1 / Math.SQRT2) * 180 / Math.PI;
 
-/* ---------------- 瓦礫の箱 ---------------- */
+/* ---------------- 障害物の形 ---------------- */
 
-// 上端の4つ角のうち0〜4個を斜めに削ぎ落として、割れた岩らしくする。
+// 高さ(0.25 / 0.5 / 0.75 / 1.0)ごとに置ける形を決めてある。
+// 上面に平らな面があるかどうかで「駒が立てるか」が形から読めるようにした:
+// 柱・錐台・樽・法面は上面が平ら(立てる)、錐は一点、アーチは稜線(立てない)。
+// これは見た目だけの話で、core.js側の進入判定・段差判定は常にマス単位・高さ単位のまま。
+// 形と向きはマス座標からの決定論rngで決まるので、同じ盤面なら毎回同じ形になる。
+//
+// 面の向き(表裏)の規則は ringSolid() の1か所だけに置いてある。以前これを側面と上面で
+// 別々に書き、片方だけ直して実機で「箱の中が見える」状態を作った。Blenderのビューポートは
+// 既定で裏面も描くので向こうでは気づけない。検査は rubbleGeometry.test.mjs が行う。
+//
+// 底面は床に接していてカメラ(仰角20°)から見えないので、どの形も張らない。底面がy=0の
+// 平面上にあるおかげで、符号付き体積は底を張らなくても本来の値と一致する(検査で使う)。
+
+export const RUBBLE_W = 0.7;         // キューブの一辺。マス(1.0)より小さくして四方に床を残す。ここを広げると到達マスの青が箱に隠れ、指で狙いにくくなる。単位: タイル
+const RUBBLE_CHAMFER_W = 0.21;       // キューブの角を削る幅。辺に沿ってこの長さだけ内側へ入る。単位: タイル
+const RUBBLE_CHAMFER_DEPTH = 0.05;   // キューブの角を削る深さ。上端からこの分だけを削ぐ。大きくすると丸っこくなる。単位: タイル高
+const CONE_SPAN = 0.88;              // 錐の接地幅。誰も立てないので、キューブより広げて存在感を出す。単位: タイル
+const SLOPE_DEPTH = 0.32;            // 法面の奥行き。大きくすると平らな上面が狭くなる。単位: タイル
+const MONOLITH_W = 0.46;             // 石板の幅。単位: タイル
+const MONOLITH_TH = 0.13;            // 石板の厚み。単位: タイル
+const MONOLITH_CHAMFER = 0.04;       // 平頂の石板の上端を落とす量。単位: タイル
+const MONOLITH_ARCH_RISE = 0.14;     // アーチの高さ。大きくすると半円に近づく。単位: タイル高
+const MONOLITH_ARCH_SEG = 3;         // アーチの分割数(上四半分)。全体では倍の分割になる
+const PILLAR_MONOLITH_CHANCE = 0.25; // 高さ1.0の柱を石板にする確率。単位: 確率(0〜1)
+
+const same = (p, q) => Math.abs(p[0] - q[0]) < 1e-9 && Math.abs(p[1] - q[1]) < 1e-9;
+
+// 輪から重なった点を落とす。先が尖った形(錐)や稜線になった形(アーチ)では点が重なる
+function dedupeRing(pts) {
+  const out = [];
+  for (const p of pts) if (!out.length || !same(out[out.length - 1], p)) out.push(p);
+  if (out.length > 1 && same(out[0], out[out.length - 1])) out.pop();
+  return out;
+}
+
+// 高さの違う「輪」を下から積み、間を四角形の帯で張る。輪はxz平面で反時計回り、
+// どの輪も同じ頂点数にする。点が重なるのを許すので、角の削ぎ・尖った先・稜線を
+// すべて同じ枠で書ける(潰れた三角形は面として出さない)。
+// 外から見て表になる順序は (下i → 上j → 下j) / (下i → 上i → 上j)。逆にすると中が見える。
+// 上面だけは真上(+y)から見ると時計回りになるので、順序を逆にして張る。
+function ringSolid(rings) {
+  const verts = [];
+  const push = (p, y) => verts.push(p[0], y, p[1]);
+  for (let k = 0; k < rings.length - 1; k++) {
+    const { y: ay, pts: a } = rings[k], { y: by, pts: b } = rings[k + 1];
+    for (let i = 0; i < b.length; i++) {
+      const j = (i + 1) % b.length;
+      if (!same(a[i], a[j])) { push(a[i], ay); push(b[j], by); push(a[j], ay); }
+      if (!same(b[i], b[j])) { push(a[i], ay); push(b[i], by); push(b[j], by); }
+    }
+  }
+  const top = rings[rings.length - 1];
+  const cap = dedupeRing(top.pts);
+  for (let i = 1; i < cap.length - 1; i++) { push(cap[0], top.y); push(cap[i + 1], top.y); push(cap[i], top.y); }
+  return verts;
+}
+
+const turnRing = (pts, angle) => pts.map(([x, z]) =>
+  [x * Math.cos(angle) - z * Math.sin(angle), x * Math.sin(angle) + z * Math.cos(angle)]);
+
+// 正多角形の輪。回した後に「平面上の最大幅」をspanへ合わせる。外接円の半径で指定すると
+// 角の少ない多角形ほど小さくなり、四角柱はマスに対して45°傾いてしまう
+function polyRing(sides, span, angle) {
+  const raw = turnRing(Array.from({ length: sides }, (_, i) => {
+    const a = (2 * Math.PI * i) / sides;
+    return [Math.cos(a), Math.sin(a)];
+  }), angle);
+  const xs = raw.map(p => p[0]), zs = raw.map(p => p[1]);
+  const k = span / Math.max(Math.max(...xs) - Math.min(...xs), Math.max(...zs) - Math.min(...zs));
+  return raw.map(p => [p[0] * k, p[1] * k]);
+}
+
+// 角柱・錐台・錐。topRatio=1で柱、0で錐、その間で錐台になる
+const prismVertices = (sides, h, topRatio, span, angle) => {
+  const base = polyRing(sides, span, angle);
+  return ringSolid([
+    { y: 0, pts: base },
+    { y: h, pts: base.map(p => [p[0] * topRatio, p[1] * topRatio]) },
+  ]);
+};
+
+// キューブ。上端の4つ角のうち0〜4個を斜めに削ぎ落として、割れた岩らしくする。
 // 削るのは上端だけで、下側は角の立った四角柱のまま。角を床まで削ると脚が細くなり、
-// 岩ではなくテーブルのような形になる(Blenderで並べて確認した上で採らなかった案)。
-// マス位置から作る決定論rngなので、同じ盤面なら毎回同じ形になる(見た目だけの話で、
-// core.js側の進入判定・段差判定は常にマス単位・高さ単位のまま変わらない)。
-// 底面は床に接していてカメラ(仰角20°)から見えないので、面を張らない。
-// 面の向き(表裏)は rubbleGeometry.test.mjs が検査する。Blenderのビューポートは既定で
-// 裏面も描くため、裏返っていても向こうでは気づけない(実際に一度これで間違えた)
-export const RUBBLE_W = 0.7;         // 箱の一辺。マス(1.0)より小さくして四方に床を残す。ここを広げると到達マスの青が箱に隠れ、指で狙いにくくなる。単位: タイル
-const RUBBLE_CHAMFER_W = 0.21;       // 角を削る幅。辺に沿ってこの長さだけ内側へ入る。単位: タイル
-const RUBBLE_CHAMFER_DEPTH = 0.05;   // 角を削る深さ。上端からこの分だけを削ぐ。大きくすると丸っこくなる。単位: タイル高
-
-// 三角形の頂点を(x,y,z)の平坦な配列で返す。テストから呼べるよう分けてある
+// 岩ではなくテーブルのような形になる(Blenderで並べて確認した上で採らなかった案)
 export function rubbleVertices(h, seed) {
   const rng = makeRng(seed);
   const s = RUBBLE_W / 2;
@@ -91,43 +162,137 @@ export function rubbleVertices(h, seed) {
   for (let n = Math.floor(rng() * 5); n > 0; n--) cut[order[n - 1]] = true;
 
   // 上端の輪(削った角は2点に分かれる)と、その真下の輪(元の角のまま2点重ねる)。
-  // 頂点数を揃えておくと側面を一律に四角形の帯で張れて、削った角だけが三角形になる
+  // 頂点数を揃えておくと、削った角だけが自然に三角形の面になる
   const top = [], under = [];
+  const f = Math.min(RUBBLE_CHAMFER_W / RUBBLE_W, 0.5);  // 隣の角の削りと重ならない上限
   for (let i = 0; i < 4; i++) {
     const p = square[i], prev = square[(i + 3) % 4], next = square[(i + 1) % 4];
-    // 削る量は辺に沿った長さで指定する(割合にすると、箱の一辺を変えたときに削り幅も動く)。
-    // 隣の角の削りと重ならないよう、辺の半分までに抑える
-    const f = Math.min(RUBBLE_CHAMFER_W / RUBBLE_W, 0.5);
     const toward = q => [p[0] + (q[0] - p[0]) * f, p[1] + (q[1] - p[1]) * f];
     if (cut[i]) { top.push(toward(prev), toward(next)); under.push(p, p); }
     else { top.push(p); under.push(p); }
   }
   const zc = h - Math.min(RUBBLE_CHAMFER_DEPTH, h / 2);  // 低いブロックを潰さないための上限
-
-  const verts = [];
-  const push = (p, y) => verts.push(p[0], y, p[1]);
-  // 側面。輪はxz平面で反時計回りなので、外から見て表になる順序は
-  // (下i → 上j → 下j) / (下i → 上i → 上j) になる。逆にすると箱の中が見える
-  // 削った角では輪の点が2つ重なるので、そこだけ帯が四角形ではなく三角形になる。
-  // 潰れた三角形は面として出さない(描かれないが、法線が出ず検査もできないため)
-  const same = (p, q) => p[0] === q[0] && p[1] === q[1];
-  const strip = (a, ay, b, by) => {
-    for (let i = 0; i < b.length; i++) {
-      const j = (i + 1) % b.length;
-      if (!same(a[i], a[j])) { push(a[i], ay); push(b[j], by); push(a[j], ay); }
-      if (!same(b[i], b[j])) { push(a[i], ay); push(b[i], by); push(b[j], by); }
-    }
-  };
-  strip(square, 0, square, zc);       // 下側の四角柱
-  strip(under, zc, top, h);           // 上端の削ぎ
-  // 上面。輪はxz平面で反時計回りだが、真上(+y)から見ると時計回り=裏面になるので順序を逆にする
-  for (let i = 1; i < top.length - 1; i++) { push(top[0], h); push(top[i + 1], h); push(top[i], h); }
-  return verts;
+  return ringSolid([{ y: 0, pts: under }, { y: zc, pts: under }, { y: h, pts: top }]);
 }
 
-function rubbleGeometry(h, seed) {
+// 樽を床に埋めて、上のvisible分だけを見せる。床下は作らない(見えない)。
+// 一番太い所が床に接するので「埋まっている」ことが輪郭で分かる
+function sunkBarrelVertices(visible, span, seg, angle) {
+  const H = 0.75, waist = 0.50, end = 0.38;              // 元の樽の輪郭(全高H)
+  const prof = [[0, end], [H * 0.22, waist], [H * 0.5, waist * 1.03], [H * 0.78, waist], [H, end]];
+  const z0 = H - visible;
+  const rAt = z => {
+    for (let i = 0; i < prof.length - 1; i++) {
+      const [za, ra] = prof[i], [zb, rb] = prof[i + 1];
+      if (z >= za - 1e-9 && z <= zb + 1e-9) return zb === za ? ra : ra + (rb - ra) * ((z - za) / (zb - za));
+    }
+    return prof[prof.length - 1][1];
+  };
+  const kept = [[0, rAt(z0)], ...prof.filter(([z]) => z > z0 + 1e-9).map(([z, r]) => [z - z0, r])];
+  const unit = polyRing(seg, 2, angle);                  // 半径1相当(最大幅2)の輪
+  const k = span / (2 * Math.max(...kept.map(([, r]) => r)));
+  return ringSolid(kept.map(([y, r]) => ({ y, pts: unit.map(p => [p[0] * r * k, p[1] * r * k]) })));
+}
+
+// 法面。片側の上部一辺だけを斜めに落とす。上面は平らなまま残るので駒が立てる。
+// facing は法面が向く方向(0=-z, 1=+x, 2=+z, 3=-x)。床側へ向けて置く。
+// 階段や坂は上面に平らな面が無く、見た目は登れそうなのに立てないので採らなかった
+function slopeVertices(h, depth, span, facing) {
+  const s = span / 2;
+  const angle = (facing * Math.PI) / 2;
+  return ringSolid([
+    { y: 0, pts: turnRing([[-s, -s], [s, -s], [s, s], [-s, s]], angle) },
+    { y: h, pts: turnRing([[-s, -s + depth], [s, -s + depth], [s, s], [-s, s]], angle) },
+  ]);
+}
+
+const rectRing = (hx, hz) => [[-hx, -hz], [hx, -hz], [hx, hz], [-hx, hz]];
+
+// 石板(モノリス)。台座は付けない。台座があると「台座に立てそう」に見えるが、
+// マスは高さを1つしか持てないので嘘になる(階段・坂と同じ理由で外した)
+function monolithFlatVertices(w, th, h, chamfer, angle) {
+  const turn = pts => turnRing(pts, angle);
+  return ringSolid([
+    { y: 0, pts: turn(rectRing(w / 2, th / 2)) },
+    { y: h - chamfer, pts: turn(rectRing(w / 2, th / 2)) },
+    { y: h, pts: turn(rectRing(Math.max(w / 2 - chamfer, 1e-3), Math.max(th / 2 - chamfer, 1e-3))) },
+  ]);
+}
+
+// 頂部を浅いアーチにした石板。上面が稜線になるので駒は立てない
+function monolithArchVertices(w, th, h, rise, seg, angle) {
+  const a = w / 2, zs = h - rise;
+  const turn = hx => turnRing(rectRing(hx, th / 2), angle);
+  const rings = [{ y: 0, pts: turn(a) }, { y: zs, pts: turn(a) }];
+  for (let i = 1; i <= seg; i++) {
+    const t = (Math.PI / 2) * (i / seg);
+    rings.push({ y: zs + rise * Math.sin(t), pts: turn(Math.max(a * Math.cos(t), 0)) });
+  }
+  return ringSolid(rings);
+}
+
+// 高さごとに置ける形。キューブは「別格」として全段に残す(作者の判断)
+export const SHAPES_BY_HEIGHT = {
+  0.25: ["cube"],                                            // 法面は隣に0.5がある時だけ足す
+  0.5: ["cube", "penta", "hexa", "frustum", "barrel"],
+  0.75: ["cube", "cone4", "cone6", "monolithArch"],
+  1: ["pillar", "monolithFlat"],
+};
+
+export function obstacleVertices(shape, h, seed, facing = 0) {
+  const angle = makeRng(seed + 977)() * Math.PI * 2;         // 同じ形が並んでも向きが違う
+  switch (shape) {
+    case "cube": return rubbleVertices(h, seed);
+    case "penta": return prismVertices(5, h, 1, RUBBLE_W, angle);
+    case "hexa": return prismVertices(6, h, 1, RUBBLE_W, angle);
+    case "frustum": return prismVertices(4, h, 0.6, RUBBLE_W, Math.PI / 4);
+    case "barrel": return sunkBarrelVertices(h, RUBBLE_W, 8, angle);
+    case "cone4": return prismVertices(4, h, 0, CONE_SPAN, Math.PI / 4);
+    case "cone6": return prismVertices(6, h, 0, CONE_SPAN, angle);
+    case "monolithFlat": return monolithFlatVertices(MONOLITH_W, MONOLITH_TH, h, MONOLITH_CHAMFER, angle);
+    case "monolithArch": return monolithArchVertices(MONOLITH_W, MONOLITH_TH, h, MONOLITH_ARCH_RISE, MONOLITH_ARCH_SEG, angle);
+    case "slope": return slopeVertices(h, SLOPE_DEPTH, RUBBLE_W, facing);
+    default: return rubbleVertices(h, seed);
+  }
+}
+
+// 盤面ごとの「塩」。形と向きの種にマス座標だけを使うと、盤面が変わっても同じ位置に
+// 同じ形が出てしまう(実測で分布が固定され、六角柱が他の1/3しか出ていなかった)。
+// 盤面の内容から作るので、同じ盤面なら毎回同じ形という決定論は保てる
+export function gridSalt(grid) {
+  let hash = 2166136261;
+  for (const c of grid.cells) {
+    const v = (c.void ? 3 : c.walkable ? 1 : 2) * 31 + Math.round((c.obstacle ? c.obstacle.height : 0) * 4);
+    hash = (Math.imul(hash ^ v, 16777619)) >>> 0;
+  }
+  return hash;
+}
+
+// マス座標と盤面の塩から、形・向き・削る角に使う種を作る
+export const obstacleSeed = (x, y, salt) => (Math.imul(x * 7919 + y * 104729 + 31, 2654435761) ^ salt) >>> 0;
+
+// 高さと隣のマスから形を選ぶ。0.25は、隣に高さ0.5のブロックがあれば法面にして
+// 「ここから登る」を形で示す。法面は0.5の反対側(床側)へ向け、平らな上面を0.5側に残す
+export function pickObstacleShape(grid, x, y, h, salt = 0) {
+  if (Math.abs(h - 0.25) < 1e-9) {
+    const dirs = [[0, 1], [1, 0], [0, -1], [-1, 0]];         // +z, +x, -z, -x
+    const toward = dirs.findIndex(([dx, dy]) => {
+      const nx = x + dx, ny = y + dy;
+      if (nx < 0 || ny < 0 || nx >= grid.w || ny >= grid.h) return false;
+      const c = grid.cells[ny * grid.w + nx];
+      return !!c && !!c.obstacle && Math.abs(c.obstacle.height - 0.5) < 1e-9;
+    });
+    if (toward >= 0) return { shape: "slope", facing: (4 - toward) % 4 };
+  }
+  const pool = SHAPES_BY_HEIGHT[h] || ["cube"];
+  const rng = makeRng(obstacleSeed(x, y, salt));
+  rng();                                                     // 1個目は種に対して偏るので捨てる
+  return { shape: pool[Math.floor(rng() * pool.length)], facing: 0 };
+}
+
+function obstacleGeometry(shape, h, seed, facing) {
   const geo = new THREE.BufferGeometry();
-  geo.setAttribute("position", new THREE.Float32BufferAttribute(rubbleVertices(h, seed), 3));
+  geo.setAttribute("position", new THREE.Float32BufferAttribute(obstacleVertices(shape, h, seed, facing), 3));
   geo.computeVertexNormals();
   return geo;
 }
@@ -488,6 +653,7 @@ export function createBattleScene(container, grid, { voidBoundaryWalls = false, 
   const groundPatchGroup = new THREE.Group();
   scene.add(groundPatchGroup);
 
+  const salt = gridSalt(grid);   // 形と向きの種。盤面が違えば違う形になる
   const tiles = new Map();   // "x,y" → 床メッシュ(ハイライトで色を塗り替える)
   for (let y = 0; y < grid.h; y++) {
     for (let x = 0; x < grid.w; x++) {
@@ -505,8 +671,14 @@ export function createBattleScene(container, grid, { voidBoundaryWalls = false, 
           continue;
         }
 
-        const m = depthTint(new THREE.Mesh(wallGeo, cell.obstacle ? pillarMat : wallMat));
-        m.position.set(wx, WALL_H / 2, wz);
+        // 高さ1.0の柱は、太い箱か細い石板(モノリス)のどちらかになる。
+        // 壁(cell.obstacleなし)は常に箱のまま
+        const seed = obstacleSeed(x, y, salt);
+        const monolith = cell.obstacle && pickObstacleShape(grid, x, y, 1, salt).shape === "monolithFlat";
+        const m = depthTint(monolith
+          ? new THREE.Mesh(obstacleGeometry("monolithFlat", WALL_H, seed, 0), pillarMat)
+          : new THREE.Mesh(wallGeo, cell.obstacle ? pillarMat : wallMat));
+        m.position.set(wx, monolith ? 0 : WALL_H / 2, wz);
         (cell.obstacle ? obstacleGroup : scene).add(m);
 
         groundPatchGroup.add(paperAt(x, y, wx, wz));
@@ -530,7 +702,9 @@ export function createBattleScene(container, grid, { voidBoundaryWalls = false, 
       // 乗り越えられる瓦礫。床の上に低い箱を置くだけで、進入は妨げない
       if (cell.obstacle) {
         const h = cell.obstacle.height;
-        const r = depthTint(new THREE.Mesh(rubbleGeometry(h, x * 7919 + y * 104729), rubbleMat));
+        const seed = obstacleSeed(x, y, salt);
+        const { shape, facing } = pickObstacleShape(grid, x, y, h, salt);
+        const r = depthTint(new THREE.Mesh(obstacleGeometry(shape, h, seed, facing), rubbleMat));
         r.position.set(wx, 0, wz);
         obstacleGroup.add(r);
       }

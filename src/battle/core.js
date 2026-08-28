@@ -14,6 +14,7 @@
 export const WALL = "#";
 
 const DIRS8 = [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [1, -1], [-1, 1], [-1, -1]];
+const DIRS4 = [[1, 0], [-1, 0], [0, 1], [0, -1]];   // 踏み台の置き場(法面が向ける4方向)
 const key = (x, y) => x + "," + y;
 
 /* ---------------- グリッド ---------------- */
@@ -251,7 +252,10 @@ function addRamps(grid, rng, clear, rampHeight, rampChance) {
     for (let x = 0; x < grid.w; x++) {
       const obstacle = cellAt(grid, x, y).obstacle;
       if (obstacle?.height !== 0.5 || rng() > rampChance) continue;
-      const candidates = DIRS8.map(([dx, dy]) => ({ x: x + dx, y: y + dy })).filter(p => {
+      // 踏み台は上下左右にだけ置く。斜めに置いても登れはするが、描画側が
+      // 「ここから登る」を示す法面を4方向しか向けられず、斜めの踏み台は
+      // ただの箱として出てしまう(実測で0.25ブロックの36%しか法面にならなかった)
+      const candidates = DIRS4.map(([dx, dy]) => ({ x: x + dx, y: y + dy })).filter(p => {
         const c = cellAt(grid, p.x, p.y);
         return c && !c.void && c.walkable && !c.obstacle && !clear.has(key(p.x, p.y));
       });
