@@ -8,7 +8,7 @@
 // 内向きなら負になる。底面はどの形も張っていないが、底面はy=0の平面上にあって原点を
 // 含むので体積への寄与が0になる。つまり開いたままでも体積は本来の値と一致する。
 import assert from "node:assert";
-import { obstacleVertices, pickObstacleShape, gridSalt, SHAPES_BY_HEIGHT, RUBBLE_W } from "./view3d.js";
+import { obstacleVertices, pickObstacleShape, gridSalt, obstacleColor, RUBBLE_COLORS, SHAPES_BY_HEIGHT, RUBBLE_W } from "./view3d.js";
 
 const cross = (a, b) => [a[1]*b[2]-a[2]*b[1], a[2]*b[0]-a[0]*b[2], a[0]*b[1]-a[1]*b[0]];
 const sub = (a, b) => [a[0]-b[0], a[1]-b[1], a[2]-b[2]];
@@ -128,3 +128,39 @@ assert.deepEqual(SHAPES_BY_HEIGHT[1], ["pillar", "monolithFlat"], "高さ1.0の�
 assert.ok(RUBBLE_W < 1, "キューブはマスより小さい(到達マスの青が見えるように)");
 
 console.log("battle/rubbleGeometry: 9種すべて面が外向き、上面の平らさが区分と一致、法面の向きが正しい");
+
+// 障害物の色は「岩の質感の幅」であって信号ではない。彩度を上げると、
+// 到達マスの青・攻撃対象の赤・手番の黄と紛れ、プレイヤーが色に規則を探す
+{
+  const hsl = hex => {
+    const r = ((hex >> 16) & 255) / 255, g = ((hex >> 8) & 255) / 255, b = (hex & 255) / 255;
+    const max = Math.max(r, g, b), min = Math.min(r, g, b), l = (max + min) / 2;
+    if (max === min) return { h: 0, s: 0, l };
+    const d = max - min;
+    const s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+    const h = (max === r ? ((g - b) / d + (g < b ? 6 : 0)) : max === g ? (b - r) / d + 2 : (r - g) / d + 4) * 60;
+    return { h, s, l };
+  };
+  const UI = { 到達マスの青: 0x3d7fb5, 攻撃対象の赤: 0xb5533d, 手番の黄: 0xf2df7e };
+  for (const hex of RUBBLE_COLORS) {
+    const c = hsl(hex), name = "#" + hex.toString(16).padStart(6, "0");
+    assert.ok(c.s <= 0.30, `${name}: 彩度が高すぎる ${c.s.toFixed(2)}`);
+    assert.ok(c.l >= 0.15 && c.l <= 0.45, `${name}: 明度が帯から外れる ${c.l.toFixed(2)}`);
+    for (const [label, ui] of Object.entries(UI)) {
+      const u = hsl(ui);
+      const near = Math.abs(c.l - u.l) < 0.08 && c.s > u.s * 0.6;
+      assert.ok(!near, `${name}: ${label} と紛れる`);
+    }
+  }
+  // 個体ごとの明度は動くが、色相と彩度は乗算なので変わらない
+  const tones = new Set();
+  for (let seed = 0; seed < 200; seed++) tones.add(obstacleColor(seed).tone.toFixed(3));
+  assert.ok(tones.size > 50, `明度のばらつきが少なすぎる (${tones.size}種)`);
+  assert.ok([...tones].every(t => Math.abs(Number(t) - 1) <= 0.12 + 1e-9), "明度のばらつきが指定を超える");
+  const picked = new Set();
+  for (let seed = 0; seed < 400; seed++) picked.add(obstacleColor(seed).hex);
+  assert.equal(picked.size, RUBBLE_COLORS.length, "色は全種類出る");
+  assert.ok(obstacleColor(7, true).tone < obstacleColor(7).tone, "高さ1.0の柱・石板は暗く落とす");
+}
+
+console.log("battle/rubbleGeometry: 色は低彩度・同じ明度帯で、UIの色と紛れない");

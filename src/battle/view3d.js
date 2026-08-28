@@ -90,6 +90,34 @@ const MONOLITH_ARCH_RISE = 0.14;     // アーチの高さ。大きくすると�
 const MONOLITH_ARCH_SEG = 3;         // アーチの分割数(上四半分)。全体では倍の分割になる
 const PILLAR_MONOLITH_CHANCE = 0.25; // 高さ1.0の柱を石板にする確率。単位: 確率(0〜1)
 
+// 障害物の色。坑道の岩の質感を、同じ明度帯・低彩度でそろえてある。
+// 色に意味を持たせない(登れるかどうかは形で読ませる)ので、色相を広げすぎない。
+// 広げると、プレイヤーが色に規則を探してしまう。
+// 到達マスの青(0x3d7fb5)・攻撃対象の赤(0xb5533d)・手番の黄(0xf2df7e)と
+// 見間違えない範囲に収める(彩度を上げないこと)。
+// 検査は rubbleGeometry.test.mjs が行う
+const RUBBLE_COLORS = [
+  0x574a35,   // 坑道の土砂。従来の色
+  0x6b5a3f,   // 砂岩。明るい黄土
+  0x4f4a42,   // 泥岩。ほぼ無彩色の茶灰
+  0x5c4433,   // 鉄錆混じり。赤みのある茶
+  0x474a52,   // 頁岩。わずかに青い灰
+  0x6d6a5f,   // 石灰岩。明るい灰
+];
+const RUBBLE_TONE_JITTER = 0.12;   // 個体ごとの明度のばらつき(±)。同じ色を引いても同じ石には見えないように
+const PILLAR_TONE = 0.72;          // 高さ1.0の柱・石板を暗く落とす倍率。壁に近づけて「越えられない」を出す
+
+// 種から色を選ぶ。tone を掛けて使う(乗算なので彩度と色相は変わらない)
+export function obstacleColor(seed, dark = false) {
+  const rng = makeRng((seed ^ 0x9e3779b9) >>> 0);
+  rng();                                                     // 1個目は種に対して偏るので捨てる
+  const hex = RUBBLE_COLORS[Math.floor(rng() * RUBBLE_COLORS.length)];
+  const tone = (dark ? PILLAR_TONE : 1) * (1 + (rng() * 2 - 1) * RUBBLE_TONE_JITTER);
+  return { hex, tone };
+}
+
+export { RUBBLE_COLORS };
+
 const same = (p, q) => Math.abs(p[0] - q[0]) < 1e-9 && Math.abs(p[1] - q[1]) < 1e-9;
 
 // 輪から重なった点を落とす。先が尖った形(錐)や稜線になった形(アーチ)では点が重なる
@@ -675,13 +703,23 @@ export function createBattleScene(container, grid, { voidBoundaryWalls = false, 
         // 壁(cell.obstacleなし)は常に箱のまま
         const seed = obstacleSeed(x, y, salt);
         const monolith = cell.obstacle && pickObstacleShape(grid, x, y, 1, salt).shape === "monolithFlat";
+        let mat = cell.obstacle ? pillarMat : wallMat;
+        if (cell.obstacle) {                                 // 壁は色を振らない(地形なので一様のまま)
+          const { hex, tone } = obstacleColor(seed, true);
+          mat = pillarMat.clone();
+          mat.color.setHex(hex).multiplyScalar(tone);
+        }
         const m = depthTint(monolith
-          ? new THREE.Mesh(obstacleGeometry("monolithFlat", WALL_H, seed, 0), pillarMat)
-          : new THREE.Mesh(wallGeo, cell.obstacle ? pillarMat : wallMat));
+          ? new THREE.Mesh(obstacleGeometry("monolithFlat", WALL_H, seed, 0), mat)
+          : new THREE.Mesh(wallGeo, mat));
         m.position.set(wx, monolith ? 0 : WALL_H / 2, wz);
         (cell.obstacle ? obstacleGroup : scene).add(m);
 
-        groundPatchGroup.add(paperAt(x, y, wx, wz));
+        // 床の当て板。壁と太い柱はマスを覆い隠すので、演出の「穴」(groundPatchGroup)へ
+        // 入れて消せるようにしてある。細い石板はマスを覆わないため、穴に入れると
+        // 石板が虚空に立っているように見える。石板の下だけは常に床を敷く
+        if (monolith) scene.add(paperAt(x, y, wx, wz));
+        else groundPatchGroup.add(paperAt(x, y, wx, wz));
         continue;
       }
 
@@ -704,7 +742,10 @@ export function createBattleScene(container, grid, { voidBoundaryWalls = false, 
         const h = cell.obstacle.height;
         const seed = obstacleSeed(x, y, salt);
         const { shape, facing } = pickObstacleShape(grid, x, y, h, salt);
-        const r = depthTint(new THREE.Mesh(obstacleGeometry(shape, h, seed, facing), rubbleMat));
+        const { hex, tone } = obstacleColor(seed);
+        const mat = rubbleMat.clone();
+        mat.color.setHex(hex).multiplyScalar(tone);
+        const r = depthTint(new THREE.Mesh(obstacleGeometry(shape, h, seed, facing), mat));
         r.position.set(wx, 0, wz);
         obstacleGroup.add(r);
       }
