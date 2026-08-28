@@ -1,4 +1,4 @@
-import { canOccupyCell, chooseMoveToward, createGrid, makeRng, resolveRanged, scatterObstacles } from "../battle/core.js";
+import { assignObstacleShapes, canOccupyCell, chooseMoveToward, createGrid, makeRng, resolveRanged, scatterObstacles } from "../battle/core.js";
 import { EXPEDITION_BATTLE_CONFIG } from "./battleConfig.js";
 
 const openRows = ({ width, height }) => Array.from({ length: height }, () => ".".repeat(width));
@@ -87,5 +87,9 @@ export function createExpeditionBattleLayout(layout, seed = 0) {
     // 味方が高いブロックで分断されないよう、通常キャラの経路で生成時に接続を確認する。
     canTraverse: (x, y, from) => canOccupyCell(grid, x, y, partyMovement, from),
   });
+  const keepClear = [starts.hero, starts.mage, ...starts.enemies];
+  const traverse = (x, y, from) => canOccupyCell(grid, x, y, partyMovement, from);
+  // 形は最後に決める。法面は隣に0.5があるかを見るので、全部置き終わってからでないと決まらない
+  assignObstacleShapes(grid, rng, { keepClear, canTraverse: traverse });
   return { grid, starts };
 }

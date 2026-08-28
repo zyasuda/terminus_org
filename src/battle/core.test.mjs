@@ -652,10 +652,18 @@ function pathReaches(grid, from, to) {
   assert.equal(elevationAt(g, 0, 1), 0.5, "瓦礫の上に立つ");
   assert.equal(elevationAt(g, 9, 9), 0, "盤外は0");
 
-  // 柱(1.0)は進入できないので立ち位置の高さにはならない
+  // 柱(1.0)も足元の高さを返す。登攀能力を持つ敵が乗るので、0だと駒がめり込む。
+  // 通常キャラが入れない規則は canOccupyCell の walkable 判定が担う
   cellAt(g, 3, 3).obstacle = { height: 1 };
   cellAt(g, 3, 3).walkable = false;
-  assert.equal(elevationAt(g, 3, 3), 0);
+  assert.equal(elevationAt(g, 3, 3), 1, "柱の上に立つ高さは1.0");
+  assert.equal(canOccupyCell(g, 3, 3, { maxStep: 0.25 }), false, "通常キャラは柱へ入れない");
+  assert.equal(canOccupyCell(g, 3, 3, { maxStep: 0.25, canClimb: true }), true, "登攀能力者は柱へ乗れる");
+
+  // 上面が平らでない形(錐・アーチ)は足場にならないので高さを持たない
+  cellAt(g, 2, 3).obstacle = { height: 0.75, shape: "cone4" };
+  assert.equal(elevationAt(g, 2, 3), 0, "錐は足場にならない");
+  assert.equal(canOccupyCell(g, 2, 3, { maxStep: 0.25, canClimb: true }), false, "錐へは登攀能力者も乗れない");
 
   const at = (x, y) => ({ x, y });
   assert.equal(heightSteps(g, at(1, 1), at(0, 0)), 3, "0.75の差は3段");

@@ -266,6 +266,85 @@ function addRamps(grid, rng, clear, rampHeight, rampChance) {
   return grid;
 }
 
+/* ---------------- 障害物の形 ---------------- */
+
+// 高さごとに置ける形。見た目はview3d.js側が作るが、「どの形にするか」はここで決める。
+// 判定(canOccupyCell)が形を見る必要があるためで、描画側に置くと
+// 「上面が平らなら立てる」という規則をルール側から参照できない。
+// キューブは作者の判断で「別格」として全段に置く
+export const SHAPES_BY_HEIGHT = {
+  0.25: ["cube"],                                      // 法面は隣に0.5がある時だけ足す
+  0.5: ["cube", "penta", "hexa", "frustum", "barrel"],
+  0.75: ["cube", "cone4", "cone6", "monolithArch"],
+  1: ["pillar", "monolithFlat"],
+};
+
+// 駒が立てる形。原則は「上面が平らなら立てる」で、錐は上面が一点、アーチは稜線なので
+// 虫であっても立てない扱いにする(モノリス平頂は薄い板だが上面は平らなので立てる)。
+//
+// 法面(slope)だけが例外。三角柱を寝かせた楔なので平らな上面が無いが、高さ0.25の
+// 傾き約20°の斜面で、そこに駒が立っていても違和感が小さい。しかも法面は0.5へ登る
+// 唯一の踏み台なので、立てなくすると登坂経路そのものが消える(2段差の成立率が
+// 58.6%から19%まで落ちる実測)。作者の判断でここは例外にした。
+//
+// shapeが未設定の障害物(既存の固定ステージ)は、従来どおり平らな箱として扱う
+const UNSTANDABLE_SHAPES = new Set(["cone4", "cone6", "monolithArch"]);
+export const isStandable = shape => !UNSTANDABLE_SHAPES.has(shape);
+
+// 障害物1つずつに形・向き・見た目用の種を持たせる。
+//
+// 法面は2マスで1つの斜面になる。高さ0.25のマスの隣(上下左右)に0.5があれば、
+// 両方を同じ向きの法面にする。0.25の高い辺と0.5の底の立方体の高さがどちらも0.25で
+// 揃うので、床から0.5まで途切れずに登る斜面として読める。
+// 向きは0.5のある方へ上る向き。法面の高い辺が0.5側に来る。
+export function assignObstacleShapes(grid, rng, { keepClear = [], canTraverse = null } = {}) {
+  const targets = [];
+  for (let y = 0; y < grid.h; y++) {
+    for (let x = 0; x < grid.w; x++) {
+      const cell = cellAt(grid, x, y);
+      if (!cell.obstacle || cell.obstacle.kind) continue;   // 木柵など専用の描き方を持つものは触らない
+      cell.obstacle.seed = Math.floor(rng() * 0x100000000) >>> 0;
+      targets.push({ x, y, cell });
+    }
+  }
+
+  // 先に法面を決める。0.5側の形も一緒に決めるので、抽選より前に走らせる必要がある
+  const DIRS = [[0, 1], [1, 0], [0, -1], [-1, 0]];         // +z, +x, -z, -x
+  for (const { x, y, cell } of targets) {
+    if (cell.obstacle.height !== 0.25 || cell.obstacle.shape) continue;
+    const toward = DIRS.findIndex(([dx, dy]) => {
+      const c = cellAt(grid, x + dx, y + dy);
+      return !!c && !!c.obstacle && !c.obstacle.kind && c.obstacle.height === 0.5 && !c.obstacle.shape;
+    });
+    if (toward < 0) continue;
+    const facing = (4 - toward) % 4;
+    cell.obstacle.shape = "slope";
+    cell.obstacle.facing = facing;
+    const [dx, dy] = DIRS[toward];
+    const up = cellAt(grid, x + dx, y + dy);
+    up.obstacle.shape = "slope";                            // 続きの斜面。向きは同じ
+    up.obstacle.facing = facing;
+    // 見た目用の種も揃える。色は種から引くので、揃えないと2マスが別の石の色になり、
+    // 1つの斜面ではなく「たまたま並んだ2つの岩」に見える
+    up.obstacle.seed = cell.obstacle.seed;
+  }
+
+  for (const { cell } of targets) {
+    if (cell.obstacle.shape) continue;
+    const pool = SHAPES_BY_HEIGHT[cell.obstacle.height];
+    cell.obstacle.shape = pool ? pool[Math.floor(rng() * pool.length)] : "cube";
+    cell.obstacle.facing = 0;
+    // 上面が平らでない形(錐・アーチ)は誰も立てないので、通り道を塞ぐことがある。
+    // 塞ぐならキューブへ落とす。生成時の接続チェックは形が付く前に走っているため、
+    // ここで保証しないと「通れる前提で作った盤面が通れなくなる」
+    if (!isStandable(cell.obstacle.shape) && keepClear.length && canTraverse
+        && !allConnected(grid, keepClear, canTraverse)) {
+      cell.obstacle.shape = "cube";
+    }
+  }
+  return grid;
+}
+
 /* ---------------- 地形(足元だけに効く。障害物とは別レイヤー) ---------------- */
 
 // 水溜り: 通行は塞がない(walkableのまま)が、そのマスへ入る移動コストが2倍になる。
@@ -297,12 +376,16 @@ export function moveCostAt(grid, x, y) {
 
 /* ---------------- 立ち位置の高さ ---------------- */
 
-// そのマスに立ったときの足元の高さ。乗り越えられる瓦礫(0.25〜0.75)の上に立つ。
-// 柱(1.0)は進入できないので、ユニットの立ち位置として現れることはない。
+// そのマスに立ったときの足元の高さ。
+// 高さ1.0(柱・モノリス)も返す。登攀能力を持つ敵は乗れるので、0を返すと駒が床の高さに
+// 描かれて障害物にめり込む(細いモノリスで実際にそうなった)。通常キャラが1.0へ入れない
+// 規則は canOccupyCell の walkable 判定が担っていて、ここは関係しない。
+// 上面が平らでない形(錐・アーチ)は誰も立てないので、足場としての高さを持たない。
 // cell.height(地形の高さ)は未使用だが、使い始めたらここへ足せばよい
 export function elevationAt(grid, x, y) {
   const c = cellAt(grid, x, y);
-  return c && c.obstacle && c.obstacle.height < 1 ? c.obstacle.height : 0;
+  if (!c || !c.obstacle) return 0;
+  return isStandable(c.obstacle.shape) ? c.obstacle.height : 0;
 }
 
 // 攻撃側から見た高低差の段数。0.25を1段と数え、-3〜+3に収める。
@@ -343,6 +426,9 @@ export function canOccupyCell(grid, x, y, unit = {}, from = null) {
   const cell = cellAt(grid, x, y);
   if (!cell || cell.void || (!cell.walkable && !cell.obstacle)) return false;
   if (!cell.obstacle) return cell.walkable;
+  // 上面が点(錐)・稜線(アーチ)の形には誰も立てない。登攀能力があっても同じで、
+  // 見た目が「立てない」と言っている場所に駒を置かないための規則
+  if (!isStandable(cell.obstacle.shape)) return false;
   if (unit.canClimb) return true;
   if (!cell.walkable) return false;
   const fromElevation = from ? elevationAt(grid, from.x, from.y) : 0;

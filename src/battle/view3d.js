@@ -82,7 +82,6 @@ export const RUBBLE_W = 0.7;         // キューブの一辺。マス(1.0)よ�
 const RUBBLE_CHAMFER_W = 0.21;       // キューブの角を削る幅。辺に沿ってこの長さだけ内側へ入る。単位: タイル
 const RUBBLE_CHAMFER_DEPTH = 0.05;   // キューブの角を削る深さ。上端からこの分だけを削ぐ。大きくすると丸っこくなる。単位: タイル高
 const CONE_SPAN = 0.88;              // 錐の接地幅。誰も立てないので、キューブより広げて存在感を出す。単位: タイル
-const SLOPE_DEPTH = 0.32;            // 法面の奥行き。大きくすると平らな上面が狭くなる。単位: タイル
 const MONOLITH_W = 0.46;             // 石板の幅。単位: タイル
 const MONOLITH_TH = 0.13;            // 石板の厚み。単位: タイル
 const MONOLITH_CHAMFER = 0.04;       // 平頂の石板の上端を落とす量。単位: タイル
@@ -222,16 +221,27 @@ function sunkBarrelVertices(visible, span, seg, angle) {
   return ringSolid(kept.map(([y, r]) => ({ y, pts: unit.map(p => [p[0] * r * k, p[1] * r * k]) })));
 }
 
-// 法面。片側の上部一辺だけを斜めに落とす。上面は平らなまま残るので駒が立てる。
-// facing は法面が向く方向(0=-z, 1=+x, 2=+z, 3=-x)。床側へ向けて置く。
-// 階段や坂は上面に平らな面が無く、見た目は登れそうなのに立てないので採らなかった
-function slopeVertices(h, depth, span, facing) {
-  const s = span / 2;
+// 法面。三角柱を寝かせた楔。横から見ると三角形で、上面は斜面だけ(平らな面が無い)。
+// 高さが0.25を超える場合は、底に高さ(h-0.25)の立方体を重ねて、その上に楔を載せる。
+// 横顔は「長方形＋三角形」になり、傾きはどの高さでも0.25ぶんで一定になる。
+// facing は斜面が下り切る方向(0=-z, 1=+x, 2=+z, 3=-x)。床側へ向けて置く。
+// 上面が平らでないので、駒が立てるのは規則側の例外として扱う(core.jsのisStandable)。
+// 駒の足元は上端(h)に置く。傾き約20°の低い斜面なので、斜面に立っていても違和感は小さい
+const SLOPE_RISE = 0.25;             // 楔ぶんの高さ。これを超える分は底の立方体で稼ぐ。単位: タイル高
+const SLOPE_RUN = 0.98;              // 登る向きの長さ。マスいっぱいにして、2マスの斜面が繋がって見えるようにする。単位: タイル
+function slopeVertices(h, width, facing) {
+  // 登る向き(z)はマスいっぱい(SLOPE_RUN)、横(x)は他の障害物と同じ幅にする。
+  // 少し細い坂になる代わりに、マスの左右に床が残って到達マスの青が見える
+  const sx = width / 2, sz = SLOPE_RUN / 2;
   const angle = (facing * Math.PI) / 2;
-  return ringSolid([
-    { y: 0, pts: turnRing([[-s, -s], [s, -s], [s, s], [-s, s]], angle) },
-    { y: h, pts: turnRing([[-s, -s + depth], [s, -s + depth], [s, s], [-s, s]], angle) },
-  ]);
+  const base = turnRing([[-sx, -sz], [sx, -sz], [sx, sz], [-sx, sz]], angle);
+  // 楔の上端は+z側の一辺だけ。手前の2点を奥へ寄せると、その辺だけが残る
+  const top = turnRing([[-sx, sz], [sx, sz], [sx, sz], [-sx, sz]], angle);
+  const rise = Math.min(SLOPE_RISE, h);
+  const rings = [{ y: 0, pts: base }];
+  if (h - rise > 1e-9) rings.push({ y: h - rise, pts: base });   // 底の立方体
+  rings.push({ y: h, pts: top });
+  return ringSolid(rings);
 }
 
 const rectRing = (hx, hz) => [[-hx, -hz], [hx, -hz], [hx, hz], [-hx, hz]];
@@ -259,18 +269,12 @@ function monolithArchVertices(w, th, h, rise, seg, angle) {
   return ringSolid(rings);
 }
 
-// 高さごとに置ける形。キューブは「別格」として全段に残す(作者の判断)
-export const SHAPES_BY_HEIGHT = {
-  0.25: ["cube"],                                            // 法面は隣に0.5がある時だけ足す
-  0.5: ["cube", "penta", "hexa", "frustum", "barrel"],
-  0.75: ["cube", "cone4", "cone6", "monolithArch"],
-  1: ["pillar", "monolithFlat"],
-};
-
+// 形と向きと種は core.js の assignObstacleShapes() がセルへ入れてある。
+// 描画側は選ばずに読むだけ(判定が形を見る必要があるため、抽選はルール側に置いた)。
+// shapeが未設定の障害物(既存の固定ステージ)はキューブとして描く
 export function obstacleVertices(shape, h, seed, facing = 0) {
   const angle = makeRng(seed + 977)() * Math.PI * 2;         // 同じ形が並んでも向きが違う
   switch (shape) {
-    case "cube": return rubbleVertices(h, seed);
     case "penta": return prismVertices(5, h, 1, RUBBLE_W, angle);
     case "hexa": return prismVertices(6, h, 1, RUBBLE_W, angle);
     case "frustum": return prismVertices(4, h, 0.6, RUBBLE_W, Math.PI / 4);
@@ -279,43 +283,10 @@ export function obstacleVertices(shape, h, seed, facing = 0) {
     case "cone6": return prismVertices(6, h, 0, CONE_SPAN, angle);
     case "monolithFlat": return monolithFlatVertices(MONOLITH_W, MONOLITH_TH, h, MONOLITH_CHAMFER, angle);
     case "monolithArch": return monolithArchVertices(MONOLITH_W, MONOLITH_TH, h, MONOLITH_ARCH_RISE, MONOLITH_ARCH_SEG, angle);
-    case "slope": return slopeVertices(h, SLOPE_DEPTH, RUBBLE_W, facing);
+    case "slope": return slopeVertices(h, RUBBLE_W, facing);
+    case "cube":
     default: return rubbleVertices(h, seed);
   }
-}
-
-// 盤面ごとの「塩」。形と向きの種にマス座標だけを使うと、盤面が変わっても同じ位置に
-// 同じ形が出てしまう(実測で分布が固定され、六角柱が他の1/3しか出ていなかった)。
-// 盤面の内容から作るので、同じ盤面なら毎回同じ形という決定論は保てる
-export function gridSalt(grid) {
-  let hash = 2166136261;
-  for (const c of grid.cells) {
-    const v = (c.void ? 3 : c.walkable ? 1 : 2) * 31 + Math.round((c.obstacle ? c.obstacle.height : 0) * 4);
-    hash = (Math.imul(hash ^ v, 16777619)) >>> 0;
-  }
-  return hash;
-}
-
-// マス座標と盤面の塩から、形・向き・削る角に使う種を作る
-export const obstacleSeed = (x, y, salt) => (Math.imul(x * 7919 + y * 104729 + 31, 2654435761) ^ salt) >>> 0;
-
-// 高さと隣のマスから形を選ぶ。0.25は、隣に高さ0.5のブロックがあれば法面にして
-// 「ここから登る」を形で示す。法面は0.5の反対側(床側)へ向け、平らな上面を0.5側に残す
-export function pickObstacleShape(grid, x, y, h, salt = 0) {
-  if (Math.abs(h - 0.25) < 1e-9) {
-    const dirs = [[0, 1], [1, 0], [0, -1], [-1, 0]];         // +z, +x, -z, -x
-    const toward = dirs.findIndex(([dx, dy]) => {
-      const nx = x + dx, ny = y + dy;
-      if (nx < 0 || ny < 0 || nx >= grid.w || ny >= grid.h) return false;
-      const c = grid.cells[ny * grid.w + nx];
-      return !!c && !!c.obstacle && Math.abs(c.obstacle.height - 0.5) < 1e-9;
-    });
-    if (toward >= 0) return { shape: "slope", facing: (4 - toward) % 4 };
-  }
-  const pool = SHAPES_BY_HEIGHT[h] || ["cube"];
-  const rng = makeRng(obstacleSeed(x, y, salt));
-  rng();                                                     // 1個目は種に対して偏るので捨てる
-  return { shape: pool[Math.floor(rng() * pool.length)], facing: 0 };
 }
 
 function obstacleGeometry(shape, h, seed, facing) {
@@ -681,7 +652,6 @@ export function createBattleScene(container, grid, { voidBoundaryWalls = false, 
   const groundPatchGroup = new THREE.Group();
   scene.add(groundPatchGroup);
 
-  const salt = gridSalt(grid);   // 形と向きの種。盤面が違えば違う形になる
   const tiles = new Map();   // "x,y" → 床メッシュ(ハイライトで色を塗り替える)
   for (let y = 0; y < grid.h; y++) {
     for (let x = 0; x < grid.w; x++) {
@@ -701,8 +671,8 @@ export function createBattleScene(container, grid, { voidBoundaryWalls = false, 
 
         // 高さ1.0の柱は、太い箱か細い石板(モノリス)のどちらかになる。
         // 壁(cell.obstacleなし)は常に箱のまま
-        const seed = obstacleSeed(x, y, salt);
-        const monolith = cell.obstacle && pickObstacleShape(grid, x, y, 1, salt).shape === "monolithFlat";
+        const seed = cell.obstacle?.seed ?? ((x * 7919 + y * 104729) >>> 0);
+        const monolith = cell.obstacle?.shape === "monolithFlat";
         let mat = cell.obstacle ? pillarMat : wallMat;
         if (cell.obstacle) {                                 // 壁は色を振らない(地形なので一様のまま)
           const { hex, tone } = obstacleColor(seed, true);
@@ -740,8 +710,8 @@ export function createBattleScene(container, grid, { voidBoundaryWalls = false, 
       // 乗り越えられる瓦礫。床の上に低い箱を置くだけで、進入は妨げない
       if (cell.obstacle) {
         const h = cell.obstacle.height;
-        const seed = obstacleSeed(x, y, salt);
-        const { shape, facing } = pickObstacleShape(grid, x, y, h, salt);
+        const seed = cell.obstacle.seed ?? ((x * 7919 + y * 104729) >>> 0);
+        const { shape = "cube", facing = 0 } = cell.obstacle;
         const { hex, tone } = obstacleColor(seed);
         const mat = rubbleMat.clone();
         mat.color.setHex(hex).multiplyScalar(tone);
