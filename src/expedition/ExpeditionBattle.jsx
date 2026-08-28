@@ -24,7 +24,7 @@ const unitFrom = (id, side, config, start, faceTo, combat) => ({
   height: config.height,
   canClimb: config.canClimb,
   ranged: config.ranged ?? false,
-  maxObstacleHeight: EXPEDITION_BATTLE_CONFIG.movement.maxObstacleHeight,
+  maxStep: EXPEDITION_BATTLE_CONFIG.movement.maxStep,
   modelId: config.modelId,
   ...(config.tint !== undefined ? { tint: config.tint } : {}),
 });

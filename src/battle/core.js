@@ -68,7 +68,7 @@ export function makeRng(seed) {
 const LOW_HEIGHTS = [0.25, 0.5, 0.75];
 
 // 2点が行き来できるか(移動力を無視した到達性の確認)
-function pathExists(grid, from, to, canTraverse = (x, y) => isWalkable(grid, x, y)) {
+function pathExists(grid, from, to, canTraverse = (x, y, _from) => isWalkable(grid, x, y)) {
   const seen = new Set([key(from.x, from.y)]);
   let frontier = [from];
   while (frontier.length) {
@@ -77,7 +77,7 @@ function pathExists(grid, from, to, canTraverse = (x, y) => isWalkable(grid, x, 
       if (p.x === to.x && p.y === to.y) return true;
       for (const [dx, dy] of DIRS8) {
         const x = p.x + dx, y = p.y + dy, k = key(x, y);
-        if (seen.has(k) || !canTraverse(x, y)) continue;
+        if (seen.has(k) || !canTraverse(x, y, p)) continue;
         seen.add(k);
         next.push({ x, y });
       }
@@ -186,7 +186,7 @@ export function carveShape(grid, rng, { keepClear = [] } = {}) {
 // keepClear(開始位置)には置かない。置いた結果keepClear全員が互いに行き来
 // できなくなる(誰か1人だけ孤立する場合も含む)柱は取り消すので、
 // 通り抜けられない盤面や、出られない孤島にはならない
-export function scatterObstacles(grid, rng, { pillars = 5, rubble = 6, keepClear = [], count = null, canTraverse = null } = {}) {
+export function scatterObstacles(grid, rng, { pillars = 5, rubble = 6, keepClear = [], count = null, canTraverse = null, rampHeight = 0.25, rampChance = 0 } = {}) {
   const traverse = canTraverse || ((x, y) => isWalkable(grid, x, y));
   const clear = new Set(keepClear.map(p => key(p.x, p.y)));
   const open = [];
@@ -218,7 +218,7 @@ export function scatterObstacles(grid, rng, { pillars = 5, rubble = 6, keepClear
       }
       placed++;
     }
-    return grid;
+    return addRamps(grid, rng, clear, rampHeight, rampChance);
   }
 
   let idx = 0, placed = 0;
@@ -241,6 +241,23 @@ export function scatterObstacles(grid, rng, { pillars = 5, rubble = 6, keepClear
     if (c.obstacle) continue;
     c.obstacle = { height: LOW_HEIGHTS[Math.floor(rng() * LOW_HEIGHTS.length)] };
     placed++;
+  }
+  return addRamps(grid, rng, clear, rampHeight, rampChance);
+}
+
+function addRamps(grid, rng, clear, rampHeight, rampChance) {
+  if (rampChance <= 0) return grid;
+  for (let y = 0; y < grid.h; y++) {
+    for (let x = 0; x < grid.w; x++) {
+      const obstacle = cellAt(grid, x, y).obstacle;
+      if (obstacle?.height !== 0.5 || rng() > rampChance) continue;
+      const candidates = DIRS8.map(([dx, dy]) => ({ x: x + dx, y: y + dy })).filter(p => {
+        const c = cellAt(grid, p.x, p.y);
+        return c && !c.void && c.walkable && !c.obstacle && !clear.has(key(p.x, p.y));
+      });
+      const ramp = candidates[Math.floor(rng() * candidates.length)];
+      if (ramp) cellAt(grid, ramp.x, ramp.y).obstacle = { height: rampHeight };
+    }
   }
   return grid;
 }
@@ -317,14 +334,15 @@ export function occupiedBy(units, moverId) {
   return units.filter(u => u.hp > 0 && u.id !== moverId).map(u => ({ x: u.x, y: u.y }));
 }
 
-// 通行可能かを、通常の床判定に加えて障害物の高さと登攀能力で決める。
-// `maxObstacleHeight` 未指定は既存盤面との互換のため高さ制限なしにする。
-export function canOccupyCell(grid, x, y, unit = {}) {
+// 通行可能かを、通常の床判定に加えて移動元との段差と登攀能力で決める。
+export function canOccupyCell(grid, x, y, unit = {}, from = null) {
   const cell = cellAt(grid, x, y);
   if (!cell || cell.void || (!cell.walkable && !cell.obstacle)) return false;
   if (!cell.obstacle) return cell.walkable;
   if (unit.canClimb) return true;
-  return cell.walkable && cell.obstacle.height < (unit.maxObstacleHeight ?? Infinity);
+  if (!cell.walkable) return false;
+  const fromElevation = from ? elevationAt(grid, from.x, from.y) : 0;
+  return Math.abs(elevationAt(grid, x, y) - fromElevation) <= (unit.maxStep ?? 0.25);
 }
 
 // 到達可能マスを列挙する。8方向・そのマスへ入るコストはmoveCostAt()(既定1、
@@ -350,7 +368,7 @@ export function reachableCells(grid, start, movePoints, occupied = [], unit = {}
 
     for (const [dx, dy] of DIRS8) {
       const x = cx + dx, y = cy + dy, k = key(x, y);
-      if (settled.has(k) || !canOccupyCell(grid, x, y, unit) || blocked.has(k)) continue;
+      if (settled.has(k) || !canOccupyCell(grid, x, y, unit, { x: cx, y: cy }) || blocked.has(k)) continue;
       const nd = curCost + moveCostAt(grid, x, y);
       if (nd > movePoints) continue;
       if (!dist.has(k) || nd < dist.get(k)) {

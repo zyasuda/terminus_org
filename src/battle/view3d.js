@@ -63,6 +63,75 @@ const loadModel = path => {
 // cameraElevationDegを省略した呼び出し(本編の会話バトル画面など)はこれまで通りの見た目になる。
 const TRUE_ISO_ELEVATION_DEG = Math.atan(1 / Math.SQRT2) * 180 / Math.PI;
 
+/* ---------------- 瓦礫の箱 ---------------- */
+
+// 上端の4つ角のうち0〜4個を斜めに削ぎ落として、割れた岩らしくする。
+// 削るのは上端だけで、下側は角の立った四角柱のまま。角を床まで削ると脚が細くなり、
+// 岩ではなくテーブルのような形になる(Blenderで並べて確認した上で採らなかった案)。
+// マス位置から作る決定論rngなので、同じ盤面なら毎回同じ形になる(見た目だけの話で、
+// core.js側の進入判定・段差判定は常にマス単位・高さ単位のまま変わらない)。
+// 底面は床に接していてカメラ(仰角20°)から見えないので、面を張らない。
+// 面の向き(表裏)は rubbleGeometry.test.mjs が検査する。Blenderのビューポートは既定で
+// 裏面も描くため、裏返っていても向こうでは気づけない(実際に一度これで間違えた)
+export const RUBBLE_W = 0.98;        // 箱の一辺。高さ1.0の柱(wallGeo)と同じで、マス(1.0)の四方に隙間を作らない。単位: タイル
+const RUBBLE_CHAMFER_W = 0.21;       // 角を削る幅。辺に沿ってこの長さだけ内側へ入る。単位: タイル
+const RUBBLE_CHAMFER_DEPTH = 0.05;   // 角を削る深さ。上端からこの分だけを削ぐ。大きくすると丸っこくなる。単位: タイル高
+
+// 三角形の頂点を(x,y,z)の平坦な配列で返す。テストから呼べるよう分けてある
+export function rubbleVertices(h, seed) {
+  const rng = makeRng(seed);
+  const s = RUBBLE_W / 2;
+  const square = [[-s, -s], [s, -s], [s, s], [-s, s]];   // xz平面で反時計回り
+  const cut = [false, false, false, false];
+  const order = [0, 1, 2, 3];
+  for (let i = 3; i > 0; i--) {                          // フィッシャー・イェーツ
+    const j = Math.floor(rng() * (i + 1));
+    [order[i], order[j]] = [order[j], order[i]];
+  }
+  for (let n = Math.floor(rng() * 5); n > 0; n--) cut[order[n - 1]] = true;
+
+  // 上端の輪(削った角は2点に分かれる)と、その真下の輪(元の角のまま2点重ねる)。
+  // 頂点数を揃えておくと側面を一律に四角形の帯で張れて、削った角だけが三角形になる
+  const top = [], under = [];
+  for (let i = 0; i < 4; i++) {
+    const p = square[i], prev = square[(i + 3) % 4], next = square[(i + 1) % 4];
+    // 削る量は辺に沿った長さで指定する(割合にすると、箱の一辺を変えたときに削り幅も動く)。
+    // 隣の角の削りと重ならないよう、辺の半分までに抑える
+    const f = Math.min(RUBBLE_CHAMFER_W / RUBBLE_W, 0.5);
+    const toward = q => [p[0] + (q[0] - p[0]) * f, p[1] + (q[1] - p[1]) * f];
+    if (cut[i]) { top.push(toward(prev), toward(next)); under.push(p, p); }
+    else { top.push(p); under.push(p); }
+  }
+  const zc = h - Math.min(RUBBLE_CHAMFER_DEPTH, h / 2);  // 低いブロックを潰さないための上限
+
+  const verts = [];
+  const push = (p, y) => verts.push(p[0], y, p[1]);
+  // 側面。輪はxz平面で反時計回りなので、外から見て表になる順序は
+  // (下i → 上j → 下j) / (下i → 上i → 上j) になる。逆にすると箱の中が見える
+  // 削った角では輪の点が2つ重なるので、そこだけ帯が四角形ではなく三角形になる。
+  // 潰れた三角形は面として出さない(描かれないが、法線が出ず検査もできないため)
+  const same = (p, q) => p[0] === q[0] && p[1] === q[1];
+  const strip = (a, ay, b, by) => {
+    for (let i = 0; i < b.length; i++) {
+      const j = (i + 1) % b.length;
+      if (!same(a[i], a[j])) { push(a[i], ay); push(b[j], by); push(a[j], ay); }
+      if (!same(b[i], b[j])) { push(a[i], ay); push(b[i], by); push(b[j], by); }
+    }
+  };
+  strip(square, 0, square, zc);       // 下側の四角柱
+  strip(under, zc, top, h);           // 上端の削ぎ
+  // 上面。輪はxz平面で反時計回りだが、真上(+y)から見ると時計回り=裏面になるので順序を逆にする
+  for (let i = 1; i < top.length - 1; i++) { push(top[0], h); push(top[i + 1], h); push(top[i], h); }
+  return verts;
+}
+
+function rubbleGeometry(h, seed) {
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute("position", new THREE.Float32BufferAttribute(rubbleVertices(h, seed), 3));
+  geo.computeVertexNormals();
+  return geo;
+}
+
 export function createBattleScene(container, grid, { voidBoundaryWalls = false, cameraElevationDeg = TRUE_ISO_ELEVATION_DEG, cameraZoom: initialCameraZoom = 1 } = {}) {
   let cameraElevation = cameraElevationDeg * Math.PI / 180;   // setCameraElevationDeg()で見た目を確認しながら調整できる
   const scene = new THREE.Scene();
@@ -450,7 +519,10 @@ export function createBattleScene(container, grid, { voidBoundaryWalls = false, 
       const m = new THREE.Mesh(paperGeo, new THREE.MeshBasicMaterial({
         color: COLOR.reach, transparent: true, opacity: 0, depthWrite: false }));
       m.rotation.x = -Math.PI / 2;
-      m.position.set(wx, HIGHLIGHT_Y, wz);
+      // 瓦礫の箱はマスの四方いっぱい(RUBBLE_W=0.98)なので、床に置いたままでは
+      // 箱に隠れて到達マスの青が見えない。乗れる瓦礫のマスは、ハイライトと
+      // タップ判定を箱の天面へ上げる(立つ位置と同じ高さになる)
+      m.position.set(wx, elevationAt(grid, x, y) + HIGHLIGHT_Y, wz);
       m.userData = { kind: "cell", x, y };
       scene.add(m);
       tiles.set(x + "," + y, m);
@@ -458,8 +530,8 @@ export function createBattleScene(container, grid, { voidBoundaryWalls = false, 
       // 乗り越えられる瓦礫。床の上に低い箱を置くだけで、進入は妨げない
       if (cell.obstacle) {
         const h = cell.obstacle.height;
-        const r = depthTint(new THREE.Mesh(new THREE.BoxGeometry(0.7, h, 0.7), rubbleMat));
-        r.position.set(wx, h / 2, wz);
+        const r = depthTint(new THREE.Mesh(rubbleGeometry(h, x * 7919 + y * 104729), rubbleMat));
+        r.position.set(wx, 0, wz);
         obstacleGroup.add(r);
       }
 

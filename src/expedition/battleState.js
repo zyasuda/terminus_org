@@ -77,13 +77,15 @@ export function createExpeditionBattleLayout(layout, seed = 0) {
     enemies: enemyStarts.map(pos => ({ ...pos })),
   };
   const grid = gridFor(board);
-  const { min, max } = EXPEDITION_BATTLE_CONFIG.board.obstacles;
-  const partyMovement = { maxObstacleHeight: EXPEDITION_BATTLE_CONFIG.movement.maxObstacleHeight };
+  const { min, max, rampHeight, rampChance } = EXPEDITION_BATTLE_CONFIG.board.obstacles;
+  const partyMovement = { maxStep: EXPEDITION_BATTLE_CONFIG.movement.maxStep };
   scatterObstacles(grid, rng, {
     count: min + Math.floor(rng() * (max - min + 1)),
     keepClear: [starts.hero, starts.mage, ...starts.enemies],
+    rampHeight,
+    rampChance,
     // 味方が高いブロックで分断されないよう、通常キャラの経路で生成時に接続を確認する。
-    canTraverse: (x, y) => canOccupyCell(grid, x, y, partyMovement),
+    canTraverse: (x, y, from) => canOccupyCell(grid, x, y, partyMovement, from),
   });
   return { grid, starts };
 }
