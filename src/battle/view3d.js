@@ -73,7 +73,7 @@ const TRUE_ISO_ELEVATION_DEG = Math.atan(1 / Math.SQRT2) * 180 / Math.PI;
 // 底面は床に接していてカメラ(仰角20°)から見えないので、面を張らない。
 // 面の向き(表裏)は rubbleGeometry.test.mjs が検査する。Blenderのビューポートは既定で
 // 裏面も描くため、裏返っていても向こうでは気づけない(実際に一度これで間違えた)
-export const RUBBLE_W = 0.98;        // 箱の一辺。高さ1.0の柱(wallGeo)と同じで、マス(1.0)の四方に隙間を作らない。単位: タイル
+export const RUBBLE_W = 0.7;         // 箱の一辺。マス(1.0)より小さくして四方に床を残す。ここを広げると到達マスの青が箱に隠れ、指で狙いにくくなる。単位: タイル
 const RUBBLE_CHAMFER_W = 0.21;       // 角を削る幅。辺に沿ってこの長さだけ内側へ入る。単位: タイル
 const RUBBLE_CHAMFER_DEPTH = 0.05;   // 角を削る深さ。上端からこの分だけを削ぐ。大きくすると丸っこくなる。単位: タイル高
 
@@ -519,10 +519,10 @@ export function createBattleScene(container, grid, { voidBoundaryWalls = false, 
       const m = new THREE.Mesh(paperGeo, new THREE.MeshBasicMaterial({
         color: COLOR.reach, transparent: true, opacity: 0, depthWrite: false }));
       m.rotation.x = -Math.PI / 2;
-      // 瓦礫の箱はマスの四方いっぱい(RUBBLE_W=0.98)なので、床に置いたままでは
-      // 箱に隠れて到達マスの青が見えない。乗れる瓦礫のマスは、ハイライトと
-      // タップ判定を箱の天面へ上げる(立つ位置と同じ高さになる)
-      m.position.set(wx, elevationAt(grid, x, y) + HIGHLIGHT_Y, wz);
+      // ハイライトとタップ判定は床の高さに置く。瓦礫の天面へ上げると、
+      // 指で狙える面が箱の上面ぶんだけ狭くなって押しにくい(実機で確認)。
+      // 箱を四方より小さく(RUBBLE_W)しているので、床の青は箱の周りに見える
+      m.position.set(wx, HIGHLIGHT_Y, wz);
       m.userData = { kind: "cell", x, y };
       scene.add(m);
       tiles.set(x + "," + y, m);
