@@ -13,6 +13,7 @@ import * as THREE from "three";
 import { STANDEE_VERSION } from "./standeeVersion.js";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import { elevationAt, makeRng } from "./core.js";
+import { DUST_TOP, dustMaterial, dustMote } from "./dustLook.js";
 
 // 床の紙は1マスちょうどで隙間なく敷く。TILEはマス内に物を置くときの
 // 「はみ出さない範囲」の目安として、水溜りや瓦礫の大きさに使う。
@@ -1089,48 +1090,24 @@ export function createBattleScene(container, grid, { voidBoundaryWalls = false, 
      地面から上へ、少量だけゆっくり上がっていく演出。数を少なめにして
      (会話が「戦闘グリッドの雰囲気作り」であって主役ではないため)、
      頂点まで達したら下へ戻して延々ループさせる。盤面のルールには一切関与しない */
-  const dustTexture = () => {
-    const c = document.createElement("canvas");
-    c.width = c.height = 32;
-    const g = c.getContext("2d");
-    const grad = g.createRadialGradient(16, 16, 0, 16, 16, 16);
-    grad.addColorStop(0, "rgba(255,244,220,0.32)");
-    grad.addColorStop(1, "rgba(255,244,220,0)");
-    g.fillStyle = grad;
-    g.fillRect(0, 0, 32, 32);
-    return new THREE.CanvasTexture(c);
-  };
-  // THREE.PointsMaterialは全粒子で同じsizeしか持てない(粒ごとに変えるには
-  // カスタムシェーダーが要る)ため、粒ごとにサイズが違って見えるように
-  // 個別のSpriteにした。数が少ない(22個)ので描画コストは気にしなくてよい
-  const dustMat = new THREE.SpriteMaterial({
-    map: dustTexture(), transparent: true, opacity: 0.28,
-    depthWrite: false, blending: THREE.AdditiveBlending
-  });
+  // 塵の見た目(テクスチャ・材質・粒ごとのばらつき)は dustLook.js が正本。
+  // 探索の一人称も同じものを読む。ここで直接いじると2つの画面で塵が食い違う。
+  const dustMat = dustMaterial();
   // on/offをまとめて切り替えられるようGroupに入れる(検証パネルからのトグル用)
   const dustGroup = new THREE.Group();
   scene.add(dustGroup);
 
   const DUST_COUNT = 22;
-  const DUST_TOP = 2.6;
   const dustState = Array.from({ length: DUST_COUNT }, () => {
     const sprite = new THREE.Sprite(dustMat);
-    const size = 0.08 + Math.random() * 0.02;   // 0.08〜0.10。前回(0.16〜0.18)からさらに縮小
-    sprite.scale.setScalar(size);
+    const mote = dustMote();          // 大きさ・速さ・揺れのばらつきは dustLook.js
+    sprite.scale.setScalar(mote.size);
     dustGroup.add(sprite);
     return {
-      sprite,
+      sprite, ...mote,
       x: (Math.random() - 0.5) * (grid.w - 1),
       z: (Math.random() - 0.5) * (grid.h - 1),
       y: Math.random() * DUST_TOP,
-      speed: 0.05 + Math.random() * 0.07,   // 頂点まで約20〜52秒。前回(0.14〜0.36)より遅く
-      // ゆらゆら感はX方向だけだと単調に見えたため、Z方向にも周期違いの
-      // 揺れを重ねて円を描くように動かす。振幅・周期も以前よりはっきり効かせる
-      swayAmpX: 0.14 + Math.random() * 0.16,
-      swayFreqX: 0.5 + Math.random() * 0.5,
-      swayAmpZ: 0.1 + Math.random() * 0.14,
-      swayFreqZ: 0.35 + Math.random() * 0.4,
-      swayPhase: Math.random() * Math.PI * 2
     };
   });
 

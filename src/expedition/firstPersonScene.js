@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import { DUST_TOP, dustMaterial, dustMote } from "../battle/dustLook.js";
 import { FACING_YAW, levelCells } from "./mapwalk.js";
 
 // 一人称の3D。戦闘(view3d.js)と同じ「1マス=1タイル」の座標系で組み、
@@ -13,31 +14,16 @@ const BG = 0x0a0d14, LINE = 0x8fb0d8, FLOOR_LINE = 0x6d8399;
 const FOG_NEAR = CELL * 0.8, FOG_FAR = CELL * 4.2;
 // 向きは角度で持つ(FACING_YAWが正本)。旋回の補間で北⇄西を跨ぐ時に長い方へ回らないよう、
 // 目標角を現在地から±πの範囲へ畳んで使う。
+const parse = key => key.split(",").map(Number);
 // 歩行と旋回にかける時間。長いと待たされ、短いとどこへ動いたか分からない。単位: ミリ秒。
 const STEP_MS = 190, TURN_MS = 170;
 // カメラを立ち位置からどれだけ後ろへ引くか。単位: 戦闘のタイル(1マス = 3タイル)。
 // 引くほど広く見えるが、マスの外へ出ると後ろの壁を突き抜けるので上限を設ける。
 export const CAM_BACK_DEFAULT = 0.6, CAM_BACK_MAX = CELL / 2 - 0.2;
-// 空気中の塵。灯りの中でだけ見えるように、点は小さく薄くする。
-// 数を増やすと画面が汚れて壁が読みにくくなる。単位: 個 / 落下はタイル毎秒。
-const DUST_COUNT = 120, DUST_RANGE = CELL * 1.6, DUST_FALL = 0.10, DUST_SWAY = 0.035;
-
-// 丸い粒。点は既定だと四角い板になり、近づくと画面に大きな四角が出る。
-// 画像ファイルは使わず、戦闘側(view3d.js)と同じくcanvasで焼く。
-const dustTexture = () => {
-  const c = document.createElement("canvas");
-  c.width = c.height = 32;
-  const g = c.getContext("2d");
-  const grad = g.createRadialGradient(16, 16, 0, 16, 16, 16);
-  grad.addColorStop(0, "rgba(255,236,205,1)");
-  grad.addColorStop(.45, "rgba(255,226,180,.5)");
-  grad.addColorStop(1, "rgba(255,226,180,0)");
-  g.fillStyle = grad;
-  g.fillRect(0, 0, 32, 32);
-  return new THREE.CanvasTexture(c);
-};
-
-const parse = key => key.split(",").map(Number);
+// 塵の見た目は戦闘と同じ dustLook.js を読む(2画面で食い違わせない)。
+// ここで決めるのは「どこに、何個置くか」だけ。
+// 戦闘は7×3の盤に22個。同じ密度になるよう、カメラの周り±1マス(=±3タイル)に置く。
+const DUST_COUNT = 38, DUST_RANGE = CELL;
 
 export function createFirstPersonScene(container, map) {
   const scene = new THREE.Scene();
@@ -101,23 +87,24 @@ export function createFirstPersonScene(container, map) {
   gridGeo.setAttribute("position", new THREE.Float32BufferAttribute(grid, 3));
   scene.add(new THREE.LineSegments(gridGeo, floorLineMat));
 
-  // 塵。カメラの周りの箱の中だけに置き、外へ出たら反対側へ回り込ませる。
-  // 地図全体へ撒くと数が要るうえ、見えない所で計算することになる。
-  const dustPos = new Float32Array(DUST_COUNT * 3), dustPhase = new Float32Array(DUST_COUNT);
-  for (let i = 0; i < DUST_COUNT; i += 1) {
-    dustPos[i * 3] = (Math.random() - 0.5) * 2 * DUST_RANGE;
-    dustPos[i * 3 + 1] = Math.random() * CEIL;
-    dustPos[i * 3 + 2] = (Math.random() - 0.5) * 2 * DUST_RANGE;
-    dustPhase[i] = Math.random() * Math.PI * 2;
-  }
-  const dustGeo = new THREE.BufferGeometry();
-  dustGeo.setAttribute("position", new THREE.BufferAttribute(dustPos, 3));
-  const dustTex = dustTexture();
-  const dustMat = new THREE.PointsMaterial({ map: dustTex, color: 0xffe2b4, size: 0.06, sizeAttenuation: true,
-    transparent: true, opacity: .34, depthWrite: false, fog: true });
-  const dust = new THREE.Points(dustGeo, dustMat);
-  dust.frustumCulled = false;
-  scene.add(dust);
+  // 塵。カメラの周りにだけ置き、外へ出たら反対側へ回り込ませる。
+  // 回り込みの基準がカメラなので、歩くと塵が後ろへ流れて視差が出る。地図全体へは撒かない。
+  // 粒ごとに大きさが違うのでPointsではなくSprite(戦闘側と同じ理由)。
+  const dustMat = dustMaterial();
+  const dustGroup = new THREE.Group();
+  scene.add(dustGroup);
+  const dustState = Array.from({ length: DUST_COUNT }, () => {
+    const sprite = new THREE.Sprite(dustMat);
+    const mote = dustMote();
+    sprite.scale.setScalar(mote.size);
+    dustGroup.add(sprite);
+    return {
+      sprite, ...mote,
+      x: (Math.random() - 0.5) * 2 * DUST_RANGE,
+      z: (Math.random() - 0.5) * 2 * DUST_RANGE,
+      y: Math.random() * DUST_TOP,
+    };
+  });
   let dustPlaced = false;
 
   // 敵影。位置は外から差し込む(地図には出さない固定敵)。
@@ -153,25 +140,27 @@ export function createFirstPersonScene(container, map) {
   let camBack = CAM_BACK_DEFAULT;
   let raf = 0, last = 0, started = false;
 
-  // 塵を1フレーム分動かす。落ちて、揺れて、箱から出たら反対側へ回り込む。
-  // 回り込みの基準はカメラなので、歩くと塵が後ろへ流れて視差が出る。
+  // 塵を1フレーム分動かす。戦闘と同じく「上へゆっくり立ち上り、XZで円を描くように揺れる」。
+  // 違うのは回り込みの基準だけ。戦闘は盤の上に留めるが、こちらはカメラに追従させる。
+  let dustElapsed = 0;
   const moveDust = (dt, cx, cz) => {
     if (!dustPlaced) { // 初回はカメラの周りへ配り直す(原点のままだと足元に無い)
       dustPlaced = true;
-      for (let i = 0; i < DUST_COUNT; i += 1) { dustPos[i * 3] += cx; dustPos[i * 3 + 2] += cz; }
+      for (const d of dustState) { d.x += cx; d.z += cz; }
     }
-    const t = performance.now() / 1000;
-    for (let i = 0; i < DUST_COUNT; i += 1) {
-      const k = i * 3;
-      dustPos[k] += Math.sin(t + dustPhase[i]) * DUST_SWAY * dt;
-      dustPos[k + 1] -= DUST_FALL * dt;
-      if (dustPos[k + 1] < 0) dustPos[k + 1] += CEIL;
-      if (dustPos[k] - cx > DUST_RANGE) dustPos[k] -= DUST_RANGE * 2;
-      else if (dustPos[k] - cx < -DUST_RANGE) dustPos[k] += DUST_RANGE * 2;
-      if (dustPos[k + 2] - cz > DUST_RANGE) dustPos[k + 2] -= DUST_RANGE * 2;
-      else if (dustPos[k + 2] - cz < -DUST_RANGE) dustPos[k + 2] += DUST_RANGE * 2;
+    dustElapsed += dt;
+    for (const d of dustState) {
+      d.y += d.speed * dt;
+      if (d.y > DUST_TOP) d.y -= DUST_TOP;
+      if (d.x - cx > DUST_RANGE) d.x -= DUST_RANGE * 2;
+      else if (d.x - cx < -DUST_RANGE) d.x += DUST_RANGE * 2;
+      if (d.z - cz > DUST_RANGE) d.z -= DUST_RANGE * 2;
+      else if (d.z - cz < -DUST_RANGE) d.z += DUST_RANGE * 2;
+      d.sprite.position.set(
+        d.x + Math.sin(dustElapsed * d.swayFreqX + d.swayPhase) * d.swayAmpX,
+        d.y,
+        d.z + Math.cos(dustElapsed * d.swayFreqZ + d.swayPhase) * d.swayAmpZ);
     }
-    dustGeo.attributes.position.needsUpdate = true;
   };
 
   const draw = () => {
@@ -231,8 +220,8 @@ export function createFirstPersonScene(container, map) {
       if (raf) cancelAnimationFrame(raf);
       renderer.domElement.remove();
       renderer.dispose();
-      for (const geo of [boxGeo, planeGeo, edgeGeo, gridGeo, markerGeo, dustGeo]) geo.dispose();
-      dustTex.dispose();
+      for (const geo of [boxGeo, planeGeo, edgeGeo, gridGeo, markerGeo]) geo.dispose();
+      dustMat.map?.dispose();
       for (const mat of [wallMat, floorMat, ceilMat, lineMat, floorLineMat, dustMat, marker.material]) mat.dispose();
     },
   };
