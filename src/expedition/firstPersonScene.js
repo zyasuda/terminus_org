@@ -1,4 +1,6 @@
 import * as THREE from "three";
+import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
+import { STANDEE_VERSION } from "../battle/standeeVersion.js";
 import { DUST_TOP, dustMaterial, dustMote } from "../battle/dustLook.js";
 import { FLICKER_SPEED, LANTERN_COLOR, LANTERN_DECAY, LANTERN_INTENSITY, LANTERN_RANGE, flicker } from "../battle/lanternLook.js";
 import { FLOOR_BASE, FLOOR_TONE, PASSAGE_HEIGHT_TILES, WALL_COLOR, stoneTexture } from "../battle/stoneLook.js";
@@ -118,6 +120,30 @@ export function createFirstPersonScene(container, map) {
   });
   let dustPlaced = false;
 
+  // 同行者(リディア)。戦闘と同じスタンディをそのまま置く。
+  // 立ち位置はパーティのマスの中心から、左手前へずらす。カメラは中心より
+  // CAM_BACK 分だけ後ろにいるので、この位置だと背中が視界の左に入る。単位: タイル。
+  const COMPANION_SIDE = -0.75, COMPANION_AHEAD = 1.35;
+  const companion = new THREE.Group();
+  scene.add(companion);
+  let companionDisposed = false;
+  new GLTFLoader().load(`/models/lydia-standee-${STANDEE_VERSION}.glb`, gltf => {
+    if (companionDisposed) return;
+    gltf.scene.traverse(obj => {
+      if (!obj.isMesh) return;
+      // 人物絵は印刷面として扱う。光源で直接照らすと濃い衣装だけが白飛びするので、
+      // 戦闘(view3d.js)と同じくMeshBasicMaterialにしてPNGのアルファで型抜きする。
+      // 板のうっすらしたアルファ(約0.12)が消えないよう、しきい値はそれより低く。
+      const src = Array.isArray(obj.material) ? obj.material : [obj.material];
+      const made = src.map(m => new THREE.MeshBasicMaterial({
+        map: m.map, alphaMap: m.alphaMap, transparent: true, alphaTest: 0.04,
+        side: THREE.FrontSide, depthWrite: true, fog: true,
+      }));
+      obj.material = Array.isArray(obj.material) ? made : made[0];
+    });
+    companion.add(gltf.scene);
+  }, undefined, () => { /* モデルが無くても探索は続けられる。同行者が出ないだけ */ });
+
   // 敵影。位置は外から差し込む(地図には出さない固定敵)。
   const markerGeo = new THREE.ConeGeometry(CELL * 0.22, 0.9, 4);
   const marker = new THREE.Mesh(markerGeo, new THREE.MeshBasicMaterial({ color: 0x6b3a3a, fog: true }));
@@ -191,6 +217,13 @@ export function createFirstPersonScene(container, map) {
     lantern.intensity = LANTERN_INTENSITY * flicker(elapsed * FLICKER_SPEED);
     camera.position.set(state.x + Math.sin(state.yaw) * camBack, EYE, state.z + Math.cos(state.yaw) * camBack);
     camera.rotation.set(0, state.yaw, 0);
+    // 同行者は進行方向を向いて、パーティの左手前を歩く。
+    // スタンディは+Zを正面に作ってあるので、カメラの前方(-sin,-cos)へ向けるには yaw + π。
+    const fwdX = -Math.sin(state.yaw), fwdZ = -Math.cos(state.yaw);
+    companion.position.set(
+      state.x + fwdX * COMPANION_AHEAD - fwdZ * COMPANION_SIDE, 0,
+      state.z + fwdZ * COMPANION_AHEAD + fwdX * COMPANION_SIDE);
+    companion.rotation.y = state.yaw + Math.PI;
     renderer.render(scene, camera);
   };
   const tick = now => {
@@ -238,6 +271,8 @@ export function createFirstPersonScene(container, map) {
       draw();
     },
     dispose() {
+      companionDisposed = true;
+      companion.traverse(o => { o.geometry?.dispose(); const m = o.material; if (m) (Array.isArray(m) ? m : [m]).forEach(x => { x.map?.dispose(); x.dispose(); }); });
       document.removeEventListener("visibilitychange", onVisible);
       if (raf) cancelAnimationFrame(raf);
       renderer.domElement.remove();
