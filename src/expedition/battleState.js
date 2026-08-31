@@ -2,14 +2,15 @@ import { assignObstacleShapes, canOccupyCell, chooseMoveToward, createGrid, make
 import { EXPEDITION_BATTLE_CONFIG } from "./battleConfig.js";
 
 const openRows = ({ width, height }) => Array.from({ length: height }, () => ".".repeat(width));
-// guardianはboolean(true/false)とレイアウト名文字列("guardian"/"junction"/"corridor")の
+// guardianはboolean(true/false)とレイアウト名文字列("guardian"/"corridor")の
 // 両方の呼び出し規約が混在しているため、両方を受け付ける。
-const layoutName = layout => layout === true || layout === "guardian" ? "guardian" : layout === "junction" ? "junction" : "corridor";
-// 大部屋の固定敵戦だけは、静的なConfigの盤面ではなく探索と同じ壁(interior.jsのhallBattleBoard)を渡す。
+const layoutName = layout => layout === true || layout === "guardian" ? "guardian" : "corridor";
+// 大部屋と三叉路は静的なConfigではなく、探索と同じ地図から組んだ盤(interior.js)を
+// オブジェクトで渡す。固定形が残っているのは通路戦と守護者戦だけ。
 const boardFor = layout => typeof layout === "object" ? layout : EXPEDITION_BATTLE_CONFIG.board[layoutName(layout)];
 const gridFor = board => {
   const grid = createGrid(board.rows || openRows(board));
-  // 三叉路の'#'は壁ではなく、床が存在しない盤外として描画する。
+  // 三叉路・大部屋の'#'は壁ではなく、床が存在しない盤外として描画する。
   for (const cell of grid.cells) if (!cell.walkable) cell.void = true;
   return grid;
 };

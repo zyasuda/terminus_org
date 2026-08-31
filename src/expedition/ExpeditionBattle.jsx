@@ -51,8 +51,8 @@ const makeState = (guardian, layout, equipment = {}, party = {}, seed = 0) => {
   // 盤面生成用rng(seedそのまま)とは別系列にするためのオフセット。
   const enemyFirst = makeRng(seed + 555)() < EXPEDITION_BATTLE_CONFIG.encounter.enemyFirstChance;
   const openingLine = guardian ? "守護者が宝箱を守っている。"
-    : layout === "junction" ? "坑道の獣が三叉路を塞いだ。"
-    : typeof layout === "object" ? "大広間の奥で、坑道の獣が振り返った。"
+    : layout?.kind === "junction" ? "坑道の獣が三叉路を塞いだ。"
+    : layout?.kind === "hall" ? "大広間の奥で、坑道の獣が振り返った。"
     : "坑道の獣が2匹、狭い通路を塞いだ。";
   return { grid, units, order: turnOrder(units, { enemyFirst }).map(u => u.id), turn: 0, log: [openingLine] };
 };
@@ -208,7 +208,7 @@ export default function ExpeditionBattle({ guardian, layout = "corridor", equipm
     setState(s => ({ ...s, units: s.units.map(u => u.id === unit.id ? { ...u, ...to, facing: facingToward(unit, to, u.facing) } : u), log: [...s.log, line] }));
   };
   useEffect(() => {
-    const grid = state.grid; const s = createBattleScene(mount.current, grid, { voidBoundaryWalls: battleLayout === "junction" || typeof battleLayout === "object", cameraElevationDeg: EXPEDITION_BATTLE_CONFIG.presentation.cameraElevationDeg, cameraZoom: EXPEDITION_BATTLE_CONFIG.presentation.cameraZoom }); scene.current = s;
+    const grid = state.grid; const s = createBattleScene(mount.current, grid, { voidBoundaryWalls: typeof battleLayout === "object", cameraElevationDeg: EXPEDITION_BATTLE_CONFIG.presentation.cameraElevationDeg, cameraZoom: EXPEDITION_BATTLE_CONFIG.presentation.cameraZoom }); scene.current = s;
     s.setFogEnabled(fogOn); s.setFogIntensity(fogLevel); s.setFogColor(fogColor);
     s.setDustEnabled(dustOn); s.setRainEnabled(rainOn); s.setWallsEnabled(wallsOn);
     s.setBackgroundColor(bgColor); s.setLightPreset(lightPreset);
@@ -335,8 +335,8 @@ export default function ExpeditionBattle({ guardian, layout = "corridor", equipm
     return attackTargets.length ? `${who}の行動を選んでください：移動または${verb}。`
       : `${who}の行動を選んでください：${noTarget}ため、移動または待機。`;
   })();
-  const layoutLabel = battleLayout === "guardian" ? "arena-8x8" : battleLayout === "junction" ? "junction-7x7"
-    : typeof battleLayout === "object" ? `hall-${battleLayout.width}x${battleLayout.height}` : "corridor-3x7";
+  const layoutLabel = battleLayout === "guardian" ? "arena-8x8"
+    : typeof battleLayout === "object" ? `${battleLayout.kind}-${battleLayout.width}x${battleLayout.height}` : "corridor-3x7";
   // data-* はスモークテストが盤面と手番を外から読むための足がかり。表示には使わない。
   return <div style={S.page}
     data-battle-layout={layoutLabel}

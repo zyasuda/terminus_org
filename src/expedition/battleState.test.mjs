@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { createGrid, isAdjacent, isWalkable, movePointsFor, occupiedBy, reachableCells } from "../battle/core.js";
 import { EXPEDITION_BATTLE_CONFIG } from "./battleConfig.js";
 import { chooseCompanionAction, createExpeditionBattleLayout, facingToward } from "./battleState.js";
+import { junctionBattleBoard } from "./interior.js";
 
 const HEIGHTS = new Set([0.25, 0.5, 0.75, 1]);
 const signature = layout => layout.grid.cells.map((cell, i) => cell.obstacle ? `${i}:${cell.obstacle.height}` : "").filter(Boolean);
@@ -40,12 +41,29 @@ assert.deepEqual(normalOrders, new Set(["0,2", "2,0"]), "通常通路ではseed�
 assert.deepEqual(guardianOrders, new Set(["3,4", "4,3"]), "守護者戦でも味方の上下を入れ替える");
 assert.deepEqual(EXPEDITION_BATTLE_CONFIG.presentation.modelFacingOffset, { party: 0, enemy: 0 }, "対峙方向はrootのfacingだけで決める");
 assert.deepEqual(signature(createExpeditionBattleLayout(false, 42)), signature(createExpeditionBattleLayout(false, 42)), "同じseedは同じブロック配置になる");
-const junction = createExpeditionBattleLayout("junction", 42);
+// 三叉路は固定形をやめ、地図の開いている向きから組む(interior.js)。
+// 以前の固定盤(北・西・南)と1文字も違わないことを、まず形で確かめる。
+assert.deepEqual(junctionBattleBoard(["north", "south", "west"], "west").rows,
+  ["##...##", "##...##", ".....##", ".....##", ".....##", "##...##", "##...##"],
+  "北・西・南に開いた三叉路は、以前の固定盤と同じ形になる");
+assert.deepEqual(junctionBattleBoard(["north", "south", "east"], "east").rows,
+  ["##...##", "##...##", "##.....", "##.....", "##.....", "##...##", "##...##"],
+  "東に開いていれば枝は東へ出る(固定盤では西にしか出せなかった)");
+assert.deepEqual(junctionBattleBoard(["north", "south", "west"], "west").partySlots,
+  [{ x: 0, y: 2 }, { x: 0, y: 4 }], "味方は入ってきた枝の外端に、通路の幅いっぱいへ離して並ぶ");
+assert.deepEqual(junctionBattleBoard(["north", "south", "west"], "north").partySlots,
+  [{ x: 2, y: 0 }, { x: 4, y: 0 }], "入口の枝が変われば味方の開始位置も動く");
+assert.deepEqual(junctionBattleBoard(["north", "south", "west"], "west").enemyStart,
+  { x: 3, y: 0 }, "敵は味方が入ってきた枝とは別の枝の外端に立つ");
+assert.deepEqual(junctionBattleBoard(["west"], "west").enemyStart,
+  { x: 3, y: 3 }, "枝が1本しかなければ敵は交差点の中央に立つ");
+const junctionBoard = junctionBattleBoard(["north", "south", "west"], "west");
+const junction = createExpeditionBattleLayout(junctionBoard, 42);
 assert.equal(junction.grid.w, 7, "三叉路盤面の横幅は定義した形状から読む");
 assert.equal(junction.grid.h, 7, "三叉路盤面の縦幅は定義した形状から読む");
 assert.ok(junction.grid.cells.filter(cell => !cell.walkable && !cell.obstacle).every(cell => cell.void), "三叉路の枝以外は壁ブロックでなく盤外として描画する");
 assert.ok(junction.grid.cells.filter(cell => cell.obstacle).every(cell => !cell.void), "ランダム障害物は三叉路の床だけに置く");
-assert.deepEqual(junction.starts.enemy, EXPEDITION_BATTLE_CONFIG.board.junction.enemyStart, "三叉路の敵位置はConfigから読む");
+assert.deepEqual(junction.starts.enemy, junctionBoard.enemyStart, "三叉路の敵位置は組んだ盤から読む");
 assert.equal(junction.grid.cells.filter(cell => !cell.void).length, 27, "三叉路は各枝が3マス幅のT字の床だけを持つ");
 assert.ok(reachableCells(junction.grid, junction.starts.hero, 99, [], { maxStep: EXPEDITION_BATTLE_CONFIG.movement.maxStep }).some(cell => cell.x === junction.starts.enemy.x && cell.y === junction.starts.enemy.y), "三叉路でも通常キャラが両陣営へ到達可能");
 const voidBoundaryEdges = junction.grid.cells.reduce((count, cell, index) => {

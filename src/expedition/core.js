@@ -1,8 +1,8 @@
 import { makeRng } from "../battle/core.js";
 import { EXPEDITION_BATTLE_CONFIG } from "./battleConfig.js";
-import { HALL_SIZE, hallBattleBoard, hallEnemyPosition, hallRoomOf } from "./interior.js";
+import { HALL_SIZE, hallBattleBoard, hallEnemyPosition, hallRoomOf, junctionBattleBoard } from "./interior.js";
 import { generateWithRetry, rerouteCorridorsWithRetry } from "./mapgen.js";
-import { opposite, run, start, turnLeft, turnRight } from "./mapwalk.js";
+import { FACING_AHEAD, isOpen, opposite, run, start, turnLeft, turnRight } from "./mapwalk.js";
 
 const EXPEDITION_CHAPTER = { scenes: [
   { id: "entrance", name: "入口", exits: [{ to: "junction-0" }] },
@@ -150,6 +150,17 @@ export function hallContact(floor) {
 }
 // 探索と同じ壁(間仕切り)・座標を使う戦闘盤面。
 export function hallLayoutFor(floor) { const room = hallRoom(floor); return room ? hallBattleBoard(room) : null; }
+// 三叉路の戦闘盤。地図でその交差点が実際に開いている向きだけに枝を生やす。
+// 味方は入ってきた枝から出るので、向き(floor.facing)の逆が入口の枝になる。
+export function junctionLayoutFor(floor) {
+  const map = mapForFloor(floor);
+  const room = [...map.rooms.values()].find(r => r.kind === "junction");
+  if (!room) return null;
+  const open = Object.entries(FACING_AHEAD)
+    .filter(([, [dx, dy]]) => isOpen(map, room.x + dx, room.y + dy))
+    .map(([dir]) => dir);
+  return junctionBattleBoard(open, opposite(floor.facing));
+}
 export function eventAt(floor) { return floor.events.find(event => !event.done && !event.bypassed && event.roomId === floor.at) || null; }
 export function canOpenChest(floor) { return floor.chest.roomId === floor.at && !floor.chest.opened && floor.events.some(event => event.kind === "guardian" && event.done); }
 export function isEntrance(floor) { return floor.at === "entrance"; }

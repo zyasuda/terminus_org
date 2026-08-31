@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { ITEMS, back, canOpenChest, createFloor, retreatToEntrance, equipFromStash, equipInField, eventAt, hallContact, hallLayoutFor, hallRoom, isEntrance, mapForFloor, newVillage, partyMaxHp, route, useFieldTonic, walk } from "./core.js";
+import { ITEMS, back, canOpenChest, createFloor, retreatToEntrance, equipFromStash, equipInField, eventAt, hallContact, hallLayoutFor, hallRoom, isEntrance, junctionLayoutFor, mapForFloor, newVillage, partyMaxHp, route, useFieldTonic, walk } from "./core.js";
 import { hallBlocked, hallEnemyPosition, hallWallCells } from "./interior.js";
 import { FACING_AHEAD, FACING_YAW, isOpen, levelCells, opposite } from "./mapwalk.js";
 import { EXPEDITION_BATTLE_CONFIG } from "./battleConfig.js";
@@ -52,6 +52,32 @@ for (const step of route(a, a, { roomId: "junction-0" })) {
 }
 assert.equal(junction.at, "junction-0", "通路の自動通過は三叉路で止まる");
 assert.equal(mapForFloor(junction).cells.get(`${junction.pos.x},${junction.pos.y}`)?.kind, "junction", "停止位置は部屋ではない交差点セル");
+
+// 三叉路の戦闘盤は、地図でその交差点が開いている向きだけに枝を出す。
+// 2026-08-31まで固定形(北・西・南)で、地図と方角が合っていなかった。
+// 盤の中心は交差点。枝の外端の中央マスが床なら、その向きへ枝が出ている。
+for (let seed = 1; seed <= 40; seed += 1) {
+  let floor = createFloor(seed);
+  for (const step of route(floor, floor, { roomId: "junction-0" })) {
+    floor = walk(floor, step.dir);
+    if (floor.at === "junction-0") break;
+  }
+  if (floor.at !== "junction-0") continue;
+  const map = mapForFloor(floor);
+  const room = [...map.rooms.values()].find(r => r.kind === "junction");
+  const board = junctionLayoutFor(floor);
+  const mid = Math.floor(board.width / 2), last = board.width - 1;
+  const armEnd = { north: [mid, 0], south: [mid, last], west: [0, mid], east: [last, mid] };
+  for (const [dir, [dx, dy]] of Object.entries(FACING_AHEAD)) {
+    const [bx, by] = armEnd[dir];
+    assert.equal(board.rows[by][bx] === ".", isOpen(map, room.x + dx, room.y + dy),
+      `seed ${seed}: 三叉路の${dir}の枝は地図と一致する`);
+  }
+  // 味方は入ってきた枝から出る。向きの逆が入口。
+  const [ex, ey] = armEnd[opposite(floor.facing)];
+  assert.ok(board.partySlots.every(slot => slot.x === ex || slot.y === ey),
+    `seed ${seed}: 味方は入ってきた枝の外端に並ぶ`);
+}
 for (let seed = 1; seed <= 80; seed++) {
   const floor = createFloor(seed);
   for (const target of [...floor.events, floor.chest]) assert.ok(route(floor, floor, target), `seed ${seed} reaches ${target.id || "chest"}`);
