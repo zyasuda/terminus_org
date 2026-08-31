@@ -26,7 +26,6 @@ export const EXPEDITION_BATTLE_CONFIG = {
       /** 守護者の開始位置。味方に近づけるほど初期の緊張感が増す。単位: グリッド座標。 */
       enemyStart: { x: 6, y: 3 },
     },
-    /** 三叉路での固定遭遇盤面。枝以外を盤外として、地図の三方向を戦闘にも残す。 */
     // 三叉路の盤は固定形をやめ、地図から組む(interior.js junctionBattleBoard)。
     obstacles: {
       /** 障害物の最少数。増やすほど毎戦の地形差が強くなる。単位: 個。 */
