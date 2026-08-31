@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import { hallRoom, mapForFloor } from "./core.js";
 import { hallEnemyPosition } from "./interior.js";
 import { FACING_AHEAD, isOpen } from "./mapwalk.js";
-import { CAM_BACK_DEFAULT, CAM_BACK_MAX, createFirstPersonScene } from "./firstPersonScene.js";
+import { CAM_BACK_DEFAULT, CAM_BACK_MAX, CEIL, createFirstPersonScene } from "./firstPersonScene.js";
 
 // 一人称。壁の判断は探索・戦闘・地図と同じ isOpen / hallBlocked で、ここは入力とHUDだけを持つ。
 // 3Dの組み立てと描画は firstPersonScene.js。
@@ -12,24 +12,27 @@ export default function FirstPerson3D({ floor, onForward, onBack, onTurn, onOpen
   const mount = useRef(null), sceneRef = useRef(null);
   // 調整はその場限り。保存すると、既定値を変えても古い値が勝って何が効いているか分からなくなる。
   const [camBack, setCamBack] = useState(CAM_BACK_DEFAULT);
+  // 天井の高さ。壁が低く見えるかを実物で決めるための調整。単位: 戦闘のタイル。
+  const [ceilTiles, setCeilTiles] = useState(CEIL);
   const map = useMemo(() => mapForFloor(floor), [floor.seed, floor.corridorSeed]);
   const room = useMemo(() => hallRoom(floor), [floor.seed, floor.corridorSeed]);
 
   // 地図が変わった時だけ組み直す。1歩ごとに作り直さない。
+  // 天井を変えると壁も床も作り直しになるので、地図が変わった時と同じ扱いで組み直す。
   useEffect(() => {
-    const scene = createFirstPersonScene(mount.current, map);
+    const scene = createFirstPersonScene(mount.current, map, { ceilTiles });
     sceneRef.current = scene;
     const onResize = () => scene.resize();
     window.addEventListener("resize", onResize);
     return () => { window.removeEventListener("resize", onResize); scene.dispose(); sceneRef.current = null; };
-  }, [map]);
+  }, [map, ceilTiles]);
 
-  useEffect(() => { sceneRef.current?.setBack(camBack); }, [camBack, map]);
+  useEffect(() => { sceneRef.current?.setBack(camBack); }, [camBack, map, ceilTiles]);
 
   const enemy = room && !floor.hallDefeated ? hallEnemyPosition(room) : null;
   useEffect(() => {
     sceneRef.current?.render(floor.pos, floor.facing, enemy);
-  }, [floor.pos.x, floor.pos.y, floor.facing, enemy?.x, enemy?.y, map]);
+  }, [floor.pos.x, floor.pos.y, floor.facing, enemy?.x, enemy?.y, map, ceilTiles]);
 
   const [ax, ay] = FACING_AHEAD[floor.facing] || FACING_AHEAD.north;
   const canForward = isOpen(map, floor.pos.x + ax, floor.pos.y + ay);
@@ -60,13 +63,22 @@ export default function FirstPerson3D({ floor, onForward, onBack, onTurn, onOpen
     {/* 見え方を決めるための調整。値が決まったら firstPersonScene.js の CAM_BACK_DEFAULT に
         固定して、この欄ごと消す(game-debug-tools)。 */}
     <details style={S.tuner}>
-      <summary style={S.tunerSummary}>カメラ（開発用）</summary>
+      <summary style={S.tunerSummary}>見え方（開発用）</summary>
       <label style={S.tunerRow}>
         後ろへ引く
         <input type="range" min="0" max={CAM_BACK_MAX} step="0.05" value={camBack}
           onChange={e => setCamBack(Number(e.target.value))} style={{ flex: 1 }}/>
         <b style={{ fontVariantNumeric: "tabular-nums" }}>{camBack.toFixed(2)}</b>タイル
       </label>
+      <label style={S.tunerRow}>
+        天井の高さ
+        <input type="range" min="1.4" max="5" step="0.1" value={ceilTiles}
+          onChange={e => setCeilTiles(Number(e.target.value))} style={{ flex: 1 }}/>
+        <b style={{ fontVariantNumeric: "tabular-nums" }}>{ceilTiles.toFixed(1)}</b>タイル
+      </label>
+      <div style={{ ...S.tunerRow, opacity: .65 }}>
+        物差し: 入口アーチ2.0 / リディア1.21 / 目の高さ1.15タイル（1タイル=1.5m）
+      </div>
     </details>
   </section>;
 }

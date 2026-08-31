@@ -15,6 +15,9 @@ export const CELL = 3;
 // 天井の高さは戦闘の入口アーチと同じ値(stoneLook.jsのPASSAGE_HEIGHT_TILESが正本)。
 // 目の高さは、アーチのコメント「人の約1.6倍」から逆算した背丈(2.0/1.6 = 1.25)のやや下。
 export const CEIL = PASSAGE_HEIGHT_TILES, EYE = 1.15;
+// 入口アーチの寸法。戦闘の書き割りに描いてある入口と同じ大きさ(単位: タイル)。
+// 高さの物差しとして部屋と通路の境目に置く。
+const ARCH_W = 1.4, ARCH_H = 2.0;
 const BG = 0x0a0d14, LINE = 0x8fb0d8, FLOOR_LINE = 0x6d8399;
 const FOG_NEAR = CELL * 0.8, FOG_FAR = CELL * 4.2;
 // 向きは角度で持つ(FACING_YAWが正本)。旋回の補間で北⇄西を跨ぐ時に長い方へ回らないよう、
@@ -30,7 +33,8 @@ export const CAM_BACK_DEFAULT = 0.6, CAM_BACK_MAX = CELL / 2 - 0.2;
 // 戦闘は7×3の盤に22個。同じ密度になるよう、カメラの周り±1マス(=±3タイル)に置く。
 const DUST_COUNT = 38, DUST_RANGE = CELL;
 
-export function createFirstPersonScene(container, map) {
+export function createFirstPersonScene(container, map, { ceilTiles = CEIL } = {}) {
+  const ceil = ceilTiles;   // 天井の高さ。開発用スライダーで動かして決める
   const scene = new THREE.Scene();
   scene.background = new THREE.Color(BG);
   scene.fog = new THREE.Fog(BG, FOG_NEAR, FOG_FAR);
@@ -47,7 +51,7 @@ export function createFirstPersonScene(container, map) {
   const lineMat = new THREE.LineBasicMaterial({ color: LINE, fog: true });
   const floorLineMat = new THREE.LineBasicMaterial({ color: FLOOR_LINE, fog: true, transparent: true, opacity: .45 });
 
-  const boxGeo = new THREE.BoxGeometry(CELL, CEIL, CELL);
+  const boxGeo = new THREE.BoxGeometry(CELL, ceil, CELL);
   // 床の板。1マス(=CELL タイル)にテクスチャを1枚ぴったり貼る。
   // 戦闘は盤面座標でUVを振って連続させているが、こちらは1マスで閉じるので既定のUVでよい。
   const planeGeo = new THREE.PlaneGeometry(CELL, CELL);
@@ -58,14 +62,14 @@ export function createFirstPersonScene(container, map) {
   for (const key of solid) {
     const [x, y] = parse(key);
     const m = new THREE.Mesh(boxGeo, wallMat);
-    m.position.set(x * CELL, CEIL / 2, y * CELL);
+    m.position.set(x * CELL, ceil / 2, y * CELL);
     wallGroup.add(m);
   }
 
   // 壁の稜線。空きマスに面している辺だけ引く(線画に見せるため)。
   // 面そのものはGPUが隠すので、ここは見た目の線だけの話。
   const edges = [];
-  const push = (ax, az, bx, bz) => { edges.push(ax, 0, az, bx, 0, bz, ax, CEIL, az, bx, CEIL, bz, ax, 0, az, ax, CEIL, az, bx, 0, bz, bx, CEIL, bz); };
+  const push = (ax, az, bx, bz) => { edges.push(ax, 0, az, bx, 0, bz, ax, ceil, az, bx, ceil, bz, ax, 0, az, ax, ceil, az, bx, 0, bz, bx, ceil, bz); };
   for (const key of solid) {
     const [x, y] = parse(key);
     const cx = x * CELL, cz = y * CELL, h = CELL / 2;
@@ -74,6 +78,36 @@ export function createFirstPersonScene(container, map) {
     if (open.has(`${x - 1},${y}`)) push(cx - h, cz - h, cx - h, cz + h);
     if (open.has(`${x + 1},${y}`)) push(cx + h, cz - h, cx + h, cz + h);
   }
+  // 入口アーチ。部屋と通路の境目に、戦闘の書き割りと同じ寸法(幅1.4 × 高さ2.0タイル)で置く。
+  // 通路の高さが人の出入口に対してどのくらいかを、絵の中で見比べるための物差し。
+  const archLines = [];
+  const kindOf = key => map.cells.get(key)?.kind;
+  const arcAt = (cx, cz, dirX, dirZ) => {
+    // 境目に垂直な面へ描く。境目の向き(dirX,dirZ)に直交する軸が開口の幅になる。
+    const ux = -dirZ, uz = dirX, r = ARCH_W / 2, straight = ARCH_H - r, SEG = 12;
+    const at = (u, y) => [cx + ux * u, y, cz + uz * u];
+    const seg = (a, b) => archLines.push(...a, ...b);
+    seg(at(-r, 0), at(-r, straight));
+    seg(at(r, 0), at(r, straight));
+    for (let i = 0; i < SEG; i += 1) {
+      const t0 = Math.PI * i / SEG, t1 = Math.PI * (i + 1) / SEG;
+      seg(at(-r * Math.cos(t0), straight + r * Math.sin(t0)), at(-r * Math.cos(t1), straight + r * Math.sin(t1)));
+    }
+  };
+  for (const key of open) {
+    const [x, y] = parse(key);
+    for (const [dx, dy] of [[1, 0], [0, 1]]) {   // 各境目を1回だけ見るため、右と下だけ調べる
+      const nextKey = `${x + dx},${y + dy}`;
+      if (!open.has(nextKey)) continue;
+      // 部屋と通路の境目だけを入口とする。部屋の中や通路の途中には置かない。
+      if ((kindOf(key) === "corridor") === (kindOf(nextKey) === "corridor")) continue;
+      arcAt((x + dx / 2) * CELL, (y + dy / 2) * CELL, dx, dy);
+    }
+  }
+  const archGeo = new THREE.BufferGeometry();
+  archGeo.setAttribute("position", new THREE.Float32BufferAttribute(archLines, 3));
+  scene.add(new THREE.LineSegments(archGeo, new THREE.LineBasicMaterial({ color: 0xe4b064, fog: true })));
+
   const edgeGeo = new THREE.BufferGeometry();
   edgeGeo.setAttribute("position", new THREE.Float32BufferAttribute(edges, 3));
   scene.add(new THREE.LineSegments(edgeGeo, lineMat));
@@ -87,10 +121,10 @@ export function createFirstPersonScene(container, map) {
     floor.rotation.x = -Math.PI / 2;
     floor.position.set(cx, 0, cz);
     floorGroup.add(floor);
-    const ceil = new THREE.Mesh(ceilGeo, ceilMat);
-    ceil.rotation.x = Math.PI / 2;
-    ceil.position.set(cx, CEIL, cz);
-    floorGroup.add(ceil);
+    const ceilMesh = new THREE.Mesh(ceilGeo, ceilMat);
+    ceilMesh.rotation.x = Math.PI / 2;
+    ceilMesh.position.set(cx, ceil, cz);
+    floorGroup.add(ceilMesh);
     for (let i = 0; i <= CELL; i += 1) {
       grid.push(cx - h + i, .01, cz - h, cx - h + i, .01, cz + h);
       grid.push(cx - h, .01, cz - h + i, cx + h, .01, cz - h + i);
@@ -277,7 +311,7 @@ export function createFirstPersonScene(container, map) {
       if (raf) cancelAnimationFrame(raf);
       renderer.domElement.remove();
       renderer.dispose();
-      for (const geo of [boxGeo, planeGeo, ceilGeo, edgeGeo, gridGeo, markerGeo]) geo.dispose();
+      for (const geo of [boxGeo, planeGeo, ceilGeo, edgeGeo, archGeo, gridGeo, markerGeo]) geo.dispose();
       dustMat.map?.dispose();
       stoneTex.dispose();
       for (const mat of [wallMat, floorMat, ceilMat, lineMat, floorLineMat, dustMat, marker.material]) mat.dispose();
