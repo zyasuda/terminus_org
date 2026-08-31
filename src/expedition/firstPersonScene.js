@@ -82,6 +82,25 @@ export function createFirstPersonScene(container, map, { ceilTiles = CEIL } = {}
   // 通路の高さが人の出入口に対してどのくらいかを、絵の中で見比べるための物差し。
   const archLines = [];
   const kindOf = key => map.cells.get(key)?.kind;
+  /* 入口の壁。戦闘(view3d.js)は開口部にアーチを抜いた書き割りを立てているので、
+     線だけだと探索側にその壁が無いことになる。同じ寸法で実体を置いて揃える。
+     戦闘は平らな絵(MeshBasic・下端は透過)でよいが、こちらはカメラが潜るので実体にする。
+     アーチの穴は上の arcAt と同じ式。片方だけ直すとふちがずれる。 */
+  const archWallShape = () => {
+    const r = ARCH_W / 2, straight = ARCH_H - r, h = CELL / 2;
+    const shape = new THREE.Shape();
+    shape.moveTo(-h, 0); shape.lineTo(h, 0); shape.lineTo(h, ceil); shape.lineTo(-h, ceil); shape.closePath();
+    const hole = new THREE.Path();
+    hole.moveTo(-r, 0); hole.lineTo(-r, straight);
+    hole.absarc(0, straight, r, Math.PI, 0, true);   // 真上を通す(falseだと下へ回る)
+    hole.lineTo(r, 0); hole.closePath();
+    shape.holes.push(hole);
+    return new THREE.ShapeGeometry(shape);
+  };
+  const archWallGeo = archWallShape();
+  // 部屋からも通路からも見えるので両面。稜線とアーチの線が同じ面に載るので、面だけ奥へ押す。
+  const archWallMat = new THREE.MeshLambertMaterial({ color: WALL_COLOR, fog: true,
+    side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: 1, polygonOffsetUnits: 1 });
   const arcAt = (cx, cz, dirX, dirZ) => {
     // 境目に垂直な面へ描く。境目の向き(dirX,dirZ)に直交する軸が開口の幅になる。
     const ux = -dirZ, uz = dirX, r = ARCH_W / 2, straight = ARCH_H - r, SEG = 12;
@@ -101,7 +120,12 @@ export function createFirstPersonScene(container, map, { ceilTiles = CEIL } = {}
       if (!open.has(nextKey)) continue;
       // 部屋と通路の境目だけを入口とする。部屋の中や通路の途中には置かない。
       if ((kindOf(key) === "corridor") === (kindOf(nextKey) === "corridor")) continue;
-      arcAt((x + dx / 2) * CELL, (y + dy / 2) * CELL, dx, dy);
+      const wx = (x + dx / 2) * CELL, wz = (y + dy / 2) * CELL;
+      arcAt(wx, wz, dx, dy);
+      const wall = new THREE.Mesh(archWallGeo, archWallMat);
+      wall.position.set(wx, 0, wz);
+      wall.rotation.y = dx ? Math.PI / 2 : 0;   // 幅の軸を境目に沿わせる
+      wallGroup.add(wall);
     }
   }
   const archGeo = new THREE.BufferGeometry();
@@ -324,7 +348,7 @@ export function createFirstPersonScene(container, map, { ceilTiles = CEIL } = {}
       if (raf) cancelAnimationFrame(raf);
       renderer.domElement.remove();
       renderer.dispose();
-      for (const geo of [boxGeo, planeGeo, ceilGeo, edgeGeo, archGeo, gridGeo, markerGeo]) geo.dispose();
+      for (const geo of [boxGeo, planeGeo, ceilGeo, edgeGeo, archGeo, archWallGeo, gridGeo, markerGeo]) geo.dispose();
       dustMat.map?.dispose();
       stoneTex.dispose();
       for (const mat of [wallMat, floorMat, ceilMat, lineMat, floorLineMat, dustMat, marker.material]) mat.dispose();
