@@ -20,5 +20,6 @@ export const LANTERN_DECAY = 0;
 export const flicker = t =>
   0.68 + 0.32 * (Math.sin(t) * 0.34 + Math.sin(t * 2.3) * 0.3 + Math.sin(t * 5.7) * 0.22 + Math.sin(t * 9.1) * 0.14);
 
-// 揺らぎの速さ。上げるほど速い。6ではせわしなかったので落としてある。
-export const FLICKER_SPEED = 3.2;
+// 揺らぎの速さ。上げるほど速い。6 → 3.2(2026-08-25) → 2.2(2026-08-31、作者の指示でゆっくりに)。
+// ここは戦闘と探索の両方に効く。片方だけ変えたくなったら、共通にした意味を先に考えること。
+export const FLICKER_SPEED = 2.2;
