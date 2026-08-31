@@ -17,7 +17,8 @@ export const CELL = 3;
 export const CEIL = PASSAGE_HEIGHT_TILES, EYE = 1.15;
 // 入口アーチの寸法。戦闘の書き割りに描いてある入口と同じ大きさ(単位: タイル)。
 // 天井(PASSAGE_HEIGHT_TILES)より低い。人が通れる高さであって、坑道の高さではない。
-const ARCH_W = 1.4, ARCH_H = DOORWAY_HEIGHT_TILES;
+// 幅はマスに収める。CELLを縮めた時に、開口がマスより広くなって壁が消えるのを防ぐ。
+const ARCH_W = Math.min(1.4, CELL * 0.7), ARCH_H = DOORWAY_HEIGHT_TILES;
 const BG = 0x0a0d14, LINE = 0x8fb0d8, FLOOR_LINE = 0x6d8399;
 const FOG_NEAR = CELL * 0.8, FOG_FAR = CELL * 4.2;
 // 向きは角度で持つ(FACING_YAWが正本)。旋回の補間で北⇄西を跨ぐ時に長い方へ回らないよう、
@@ -27,7 +28,7 @@ const parse = key => key.split(",").map(Number);
 const STEP_MS = 190, TURN_MS = 170;
 // カメラを立ち位置からどれだけ後ろへ引くか。単位: 戦闘のタイル(1マス = 3タイル)。
 // 引くほど広く見えるが、マスの外へ出ると後ろの壁を突き抜けるので上限を設ける。
-export const CAM_BACK_DEFAULT = 0.6, CAM_BACK_MAX = CELL / 2 - 0.2;
+export const CAM_BACK_DEFAULT = CELL * 0.2, CAM_BACK_MAX = CELL * 0.43;
 // 塵の見た目は戦闘と同じ dustLook.js を読む(2画面で食い違わせない)。
 // ここで決めるのは「どこに、何個置くか」だけ。
 // 戦闘は7×3の盤に22個。同じ密度になるよう、カメラの周り±1マス(=±3タイル)に置く。
@@ -181,11 +182,11 @@ export function createFirstPersonScene(container, map, { ceilTiles = CEIL } = {}
   // 同行者。戦闘と同じスタンディをそのまま置く。
   // 立ち位置はパーティのマスの中心から見た「横」と「前」(単位: タイル)。
   // カメラは中心より CAM_BACK 分だけ後ろにいるので、この位置だと背中が視界に入る。
-  // 横は通路の半分(1.5タイル)から板の幅の半分(約0.45)を引いた範囲に収めること。
-  // 越えると壁を突き抜ける。
+  // 位置はマスの大きさに対する割合で持つ。横は通路の半分から板の幅の半分(約0.45)を
+  // 引いた範囲に収めること。越えると壁を突き抜ける。
   const PARTY = [
-    { model: "lydia", side: -0.62, ahead: 1.45 },    // 小柄。少し前を歩く
-    { model: "gareth", side: -0.98, ahead: 1.00 },   // 大柄。リディアの手前・左を歩く
+    { model: "lydia", side: -0.21 * CELL, ahead: 0.48 * CELL },    // 小柄。少し前を歩く
+    { model: "gareth", side: -0.33 * CELL, ahead: 0.33 * CELL },   // 大柄。リディアの手前・左を歩く
   ];
   const partyGroup = new THREE.Group();
   scene.add(partyGroup);
