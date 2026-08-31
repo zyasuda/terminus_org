@@ -20,33 +20,31 @@ export function opposite(dir) { return turnRight(turnRight(dir)); }
 // そのマスが通れるか。地図の外(=壁)と大部屋の間仕切りをまとめて閉じ扱いにする。
 export function isOpen(map, x, y) { return map.cells.has(keyOf({ x, y })) && !hallBlocked(map, x, y); }
 
-// カメラ前方のマスを格子として切り出す。u = 横(右が正)、d = 奥行き(0が足元のマス)。
-// 一人称の描画はこの格子だけを読む。1列ではなく面で持つので、部屋の壁も柱も横穴も表せる。
-export function viewCells(map, pos, dir, maxDepth = 4, maxSide = 3) {
-  const ahead = directions.find(item => item.name === dir);
-  const right = directions.find(item => item.name === turnRight(dir));
-  const cells = [];
-  for (let d = 0; d <= maxDepth; d += 1) for (let u = -maxSide; u <= maxSide; u += 1) {
-    const x = pos.x + ahead.x * d + right.x * u, y = pos.y + ahead.y * d + right.y * u;
-    cells.push({ u, d, x, y, open: isOpen(map, x, y) });
-  }
-  return cells;
-}
+// 地図の方角と、3Dカメラの回転角(Y軸)の対応。
+// three.jsのカメラは rotation.y = 0 で -Z を向く。地図の北を -Z に取ったので north が 0。
+// ここを間違えると地図と一人称が90度ずれる(実際に一度ずらした)。描画に依存しないのでNodeで検査できる。
+export const FACING_YAW = { north: 0, east: -Math.PI / 2, south: Math.PI, west: Math.PI / 2 };
+// その向きの前方1マス(地図座標)。FACING_YAWと必ず一致していること。
+export const FACING_AHEAD = { north: [0, -1], east: [1, 0], south: [0, 1], west: [-1, 0] };
 
-// 2点の間に壁が無いか(Bresenham)。壁の向こうの敵影や床を描かないために使う。
-// 壁の描画そのものは遠い順の上書きで隠れるので、こちらは見えるかどうかの判定だけに使う。
-export function hasLineOfSight(map, from, to) {
-  let x = from.x, y = from.y;
-  const dx = Math.abs(to.x - x), dy = Math.abs(to.y - y);
-  const stepX = x < to.x ? 1 : -1, stepY = y < to.y ? 1 : -1;
-  let err = dx - dy;
-  while (x !== to.x || y !== to.y) {
-    const e2 = 2 * err;
-    if (e2 > -dy) { err -= dy; x += stepX; }
-    if (e2 < dx) { err += dx; y += stepY; }
-    if ((x !== to.x || y !== to.y) && !isOpen(map, x, y)) return false;
+// 地図全体を「通れるマス」と「壁として立てるマス」に分ける。
+// 壁は空きマスに隣り合うものだけ。地図の外を無限に作らないための刈り込み。
+// 3Dのシーン組み立てが読む唯一の入口(描画には依存しないのでNodeで検査できる)。
+export function levelCells(map) {
+  const open = new Set();
+  for (const key of map.cells.keys()) {
+    const [x, y] = key.split(",").map(Number);
+    if (isOpen(map, x, y)) open.add(key);
   }
-  return true;
+  const solid = new Set();
+  for (const key of open) {
+    const [x, y] = key.split(",").map(Number);
+    for (let dy = -1; dy <= 1; dy += 1) for (let dx = -1; dx <= 1; dx += 1) {
+      const k = `${x + dx},${y + dy}`;
+      if (!open.has(k)) solid.add(k);
+    }
+  }
+  return { open, solid };
 }
 
 export function start(map) {

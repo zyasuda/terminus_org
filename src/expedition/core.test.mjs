@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { ITEMS, back, canOpenChest, createFloor, retreatToEntrance, equipFromStash, equipInField, eventAt, hallContact, hallLayoutFor, hallRoom, isEntrance, mapForFloor, newVillage, partyMaxHp, route, useFieldTonic, walk } from "./core.js";
 import { hallBlocked, hallEnemyPosition, hallWallCells } from "./interior.js";
-import { hasLineOfSight, isOpen, opposite, viewCells } from "./mapwalk.js";
+import { FACING_AHEAD, FACING_YAW, isOpen, levelCells, opposite } from "./mapwalk.js";
 import { EXPEDITION_BATTLE_CONFIG } from "./battleConfig.js";
 const a = createFloor(123), b = createFloor(123);
 assert.equal(a.seed, b.seed);
@@ -71,40 +71,29 @@ for (let seed = 0; seed < 100; seed++) {
   }
   assert.ok(seen.has(`${target.x},${target.y}`), `seed ${seed}: 大広間の固定敵へ到達できる`);
 }
-// 一人称の視界。カメラ前方のマスを格子で切り出す(1列ではなく面で持つ)。
-// u = 横(右が正)、d = 奥行き(0が足元)。描画はこの格子と視線判定だけを読む。
-const at = (cells, u, d) => cells.find(c => c.u === u && c.d === d);
+// 3Dのシーンが読む、通れるマスと壁として立てるマスの分け方。
 const wideFloor = createFloor(1448944938), wideMap = mapForFloor(wideFloor), entrance = wideMap.rooms.get("entrance");
 assert.deepEqual({ x: entrance.x, y: entrance.y, w: entrance.w, h: entrance.h }, { x: 0, y: 0, w: 4, h: 3 },
   "この検査は入口が(0,0)の4×3であることを前提にしている");
-// 入口(2,1)で南向き。南 = +y、その右手は西 = -x。
-const view = viewCells(wideMap, { x: 2, y: 1 }, "south", 3, 2);
-assert.deepEqual([at(view, 0, 0).x, at(view, 0, 0).y], [2, 1], "d=0,u=0 は足元のマス");
-assert.deepEqual([at(view, 1, 0).x, at(view, 1, 0).y], [1, 1], "南を向くと u=+1(右)は西へ1マス");
-assert.deepEqual([at(view, 0, 1).x, at(view, 0, 1).y], [2, 2], "d=+1 は南へ1マス");
-assert.equal(at(view, -1, 0).open, true, "部屋の中なので左隣は開いている");
-assert.equal(at(view, -2, 0).open, false, "その先(x=4)は部屋の外なので壁");
-assert.equal(at(view, 2, 0).open, true, "右は2マス開いている(x=0)");
-assert.equal(at(view, -1, 2).open, false, "2マス先は通路なので左右が壁になる");
-assert.equal(at(view, 1, 2).open, false, "通路の右も壁");
-assert.equal(at(view, 0, 2).open, true, "通路そのものは通れる");
+const level = levelCells(wideMap);
+assert.ok(level.open.has("2,1"), "部屋の中は通れる");
+assert.equal(level.open.has("4,1"), false, "部屋の外は通れない");
+assert.ok(level.solid.has("4,1"), "空きマスに隣り合う外側は壁として立てる");
+assert.ok(level.solid.has("-1,-1"), "斜めに隣り合う角も壁にする(角が抜けて見えないように)");
+assert.equal(level.solid.has("9,9"), false, "どの空きマスにも接しない遠くは作らない");
+for (const key of level.solid) assert.equal(level.open.has(key), false, "壁と通れるマスは重ならない");
+// 大広間の間仕切りは、地図の外ではなく部屋の内側にある壁。3Dでも立てる。
+const partitionKey = `${hall.x + 8},${hall.y + 1}`;
+assert.ok(hallBlocked(hallMap, hall.x + 8, hall.y + 1), "前提: そこは間仕切り");
+assert.ok(levelCells(hallMap).solid.has(partitionKey), "部屋の内側の間仕切りも壁として立てる");
 
-// 地図が描く間仕切りは、探索の当たり判定と同じ集合でなければならない。
-// (地図は部屋を角丸長方形で描くので、間仕切りを別に塗らないと地図からだけ壁が消える)
-const drawn = hallWallCells(hallMap);
-assert.ok(drawn.length > 0, "大広間には描くべき間仕切りがある");
-for (const cell of drawn) assert.ok(hallBlocked(hallMap, cell.x, cell.y), `地図が描く壁(${cell.x},${cell.y})は探索でも通れない`);
-for (let y = hall.y; y < hall.y + hall.h; y += 1) for (let x = hall.x; x < hall.x + hall.w; x += 1) {
-  if (hallBlocked(hallMap, x, y)) assert.ok(drawn.some(c => c.x === x && c.y === y), `通れない壁(${x},${y})は地図にも出る`);
+// 3Dカメラの向きと地図の方角。three.jsは rotation.y = θ のとき前方が (-sinθ, -cosθ)。
+// ここがずれると地図と一人称が90度食い違う(一度ずらした)。
+for (const [dir, theta] of Object.entries(FACING_YAW)) {
+  const [ax, ay] = FACING_AHEAD[dir];
+  assert.ok(Math.abs(-Math.sin(theta) - ax) < 1e-9 && Math.abs(-Math.cos(theta) - ay) < 1e-9,
+    `${dir}: カメラの前方が地図の(${ax},${ay})と一致しない`);
 }
-
-// 視線。壁の向こうは見えない。大広間の間仕切りで確かめる。
-const gapY = hall.y + 5;
-assert.ok(hasLineOfSight(hallMap, { x: hall.x + 7, y: gapY }, { x: hall.x + 9, y: gapY }), "中央の開口越しには見通せる");
-assert.equal(hasLineOfSight(hallMap, { x: hall.x + 7, y: hall.y + 1 }, { x: hall.x + 9, y: hall.y + 1 }), false,
-  "間仕切り越しには見通せない(敵影も床もここでは描かない)");
-assert.ok(hasLineOfSight(hallMap, { x: hall.x + 1, y: hall.y + 1 }, { x: hall.x + 1, y: hall.y + 1 }), "同じマスは常に見える");
-
 assert.equal(opposite("north"), "south");
 assert.equal(opposite("east"), "west");
 // 後退: 向きを変えずに1歩戻り、前進で元の位置へ戻れる。

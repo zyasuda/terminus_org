@@ -1,13 +1,12 @@
 import React, { useEffect, useMemo, useRef } from "react";
 import { hallRoom, mapForFloor } from "./core.js";
 import { hallEnemyPosition } from "./interior.js";
-import { isOpen } from "./mapwalk.js";
+import { FACING_AHEAD, isOpen } from "./mapwalk.js";
 import { createFirstPersonScene } from "./firstPersonScene.js";
 
-// 一人称の3D版。SVG版(FirstPersonView.jsx)と操作もHUDも同じにして、描画だけ差し替える。
-// 壁の判断はどちらも isOpen / hallBlocked。見比べる時に条件を揃えるため。
+// 一人称。壁の判断は探索・戦闘・地図と同じ isOpen / hallBlocked で、ここは入力とHUDだけを持つ。
+// 3Dの組み立てと描画は firstPersonScene.js。
 const COMPASS = { north: { label: "北", angle: 0 }, east: { label: "東", angle: 90 }, south: { label: "南", angle: 180 }, west: { label: "西", angle: 270 } };
-const AHEAD = { north: [0, -1], east: [1, 0], south: [0, 1], west: [-1, 0] };
 
 export default function FirstPerson3D({ floor, onForward, onBack, onTurn, onOpenMap }) {
   const mount = useRef(null), sceneRef = useRef(null);
@@ -28,7 +27,7 @@ export default function FirstPerson3D({ floor, onForward, onBack, onTurn, onOpen
     sceneRef.current?.render(floor.pos, floor.facing, enemy);
   }, [floor.pos.x, floor.pos.y, floor.facing, enemy?.x, enemy?.y, map]);
 
-  const [ax, ay] = AHEAD[floor.facing] || AHEAD.north;
+  const [ax, ay] = FACING_AHEAD[floor.facing] || FACING_AHEAD.north;
   const canForward = isOpen(map, floor.pos.x + ax, floor.pos.y + ay);
   const compass = COMPASS[floor.facing];
   return <section style={S.shell} aria-label="一人称視点">

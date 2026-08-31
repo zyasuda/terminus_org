@@ -1,13 +1,10 @@
 import React, { useEffect, useState } from "react";
 import ExpeditionBattle from "./ExpeditionBattle.jsx";
 import FirstPerson3D from "./FirstPerson3D.jsx";
-import FirstPersonView from "./FirstPersonView.jsx";
 import RogueMap from "./RogueMap.jsx";
 import { ITEMS, back, canOpenChest, createFloor, equipFromStash, equipInField, eventAt, hallContact, hallLayoutFor, isEntrance, newVillage, partyMaxHp, retreatToEntrance, rewardFor, turn, useFieldTonic, walk } from "./core.js";
 
 const SAVE = "ai_companion_expedition_b1";
-// 一人称の描画方式。3D(three.js)とSVG線画を見比べるための切り替え。どちらを残すか決めたら片方を消す。
-const RENDER_SAVE = "ai_companion_expedition_fp";
 // 開発中の検証専用。プレイヤー向け機能ではない(game-debug-tools)。
 // URLに?debugが付いている時だけ、戦闘を即座に勝利扱いでスキップするボタンを出す。
 // 遠征コアのロジックには一切手を入れず、UI層に1つボタンを足すだけにする。
@@ -51,8 +48,6 @@ export default function ExpeditionView() {
   const [village, setVillage] = useState(saved.village), [floor, setFloor] = useState(saved.floor), [battle, setBattle] = useState(() => saved.floor?.events.find(e => e.id === saved.battleId) || null), [haul, setHaul] = useState(saved.haul), [message, setMessage] = useState(saved.message);
   useEffect(() => { localStorage.setItem(SAVE, JSON.stringify({ village, floor, haul, message, battleId: battle?.id || null })); }, [village, floor, haul, message, battle]);
   const [mapOpen, setMapOpen] = useState(false);
-  const [fp3d, setFp3d] = useState(() => localStorage.getItem(RENDER_SAVE) !== "svg");
-  useEffect(() => { localStorage.setItem(RENDER_SAVE, fp3d ? "3d" : "svg"); }, [fp3d]);
   const start = () => { setFloor(createFloor(Date.now() >>> 0)); setHaul([]); setMessage("リディア「宝箱があるなら、寄り道も悪くないですね。」"); };
   const move = direction => {
     const next = walk(floor, direction);
@@ -177,8 +172,7 @@ export default function ExpeditionView() {
     </header>
     <p style={S.message}>{message}</p>
     <div style={S.layout}>
-      {React.createElement(fp3d ? FirstPerson3D : FirstPersonView,
-        { floor, onForward: moveForward, onBack: moveBack, onTurn: turnPlayer, onOpenMap: () => setMapOpen(true) })}
+      <FirstPerson3D floor={floor} onForward={moveForward} onBack={moveBack} onTurn={turnPlayer} onOpenMap={() => setMapOpen(true)}/>
       <aside style={S.side}>
         <section style={S.field}>
           <b>携行品・装備</b>
@@ -197,11 +191,6 @@ export default function ExpeditionView() {
             </div>)
             : <div style={S.muted}>変更できる装備はありません。</div>}
         </section>
-        {/* 描画方式の見比べ用。片方に決めたらこの切り替えごと消す(game-debug-tools)。 */}
-        <p style={S.muted}>一人称の描画:
-          <button style={{ ...S.btn, ...(fp3d ? S.selected : {}) }} onClick={() => setFp3d(true)}>3D</button>
-          <button style={{ ...S.btn, ...(!fp3d ? S.selected : {}) }} onClick={() => setFp3d(false)}>SVG線画</button>
-        </p>
         <p>↑で前進、↓で後退(向きは変わりません)。←→で旋回します。通路は次の部屋まで自動で通過します。三叉路では止まります。</p>
         {e && <><button style={S.primary} onClick={() => setBattle(e)}>戦う</button><button style={S.primary} onClick={bypass}>迂回する</button></>}
         {chest && <button style={S.primary} onClick={openChest}>宝箱を開ける</button>}
