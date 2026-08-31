@@ -15,7 +15,7 @@ import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import { elevationAt, makeRng } from "./core.js";
 import { DUST_TOP, dustMaterial, dustMote } from "./dustLook.js";
 import { FLICKER_SPEED, LANTERN_COLOR, LANTERN_DECAY, LANTERN_INTENSITY, LANTERN_RANGE, flicker } from "./lanternLook.js";
-import { FLOOR_BASE, FLOOR_TEX_TILES, FLOOR_TONE, WALL_COLOR, stoneTexture } from "./stoneLook.js";
+import { FLOOR_BASE, FLOOR_TEX_TILES, FLOOR_TONE, PASSAGE_HEIGHT_TILES, WALL_COLOR, stoneTexture } from "./stoneLook.js";
 
 // 床の紙は1マスちょうどで隙間なく敷く。TILEはマス内に物を置くときの
 // 「はみ出さない範囲」の目安として、水溜りや瓦礫の大きさに使う。
@@ -851,7 +851,8 @@ export function createBattleScene(container, grid, { voidBoundaryWalls = false, 
      突き抜ける(2026-08-27に実測。幅3マスで頂点がcanvasの上端を超えていた)。 */
   const ARCH_PX_PER_TILE = 96;
   const ARCH_WIDTH_TILES = 1.4;    // 入口の幅。狭い枝では枝幅に収める
-  const ARCH_HEIGHT_TILES = 2.0;   // 入口の高さ(1マス1.5m換算で3m)。人の約1.6倍
+  // 入口の高さ = 通路の高さ。stoneLook.jsが正本(探索の天井も同じものを読む)。
+  const ARCH_HEIGHT_TILES = PASSAGE_HEIGHT_TILES;
   const archPath = (g, w, h) => {
     const aw = Math.min(w * 0.72, ARCH_PX_PER_TILE * ARCH_WIDTH_TILES);
     const x0 = (w - aw) / 2, r = aw / 2;

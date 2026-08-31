@@ -1,7 +1,7 @@
 import * as THREE from "three";
 import { DUST_TOP, dustMaterial, dustMote } from "../battle/dustLook.js";
 import { FLICKER_SPEED, LANTERN_COLOR, LANTERN_DECAY, LANTERN_INTENSITY, LANTERN_RANGE, flicker } from "../battle/lanternLook.js";
-import { FLOOR_BASE, FLOOR_TONE, WALL_COLOR, stoneTexture } from "../battle/stoneLook.js";
+import { FLOOR_BASE, FLOOR_TONE, PASSAGE_HEIGHT_TILES, WALL_COLOR, stoneTexture } from "../battle/stoneLook.js";
 import { FACING_YAW, levelCells } from "./mapwalk.js";
 
 // 一人称の3D。戦闘(view3d.js)と同じ「1マス=1タイル」の座標系で組み、
@@ -10,8 +10,9 @@ import { FACING_YAW, levelCells } from "./mapwalk.js";
 //
 // 単位はすべて戦闘のタイル。探索の1マスは戦闘の3タイル(battleConfig.jsのcorridor.height)。
 export const CELL = 3;
-// 天井の高さと目の高さ。戦闘3Dの入口アーチ(view3d.js ARCH_HEIGHT_TILES = 2.0、1マス1.5m換算)に合わせた。
-export const CEIL = 2.0, EYE = 1.15;
+// 天井の高さは戦闘の入口アーチと同じ値(stoneLook.jsのPASSAGE_HEIGHT_TILESが正本)。
+// 目の高さは、アーチのコメント「人の約1.6倍」から逆算した背丈(2.0/1.6 = 1.25)のやや下。
+export const CEIL = PASSAGE_HEIGHT_TILES, EYE = 1.15;
 const BG = 0x0a0d14, LINE = 0x8fb0d8, FLOOR_LINE = 0x6d8399;
 const FOG_NEAR = CELL * 0.8, FOG_FAR = CELL * 4.2;
 // 向きは角度で持つ(FACING_YAWが正本)。旋回の補間で北⇄西を跨ぐ時に長い方へ回らないよう、

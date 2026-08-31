@@ -1,12 +1,20 @@
 import * as THREE from "three";
 import { makeRng } from "./core.js";
 
-// 床の石の「見た目」の正本。戦闘(view3d.js)と探索の一人称(firstPersonScene.js)が
-// 同じ床になるよう、テクスチャと明度をここだけに置く。
+// 坑道の面(床・壁)と、通路の高さの正本。戦闘(view3d.js)と探索の一人称
+// (firstPersonScene.js)が同じ坑道に見えるよう、ここだけに置く。
 // 元は view3d.js の中にあった値。FLOOR_TONEとGRID_LINE_OPACITYは
 // 2026-08-25に作者が比較画像から決めたもの。
 //
 // 壁には貼らない。戦闘の壁は無地(COLOR.wall)なので、探索だけ石を貼ると食い違う。
+
+// 通路の高さ。戦闘の入口アーチ(ARCH_HEIGHT_TILES)と探索の天井(CEIL)が同じものを読む。
+// 1マス1.5m換算で3m。人の約1.6倍。
+//
+// 戦闘の WALL_H(1.0)とは別物なので混同しないこと。あちらは「見下ろした時に駒が隠れない
+// 高さ」で決めた盤上のブロックの高さで、通路の高さを表していない。
+// 探索でWALL_Hを使うと天井が目の高さ(1.15)より低くなり、歩けない絵になる。
+export const PASSAGE_HEIGHT_TILES = 2.0;
 
 // 壁の色。戦闘の COLOR.wall もここを読む。床と違って無地(テクスチャは貼らない)。
 export const WALL_COLOR = 0x2b303c;
