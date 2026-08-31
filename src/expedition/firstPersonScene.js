@@ -1,5 +1,6 @@
 import * as THREE from "three";
 import { DUST_TOP, dustMaterial, dustMote } from "../battle/dustLook.js";
+import { FLOOR_BASE, FLOOR_TEX_TILES, FLOOR_TONE, stoneTexture } from "../battle/stoneLook.js";
 import { FACING_YAW, levelCells } from "./mapwalk.js";
 
 // 一人称の3D。戦闘(view3d.js)と同じ「1マス=1タイル」の座標系で組み、
@@ -33,12 +34,20 @@ export function createFirstPersonScene(container, map) {
   const { open, solid } = levelCells(map);
 
   const dark = hex => new THREE.MeshLambertMaterial({ color: hex, fog: true });
-  const wallMat = dark(0x5a6272), floorMat = dark(0x474f5c), ceilMat = dark(0x333a47);
+  // 壁と天井は無地。戦闘の壁も無地(COLOR.wall)なので、探索だけ石を貼ると食い違う。
+  const wallMat = dark(0x5a6272), ceilMat = dark(0x333a47);
+  // 床は戦闘と同じ石。テクスチャ1枚 = FLOOR_TEX_TILES(3)タイル = 探索のちょうど1マス。
+  const stoneTex = stoneTexture();
+  const floorMat = new THREE.MeshLambertMaterial({ map: stoneTex, fog: true,
+    color: new THREE.Color(FLOOR_BASE).multiplyScalar(FLOOR_TONE) });
   const lineMat = new THREE.LineBasicMaterial({ color: LINE, fog: true });
   const floorLineMat = new THREE.LineBasicMaterial({ color: FLOOR_LINE, fog: true, transparent: true, opacity: .45 });
 
   const boxGeo = new THREE.BoxGeometry(CELL, CEIL, CELL);
+  // 床の板。1マス(=CELL タイル)にテクスチャを1枚ぴったり貼る。
+  // 戦闘は盤面座標でUVを振って連続させているが、こちらは1マスで閉じるので既定のUVでよい。
   const planeGeo = new THREE.PlaneGeometry(CELL, CELL);
+  const ceilGeo = new THREE.PlaneGeometry(CELL, CELL);
   const wallGroup = new THREE.Group(), floorGroup = new THREE.Group();
   scene.add(wallGroup, floorGroup);
 
@@ -74,7 +83,7 @@ export function createFirstPersonScene(container, map) {
     floor.rotation.x = -Math.PI / 2;
     floor.position.set(cx, 0, cz);
     floorGroup.add(floor);
-    const ceil = new THREE.Mesh(planeGeo, ceilMat);
+    const ceil = new THREE.Mesh(ceilGeo, ceilMat);
     ceil.rotation.x = Math.PI / 2;
     ceil.position.set(cx, CEIL, cz);
     floorGroup.add(ceil);
@@ -220,8 +229,9 @@ export function createFirstPersonScene(container, map) {
       if (raf) cancelAnimationFrame(raf);
       renderer.domElement.remove();
       renderer.dispose();
-      for (const geo of [boxGeo, planeGeo, edgeGeo, gridGeo, markerGeo]) geo.dispose();
+      for (const geo of [boxGeo, planeGeo, ceilGeo, edgeGeo, gridGeo, markerGeo]) geo.dispose();
       dustMat.map?.dispose();
+      stoneTex.dispose();
       for (const mat of [wallMat, floorMat, ceilMat, lineMat, floorLineMat, dustMat, marker.material]) mat.dispose();
     },
   };

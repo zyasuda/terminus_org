@@ -14,6 +14,7 @@ import { STANDEE_VERSION } from "./standeeVersion.js";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import { elevationAt, makeRng } from "./core.js";
 import { DUST_TOP, dustMaterial, dustMote } from "./dustLook.js";
+import { FLOOR_BASE, FLOOR_TEX_TILES, FLOOR_TONE, stoneTexture } from "./stoneLook.js";
 
 // 床の紙は1マスちょうどで隙間なく敷く。TILEはマス内に物を置くときの
 // 「はみ出さない範囲」の目安として、水溜りや瓦礫の大きさに使う。
@@ -528,37 +529,9 @@ export function createBattleScene(container, grid, { voidBoundaryWalls = false, 
   const GRID_LINE_Y = 0.008;
   const HIGHLIGHT_OPACITY = 0.42;
   const GRID_LINE_OPACITY = 0.5;   // 比較画像から作者が決めた値(2026-08-25)
-  const FLOOR_TONE = 0.8;          // 同上
-  const FLOOR_TEX_TILES = 3;      // テクスチャ1枚が何マス分か。物理サイズを固定するため
-  const FLOOR_BASE = 0xb4b4b4;    // 石のモノトーン。明度はsetFloorToneで動かす
-
+  // 床の石(テクスチャ・明度・1枚が何タイル分か)は stoneLook.js が正本。
+  // 探索の一人称も同じものを読む。ここで直接いじると2つの画面で床が食い違う。
   const wallGeo = new THREE.BoxGeometry(0.98, WALL_H, 0.98);
-  // 石畳のモノトーン。画像ファイルは使わず、水面と同じくcanvasで焼く。
-  // 大きな色むら→細かい粒の順に重ねる。決定論rngなので毎回同じ絵になる。
-  const stoneTexture = () => {
-    const c = document.createElement("canvas");
-    c.width = c.height = 256;
-    const g = c.getContext("2d");
-    g.fillStyle = "#8f8f8f";
-    g.fillRect(0, 0, 256, 256);
-    const rng = makeRng(20260825);
-    for (let i = 0; i < 130; i++) {
-      const v = Math.round(118 + rng() * 62);
-      g.fillStyle = `rgba(${v},${v},${v},0.32)`;
-      g.beginPath();
-      g.ellipse(rng() * 256, rng() * 256, 12 + rng() * 44, 10 + rng() * 36, rng() * Math.PI, 0, Math.PI * 2);
-      g.fill();
-    }
-    for (let i = 0; i < 9000; i++) {
-      const v = Math.round(88 + rng() * 92);
-      g.fillStyle = `rgba(${v},${v},${v},0.2)`;
-      g.fillRect(rng() * 256, rng() * 256, 1.4, 1.4);
-    }
-    const tex = new THREE.CanvasTexture(c);
-    tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
-    tex.colorSpace = THREE.SRGBColorSpace;
-    return tex;
-  };
   const stoneTex = stoneTexture();
   let floorTone = FLOOR_TONE;
   const floorMat = new THREE.MeshLambertMaterial({ map: stoneTex, color: FLOOR_BASE, vertexColors: true });
