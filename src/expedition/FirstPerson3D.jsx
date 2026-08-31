@@ -1,0 +1,70 @@
+import React, { useEffect, useMemo, useRef } from "react";
+import { hallRoom, mapForFloor } from "./core.js";
+import { hallEnemyPosition } from "./interior.js";
+import { isOpen } from "./mapwalk.js";
+import { createFirstPersonScene } from "./firstPersonScene.js";
+
+// 一人称の3D版。SVG版(FirstPersonView.jsx)と操作もHUDも同じにして、描画だけ差し替える。
+// 壁の判断はどちらも isOpen / hallBlocked。見比べる時に条件を揃えるため。
+const COMPASS = { north: { label: "北", angle: 0 }, east: { label: "東", angle: 90 }, south: { label: "南", angle: 180 }, west: { label: "西", angle: 270 } };
+const AHEAD = { north: [0, -1], east: [1, 0], south: [0, 1], west: [-1, 0] };
+
+export default function FirstPerson3D({ floor, onForward, onBack, onTurn, onOpenMap }) {
+  const mount = useRef(null), sceneRef = useRef(null);
+  const map = useMemo(() => mapForFloor(floor), [floor.seed, floor.corridorSeed]);
+  const room = useMemo(() => hallRoom(floor), [floor.seed, floor.corridorSeed]);
+
+  // 地図が変わった時だけ組み直す。1歩ごとに作り直さない。
+  useEffect(() => {
+    const scene = createFirstPersonScene(mount.current, map);
+    sceneRef.current = scene;
+    const onResize = () => scene.resize();
+    window.addEventListener("resize", onResize);
+    return () => { window.removeEventListener("resize", onResize); scene.dispose(); sceneRef.current = null; };
+  }, [map]);
+
+  const enemy = room && !floor.hallDefeated ? hallEnemyPosition(room) : null;
+  useEffect(() => {
+    sceneRef.current?.render(floor.pos, floor.facing, enemy);
+  }, [floor.pos.x, floor.pos.y, floor.facing, enemy?.x, enemy?.y, map]);
+
+  const [ax, ay] = AHEAD[floor.facing] || AHEAD.north;
+  const canForward = isOpen(map, floor.pos.x + ax, floor.pos.y + ay);
+  const compass = COMPASS[floor.facing];
+  return <section style={S.shell} aria-label="一人称視点">
+    <div style={S.hud}>
+      <b>{room && floor.at === room.id ? room.name : map.rooms.get(floor.at)?.name || "通路"}</b>
+      <span style={S.compass}>
+        <svg viewBox="-12 -12 24 24" width="22" height="22" aria-hidden="true">
+          <circle r="11" fill="#171b24" stroke="#4a5366"/>
+          <polygon points="0,-8 4,5 0,2 -4,5" fill="#e4b064" transform={`rotate(${compass.angle})`}/>
+        </svg>
+        <span>{compass.label}を向いている</span>
+      </span>
+    </div>
+    <div ref={mount} style={S.canvas} data-facing={floor.facing} data-pos={`${floor.pos.x},${floor.pos.y}`}/>
+    <div style={S.controls}>
+      <button style={S.turnBtn} onClick={() => onTurn("left")} aria-label="左へ旋回">↺</button>
+      <div style={S.moveCol}>
+        <button style={S.forwardBtn} onClick={onForward} disabled={!canForward} aria-label="前進">
+          {canForward ? "前進" : "壁"}
+        </button>
+        <button style={S.backBtn} onClick={onBack} aria-label="後退">後退</button>
+      </div>
+      <button style={S.turnBtn} onClick={() => onTurn("right")} aria-label="右へ旋回">↻</button>
+    </div>
+    <button style={S.mapBtn} onClick={onOpenMap}>地図</button>
+  </section>;
+}
+const S = {
+  shell: { position: "relative", width: 300, background: "#0a0d14", borderRadius: 8, overflow: "hidden", border: "1px solid #3c4354" },
+  hud: { display: "flex", justifyContent: "space-between", alignItems: "center", padding: "5px 10px", color: "#c3ccdd", fontSize: 12, background: "rgba(20,24,32,.9)" },
+  compass: { display: "flex", alignItems: "center", gap: 6 },
+  canvas: { width: "100%", height: 250 },
+  controls: { display: "flex", justifyContent: "center", alignItems: "center", gap: 10, padding: 10, background: "rgba(20,24,32,.9)" },
+  turnBtn: { background: "#2b303c", color: "#e6e8ee", border: "1px solid #4a5366", borderRadius: 8, width: 44, height: 44, fontSize: 18 },
+  moveCol: { display: "flex", flexDirection: "column", gap: 6 },
+  forwardBtn: { background: "#3d7fb5", color: "#fff", border: 0, borderRadius: 8, padding: "0 22px", height: 40, fontSize: 14 },
+  backBtn: { background: "#2b303c", color: "#c3ccdd", border: "1px solid #4a5366", borderRadius: 8, padding: "0 22px", height: 32, fontSize: 12 },
+  mapBtn: { position: "absolute", top: 4, right: 6, background: "rgba(43,48,60,.9)", color: "#e6e8ee", border: "1px solid #4a5366", borderRadius: 6, padding: "5px 10px", fontSize: 12 },
+};

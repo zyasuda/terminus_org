@@ -1,5 +1,8 @@
 import assert from "node:assert/strict";
-import { ITEMS, canOpenChest, createFloor, equipFromStash, equipInField, eventAt, isEntrance, mapForFloor, newVillage, partyMaxHp, route, useFieldTonic, walk } from "./core.js";
+import { ITEMS, back, canOpenChest, createFloor, retreatToEntrance, equipFromStash, equipInField, eventAt, hallContact, hallLayoutFor, hallRoom, isEntrance, mapForFloor, newVillage, partyMaxHp, route, useFieldTonic, walk } from "./core.js";
+import { hallBlocked, hallEnemyPosition, hallWallCells } from "./interior.js";
+import { hasLineOfSight, isOpen, opposite, viewCells } from "./mapwalk.js";
+import { EXPEDITION_BATTLE_CONFIG } from "./battleConfig.js";
 const a = createFloor(123), b = createFloor(123);
 assert.equal(a.seed, b.seed);
 assert.deepEqual([...mapForFloor(a).rooms], [...mapForFloor(b).rooms]);
@@ -53,4 +56,76 @@ for (let seed = 1; seed <= 80; seed++) {
   const floor = createFloor(seed);
   for (const target of [...floor.events, floor.chest]) assert.ok(route(floor, floor, target), `seed ${seed} reaches ${target.id || "chest"}`);
 }
+assert.deepEqual(hallLayoutFor(a), hallLayoutFor(b), "同じseedの大広間内装は一致する");
+const hall = hallRoom(a), enemy = hallEnemyPosition(hall), hallMap = mapForFloor(a);
+assert.ok(hallBlocked(hallMap, hall.x + 8, hall.y + 1), "間仕切りは通れない");
+assert.equal(hallBlocked(hallMap, hall.x + 8, hall.y + 5), false, "中央の開口は通れる");
+assert.ok(hallContact({ ...a, at: hall.id, pos: enemy }), "固定敵のマスで接触する");
+assert.equal(hallContact({ ...a, at: hall.id, pos: enemy, hallDefeated: true }), false, "倒した固定敵は復活しない");
+for (let seed = 0; seed < 100; seed++) {
+  const floor = createFloor(seed), map = mapForFloor(floor), room = hallRoom(floor), target = hallEnemyPosition(room);
+  const queue = [floor.pos], seen = new Set([`${floor.pos.x},${floor.pos.y}`]);
+  for (let i = 0; i < queue.length; i++) for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+    const next = { x: queue[i].x + dx, y: queue[i].y + dy }, key = `${next.x},${next.y}`;
+    if (!seen.has(key) && map.cells.has(key) && !hallBlocked(map, next.x, next.y)) { seen.add(key); queue.push(next); }
+  }
+  assert.ok(seen.has(`${target.x},${target.y}`), `seed ${seed}: 大広間の固定敵へ到達できる`);
+}
+// 一人称の視界。カメラ前方のマスを格子で切り出す(1列ではなく面で持つ)。
+// u = 横(右が正)、d = 奥行き(0が足元)。描画はこの格子と視線判定だけを読む。
+const at = (cells, u, d) => cells.find(c => c.u === u && c.d === d);
+const wideFloor = createFloor(1448944938), wideMap = mapForFloor(wideFloor), entrance = wideMap.rooms.get("entrance");
+assert.deepEqual({ x: entrance.x, y: entrance.y, w: entrance.w, h: entrance.h }, { x: 0, y: 0, w: 4, h: 3 },
+  "この検査は入口が(0,0)の4×3であることを前提にしている");
+// 入口(2,1)で南向き。南 = +y、その右手は西 = -x。
+const view = viewCells(wideMap, { x: 2, y: 1 }, "south", 3, 2);
+assert.deepEqual([at(view, 0, 0).x, at(view, 0, 0).y], [2, 1], "d=0,u=0 は足元のマス");
+assert.deepEqual([at(view, 1, 0).x, at(view, 1, 0).y], [1, 1], "南を向くと u=+1(右)は西へ1マス");
+assert.deepEqual([at(view, 0, 1).x, at(view, 0, 1).y], [2, 2], "d=+1 は南へ1マス");
+assert.equal(at(view, -1, 0).open, true, "部屋の中なので左隣は開いている");
+assert.equal(at(view, -2, 0).open, false, "その先(x=4)は部屋の外なので壁");
+assert.equal(at(view, 2, 0).open, true, "右は2マス開いている(x=0)");
+assert.equal(at(view, -1, 2).open, false, "2マス先は通路なので左右が壁になる");
+assert.equal(at(view, 1, 2).open, false, "通路の右も壁");
+assert.equal(at(view, 0, 2).open, true, "通路そのものは通れる");
+
+// 地図が描く間仕切りは、探索の当たり判定と同じ集合でなければならない。
+// (地図は部屋を角丸長方形で描くので、間仕切りを別に塗らないと地図からだけ壁が消える)
+const drawn = hallWallCells(hallMap);
+assert.ok(drawn.length > 0, "大広間には描くべき間仕切りがある");
+for (const cell of drawn) assert.ok(hallBlocked(hallMap, cell.x, cell.y), `地図が描く壁(${cell.x},${cell.y})は探索でも通れない`);
+for (let y = hall.y; y < hall.y + hall.h; y += 1) for (let x = hall.x; x < hall.x + hall.w; x += 1) {
+  if (hallBlocked(hallMap, x, y)) assert.ok(drawn.some(c => c.x === x && c.y === y), `通れない壁(${x},${y})は地図にも出る`);
+}
+
+// 視線。壁の向こうは見えない。大広間の間仕切りで確かめる。
+const gapY = hall.y + 5;
+assert.ok(hasLineOfSight(hallMap, { x: hall.x + 7, y: gapY }, { x: hall.x + 9, y: gapY }), "中央の開口越しには見通せる");
+assert.equal(hasLineOfSight(hallMap, { x: hall.x + 7, y: hall.y + 1 }, { x: hall.x + 9, y: hall.y + 1 }), false,
+  "間仕切り越しには見通せない(敵影も床もここでは描かない)");
+assert.ok(hasLineOfSight(hallMap, { x: hall.x + 1, y: hall.y + 1 }, { x: hall.x + 1, y: hall.y + 1 }), "同じマスは常に見える");
+
+assert.equal(opposite("north"), "south");
+assert.equal(opposite("east"), "west");
+// 後退: 向きを変えずに1歩戻り、前進で元の位置へ戻れる。
+const facedNorth = { ...a, facing: "north" };
+const stepped = walk(facedNorth, "north");
+if (stepped.pos.x !== facedNorth.pos.x || stepped.pos.y !== facedNorth.pos.y) {
+  const returned = back({ ...stepped, facing: "north" });
+  assert.equal(returned.facing, "north", "後退しても向きは変わらない");
+  assert.deepEqual(returned.pos, facedNorth.pos, "後退で元のマスへ戻る");
+}
+// 戦闘からの離脱: 入口へ戻り、敵は倒した扱いにならない。
+const midFight = { ...a, at: "fight-0", pos: { x: a.pos.x + 3, y: a.pos.y + 3 }, facing: "north", hallDefeated: false };
+const retreated = retreatToEntrance(midFight);
+assert.equal(retreated.at, "entrance", "離脱すると入口へ戻る");
+assert.deepEqual(retreated.pos, a.pos, "戻る位置は遠征開始時と同じ");
+assert.equal(retreated.facing, a.facing, "向きも遠征開始時と同じ");
+assert.deepEqual(retreated.events, midFight.events, "離脱しても敵は倒した扱いにならない");
+assert.equal(retreated.hallDefeated, false, "大広間の固定敵も残る");
+assert.equal(eventAt(retreated), null, "入口には遭遇が無いので、戻った直後に再戦にならない");
+
+// 一人称の床の目盛りは「探索1マス = 戦闘3タイル」を前提にしている(FirstPersonView.jsx の TILES_PER_CELL)。
+// 通路盤の幅を変えたらここで落ちるので、床の刻みも一緒に直すこと。
+assert.equal(EXPEDITION_BATTLE_CONFIG.board.corridor.height, 3, "戦闘の通路幅が3マスであることが一人称の床の刻みの根拠");
 console.log("expedition core: ok");

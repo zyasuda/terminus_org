@@ -50,7 +50,11 @@ const makeState = (guardian, layout, equipment = {}, party = {}, seed = 0) => {
   // 遭遇は稀に不意打ちで、敵が先手を取ることがある(既定20%)。+555はダイス用rng(+777)や
   // 盤面生成用rng(seedそのまま)とは別系列にするためのオフセット。
   const enemyFirst = makeRng(seed + 555)() < EXPEDITION_BATTLE_CONFIG.encounter.enemyFirstChance;
-  return { grid, units, order: turnOrder(units, { enemyFirst }).map(u => u.id), turn: 0, log: [guardian ? "守護者が宝箱を守っている。" : layout === "junction" ? "坑道の獣が三叉路を塞いだ。" : "坑道の獣が2匹、狭い通路を塞いだ。"] };
+  const openingLine = guardian ? "守護者が宝箱を守っている。"
+    : layout === "junction" ? "坑道の獣が三叉路を塞いだ。"
+    : typeof layout === "object" ? "大広間の奥で、坑道の獣が振り返った。"
+    : "坑道の獣が2匹、狭い通路を塞いだ。";
+  return { grid, units, order: turnOrder(units, { enemyFirst }).map(u => u.id), turn: 0, log: [openingLine] };
 };
 const alive = (units, side) => units.some(u => u.side === side && u.hp > 0);
 // ポケモンアングルの「向き」側。手番の駒が向いている方向(facing)を画面奥にする水平角度(度)。
@@ -204,7 +208,7 @@ export default function ExpeditionBattle({ guardian, layout = "corridor", equipm
     setState(s => ({ ...s, units: s.units.map(u => u.id === unit.id ? { ...u, ...to, facing: facingToward(unit, to, u.facing) } : u), log: [...s.log, line] }));
   };
   useEffect(() => {
-    const grid = state.grid; const s = createBattleScene(mount.current, grid, { voidBoundaryWalls: battleLayout === "junction", cameraElevationDeg: EXPEDITION_BATTLE_CONFIG.presentation.cameraElevationDeg, cameraZoom: EXPEDITION_BATTLE_CONFIG.presentation.cameraZoom }); scene.current = s;
+    const grid = state.grid; const s = createBattleScene(mount.current, grid, { voidBoundaryWalls: battleLayout === "junction" || typeof battleLayout === "object", cameraElevationDeg: EXPEDITION_BATTLE_CONFIG.presentation.cameraElevationDeg, cameraZoom: EXPEDITION_BATTLE_CONFIG.presentation.cameraZoom }); scene.current = s;
     s.setFogEnabled(fogOn); s.setFogIntensity(fogLevel); s.setFogColor(fogColor);
     s.setDustEnabled(dustOn); s.setRainEnabled(rainOn); s.setWallsEnabled(wallsOn);
     s.setBackgroundColor(bgColor); s.setLightPreset(lightPreset);
@@ -331,7 +335,8 @@ export default function ExpeditionBattle({ guardian, layout = "corridor", equipm
     return attackTargets.length ? `${who}の行動を選んでください：移動または${verb}。`
       : `${who}の行動を選んでください：${noTarget}ため、移動または待機。`;
   })();
-  const layoutLabel = battleLayout === "guardian" ? "arena-8x8" : battleLayout === "junction" ? "junction-7x7" : "corridor-3x7";
+  const layoutLabel = battleLayout === "guardian" ? "arena-8x8" : battleLayout === "junction" ? "junction-7x7"
+    : typeof battleLayout === "object" ? `hall-${battleLayout.width}x${battleLayout.height}` : "corridor-3x7";
   // data-* はスモークテストが盤面と手番を外から読むための足がかり。表示には使わない。
   return <div style={S.page}
     data-battle-layout={layoutLabel}
@@ -381,6 +386,15 @@ export default function ExpeditionBattle({ guardian, layout = "corridor", equipm
         {busy && <span>行動中…</span>}
       </div>
       <div style={S.hint}>{actionStatus || "攻撃時は対面カメラになります。"}</div>
+      {/* 離脱は「この手番の行動」ではないので、行動ボタンとは別の行に置く(one-place-one-function)。
+          倒した扱いにはせず、入口まで退くだけ。戻ればまた戦える。 */}
+      {partyAlive && enemyAlive && <div style={S.row}>
+        <button style={S.escape} disabled={busy}
+          onClick={() => onFinish("escape", Object.fromEntries(state.units.filter(u => u.side === "party").map(u => [u.id, u.hp])))}>
+          入口へ戻る
+        </button>
+        <span style={S.hint}>戦わずに退く。敵はその場に残る。</span>
+      </div>}
       <div style={S.log}>{state.log.slice(-4).map((x, i) => <div key={i}>{x}</div>)}</div>
       {/* 調整はプレイヤー向けの操作ではないので、既定で畳んでおく(game-debug-tools)。
           盤面の面積を食わないことが目的なので、中身は触らずdetailsで包むだけにする。 */}
@@ -491,6 +505,7 @@ const S = {
   row: { display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", marginTop: 6 },
   chip: { border: "1px solid #59647a", borderRadius: 999, padding: "1px 8px" },
   btn: { background: "#2b303c", color: "#e6e8ee", border: "1px solid #3c4354", borderRadius: 6, padding: "5px 11px" },
+  escape: { background: "#3a2c2c", color: "#e3c9c9", border: "1px solid #6b4a4a", borderRadius: 6, padding: "6px 12px", fontSize: 13 },
   active: { background: "#3d7fb5" },
   hint: { color: "#9ca8bd", marginTop: 5 },
   log: { marginTop: 5, color: "#d8c98c" },

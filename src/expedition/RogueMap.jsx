@@ -1,10 +1,13 @@
 import React, { useMemo } from "react";
 import { corridorShapes, roomShapes } from "./draw.js";
 import { mapForFloor } from "./core.js";
+import { hallWallCells } from "./interior.js";
 import { lit } from "./mapwalk.js";
 import "./rogueMap.css";
 
 const keyOf = cell => `${cell.x},${cell.y}`;
+// 地図上の自分の向き。北を0度として時計回り。三角形は-y(上)を向いた形で描く。
+const FACING_ANGLE = { north: 0, east: 90, south: 180, west: 270 };
 const markerFor = (floor, room) => {
   if (room.id === "entrance") return "△";
   const event = floor.events.find(item => item.roomId === room.id && !item.done);
@@ -37,10 +40,14 @@ export default function RogueMap({ floor, onMove }) {
   const maxY = Math.max(floor.pos.y + 3, ...known.map(([, y]) => y));
   const pad = 2, left = minX - pad, top = minY - pad;
   const width = Math.max(11, maxX - minX + 1 + pad * 2), height = Math.max(8, maxY - minY + 1 + pad * 2);
+  // 部屋は角丸長方形で描くので、大広間の間仕切りは自分で塗り潰さないと地図から消える。
+  // 隣のマスを見たことがある壁だけ出す(壁は隣に立って初めて分かる)。
+  const partition = hallWallCells(map).filter(cell =>
+    [[1, 0], [-1, 0], [0, 1], [0, -1]].some(([dx, dy]) => state.seen.has(`${cell.x + dx},${cell.y + dy}`)));
   const currentRoom = map.rooms.get(floor.at);
   const lamp = { x: floor.pos.x + .5, y: floor.pos.y + .5 };
   return <section className="rogue-map-shell" aria-label="探索地図">
-    <header className="rogue-map-rail"><b>{currentRoom?.name || "通路"}</b><span>灯りの届く範囲</span></header>
+    <header className="rogue-map-rail"><b>{currentRoom?.name || "通路"}</b><span>{"↑北 / 現在の向き: " + ({ north: "北", east: "東", south: "南", west: "西" }[floor.facing] || "?")}</span></header>
     <div className="rogue-map">
       <svg viewBox={`${left} ${top} ${width} ${height}`} role="img" aria-label="探索地図">
         <defs>
@@ -50,11 +57,16 @@ export default function RogueMap({ floor, onMove }) {
         </defs>
         <g className="rogue-floor rogue-memory" dangerouslySetInnerHTML={{ __html: rooms + memoryCorridors }}/>
         <g mask="url(#expedition-torch-mask)" className="rogue-floor rogue-light" dangerouslySetInnerHTML={{ __html: rooms + lightCorridors }}/>
-        {Array.from(map.rooms.values()).filter(room => state.visited.has(room.id)).map(room => <g key={room.id} className="rogue-marker" transform={`translate(${room.x + room.w / 2} ${room.y + room.h / 2})`}><text y=".12">{markerFor(floor, room)}</text><text className="rogue-room-name" y="-.7">{room.name}</text></g>)}
+        {partition.map(cell => <rect key={`w${cell.x},${cell.y}`} className="rogue-partition" x={cell.x} y={cell.y} width="1" height="1"/>)}
+        {Array.from(map.rooms.values()).filter(room => state.visited.has(room.id)).map(room => <g key={room.id} className="rogue-marker" transform={`translate(${room.x + room.w / 2} ${room.y + room.h / 2})`}><text y=".12">{markerFor(floor, room)}</text><text className="rogue-room-name" y={-room.h / 2 - .35}>{room.name}</text></g>)}
         <circle className="rogue-lamp-glow" cx={lamp.x} cy={lamp.y} r="5" fill="url(#expedition-glow)"/>
-        <circle className="rogue-player" cx={lamp.x} cy={lamp.y} r=".19"/>
+        <g className="rogue-player-mark" transform={`translate(${lamp.x} ${lamp.y}) rotate(${FACING_ANGLE[floor.facing] ?? 0})`}>
+          <circle className="rogue-player-halo" r=".42"/>
+          <circle className="rogue-player" r=".17"/>
+          <polygon className="rogue-player-arrow" points="0,-.95 .34,-.2 0,-.38 -.34,-.2"/>
+        </g>
       </svg>
     </div>
-    <nav className="rogue-controls" aria-label="移動"><button onClick={() => onMove("north")}>↑<span>北</span></button><button onClick={() => onMove("west")}>←<span>西</span></button><button onClick={() => onMove("south")}>↓<span>南</span></button><button onClick={() => onMove("east")}>→<span>東</span></button></nav>
+    {onMove && <nav className="rogue-controls" aria-label="移動"><button onClick={() => onMove("north")}>↑<span>北</span></button><button onClick={() => onMove("west")}>←<span>西</span></button><button onClick={() => onMove("south")}>↓<span>南</span></button><button onClick={() => onMove("east")}>→<span>東</span></button></nav>}
   </section>;
 }

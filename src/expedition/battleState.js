@@ -5,6 +5,8 @@ const openRows = ({ width, height }) => Array.from({ length: height }, () => "."
 // guardianはboolean(true/false)とレイアウト名文字列("guardian"/"junction"/"corridor")の
 // 両方の呼び出し規約が混在しているため、両方を受け付ける。
 const layoutName = layout => layout === true || layout === "guardian" ? "guardian" : layout === "junction" ? "junction" : "corridor";
+// 大部屋の固定敵戦だけは、静的なConfigの盤面ではなく探索と同じ壁(interior.jsのhallBattleBoard)を渡す。
+const boardFor = layout => typeof layout === "object" ? layout : EXPEDITION_BATTLE_CONFIG.board[layoutName(layout)];
 const gridFor = board => {
   const grid = createGrid(board.rows || openRows(board));
   // 三叉路の'#'は壁ではなく、床が存在しない盤外として描画する。
@@ -65,7 +67,7 @@ export function chooseCompanionAction({ grid, units, mage, command }) {
 
 export function createExpeditionBattleLayout(layout, seed = 0) {
   const rng = makeRng(seed);
-  const board = EXPEDITION_BATTLE_CONFIG.board[layoutName(layout)];
+  const board = boardFor(layout);
   const partySlots = board.partySlots.map(slot => ({ ...slot }));
   const swap = Math.floor(rng() * partySlots.length); // Fisher-Yatesの2要素版
   [partySlots[partySlots.length - 1], partySlots[swap]] = [partySlots[swap], partySlots[partySlots.length - 1]];
