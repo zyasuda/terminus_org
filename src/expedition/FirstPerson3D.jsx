@@ -8,11 +8,10 @@ import { CAM_BACK_DEFAULT, CAM_BACK_MAX, createFirstPersonScene } from "./firstP
 // 3Dの組み立てと描画は firstPersonScene.js。
 const COMPASS = { north: { label: "北", angle: 0 }, east: { label: "東", angle: 90 }, south: { label: "南", angle: 180 }, west: { label: "西", angle: 270 } };
 
-const BACK_SAVE = "ai_companion_fp_camback";
-
 export default function FirstPerson3D({ floor, onForward, onBack, onTurn, onOpenMap }) {
   const mount = useRef(null), sceneRef = useRef(null);
-  const [camBack, setCamBack] = useState(() => Number(localStorage.getItem(BACK_SAVE) ?? CAM_BACK_DEFAULT));
+  // 調整はその場限り。保存すると、既定値を変えても古い値が勝って何が効いているか分からなくなる。
+  const [camBack, setCamBack] = useState(CAM_BACK_DEFAULT);
   const map = useMemo(() => mapForFloor(floor), [floor.seed, floor.corridorSeed]);
   const room = useMemo(() => hallRoom(floor), [floor.seed, floor.corridorSeed]);
 
@@ -25,7 +24,7 @@ export default function FirstPerson3D({ floor, onForward, onBack, onTurn, onOpen
     return () => { window.removeEventListener("resize", onResize); scene.dispose(); sceneRef.current = null; };
   }, [map]);
 
-  useEffect(() => { localStorage.setItem(BACK_SAVE, String(camBack)); sceneRef.current?.setBack(camBack); }, [camBack, map]);
+  useEffect(() => { sceneRef.current?.setBack(camBack); }, [camBack, map]);
 
   const enemy = room && !floor.hallDefeated ? hallEnemyPosition(room) : null;
   useEffect(() => {

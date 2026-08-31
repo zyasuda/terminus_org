@@ -17,7 +17,7 @@ const FOG_NEAR = CELL * 0.8, FOG_FAR = CELL * 4.2;
 const STEP_MS = 190, TURN_MS = 170;
 // カメラを立ち位置からどれだけ後ろへ引くか。単位: 戦闘のタイル(1マス = 3タイル)。
 // 引くほど広く見えるが、マスの外へ出ると後ろの壁を突き抜けるので上限を設ける。
-export const CAM_BACK_DEFAULT = 1.0, CAM_BACK_MAX = CELL / 2 - 0.2;
+export const CAM_BACK_DEFAULT = 0.6, CAM_BACK_MAX = CELL / 2 - 0.2;
 
 const parse = key => key.split(",").map(Number);
 
