@@ -3,15 +3,18 @@ import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import { STANDEE_VERSION } from "../battle/standeeVersion.js";
 import { DUST_TOP, dustMaterial, dustMote } from "../battle/dustLook.js";
 import { FLICKER_SPEED, LANTERN_COLOR, LANTERN_DECAY, LANTERN_INTENSITY, LANTERN_RANGE, flicker } from "../battle/lanternLook.js";
-import { DOORWAY_HEIGHT_TILES, FLOOR_BASE, FLOOR_TONE, PASSAGE_HEIGHT_TILES, WALL_COLOR, stoneTexture } from "../battle/stoneLook.js";
+import { DOORWAY_HEIGHT_TILES, FLOOR_BASE, FLOOR_TEX_TILES, FLOOR_TONE, PASSAGE_HEIGHT_TILES, WALL_COLOR, stoneTexture } from "../battle/stoneLook.js";
 import { FACING_YAW, levelCells } from "./mapwalk.js";
 
 // 一人称の3D。戦闘(view3d.js)と同じ「1マス=1タイル」の座標系で組み、
 // 壁の有無は探索・戦闘と同じ isOpen / hallBlocked を読む。
 // 隠面と奥行きはGPUに任せる。自前の投影・並べ替え・隠面判定は持たない。
 //
-// 単位はすべて戦闘のタイル。探索の1マスは戦闘の3タイル(battleConfig.jsのcorridor.height)。
-export const CELL = 3;
+// 単位はすべて戦闘のタイル。**探索の1マス = 戦闘の1タイル**で、戦闘盤(hallBattleBoard /
+// corridorBattleBoard が room.w×room.h をそのまま行データにしている)と同じ換算にする。
+// 2026-08-31まで3にしていたが、これは「細い通路盤の幅が3マス」を1マスの大きさと
+// 読み違えたもので、依頼には無い決定だった。同じ部屋が一人称だけ3倍広く描かれていた。
+export const CELL = 1;
 // 天井の高さは stoneLook.js の PASSAGE_HEIGHT_TILES が正本(出入口の高さとは別)。
 // 目の高さは、アーチのコメント「人の約1.6倍」から逆算した背丈(2.0/1.6 = 1.25)のやや下。
 export const CEIL = PASSAGE_HEIGHT_TILES, EYE = 1.15;
@@ -20,7 +23,8 @@ export const CEIL = PASSAGE_HEIGHT_TILES, EYE = 1.15;
 // 幅はマスに収める。CELLを縮めた時に、開口がマスより広くなって壁が消えるのを防ぐ。
 const ARCH_W = Math.min(1.4, CELL * 0.7), ARCH_H = DOORWAY_HEIGHT_TILES;
 const BG = 0x0a0d14, LINE = 0x8fb0d8, FLOOR_LINE = 0x6d8399;
-const FOG_NEAR = CELL * 0.8, FOG_FAR = CELL * 4.2;
+// 霧はカメラからの実距離なので、マスの大きさではなくタイルで持つ。
+const FOG_NEAR = 2.4, FOG_FAR = 12.6;
 // 向きは角度で持つ(FACING_YAWが正本)。旋回の補間で北⇄西を跨ぐ時に長い方へ回らないよう、
 // 目標角を現在地から±πの範囲へ畳んで使う。
 const parse = key => key.split(",").map(Number);
@@ -31,8 +35,9 @@ const STEP_MS = 190, TURN_MS = 170;
 export const CAM_BACK_DEFAULT = CELL * 0.2, CAM_BACK_MAX = CELL * 0.43;
 // 塵の見た目は戦闘と同じ dustLook.js を読む(2画面で食い違わせない)。
 // ここで決めるのは「どこに、何個置くか」だけ。
-// 戦闘は7×3の盤に22個。同じ密度になるよう、カメラの周り±1マス(=±3タイル)に置く。
-const DUST_COUNT = 38, DUST_RANGE = CELL;
+// 戦闘は7×3=21タイルの盤に22個。同じ密度になるよう、カメラの周り±3タイル(6×6=36タイル)に
+// 置く。マスの大きさではなくタイルで持つ(塵の粒の間隔は物理的な値)。
+const DUST_COUNT = 38, DUST_RANGE = 3;
 
 export function createFirstPersonScene(container, map, { ceilTiles = CEIL } = {}) {
   const ceil = ceilTiles;   // 天井の高さ。開発用スライダーで動かして決める
@@ -45,8 +50,10 @@ export function createFirstPersonScene(container, map, { ceilTiles = CEIL } = {}
   const dark = hex => new THREE.MeshLambertMaterial({ color: hex, fog: true });
   // 壁と天井は無地。戦闘の壁も無地(COLOR.wall)なので、探索だけ石を貼ると食い違う。
   const wallMat = dark(WALL_COLOR), ceilMat = dark(0x232833);
-  // 床は戦闘と同じ石。テクスチャ1枚 = FLOOR_TEX_TILES(3)タイル = 探索のちょうど1マス。
+  // 床は戦闘と同じ石。戦闘は「テクスチャ1枚 = FLOOR_TEX_TILES(3)タイル」でUVを振っている。
+  // こちらは1マスの板1枚にrepeatで同じ密度を作る。マス1枚に1回貼ると石が3倍細かくなる。
   const stoneTex = stoneTexture();
+  stoneTex.repeat.set(CELL / FLOOR_TEX_TILES, CELL / FLOOR_TEX_TILES);
   const floorMat = new THREE.MeshLambertMaterial({ map: stoneTex, fog: true,
     color: new THREE.Color(FLOOR_BASE).multiplyScalar(FLOOR_TONE) });
   const lineMat = new THREE.LineBasicMaterial({ color: LINE, fog: true });
@@ -150,7 +157,7 @@ export function createFirstPersonScene(container, map, { ceilTiles = CEIL } = {}
     ceilMesh.rotation.x = Math.PI / 2;
     ceilMesh.position.set(cx, ceil, cz);
     floorGroup.add(ceilMesh);
-    for (let i = 0; i <= CELL; i += 1) {
+    for (let i = 0; i <= Math.round(CELL); i += 1) {
       grid.push(cx - h + i, .01, cz - h, cx - h + i, .01, cz + h);
       grid.push(cx - h, .01, cz - h + i, cx + h, .01, cz - h + i);
     }
@@ -182,11 +189,11 @@ export function createFirstPersonScene(container, map, { ceilTiles = CEIL } = {}
   // 同行者。戦闘と同じスタンディをそのまま置く。
   // 立ち位置はパーティのマスの中心から見た「横」と「前」(単位: タイル)。
   // カメラは中心より CAM_BACK 分だけ後ろにいるので、この位置だと背中が視界に入る。
-  // 位置はマスの大きさに対する割合で持つ。横は通路の半分から板の幅の半分(約0.45)を
-  // 引いた範囲に収めること。越えると壁を突き抜ける。
+  /* 同行者。1マス=1タイルだと通路の幅が1タイルしかなく、板の幅(リディア0.638・
+     ガレス0.884)では横に2人並べられない。縦一列にする。
+     主人公(ガレス)はカメラそのものなので置かない。 */
   const PARTY = [
-    { model: "lydia", side: -0.21 * CELL, ahead: 0.48 * CELL },    // 小柄。少し前を歩く
-    { model: "gareth", side: -0.33 * CELL, ahead: 0.33 * CELL },   // 大柄。リディアの手前・左を歩く
+    { model: "lydia", side: 0, ahead: 0.9 },   // 半歩先を歩く
   ];
   const partyGroup = new THREE.Group();
   scene.add(partyGroup);
@@ -215,12 +222,12 @@ export function createFirstPersonScene(container, map, { ceilTiles = CEIL } = {}
   }
 
   // 敵影。位置は外から差し込む(地図には出さない固定敵)。
-  const markerGeo = new THREE.ConeGeometry(CELL * 0.22, 0.9, 4);
+  const markerGeo = new THREE.ConeGeometry(0.66, 0.9, 4);
   const marker = new THREE.Mesh(markerGeo, new THREE.MeshBasicMaterial({ color: 0x6b3a3a, fog: true }));
   marker.visible = false;
   scene.add(marker);
 
-  const camera = new THREE.PerspectiveCamera(72, 1, 0.05, CELL * 12);
+  const camera = new THREE.PerspectiveCamera(72, 1, 0.05, 36);
   camera.position.y = EYE;
   // カンテラ。色・強さ・減衰・揺らぎは戦闘と同じ lanternLook.js を読む。
   // 射程だけは場面で違う。戦闘は盤を見下ろすので3タイルで足りるが、一人称は
