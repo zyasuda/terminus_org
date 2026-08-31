@@ -1,6 +1,7 @@
 import * as THREE from "three";
 import { DUST_TOP, dustMaterial, dustMote } from "../battle/dustLook.js";
-import { FLOOR_BASE, FLOOR_TEX_TILES, FLOOR_TONE, stoneTexture } from "../battle/stoneLook.js";
+import { FLICKER_SPEED, LANTERN_COLOR, LANTERN_DECAY, LANTERN_INTENSITY, LANTERN_RANGE, flicker } from "../battle/lanternLook.js";
+import { FLOOR_BASE, FLOOR_TONE, WALL_COLOR, stoneTexture } from "../battle/stoneLook.js";
 import { FACING_YAW, levelCells } from "./mapwalk.js";
 
 // 一人称の3D。戦闘(view3d.js)と同じ「1マス=1タイル」の座標系で組み、
@@ -35,7 +36,7 @@ export function createFirstPersonScene(container, map) {
 
   const dark = hex => new THREE.MeshLambertMaterial({ color: hex, fog: true });
   // 壁と天井は無地。戦闘の壁も無地(COLOR.wall)なので、探索だけ石を貼ると食い違う。
-  const wallMat = dark(0x5a6272), ceilMat = dark(0x333a47);
+  const wallMat = dark(WALL_COLOR), ceilMat = dark(0x232833);
   // 床は戦闘と同じ石。テクスチャ1枚 = FLOOR_TEX_TILES(3)タイル = 探索のちょうど1マス。
   const stoneTex = stoneTexture();
   const floorMat = new THREE.MeshLambertMaterial({ map: stoneTex, fog: true,
@@ -124,9 +125,18 @@ export function createFirstPersonScene(container, map) {
 
   const camera = new THREE.PerspectiveCamera(72, 1, 0.05, CELL * 12);
   camera.position.y = EYE;
-  // 松明。カメラと一緒に動く。distanceが「灯りの届く範囲」の正本になる。
-  const torch = new THREE.PointLight(0xffd9a0, 2.6, CELL * 3.6, 1.6);
-  scene.add(torch);
+  // カンテラ。色・強さ・減衰・揺らぎは戦闘と同じ lanternLook.js を読む。
+  // 射程だけは場面で違う。戦闘は盤を見下ろすので3タイルで足りるが、一人称は
+  // 進行方向の奥まで見えるため、灯りが届かないと真っ暗な穴を覗くことになる。
+  // 探索の1マス = 3タイルなので、LANTERN_RANGE_CELLS マス先までを照らす。
+  const LANTERN_RANGE_CELLS = 1.6;
+  const lantern = new THREE.PointLight(LANTERN_COLOR, LANTERN_INTENSITY,
+    LANTERN_RANGE * LANTERN_RANGE_CELLS, LANTERN_DECAY);
+  scene.add(lantern);
+  // 環境光は探索側の値のまま。中立色の補助光を足しても床の橙は取れなかった
+  // (実測: 0.34+key0.36で偏り16.3%、0.55単独で16.2%、今の値で28.4%。戦闘は3.3%)。
+  // 一人称は常にカンテラの射程の中にいるので、床の色をカンテラが決めてしまう。
+  // 灯りの届く範囲の暗さを保つ方を採り、床の橙は残している(2026-08-31、作者の判断待ち)。
   scene.add(new THREE.AmbientLight(0x2a3550, 0.5));
 
   const renderer = new THREE.WebGLRenderer({ antialias: true });
@@ -151,13 +161,13 @@ export function createFirstPersonScene(container, map) {
 
   // 塵を1フレーム分動かす。戦闘と同じく「上へゆっくり立ち上り、XZで円を描くように揺れる」。
   // 違うのは回り込みの基準だけ。戦闘は盤の上に留めるが、こちらはカメラに追従させる。
-  let dustElapsed = 0;
+  let elapsed = 0;   // 経過秒。塵の揺れとカンテラの揺らぎが共有する
   const moveDust = (dt, cx, cz) => {
     if (!dustPlaced) { // 初回はカメラの周りへ配り直す(原点のままだと足元に無い)
       dustPlaced = true;
       for (const d of dustState) { d.x += cx; d.z += cz; }
     }
-    dustElapsed += dt;
+    elapsed += dt;
     for (const d of dustState) {
       d.y += d.speed * dt;
       if (d.y > DUST_TOP) d.y -= DUST_TOP;
@@ -166,16 +176,18 @@ export function createFirstPersonScene(container, map) {
       if (d.z - cz > DUST_RANGE) d.z -= DUST_RANGE * 2;
       else if (d.z - cz < -DUST_RANGE) d.z += DUST_RANGE * 2;
       d.sprite.position.set(
-        d.x + Math.sin(dustElapsed * d.swayFreqX + d.swayPhase) * d.swayAmpX,
+        d.x + Math.sin(elapsed * d.swayFreqX + d.swayPhase) * d.swayAmpX,
         d.y,
-        d.z + Math.cos(dustElapsed * d.swayFreqZ + d.swayPhase) * d.swayAmpZ);
+        d.z + Math.cos(elapsed * d.swayFreqZ + d.swayPhase) * d.swayAmpZ);
     }
   };
 
   const draw = () => {
-    // 松明は立ち位置(マスの中心)に置いたまま、カメラだけ後ろへ引く。
+    // カンテラは立ち位置(マスの中心)に置いたまま、カメラだけ後ろへ引く。
     // カメラに付けると引いた分だけ前が暗くなり、明るさが操作で変わってしまう。
-    torch.position.set(state.x, EYE, state.z);
+    lantern.position.set(state.x, EYE, state.z);
+    // 炎の揺らぎ。戦闘と同じ式・同じ速さ。
+    lantern.intensity = LANTERN_INTENSITY * flicker(elapsed * FLICKER_SPEED);
     camera.position.set(state.x + Math.sin(state.yaw) * camBack, EYE, state.z + Math.cos(state.yaw) * camBack);
     camera.rotation.set(0, state.yaw, 0);
     renderer.render(scene, camera);

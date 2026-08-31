@@ -14,27 +14,22 @@ import { STANDEE_VERSION } from "./standeeVersion.js";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import { elevationAt, makeRng } from "./core.js";
 import { DUST_TOP, dustMaterial, dustMote } from "./dustLook.js";
-import { FLOOR_BASE, FLOOR_TEX_TILES, FLOOR_TONE, stoneTexture } from "./stoneLook.js";
+import { FLICKER_SPEED, LANTERN_COLOR, LANTERN_DECAY, LANTERN_INTENSITY, LANTERN_RANGE, flicker } from "./lanternLook.js";
+import { FLOOR_BASE, FLOOR_TEX_TILES, FLOOR_TONE, WALL_COLOR, stoneTexture } from "./stoneLook.js";
 
 // 床の紙は1マスちょうどで隙間なく敷く。TILEはマス内に物を置くときの
 // 「はみ出さない範囲」の目安として、水溜りや瓦礫の大きさに使う。
 const TILE = 0.92;
 const WALL_H = 1.0;
 
-// ランタンの色と強さ。夜の主光源。
-// 元は0xffa848(濃い橙)だったが、床を石のモノトーンにしたところ床が橙に染まり、
-// グレーに見えなくなった。scripts/lantern-tune.mjs で床の無彩色からの偏りを
-// 実測して詰めた値(2026-08-25、偏り26.4%→3.3%)。橙みは残っているが、
-// ランタンの存在は色ではなく明るさの落ち方で出る(近く明度53 / 遠く明度41)。
-const LANTERN_COLOR = 0xffe3bd;
-const LANTERN_INTENSITY = 4.6;   // 板の明るさの基準にも使う(applyPlateLight)
-const LANTERN_RANGE = 3.0;
+// カンテラの色・強さ・射程・揺らぎは lanternLook.js が正本(探索の一人称も同じものを読む)。
+// LANTERN_INTENSITY は板の明るさの基準にも使う(applyPlateLight)。
 const LIGHT_PRESET_LANTERN_DEFAULT = true;   // 既定は夜プリセット
 
 const COLOR = {
   bg: 0x161a22,
   floor: 0x4a5164,
-  wall: 0x2b303c,        // 盤面の外周・地形の壁
+  wall: WALL_COLOR,      // 盤面の外周・地形の壁(stoneLook.jsが正本。探索の壁も同じ色)
   pillar: 0x3f3527,      // 高さ1.0の障害物(進入不可)
   rubble: 0x574a35,      // 高さ0.25〜0.75の障害物(乗り越えられる)
   reach: 0x3d7fb5,       // 到達可能マス
@@ -511,8 +506,6 @@ export function createBattleScene(container, grid, { voidBoundaryWalls = false, 
 
   // 周期の違う正弦を重ねて、繰り返しに気づきにくいゆらぎを作る。
   // 速い成分を厚めにすると「ゆっくり明滅」ではなく炎のチラつきに寄る
-  const flicker = t =>
-    0.68 + 0.32 * (Math.sin(t) * 0.34 + Math.sin(t * 2.3) * 0.3 + Math.sin(t * 5.7) * 0.22 + Math.sin(t * 9.1) * 0.14);
 
   /* --- 床と壁(戦闘中は変化しないので一度だけ作る) ---
      床はタイルの箱ではなく、厚みのない紙として描く。マスの切れ目ではなく細い線で
@@ -1245,7 +1238,7 @@ export function createBattleScene(container, grid, { voidBoundaryWalls = false, 
       // 減衰を切ると範囲内が一様に照らされ、distanceの縁でなめらかに落ちるので、
       // 「ぼんやり明るい範囲」がそのまま出る
       const base = lanternIntensity;
-      const light = new THREE.PointLight(lanternColor, base, lanternRange, 0);
+      const light = new THREE.PointLight(lanternColor, base, lanternRange, LANTERN_DECAY);
       light.position.set(0, h * 0.9, 0);   // 頭のあたり。光源だけを置き、球体は出さない
       light.visible = lanternVisibleFor(unit.id);
       g.add(light);
@@ -1921,8 +1914,7 @@ export function createBattleScene(container, grid, { voidBoundaryWalls = false, 
       // 消えているカンテラは揺らがせない。Three.jsは非表示の光を照明計算から
       // 除外するので見た目は同じだが、「消灯中は環境光だけ」を意図として明示する。
       if (!l.light.visible) continue;
-      // 係数を上げるほど速くなる。6ではせわしなかったので落としてある
-      l.light.intensity = l.base * flicker(elapsed * 3.2 + l.phase);
+      l.light.intensity = l.base * flicker(elapsed * FLICKER_SPEED + l.phase);
     }
 
     stepEffects(dt);

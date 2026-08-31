@@ -8,6 +8,9 @@ import { makeRng } from "./core.js";
 //
 // 壁には貼らない。戦闘の壁は無地(COLOR.wall)なので、探索だけ石を貼ると食い違う。
 
+// 壁の色。戦闘の COLOR.wall もここを読む。床と違って無地(テクスチャは貼らない)。
+export const WALL_COLOR = 0x2b303c;
+
 export const FLOOR_BASE = 0xb4b4b4;   // 石のモノトーン。明度はFLOOR_TONEで動かす
 export const FLOOR_TONE = 0.8;
 export const FLOOR_TEX_TILES = 3;     // テクスチャ1枚が何タイル分か。物理サイズを固定するため
