@@ -1,4 +1,4 @@
-// 探索の地図から戦闘盤を組む場所。大部屋の内装と、三叉路の枝の形をここで決める。
+// 探索の地図から戦闘盤を組む場所。大部屋の内装、三叉路の枝、通路の形をここで決める。
 // 探索側の当たり判定(hallBlocked)と戦闘盤面(hallBattleBoard)が同じ壁集合を読むので、
 // 迷路の壁と戦闘の壁が食い違わない。三叉路も同じ理由で、固定の形ではなく地図から組む。
 export const HALL_SIZE = { w: 16, h: 12 };
@@ -62,6 +62,30 @@ export function hallBattleBoard(room) {
     width: room.w, height: room.h, rows,
     partySlots: [{ x: WALL_X - 2, y: GAP_Y[0] }, { x: WALL_X - 2, y: GAP_Y[1] }],
     enemyStart: { x: HALL_ENEMY_LOCAL.x, y: HALL_ENEMY_LOCAL.y },
+  };
+}
+
+// 通路戦の盤。探索の部屋寸法をそのまま使い、入ってきた辺と反対側で向かい合う。
+export function corridorBattleBoard(room, entryCell) {
+  const edge = [
+    ["north", entryCell.y], ["south", room.h - 1 - entryCell.y],
+    ["west", entryCell.x], ["east", room.w - 1 - entryCell.x],
+  ].reduce((nearest, candidate) => candidate[1] < nearest[1] ? candidate : nearest)[0];
+  const oppositeEdge = { north: "south", south: "north", west: "east", east: "west" }[edge];
+  const cellsOn = side => {
+    const horizontal = side === "north" || side === "south";
+    const length = horizontal ? room.w : room.h;
+    const positions = [-1, 1].map(offset => Math.max(0, Math.min(length - 1, Math.floor(length / 2) + offset)));
+    return positions.map(position => horizontal
+      ? { x: position, y: side === "north" ? 0 : room.h - 1 }
+      : { x: side === "west" ? 0 : room.w - 1, y: position });
+  };
+  const partySlots = cellsOn(edge), enemySlots = cellsOn(oppositeEdge);
+  return {
+    kind: "corridor",
+    width: room.w, height: room.h, rows: Array.from({ length: room.h }, () => ".".repeat(room.w)),
+    partySlots,
+    enemyStart: enemySlots[0], enemyStart2: enemySlots[1],
   };
 }
 

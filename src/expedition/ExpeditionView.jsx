@@ -2,7 +2,7 @@ import React, { useEffect, useState } from "react";
 import ExpeditionBattle from "./ExpeditionBattle.jsx";
 import FirstPerson3D from "./FirstPerson3D.jsx";
 import RogueMap from "./RogueMap.jsx";
-import { ITEMS, back, canOpenChest, createFloor, equipFromStash, equipInField, eventAt, hallContact, hallLayoutFor, isEntrance, junctionLayoutFor, newVillage, partyMaxHp, retreatToEntrance, rewardFor, turn, useFieldTonic, walk } from "./core.js";
+import { ITEMS, back, canOpenChest, corridorLayoutFor, createFloor, equipFromStash, equipInField, eventAt, hallContact, hallLayoutFor, isEntrance, junctionLayoutFor, newVillage, partyMaxHp, retreatToEntrance, rewardFor, turn, useFieldTonic, walk } from "./core.js";
 
 const SAVE = "ai_companion_expedition_b1";
 // 開発中の検証専用。プレイヤー向け機能ではない(game-debug-tools)。
@@ -107,7 +107,7 @@ export default function ExpeditionView() {
   const equip = (id, index) => { if (ITEMS[id]?.slot !== "consumable") setVillage(v => equipFromStash(v, owner, index)); };
   const useTonic = () => { const i = village.stash.indexOf("tonic"); if (i < 0) return false; setVillage(v => ({ ...v, stash: v.stash.filter((_, n) => n !== i) })); return true; };
   if (battle) return <>
-    <ExpeditionBattle guardian={battle.kind === "guardian"} layout={battle.kind === "hall" ? hallLayoutFor(floor) : battle.kind === "junction" ? junctionLayoutFor(floor) : "corridor"} equipment={village.equipment} party={floor.party} seed={(floor.seed + [...battle.id].reduce((n, char) => n + char.charCodeAt(0), 0)) >>> 0} tonics={village.stash.filter(i => i === "tonic").length} onUseTonic={useTonic} onFinish={finishBattle}/>
+    <ExpeditionBattle guardian={battle.kind === "guardian"} layout={battle.kind === "hall" ? hallLayoutFor(floor) : battle.kind === "junction" ? junctionLayoutFor(floor) : corridorLayoutFor(floor) || "corridor"} equipment={village.equipment} party={floor.party} seed={(floor.seed + [...battle.id].reduce((n, char) => n + char.charCodeAt(0), 0)) >>> 0} tonics={village.stash.filter(i => i === "tonic").length} onUseTonic={useTonic} onFinish={finishBattle}/>
     {DEBUG && <button style={S.debugSkip} onClick={() => finishBattle("victory", floor.party)}>[debug] 戦闘スキップ</button>}
   </>;
   if (!floor) return <div style={S.page}>

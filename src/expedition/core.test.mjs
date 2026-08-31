@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { ITEMS, back, canOpenChest, createFloor, retreatToEntrance, equipFromStash, equipInField, eventAt, hallContact, hallLayoutFor, hallRoom, isEntrance, junctionLayoutFor, mapForFloor, newVillage, partyMaxHp, route, useFieldTonic, walk } from "./core.js";
+import { ITEMS, back, canOpenChest, corridorLayoutFor, createFloor, retreatToEntrance, equipFromStash, equipInField, eventAt, hallContact, hallLayoutFor, hallRoom, isEntrance, junctionLayoutFor, mapForFloor, newVillage, partyMaxHp, route, useFieldTonic, walk } from "./core.js";
 import { hallBlocked, hallEnemyPosition, hallWallCells } from "./interior.js";
 import { FACING_AHEAD, FACING_YAW, isOpen, levelCells, opposite } from "./mapwalk.js";
 import { EXPEDITION_BATTLE_CONFIG } from "./battleConfig.js";
@@ -142,5 +142,61 @@ assert.equal(eventAt(retreated), null, "入口には遭遇が無いので、戻�
 
 // 一人称の床の目盛りは「探索1マス = 戦闘3タイル」を前提にしている(FirstPersonView.jsx の TILES_PER_CELL)。
 // 通路盤の幅を変えたらここで落ちるので、床の刻みも一緒に直すこと。
-assert.equal(EXPEDITION_BATTLE_CONFIG.board.corridor.height, 3, "戦闘の通路幅が3マスであることが一人称の床の刻みの根拠");
+/* 一人称の床の刻み(firstPersonScene.js の CELL = 3)の根拠。
+   2026-08-31に通路戦の盤を部屋から組むようにしたので、盤の縦幅はもう3固定ではない
+   (実測 3〜5)。刻みの根拠は「細い通路の幅が3マス」という設計値の方であり、
+   この board.corridor はその設計値が書いてある最後の場所として残している。
+   **盤の縮尺(1マス=1タイル)と一人称の縮尺(1マス=3タイル)は食い違ったままで、未解決。** */
+assert.equal(EXPEDITION_BATTLE_CONFIG.board.corridor.height, 3, "細い通路の幅3マスが一人称の床の刻みの根拠として残っている");
+
+/* 通路戦の盤は、戦う部屋の実寸と入ってきた辺から組む(2026-08-31)。
+   それまでは固定の7×3で、部屋の形と無関係だった。
+   mapgen.js:118 の部屋は w∈[4,7] h∈[3,5]。辺の長さが必ず3以上あるので、
+   味方2人・敵2体を中央±1へ置いても重ならない。ここが3を割ると開始位置が重なるため、
+   下の「開始位置は4つとも別のマス」がその見張りになる。 */
+const walkTo = (seed, roomId) => {
+  let floor = createFloor(seed);
+  for (let guard = 0; guard < 60 && floor.at !== roomId; guard += 1) {
+    const path = route(floor, floor, { roomId });
+    if (!path?.length) return null;
+    floor = walk(floor, path[0].dir);
+  }
+  return floor.at === roomId ? floor : null;
+};
+let corridorBattles = 0;
+const boardSizes = new Set();
+for (let seed = 1; seed <= 60; seed += 1) for (const roomId of ["fight-0", "fight-1"]) {
+  const floor = walkTo(seed, roomId);
+  if (!floor) continue;
+  corridorBattles += 1;
+  const room = mapForFloor(floor).rooms.get(roomId);
+  const board = corridorLayoutFor(floor);
+  boardSizes.add(`${board.width}x${board.height}`);
+  assert.equal(board.width, room.w, `seed ${seed} ${roomId}: 盤の横幅は部屋の実寸`);
+  assert.equal(board.height, room.h, `seed ${seed} ${roomId}: 盤の縦幅は部屋の実寸`);
+  const starts = [...board.partySlots, board.enemyStart, board.enemyStart2];
+  assert.equal(new Set(starts.map(c => `${c.x},${c.y}`)).size, 4, `seed ${seed} ${roomId}: 開始位置は4つとも別のマス`);
+  for (const cell of starts) assert.ok(cell.x >= 0 && cell.y >= 0 && cell.x < board.width && cell.y < board.height,
+    `seed ${seed} ${roomId}: 開始位置が盤の中にある`);
+  // 味方は「立っている場所にいちばん近い辺」に、敵はその反対の辺に並ぶ。
+  const local = { x: floor.pos.x - room.x, y: floor.pos.y - room.y };
+  const near = Math.min(local.y, room.h - 1 - local.y, local.x, room.w - 1 - local.x);
+  const onEdge = c => c.x === 0 || c.y === 0 || c.x === room.w - 1 || c.y === room.h - 1;
+  assert.ok(board.partySlots.every(onEdge), `seed ${seed} ${roomId}: 味方は部屋の辺に並ぶ`);
+  assert.ok([board.enemyStart, board.enemyStart2].every(onEdge), `seed ${seed} ${roomId}: 敵も部屋の辺に並ぶ`);
+  assert.ok(board.partySlots.every(c => Math.min(c.y, room.h - 1 - c.y, c.x, room.w - 1 - c.x) === 0 && near >= 0),
+    `seed ${seed} ${roomId}: 味方の辺は立っている場所から選ぶ`);
+  assert.equal(board.kind, "corridor", `seed ${seed} ${roomId}: 盤の種類は通路戦(敵2体編成の根拠)`);
+}
+assert.ok(corridorBattles >= 100, `通路戦を十分な数だけ検査した(実測 ${corridorBattles} 件)`);
+assert.ok(boardSizes.size >= 8, `部屋ごとに盤の形が変わる(実測 ${boardSizes.size} 通り: ${[...boardSizes].join(" ")})`);
+// 固定盤だった頃の7×3を、西から入った時だけ再現する(旧盤との地続きを保つ)。
+{
+  const { corridorBattleBoard } = await import("./interior.js");
+  const old = corridorBattleBoard({ w: 7, h: 3 }, { x: 0, y: 1 });
+  assert.deepEqual(old.partySlots, [{ x: 0, y: 0 }, { x: 0, y: 2 }], "7×3の部屋へ西から入ると、以前の固定盤と同じ味方位置になる");
+  assert.deepEqual([old.enemyStart, old.enemyStart2], [{ x: 6, y: 0 }, { x: 6, y: 2 }], "敵位置も以前の固定盤と同じ");
+  const east = corridorBattleBoard({ w: 7, h: 3 }, { x: 6, y: 1 });
+  assert.deepEqual(east.partySlots, [{ x: 6, y: 0 }, { x: 6, y: 2 }], "東から入れば味方は東の辺に並ぶ(固定盤では常に西だった)");
+}
 console.log("expedition core: ok");

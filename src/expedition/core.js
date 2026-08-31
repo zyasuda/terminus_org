@@ -1,6 +1,6 @@
 import { makeRng } from "../battle/core.js";
 import { EXPEDITION_BATTLE_CONFIG } from "./battleConfig.js";
-import { HALL_SIZE, hallBattleBoard, hallEnemyPosition, hallRoomOf, junctionBattleBoard } from "./interior.js";
+import { HALL_SIZE, corridorBattleBoard, hallBattleBoard, hallEnemyPosition, hallRoomOf, junctionBattleBoard } from "./interior.js";
 import { generateWithRetry, rerouteCorridorsWithRetry } from "./mapgen.js";
 import { FACING_AHEAD, isOpen, opposite, run, start, turnLeft, turnRight } from "./mapwalk.js";
 
@@ -150,6 +150,12 @@ export function hallContact(floor) {
 }
 // 探索と同じ壁(間仕切り)・座標を使う戦闘盤面。
 export function hallLayoutFor(floor) { const room = hallRoom(floor); return room ? hallBattleBoard(room) : null; }
+// 通路戦の盤。現在地を部屋ローカル座標へ直し、実際に入ってきた辺へ味方を置く。
+export function corridorLayoutFor(floor) {
+  const map = mapForFloor(floor), room = map.rooms.get(floor.at);
+  if (!room) return null;
+  return corridorBattleBoard(room, { x: floor.pos.x - room.x, y: floor.pos.y - room.y });
+}
 // 三叉路の戦闘盤。地図でその交差点が実際に開いている向きだけに枝を生やす。
 // 味方は入ってきた枝から出るので、向き(floor.facing)の逆が入口の枝になる。
 export function junctionLayoutFor(floor) {

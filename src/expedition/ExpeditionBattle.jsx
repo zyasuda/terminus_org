@@ -32,7 +32,8 @@ const unitFrom = (id, side, config, start, faceTo, combat) => ({
 const makeState = (guardian, layout, equipment = {}, party = {}, seed = 0) => {
   const { hero: heroConfig, mage: mageConfig, enemy: enemyConfig, corridorEnemy: corridorEnemyConfig, guardian: guardianConfig } = EXPEDITION_BATTLE_CONFIG.units;
   // 通路戦だけ2体編成(corridorEnemy)。三叉路・守護者戦は従来どおり1体。
-  const foeConfig = guardian ? guardianConfig : layout === "corridor" ? corridorEnemyConfig : enemyConfig;
+  const corridor = layout === "corridor" || layout?.kind === "corridor";
+  const foeConfig = guardian ? guardianConfig : corridor ? corridorEnemyConfig : enemyConfig;
   // 最大HPは core.partyMaxHp が正本。地図画面と戦闘画面で違う値を出さないよう式を複製しない。
   const hero = { atk: atkOf(heroConfig.atk, equipment.hero), hp: partyMaxHp("hero", equipment) };
   const mage = { atk: atkOf(mageConfig.atk, equipment.mage), hp: partyMaxHp("mage", equipment) };
