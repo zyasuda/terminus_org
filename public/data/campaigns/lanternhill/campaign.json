@@ -22,8 +22,8 @@
       "電池",
       "メートル"
     ],
-    "world": "ミステリ / ロー・ファンタジー。静かで神秘的、少し切ない。",
-    "terms": "現代語彙を避ける。\n禁止語：懐中電灯、電灯、モーター、エンジン、電池、メートル\n言い換えが必要な場合は、世界観に合う平易な表現を使う。",
+    "world": "ミステリー / ロー・ファンタジー。静かで神秘的、少し切ない。",
+    "terms": "現代語彙を避ける。正名はエンティティ台帳に合わせる。",
     "rollReaction": {
       "critical": "",
       "fumble": ""
@@ -59,6 +59,21 @@
       "nameEn": "Myra Vane",
       "public": "ランタンヒル村の顔役。廃坑再開で村を立て直したい。実利的だが村人思いに見える元行商人",
       "direction": "報告に『青く脈打つ石』への言及があれば、抑えきれない関心を一瞬見せろ。すぐ取り繕わせろ"
+    },
+    {
+      "id": "npc_1",
+      "name": "マイラ",
+      "public": "村の長である。全体のことを優先的に考える。なぜか青い石の行方を追っている。"
+    },
+    {
+      "id": "npc_2",
+      "name": "灯りの番人",
+      "public": "話をすることはできない。胸の青い光の付近に「心石の欠片」が付着していて、手に取ることができるようだ。"
+    },
+    {
+      "id": "npc_3",
+      "name": "村人",
+      "public": "素朴な口調。マイラの部屋を示す。マイラが村人より興味を持っているものがあると秘密めいたことを言う。"
     }
   ],
   "companions": [
@@ -75,8 +90,37 @@
       "image": "assets/casts/member_1.png",
       "sprite": "portrait_lydia_alt.png",
       "gender": "female",
-      "firstPerson": "あたし",
+      "firstPerson": "わたし",
       "addressTerm": "あなた",
+      "quirks": [
+        {
+          "mutter": "遺工は、急いで触るものじゃないわ。"
+        },
+        {
+          "mutter": "ガレス、壊すのは調べてからにして。"
+        },
+        {
+          "mutter": "足元を見て。古い仕掛けかもしれない。"
+        }
+      ],
+      "battleMutters": [
+        "無茶をしないで、ガレス。",
+        "急がないで。相手の癖を見てからでも遅くないわ。",
+        "間合いが遠いわ。もう半歩、退がって。",
+        "息を整えて、あなた。一度で決めなくていい。"
+      ],
+      "battleEnd": {
+        "win": [
+          "片付いたわね。次は痕跡を見ましょう。"
+        ],
+        "fled": [
+          "引く判断は正しいわ。道を変えましょう。"
+        ],
+        "repelled": [
+          "追い払えたみたい。今のうちに進みましょう。"
+        ]
+      },
+      "idleLine": "何か見つけた？",
       "speechFrequency": "standard"
     },
     {
@@ -94,6 +138,32 @@
       "gender": "male",
       "firstPerson": "俺",
       "addressTerm": "お前",
+      "quirks": [
+        {
+          "mutter": "道を見ろ。"
+        },
+        {
+          "mutter": "必要な物だけ持つ。"
+        }
+      ],
+      "battleMutters": [
+        "下がれ。",
+        "俺が前に出る。",
+        "お前は右へ回れ。",
+        "まだ持つ。続けろ。"
+      ],
+      "battleEnd": {
+        "win": [
+          "終わりだ。進める。"
+        ],
+        "fled": [
+          "退く。足を止めるな。"
+        ],
+        "repelled": [
+          "追い払った。今だ。"
+        ]
+      },
+      "idleLine": "なんだ。",
       "speechFrequency": "standard"
     }
   ],
@@ -129,7 +199,7 @@
     },
     {
       "id": "npc_1",
-      "ja": "NPC1",
+      "ja": "マイラ",
       "aliases": [],
       "kind": "npc",
       "importance": "support",
@@ -147,9 +217,10 @@
       "aliases": [
         "ランプ",
         "灯り",
-        "ていとう",
+        "らんぷ",
+        "火",
         "らんたん",
-        "手元灯",
+        "手元",
         "照明"
       ],
       "kind": "item",
@@ -229,7 +300,20 @@
         "あおいし",
         "ひかるいし",
         "いし",
-        "心臓の石"
+        "心臓の石",
+        "心の石",
+        "胸の石",
+        "ど",
+        "どう",
+        "りょ",
+        "どうりょく",
+        "動力",
+        "動力源",
+        "力",
+        "力のみなもと",
+        "力の源",
+        "輝く石",
+        "心いし"
       ],
       "kind": "item",
       "parentConceptId": "concept_heartstone",
@@ -241,7 +325,7 @@
         "take",
         "give"
       ],
-      "requires": "s3b",
+      "requires": "ch1_s3_item_2",
       "surface": "青く光る小さな石の破片である。手に取るとかすかに温かい。強い力を秘めている。",
       "visual": ""
     },
@@ -252,8 +336,8 @@
       "kind": "enemy",
       "importance": "support",
       "surface": "",
-      "truth": "/images/s2_rust_eater.png",
-      "visual": "/images/s2_rust_eater.png",
+      "truth": "",
+      "visual": "s2_rust_eater.png",
       "affordances": [
         "inspect",
         "fight"
@@ -263,10 +347,10 @@
       "id": "monster_2",
       "ja": "灯りの番人",
       "aliases": [],
-      "kind": "enemy",
+      "kind": "npc",
       "importance": "support",
       "surface": "",
-      "truth": "/images/s3_guardian.png",
+      "truth": "",
       "visual": "/images/s3_guardian.png",
       "affordances": [
         "inspect",
@@ -283,7 +367,7 @@
       "importance": "support",
       "surface": "",
       "truth": "/images/s2_rust_eater.png",
-      "visual": "/images/s2_mine_bat.png",
+      "visual": "s2_mine_bat.png",
       "affordances": [
         "inspect",
         "fight"
@@ -295,19 +379,54 @@
       "aliases": [
         "青い石",
         "光る石",
-        "石",
+        "輝く石",
         "あおいし",
         "ひかるいし",
-        "いし",
-        "心臓の石"
+        "こころいし",
+        "動力",
+        "動力源",
+        "力の源"
       ],
       "kind": "concept",
       "role": "main",
       "usage": "dialogue_condition",
       "scope": "campaign",
       "storyKey": true,
-      "surface": "ゆっくりと脈動している青く光る石",
-      "truth": "何かの動力源になるような不思議な力を宿す"
+      "surface": "ゆっくりと脈動して、青く光る石",
+      "truth": "何かの動力源になるような不思議な力を宿す。その力が衰えると、欠片となって剥がれ落ちる。"
+    },
+    {
+      "id": "npc_3",
+      "ja": "村人",
+      "aliases": [],
+      "kind": "npc",
+      "importance": "support",
+      "surface": "",
+      "truth": "",
+      "visual": "",
+      "affordances": [
+        "talk",
+        "inspect"
+      ]
+    },
+    {
+      "id": "item_5-msicql8t-ewjn8d",
+      "ja": "回復薬",
+      "aliases": [
+        "薬",
+        "くすり"
+      ],
+      "kind": "item",
+      "parentConceptId": null,
+      "scope": "campaign",
+      "acquisition": "dialogue",
+      "persistent": false,
+      "capabilities": [
+        "inspect"
+      ],
+      "requires": "",
+      "surface": "体力（HP）を少し回復する",
+      "visual": ""
     }
   ],
   "gmSprite": "gm_mascot.png",
@@ -322,19 +441,21 @@
       "aliases": [
         "青い石",
         "光る石",
-        "石",
+        "輝く石",
         "あおいし",
         "ひかるいし",
-        "いし",
-        "心臓の石"
+        "こころいし",
+        "動力",
+        "動力源",
+        "力の源"
       ],
       "kind": "concept",
       "role": "main",
       "usage": "dialogue_condition",
       "scope": "campaign",
       "storyKey": true,
-      "surface": "ゆっくりと脈動している青く光る石",
-      "truth": "何かの動力源になるような不思議な力を宿す"
+      "surface": "ゆっくりと脈動して、青く光る石",
+      "truth": "何かの動力源になるような不思議な力を宿す。その力が衰えると、欠片となって剥がれ落ちる。"
     }
   ],
   "items": [
@@ -344,9 +465,10 @@
       "aliases": [
         "ランプ",
         "灯り",
-        "ていとう",
+        "らんぷ",
+        "火",
         "らんたん",
-        "手元灯",
+        "手元",
         "照明"
       ],
       "kind": "item",
@@ -426,7 +548,20 @@
         "あおいし",
         "ひかるいし",
         "いし",
-        "心臓の石"
+        "心臓の石",
+        "心の石",
+        "胸の石",
+        "ど",
+        "どう",
+        "りょ",
+        "どうりょく",
+        "動力",
+        "動力源",
+        "力",
+        "力のみなもと",
+        "力の源",
+        "輝く石",
+        "心いし"
       ],
       "kind": "item",
       "parentConceptId": "concept_heartstone",
@@ -438,8 +573,27 @@
         "take",
         "give"
       ],
-      "requires": "s3b",
+      "requires": "ch1_s3_item_2",
       "surface": "青く光る小さな石の破片である。手に取るとかすかに温かい。強い力を秘めている。",
+      "visual": ""
+    },
+    {
+      "id": "item_5-msicql8t-ewjn8d",
+      "ja": "回復薬",
+      "aliases": [
+        "薬",
+        "くすり"
+      ],
+      "kind": "item",
+      "parentConceptId": null,
+      "scope": "campaign",
+      "acquisition": "dialogue",
+      "persistent": false,
+      "capabilities": [
+        "inspect"
+      ],
+      "requires": "",
+      "surface": "体力（HP）を少し回復する",
       "visual": ""
     }
   ],
@@ -455,30 +609,99 @@
   ],
   "castAttributes": {
     "gm": {
-      "gender": "unspecified",
-      "firstPerson": "",
-      "addressTerm": "",
+      "gender": "male",
+      "firstPerson": "私",
+      "addressTerm": "君",
       "speechRules": "",
       "speechFrequency": "standard"
     },
     "member_1": {
-      "gender": "unspecified",
-      "firstPerson": "",
+      "gender": "female",
+      "firstPerson": "わたし",
       "addressTerm": "",
       "speechRules": "",
-      "speechFrequency": "standard"
+      "speechFrequency": "standard",
+      "quirks": [
+        {
+          "mutter": "遺工は、急いで触るものじゃないわ。"
+        },
+        {
+          "mutter": "ガレス、壊すのは調べてからにして。"
+        },
+        {
+          "mutter": "足元を見て。古い仕掛けかもしれない。"
+        }
+      ],
+      "battleMutters": [
+        "無茶をしないで、ガレス。",
+        "急がないで。相手の癖を見てからでも遅くないわ。",
+        "間合いが遠いわ。もう半歩、退がって。",
+        "息を整えて、あなた。一度で決めなくていい。"
+      ],
+      "battleEnd": {
+        "win": [
+          "片付いたわね。次は痕跡を見ましょう。"
+        ],
+        "fled": [
+          "引く判断は正しいわ。道を変えましょう。"
+        ],
+        "repelled": [
+          "追い払えたみたい。今のうちに進みましょう。"
+        ]
+      },
+      "idleLine": "何か見つけた？"
     },
     "member_2": {
+      "gender": "male",
+      "firstPerson": "俺",
+      "addressTerm": "お前",
+      "speechRules": "",
+      "speechFrequency": "standard",
+      "quirks": [
+        {
+          "mutter": "道を見ろ。"
+        },
+        {
+          "mutter": "必要な物だけ持つ。"
+        }
+      ],
+      "battleMutters": [
+        "下がれ。",
+        "俺が前に出る。",
+        "お前は右へ回れ。",
+        "まだ持つ。続けろ。"
+      ],
+      "battleEnd": {
+        "win": [
+          "終わりだ。進める。"
+        ],
+        "fled": [
+          "退く。足を止めるな。"
+        ],
+        "repelled": [
+          "追い払った。今だ。"
+        ]
+      },
+      "idleLine": "なんだ。"
+    },
+    "npc_1": {
+      "gender": "female",
+      "firstPerson": "私たち",
+      "addressTerm": "お前たち",
+      "speechRules": "",
+      "speechFrequency": "standard"
+    },
+    "npc_2": {
       "gender": "unspecified",
       "firstPerson": "",
       "addressTerm": "",
       "speechRules": "",
       "speechFrequency": "standard"
     },
-    "npc_1": {
-      "gender": "unspecified",
-      "firstPerson": "",
-      "addressTerm": "",
+    "npc_3": {
+      "gender": "male",
+      "firstPerson": "俺",
+      "addressTerm": "あんたら",
       "speechRules": "",
       "speechFrequency": "standard"
     }
@@ -490,7 +713,7 @@
     "speechRules": "",
     "id": "gm",
     "name": "ダイス先輩",
-    "persona": "ゲームマスター。確定した結果を説明し、プレイヤーを案内する。",
+    "persona": "ゲームマスターである。確定した結果を説明する。プレイヤーを優しく案内する。たまにギャグを言う。語尾が上がる。",
     "sprite": "gm_mascot.png"
   }
 }

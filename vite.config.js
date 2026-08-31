@@ -5,7 +5,7 @@ import basicSsl from "@vitejs/plugin-basic-ssl";
 // LAN上のiPhone実機からHTTPSでアクセスして確認するための設定。
 // /api, /images は既存の server.js (LLM中継・画像配信、ポート8788) にプロキシする。
 export default defineConfig({
-  plugins: [react(), basicSsl()],
+  plugins: [react(), ...(process.env.LOCAL_HTTP === "1" ? [] : [basicSsl()])],
   server: {
     host: true,
     proxy: {

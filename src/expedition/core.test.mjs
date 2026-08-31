@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { ITEMS, createFloor, equipFromStash, equipInField, eventAt, isEntrance, keepAfterDefeat, mapForFloor, newVillage, partyMaxHp, route, useFieldTonic, walk } from "./core.js";
+import { ITEMS, canOpenChest, createFloor, equipFromStash, equipInField, eventAt, isEntrance, mapForFloor, newVillage, partyMaxHp, route, useFieldTonic, walk } from "./core.js";
 const a = createFloor(123), b = createFloor(123);
 assert.equal(a.seed, b.seed);
 assert.deepEqual([...mapForFloor(a).rooms], [...mapForFloor(b).rooms]);
@@ -9,9 +9,14 @@ assert.ok(mapForFloor(a).corridors.length >= 4, "部屋同士は独立した通�
 assert.equal(a.events.filter(e => e.kind === "fight").length, 2);
 assert.equal(a.events.filter(e => e.kind === "junction").length, 1, "三叉路の固定遭遇を持つ");
 assert.equal(a.events.filter(e => e.kind === "guardian").length, 1);
-assert.deepEqual(keepAfterDefeat(["a", "b", "c", "d", "e"], 8), keepAfterDefeat(["a", "b", "c", "d", "e"], 8));
 assert.equal(walk(a, "north").seed, a.seed);
 assert.equal(eventAt(a), null);
+const bypassedFight = { ...a, at: "fight-0", events: a.events.map(event => event.id === "fight-0" ? { ...event, bypassed: true } : event) };
+assert.equal(eventAt(bypassedFight), null, "迂回済みの敵は再戦にならない");
+const guardianDefeated = { ...a, at: "guardian", events: a.events.map(event => event.kind === "guardian" ? { ...event, done: true } : event) };
+assert.ok(canOpenChest(guardianDefeated), "通常遭遇を残しても守護者を倒せば宝箱を開けられる");
+const guardianBypassed = { ...a, at: "guardian", events: a.events.map(event => event.kind === "guardian" ? { ...event, bypassed: true } : event) };
+assert.equal(canOpenChest(guardianBypassed), false, "守護者を迂回しただけでは宝箱は開かない");
 assert.deepEqual(a.party, { hero: 16, mage: 12 });
 assert.ok(isEntrance(a));
 assert.equal(ITEMS.sword.price, 12);
@@ -47,9 +52,5 @@ assert.equal(mapForFloor(junction).cells.get(`${junction.pos.x},${junction.pos.y
 for (let seed = 1; seed <= 80; seed++) {
   const floor = createFloor(seed);
   for (const target of [...floor.events, floor.chest]) assert.ok(route(floor, floor, target), `seed ${seed} reaches ${target.id || "chest"}`);
-}
-for (let seed = 1; seed <= 20; seed++) {
-  const kept = keepAfterDefeat(["a","b","c","d","e"], seed);
-  assert.ok(kept.length >= 2 && kept.length <= 4);
 }
 console.log("expedition core: ok");

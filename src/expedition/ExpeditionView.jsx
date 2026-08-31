@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
 import ExpeditionBattle from "./ExpeditionBattle.jsx";
 import RogueMap from "./RogueMap.jsx";
-import { ITEMS, canOpenChest, createFloor, equipFromStash, equipInField, eventAt, isEntrance, keepAfterDefeat, newVillage, partyMaxHp, rerouteFloorCorridors, rewardFor, useFieldTonic, walk } from "./core.js";
+import { ITEMS, canOpenChest, createFloor, equipFromStash, equipInField, eventAt, isEntrance, newVillage, partyMaxHp, rewardFor, useFieldTonic, walk } from "./core.js";
 
 const SAVE = "ai_companion_expedition_b1";
 // 開発中の検証専用。プレイヤー向け機能ではない(game-debug-tools)。
@@ -21,7 +21,7 @@ const migrateFloor = floor => {
   const sameMap = floor.mapVersion === fresh.mapVersion;
   return { ...fresh, ...floor, mapVersion: fresh.mapVersion, pos: sameMap ? floor.pos || fresh.pos : fresh.pos, at: sameMap ? floor.at ?? fresh.at : fresh.at,
     visited: sameMap ? floor.visited || fresh.visited : fresh.visited, walked: sameMap ? floor.walked || fresh.walked : fresh.walked, seen: sameMap ? floor.seen || fresh.seen : fresh.seen,
-    events: fresh.events.map(event => ({ ...event, done: floor.events?.find(old => old.id === event.id)?.done || false })),
+    events: fresh.events.map(event => ({ ...event, done: floor.events?.find(old => old.id === event.id)?.done || false, bypassed: floor.events?.find(old => old.id === event.id)?.bypassed || false })),
     chest: { ...fresh.chest, opened: floor.chest?.opened || false },
   };
 };
@@ -46,7 +46,11 @@ export default function ExpeditionView() {
   const [village, setVillage] = useState(saved.village), [floor, setFloor] = useState(saved.floor), [battle, setBattle] = useState(() => saved.floor?.events.find(e => e.id === saved.battleId) || null), [haul, setHaul] = useState(saved.haul), [message, setMessage] = useState(saved.message);
   useEffect(() => { localStorage.setItem(SAVE, JSON.stringify({ village, floor, haul, message, battleId: battle?.id || null })); }, [village, floor, haul, message, battle]);
   const start = () => { setFloor(createFloor(Date.now() >>> 0)); setHaul([]); setMessage("リディア「宝箱があるなら、寄り道も悪くないですね。」"); };
-  const move = direction => setFloor(f => { const next = walk(f, direction); const e = eventAt(next); if (e) setBattle(e); return next; });
+  const move = direction => {
+    const next = walk(floor, direction);
+    setFloor(next);
+    if (eventAt(next)) setMessage("敵がいる。戦うか、迂回するか。");
+  };
   useEffect(() => {
     if (!BATTLE_NOW || battle) return;
     const f = floor || createFloor(FIXED_SEED ? Number(FIXED_SEED) >>> 0 : Date.now() >>> 0);
@@ -62,12 +66,8 @@ export default function ExpeditionView() {
     return () => window.removeEventListener("keydown", onKey);
   }, [floor, battle]);
   const finishBattle = (result, party) => {
-    if (result === "defeat") { const kept = keepAfterDefeat(haul, floor.seed); setVillage(v => ({ ...v, stash: [...v.stash, ...kept] })); setFloor(null); setBattle(null); setHaul([]); setMessage(`全滅。リディアが ${kept.length} 個を持ち帰った。`); return; }
-    // 守護者を倒した時だけ、部屋とドアの位置は変えずに通路の曲がり方を引き直し、
-    // 通路の記憶(seen/walked)も消す。「中ボスを倒して村に戻る際に通路が変化している」
-    // 「通路をロストした感じ」という要望への対応。部屋の記憶(visited)は消さない。
-    setFloor(f => ({ ...f, party, events: f.events.map(e => e.id === battle.id ? { ...e, done: true } : e),
-      ...(battle.kind === "guardian" ? rerouteFloorCorridors(f) : {}) }));
+    if (result === "defeat") { setFloor(null); setBattle(null); setHaul([]); setMessage("全滅。荷を捨てて逃げた。装備と金は残っている。"); return; }
+    setFloor(f => ({ ...f, party, events: f.events.map(e => e.id === battle.id ? { ...e, done: true } : e) }));
     setMessage(battle.kind === "guardian" ? "リディア「守護者を倒しました。宝箱を開けましょう。」" : "リディア「道が開けました。」"); setBattle(null);
   };
   const openChest = () => { const item = rewardFor(floor); setHaul(h => [...h, item]); setFloor(f => ({ ...f, chest: { ...f.chest, opened: true } })); setMessage(`宝箱から「${ITEMS[item].name}」を入手。入口まで持ち帰れます。`); };
@@ -113,6 +113,11 @@ export default function ExpeditionView() {
     </section>
   </div>;
   const e = eventAt(floor); const chest = canOpenChest(floor);
+  const bypass = () => {
+    // ponytail: 灯り -4 は本D/本Gで入る。現段階では迂回済みだけを記録する。
+    setFloor(f => ({ ...f, events: f.events.map(event => event.id === e.id ? { ...event, bypassed: true } : event) }));
+    setMessage("敵をやり過ごして先へ進んだ。");
+  };
   const useFieldItem = target => {
     const result = useFieldTonic(village, floor, target);
     if (!result) return setMessage("回復薬がない。");
@@ -154,7 +159,7 @@ export default function ExpeditionView() {
             : <div style={S.muted}>変更できる装備はありません。</div>}
         </section>
         <p>矢印キーまたは地図下のボタンで移動します。通路は次の部屋まで自動で通過します。三叉路では止まります。</p>
-        {e && <button style={S.primary} onClick={() => setBattle(e)}>戦闘を開始</button>}
+        {e && <><button style={S.primary} onClick={() => setBattle(e)}>戦う</button><button style={S.primary} onClick={bypass}>迂回する</button></>}
         {chest && <button style={S.primary} onClick={openChest}>宝箱を開ける</button>}
       </aside>
     </div>

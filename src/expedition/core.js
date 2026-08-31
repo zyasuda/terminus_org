@@ -104,10 +104,10 @@ export function createFloor(seed = Date.now()) {
     visited: [...state.visited], walked: [...state.walked], seen: [...state.seen],
     party: { hero: 16, mage: 12 },
     events: [
-      { id: "junction-0", roomId: "junction-0", kind: "junction", done: false },
-      { id: "fight-0", roomId: "fight-0", kind: "fight", done: false },
-      { id: "fight-1", roomId: "fight-1", kind: "fight", done: false },
-      { id: "guardian", roomId: "guardian", kind: "guardian", done: false },
+      { id: "junction-0", roomId: "junction-0", kind: "junction", done: false, bypassed: false },
+      { id: "fight-0", roomId: "fight-0", kind: "fight", done: false, bypassed: false },
+      { id: "fight-1", roomId: "fight-1", kind: "fight", done: false, bypassed: false },
+      { id: "guardian", roomId: "guardian", kind: "guardian", done: false, bypassed: false },
     ],
     chest: { roomId: "guardian", opened: false },
     log: ["地下1階へ降りた。灯りを頼りに、入口まで歩いて帰還できる。"],
@@ -121,39 +121,13 @@ export function walk(floor, direction) {
   return { ...floor, pos: state.pos, at: state.at, visited: [...state.visited], walked: [...state.walked], seen: [...state.seen] };
 }
 
-// 守護者を倒した時に呼ぶ。部屋の位置・記憶(visited)はそのまま、通路の形だけ引き直し、
-// 通路の記憶(seen/walked)だけを消す。部屋は覚えているが、そこへの道は忘れた、という体験にする
-// (作者の要望:「リルートしたら部屋だけ見えて通路はそこに行くまで見えない。通路をロストした感じ」)。
-export function rerouteFloorCorridors(floor, seed = Date.now()) {
-  const before = mapForFloor(floor);
-  /* 引き直せることを確かめてから保存する。以前は seed を検証せずに置いていたため、
-     引き直せない間取り(実測 2.25%)では通路が変わらないのに探索の記憶(seen)だけが
-     削られ、歩いた通路をもう一度暗闇から辿り直すことになっていた。
-     成功した seed をそのまま保存するので、mapForFloor は offset 0 で引き当てる */
-  const found = rerouteCorridorsWithRetry(before, seed >>> 0);
-  if (!found) return {}; // 地図も記憶もそのまま。守護者を倒した演出だけが起きない
-  const corridorCells = new Set(before.corridors.flatMap(c => c.path.map(cell => `${cell.x},${cell.y}`)));
-  return {
-    corridorSeed: found.seed >>> 0,
-    seen: floor.seen.filter(key => !corridorCells.has(key)),
-    walked: [],
-  };
-}
-
-export function eventAt(floor) { return floor.events.find(event => !event.done && event.roomId === floor.at) || null; }
-export function canOpenChest(floor) { return floor.chest.roomId === floor.at && !floor.chest.opened && floor.events.every(event => event.done); }
+export function eventAt(floor) { return floor.events.find(event => !event.done && !event.bypassed && event.roomId === floor.at) || null; }
+export function canOpenChest(floor) { return floor.chest.roomId === floor.at && !floor.chest.opened && floor.events.some(event => event.kind === "guardian" && event.done); }
 export function isEntrance(floor) { return floor.at === "entrance"; }
 
 export function rewardFor(floor) {
   const ids = ["sword", "mail", "charm", "tonic"];
   return ids[Math.floor(makeRng(floor.seed + 91)() * ids.length)];
-}
-
-export function keepAfterDefeat(items, seed) {
-  const rng = makeRng(seed + 441); const count = Math.min(items.length, 2 + Math.floor(rng() * 3));
-  const pool = [...items];
-  for (let i = pool.length - 1; i > 0; i--) { const j = Math.floor(rng() * (i + 1)); [pool[i], pool[j]] = [pool[j], pool[i]]; }
-  return pool.slice(0, count);
 }
 
 export function route(floor, from, to) {
