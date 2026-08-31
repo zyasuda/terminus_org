@@ -3,7 +3,7 @@ import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import { STANDEE_VERSION } from "../battle/standeeVersion.js";
 import { DUST_TOP, dustMaterial, dustMote } from "../battle/dustLook.js";
 import { FLICKER_SPEED, LANTERN_COLOR, LANTERN_DECAY, LANTERN_INTENSITY, LANTERN_RANGE, flicker } from "../battle/lanternLook.js";
-import { FLOOR_BASE, FLOOR_TONE, PASSAGE_HEIGHT_TILES, WALL_COLOR, stoneTexture } from "../battle/stoneLook.js";
+import { DOORWAY_HEIGHT_TILES, FLOOR_BASE, FLOOR_TONE, PASSAGE_HEIGHT_TILES, WALL_COLOR, stoneTexture } from "../battle/stoneLook.js";
 import { FACING_YAW, levelCells } from "./mapwalk.js";
 
 // 一人称の3D。戦闘(view3d.js)と同じ「1マス=1タイル」の座標系で組み、
@@ -12,12 +12,12 @@ import { FACING_YAW, levelCells } from "./mapwalk.js";
 //
 // 単位はすべて戦闘のタイル。探索の1マスは戦闘の3タイル(battleConfig.jsのcorridor.height)。
 export const CELL = 3;
-// 天井の高さは戦闘の入口アーチと同じ値(stoneLook.jsのPASSAGE_HEIGHT_TILESが正本)。
+// 天井の高さは stoneLook.js の PASSAGE_HEIGHT_TILES が正本(出入口の高さとは別)。
 // 目の高さは、アーチのコメント「人の約1.6倍」から逆算した背丈(2.0/1.6 = 1.25)のやや下。
 export const CEIL = PASSAGE_HEIGHT_TILES, EYE = 1.15;
 // 入口アーチの寸法。戦闘の書き割りに描いてある入口と同じ大きさ(単位: タイル)。
-// 高さの物差しとして部屋と通路の境目に置く。
-const ARCH_W = 1.4, ARCH_H = 2.0;
+// 天井(PASSAGE_HEIGHT_TILES)より低い。人が通れる高さであって、坑道の高さではない。
+const ARCH_W = 1.4, ARCH_H = DOORWAY_HEIGHT_TILES;
 const BG = 0x0a0d14, LINE = 0x8fb0d8, FLOOR_LINE = 0x6d8399;
 const FOG_NEAR = CELL * 0.8, FOG_FAR = CELL * 4.2;
 // 向きは角度で持つ(FACING_YAWが正本)。旋回の補間で北⇄西を跨ぐ時に長い方へ回らないよう、
@@ -154,29 +154,40 @@ export function createFirstPersonScene(container, map, { ceilTiles = CEIL } = {}
   });
   let dustPlaced = false;
 
-  // 同行者(リディア)。戦闘と同じスタンディをそのまま置く。
-  // 立ち位置はパーティのマスの中心から、左手前へずらす。カメラは中心より
-  // CAM_BACK 分だけ後ろにいるので、この位置だと背中が視界の左に入る。単位: タイル。
-  const COMPANION_SIDE = -0.75, COMPANION_AHEAD = 1.35;
-  const companion = new THREE.Group();
-  scene.add(companion);
+  // 同行者。戦闘と同じスタンディをそのまま置く。
+  // 立ち位置はパーティのマスの中心から見た「横」と「前」(単位: タイル)。
+  // カメラは中心より CAM_BACK 分だけ後ろにいるので、この位置だと背中が視界に入る。
+  // 横は通路の半分(1.5タイル)から板の幅の半分(約0.45)を引いた範囲に収めること。
+  // 越えると壁を突き抜ける。
+  const PARTY = [
+    { model: "lydia", side: -0.62, ahead: 1.45 },    // 小柄。少し前を歩く
+    { model: "gareth", side: -0.98, ahead: 1.00 },   // 大柄。リディアの手前・左を歩く
+  ];
+  const partyGroup = new THREE.Group();
+  scene.add(partyGroup);
+  const members = [];
   let companionDisposed = false;
-  new GLTFLoader().load(`/models/lydia-standee-${STANDEE_VERSION}.glb`, gltf => {
-    if (companionDisposed) return;
-    gltf.scene.traverse(obj => {
-      if (!obj.isMesh) return;
-      // 人物絵は印刷面として扱う。光源で直接照らすと濃い衣装だけが白飛びするので、
-      // 戦闘(view3d.js)と同じくMeshBasicMaterialにしてPNGのアルファで型抜きする。
-      // 板のうっすらしたアルファ(約0.12)が消えないよう、しきい値はそれより低く。
-      const src = Array.isArray(obj.material) ? obj.material : [obj.material];
-      const made = src.map(m => new THREE.MeshBasicMaterial({
-        map: m.map, alphaMap: m.alphaMap, transparent: true, alphaTest: 0.04,
-        side: THREE.FrontSide, depthWrite: true, fog: true,
-      }));
-      obj.material = Array.isArray(obj.material) ? made : made[0];
-    });
-    companion.add(gltf.scene);
-  }, undefined, () => { /* モデルが無くても探索は続けられる。同行者が出ないだけ */ });
+  for (const spec of PARTY) {
+    const g = new THREE.Group();
+    partyGroup.add(g);
+    members.push({ ...spec, group: g });
+    new GLTFLoader().load(`/models/${spec.model}-standee-${STANDEE_VERSION}.glb`, gltf => {
+      if (companionDisposed) return;
+      gltf.scene.traverse(obj => {
+        if (!obj.isMesh) return;
+        // 人物絵は印刷面として扱う。光源で直接照らすと濃い衣装だけが白飛びするので、
+        // 戦闘(view3d.js)と同じくMeshBasicMaterialにしてPNGのアルファで型抜きする。
+        // 板のうっすらしたアルファ(約0.12)が消えないよう、しきい値はそれより低く。
+        const src = Array.isArray(obj.material) ? obj.material : [obj.material];
+        const made = src.map(m => new THREE.MeshBasicMaterial({
+          map: m.map, alphaMap: m.alphaMap, transparent: true, alphaTest: 0.04,
+          side: THREE.FrontSide, depthWrite: true, fog: true,
+        }));
+        obj.material = Array.isArray(obj.material) ? made : made[0];
+      });
+      g.add(gltf.scene);
+    }, undefined, () => { /* モデルが無くても探索は続けられる。その駒が出ないだけ */ });
+  }
 
   // 敵影。位置は外から差し込む(地図には出さない固定敵)。
   const markerGeo = new THREE.ConeGeometry(CELL * 0.22, 0.9, 4);
@@ -251,13 +262,15 @@ export function createFirstPersonScene(container, map, { ceilTiles = CEIL } = {}
     lantern.intensity = LANTERN_INTENSITY * flicker(elapsed * FLICKER_SPEED);
     camera.position.set(state.x + Math.sin(state.yaw) * camBack, EYE, state.z + Math.cos(state.yaw) * camBack);
     camera.rotation.set(0, state.yaw, 0);
-    // 同行者は進行方向を向いて、パーティの左手前を歩く。
+    // 味方は進行方向を向いて歩く。
     // スタンディは+Zを正面に作ってあるので、カメラの前方(-sin,-cos)へ向けるには yaw + π。
     const fwdX = -Math.sin(state.yaw), fwdZ = -Math.cos(state.yaw);
-    companion.position.set(
-      state.x + fwdX * COMPANION_AHEAD - fwdZ * COMPANION_SIDE, 0,
-      state.z + fwdZ * COMPANION_AHEAD + fwdX * COMPANION_SIDE);
-    companion.rotation.y = state.yaw + Math.PI;
+    for (const m of members) {
+      m.group.position.set(
+        state.x + fwdX * m.ahead - fwdZ * m.side, 0,
+        state.z + fwdZ * m.ahead + fwdX * m.side);
+      m.group.rotation.y = state.yaw + Math.PI;
+    }
     renderer.render(scene, camera);
   };
   const tick = now => {
@@ -306,7 +319,7 @@ export function createFirstPersonScene(container, map, { ceilTiles = CEIL } = {}
     },
     dispose() {
       companionDisposed = true;
-      companion.traverse(o => { o.geometry?.dispose(); const m = o.material; if (m) (Array.isArray(m) ? m : [m]).forEach(x => { x.map?.dispose(); x.dispose(); }); });
+      partyGroup.traverse(o => { o.geometry?.dispose(); const m = o.material; if (m) (Array.isArray(m) ? m : [m]).forEach(x => { x.map?.dispose(); x.dispose(); }); });
       document.removeEventListener("visibilitychange", onVisible);
       if (raf) cancelAnimationFrame(raf);
       renderer.domElement.remove();
