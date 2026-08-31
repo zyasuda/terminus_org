@@ -1,15 +1,18 @@
-import React, { useEffect, useMemo, useRef } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { hallRoom, mapForFloor } from "./core.js";
 import { hallEnemyPosition } from "./interior.js";
 import { FACING_AHEAD, isOpen } from "./mapwalk.js";
-import { createFirstPersonScene } from "./firstPersonScene.js";
+import { CAM_BACK_DEFAULT, CAM_BACK_MAX, createFirstPersonScene } from "./firstPersonScene.js";
 
 // 一人称。壁の判断は探索・戦闘・地図と同じ isOpen / hallBlocked で、ここは入力とHUDだけを持つ。
 // 3Dの組み立てと描画は firstPersonScene.js。
 const COMPASS = { north: { label: "北", angle: 0 }, east: { label: "東", angle: 90 }, south: { label: "南", angle: 180 }, west: { label: "西", angle: 270 } };
 
+const BACK_SAVE = "ai_companion_fp_camback";
+
 export default function FirstPerson3D({ floor, onForward, onBack, onTurn, onOpenMap }) {
   const mount = useRef(null), sceneRef = useRef(null);
+  const [camBack, setCamBack] = useState(() => Number(localStorage.getItem(BACK_SAVE) ?? CAM_BACK_DEFAULT));
   const map = useMemo(() => mapForFloor(floor), [floor.seed, floor.corridorSeed]);
   const room = useMemo(() => hallRoom(floor), [floor.seed, floor.corridorSeed]);
 
@@ -21,6 +24,8 @@ export default function FirstPerson3D({ floor, onForward, onBack, onTurn, onOpen
     window.addEventListener("resize", onResize);
     return () => { window.removeEventListener("resize", onResize); scene.dispose(); sceneRef.current = null; };
   }, [map]);
+
+  useEffect(() => { localStorage.setItem(BACK_SAVE, String(camBack)); sceneRef.current?.setBack(camBack); }, [camBack, map]);
 
   const enemy = room && !floor.hallDefeated ? hallEnemyPosition(room) : null;
   useEffect(() => {
@@ -53,6 +58,17 @@ export default function FirstPerson3D({ floor, onForward, onBack, onTurn, onOpen
       <button style={S.turnBtn} onClick={() => onTurn("right")} aria-label="右へ旋回">↻</button>
     </div>
     <button style={S.mapBtn} onClick={onOpenMap}>地図</button>
+    {/* 見え方を決めるための調整。値が決まったら firstPersonScene.js の CAM_BACK_DEFAULT に
+        固定して、この欄ごと消す(game-debug-tools)。 */}
+    <details style={S.tuner}>
+      <summary style={S.tunerSummary}>カメラ（開発用）</summary>
+      <label style={S.tunerRow}>
+        後ろへ引く
+        <input type="range" min="0" max={CAM_BACK_MAX} step="0.05" value={camBack}
+          onChange={e => setCamBack(Number(e.target.value))} style={{ flex: 1 }}/>
+        <b style={{ fontVariantNumeric: "tabular-nums" }}>{camBack.toFixed(2)}</b>タイル
+      </label>
+    </details>
   </section>;
 }
 const S = {
@@ -65,5 +81,8 @@ const S = {
   moveCol: { display: "flex", flexDirection: "column", gap: 6 },
   forwardBtn: { background: "#3d7fb5", color: "#fff", border: 0, borderRadius: 8, padding: "0 22px", height: 40, fontSize: 14 },
   backBtn: { background: "#2b303c", color: "#c3ccdd", border: "1px solid #4a5366", borderRadius: 8, padding: "0 22px", height: 32, fontSize: 12 },
+  tuner: { borderTop: "1px solid #2b303c", background: "rgba(20,24,32,.9)", color: "#c3ccdd", fontSize: 11 },
+  tunerSummary: { padding: "5px 10px", cursor: "pointer", opacity: .7 },
+  tunerRow: { display: "flex", alignItems: "center", gap: 8, padding: "0 10px 8px" },
   mapBtn: { position: "absolute", top: 4, right: 6, background: "rgba(43,48,60,.9)", color: "#e6e8ee", border: "1px solid #4a5366", borderRadius: 6, padding: "5px 10px", fontSize: 12 },
 };

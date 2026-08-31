@@ -15,6 +15,9 @@ const FOG_NEAR = CELL * 0.8, FOG_FAR = CELL * 4.2;
 // 目標角を現在地から±πの範囲へ畳んで使う。
 // 歩行と旋回にかける時間。長いと待たされ、短いとどこへ動いたか分からない。単位: ミリ秒。
 const STEP_MS = 190, TURN_MS = 170;
+// カメラを立ち位置からどれだけ後ろへ引くか。単位: 戦闘のタイル(1マス = 3タイル)。
+// 引くほど広く見えるが、マスの外へ出ると後ろの壁を突き抜けるので上限を設ける。
+export const CAM_BACK_DEFAULT = 1.0, CAM_BACK_MAX = CELL / 2 - 0.2;
 
 const parse = key => key.split(",").map(Number);
 
@@ -110,12 +113,15 @@ export function createFirstPersonScene(container, map) {
 
   // 目標(pos/facing)と、いま画面に出ている値。差がある間だけ描き続ける。
   const state = { x: 0, z: 0, yaw: 0, tx: 0, tz: 0, tyaw: 0, enemy: null };
+  let camBack = CAM_BACK_DEFAULT;
   let raf = 0, last = 0, started = false;
 
   const draw = () => {
-    camera.position.set(state.x, EYE, state.z);
+    // 松明は立ち位置(マスの中心)に置いたまま、カメラだけ後ろへ引く。
+    // カメラに付けると引いた分だけ前が暗くなり、明るさが操作で変わってしまう。
+    torch.position.set(state.x, EYE, state.z);
+    camera.position.set(state.x + Math.sin(state.yaw) * camBack, EYE, state.z + Math.cos(state.yaw) * camBack);
     camera.rotation.set(0, state.yaw, 0);
-    torch.position.copy(camera.position);
     renderer.render(scene, camera);
   };
   const tick = now => {
@@ -153,6 +159,11 @@ export function createFirstPersonScene(container, map) {
       if (!raf) { last = performance.now(); raf = requestAnimationFrame(tick); }
     },
     resize,
+    // カメラの引き。決まったら CAM_BACK_DEFAULT に固定して、この口ごと消してよい。
+    setBack(value) {
+      camBack = Math.max(0, Math.min(CAM_BACK_MAX, value));
+      draw();
+    },
     dispose() {
       if (raf) cancelAnimationFrame(raf);
       renderer.domElement.remove();
