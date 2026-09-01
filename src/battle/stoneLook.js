@@ -30,16 +30,22 @@ export const WALL_COLOR = 0x2b303c;
 
    戦闘は書き割りなので透過させて床際を闇へ落とす。探索の壁は本物の面で、
    カメラが中を歩くので透過させられない。`opaque` を渡すと、同じ色を
-   背景色 `over` の上へ焼き込んで不透明にする(見た目は透過版と同じになる)。 */
+   背景色 `over` の上へ焼き込んで不透明にする。
+
+   `gain` は明るさの倍率。戦闘の書き割りは陰影を付けない(MeshBasic)ので焼いた色が
+   そのまま出るが、探索の壁はカンテラで照らす(MeshLambert)ので、同じ色を貼ると
+   光を掛けたぶん暗くなり、グラデーションが潰れて平らに見える(2026-09-01の実測:
+   合成後の上端が28,33,46で、それまでの壁色43,48,60より既に暗かった)。
+   照らされるぶんを見越して持ち上げるための倍率。 */
 const WALL_STOPS = [[0, 30, 35, 49, 0.9], [0.45, 15, 18, 26, 0.5], [1, 5, 6, 10, 0]];
-export function wallGradientTexture({ opaque = false, over = [10, 13, 20] } = {}) {
+export function wallGradientTexture({ opaque = false, over = [10, 13, 20], gain = 1 } = {}) {
   const c = document.createElement("canvas");
   c.width = 2;
   c.height = 128;
   const g = c.getContext("2d");
   const grad = g.createLinearGradient(0, 0, 0, c.height);
   for (const [at, r, gg, b, a] of WALL_STOPS) {
-    const mix = (v, i) => Math.round(v * a + over[i] * (1 - a));
+    const mix = (v, i) => Math.min(255, Math.round((v * a + over[i] * (1 - a)) * gain));
     grad.addColorStop(at, opaque ? `rgb(${mix(r, 0)},${mix(gg, 1)},${mix(b, 2)})` : `rgba(${r},${gg},${b},${a})`);
   }
   g.fillStyle = grad;

@@ -72,7 +72,10 @@ export function createFirstPersonScene(container, map, { ceilTiles = CEIL } = {}
      下へ向かうほど闇に沈む。戦闘は透過で床際を落とすが、こちらはカメラが中を歩くので
      不透明に焼き込む(opaque。背景色の上へ合成するので見た目は同じ)。
      色はテクスチャが持つので、材質の color は白にして光だけ乗せる。 */
-  const wallTex = wallGradientTexture({ opaque: true, over: [BG >> 16 & 255, BG >> 8 & 255, BG & 255] });
+  // 倍率1.5は、上端がそれまでの壁色(43,48,60)とほぼ同じ明るさに戻る値。
+  // これを入れないと、カンテラの光を掛けたぶん全体が暗くなりグラデーションが潰れる。
+  const wallTex = wallGradientTexture({ opaque: true, gain: 1.5,
+    over: [BG >> 16 & 255, BG >> 8 & 255, BG & 255] });
   const wallMat = new THREE.MeshLambertMaterial({ map: wallTex, fog: true });
   const ceilMat = dark(0x232833);
   // 床は戦闘と同じ石。石の目の細かさを戦闘に揃えるため、stoneLook.js の FLOOR_TEX_TILES で
