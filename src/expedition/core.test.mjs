@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import fs from "node:fs";
-import { ITEMS, back, canOpenChest, corridorLayoutFor, createFloor, roomDoorways, retreatToEntrance, equipFromStash, equipInField, eventAt, hallContact, hallLayoutFor, hallRoom, isEntrance, junctionLayoutFor, mapForFloor, newVillage, partyMaxHp, route, useFieldTonic, walk } from "./core.js";
+import { ITEMS, back, battleSeedFor, canOpenChest, corridorLayoutFor, createFloor, roomDoorways, retreatToEntrance, equipFromStash, equipInField, eventAt, hallContact, hallLayoutFor, hallRoom, isEntrance, junctionLayoutFor, mapForFloor, newVillage, partyMaxHp, pendingBattleObstaclesFor, route, useFieldTonic, walk } from "./core.js";
+import { createExpeditionBattleLayout } from "./battleState.js";
 import { hallBlocked, hallEnemyPosition, hallWallCells } from "./interior.js";
 import { FACING_AHEAD, FACING_YAW, isOpen, levelCells, opposite } from "./mapwalk.js";
 const a = createFloor(123), b = createFloor(123);
@@ -266,6 +267,32 @@ for (let seed = 1; seed <= 40; seed += 1) for (const roomId of ["fight-0", "figh
   }
   assert.ok(doors.length < 2 * room.w + 2 * room.h,
     `seed ${seed} ${roomId}: 外周ぜんぶが出入口になっていない`);
+}
+
+/* 一人称で先読みする通路戦の障害物(pendingBattleObstaclesFor)が、実際に戦闘へ入った後の
+   盤(createExpeditionBattleLayout)と一致するかを確認する。seedの作り方
+   (battleSeedFor)が二重に書かれてズレたら、一人称で見えた配置と戦闘後の配置が
+   食い違う(見た目だけ避けたのに戦闘では塞がれている、という事故になる)。 */
+for (let seed = 1; seed <= 60; seed += 1) for (const roomId of ["fight-0", "fight-1"]) {
+  const floor = walkTo(seed, roomId);
+  if (!floor) continue;
+  const map = mapForFloor(floor), room = map.rooms.get(roomId);
+  const event = eventAt(floor);
+  assert.equal(event?.kind, "fight", `seed ${seed} ${roomId}: 通路戦のイベントがある`);
+  const seen = pendingBattleObstaclesFor(floor);
+  const { grid } = createExpeditionBattleLayout(corridorLayoutFor(floor), battleSeedFor(floor, event.id));
+  const expected = [];
+  for (let y = 0; y < grid.h; y += 1) for (let x = 0; x < grid.w; x += 1) {
+    const c = grid.cells[y * grid.w + x];
+    if (c.obstacle) expected.push({ x: room.x + x, y: room.y + y, height: c.obstacle.height });
+  }
+  assert.deepEqual(seen, expected, `seed ${seed} ${roomId}: 一人称の先読みと戦闘後の盤が食い違う`);
+}
+// 大部屋・通路戦以外(三叉路・守護者、決着済み)は模式盤・固定盤なので対象外。空を返す。
+{
+  const floor = createFloor(1);
+  assert.deepEqual(pendingBattleObstaclesFor({ ...floor, at: "junction-0" }), []);
+  assert.deepEqual(pendingBattleObstaclesFor({ ...floor, at: "guardian" }), []);
 }
 
 console.log("expedition core: ok");

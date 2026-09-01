@@ -5,6 +5,9 @@ import { ITEMS, partyMaxHp } from "./core.js";
 import { EXPEDITION_BATTLE_CONFIG } from "./battleConfig.js";
 import { createExpeditionBattleLayout, facingToward, nearestAlive } from "./battleState.js";
 
+// styles.css の body と同じ既定フォント(2026-09-01、作者の指示)。
+const FONT = '"Kosugi Maru", "Hiragino Kaku Gothic ProN", "Yu Gothic", sans-serif';
+
 // ズームの可動域。view3d.js側の上下限と同じ値にする(片方だけ動かすと、
 // スライダーの端まで動かしてもカメラが追従しない)。
 const ZOOM_MIN = 0.5, ZOOM_MAX = 5.0;
@@ -490,7 +493,7 @@ export default function ExpeditionBattle({ guardian, layout = "corridor", equipm
 }
 // 画面の見た目。1トークン1行にして、色や余白を1つ変えた時にdiffがその1行だけになるようにする。
 const S = {
-  page: { position: "fixed", inset: 0, background: "#161a22", color: "#e6e8ee", font: "13px/1.6 system-ui", display: "flex", flexDirection: "column" },
+  page: { position: "fixed", inset: 0, background: "#161a22", color: "#e6e8ee", fontSize: 13, lineHeight: 1.6, fontFamily: FONT, display: "flex", flexDirection: "column" },
   // 3Dは画面の6.5割で固定する。flex:1にするとログの行数で盤面の高さが変わり、
   // 同じ局面でも見え方が毎回ずれる(作者の指示 2026-08-27)。
   // 6割→7割→6.5割と実機で見比べて決めた。7割は盤面が大きくなるのではなく下の余白が

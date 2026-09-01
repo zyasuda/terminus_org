@@ -1,8 +1,11 @@
-.rogue-map-shell { width: min(680px, 100%); background: #0f1418; border: 1px solid #3c4354; color: #c9c3b7; }
-.rogue-map-rail { display: flex; justify-content: space-between; gap: 12px; padding: 9px 12px; border-bottom: 1px solid rgba(201,195,183,.12); letter-spacing: .06em; }
+/* シェル自体が親の高さいっぱいに伸びる形にする(2026-09-01、作者の指示)。
+   以前はsvgに固定pxの高さを持たせていたため、全画面オーバーレイの中でも
+   小さなpopupのまま浮き、残りが空白になっていた。 */
+.rogue-map-shell { flex: 1; width: 100%; height: 100%; display: flex; flex-direction: column; min-height: 0; background: #0f1418; border: 1px solid #3c4354; color: #c9c3b7; box-sizing: border-box; }
+.rogue-map-rail { flex: none; display: flex; justify-content: space-between; gap: 12px; padding: 9px 12px; border-bottom: 1px solid rgba(201,195,183,.12); letter-spacing: .06em; }
 .rogue-map-rail span { color: #6e7580; font-size: 12px; }
-.rogue-map { min-height: 330px; overflow: hidden; }
-.rogue-map svg { display: block; width: 100%; height: 330px; }
+.rogue-map { flex: 1; min-height: 0; overflow: hidden; }
+.rogue-map svg { display: block; width: 100%; height: 100%; }
 .rogue-floor { fill: #454f5a; stroke: #454f5a; stroke-width: .14; }
 .rogue-memory { opacity: .3; }
 .rogue-light { fill: #e4b064; stroke: #e4b064; opacity: .18; mix-blend-mode: screen; }
@@ -11,10 +14,9 @@
 .rogue-partition { fill: #0f1418; stroke: rgba(201,195,183,.22); stroke-width: .06; }
 .rogue-player-halo { fill: #0f1418; opacity: .72; }
 .rogue-player-arrow { fill: #e4b064; stroke: #0f1418; stroke-width: .04; }
-.rogue-marker text { text-anchor: middle; fill: #e4b064; font: .62px system-ui, sans-serif; paint-order: stroke; stroke: #0f1418; stroke-width: .08px; }
+.rogue-marker text { text-anchor: middle; fill: #e4b064; font: .62px "Kosugi Maru", sans-serif; paint-order: stroke; stroke: #0f1418; stroke-width: .08px; }
 .rogue-marker .rogue-room-name { fill: #c9c3b7; font-size: .37px; letter-spacing: .03px; }
-.rogue-controls { min-height: 58px; display: flex; border-top: 1px solid rgba(201,195,183,.12); }
+.rogue-controls { flex: none; min-height: 58px; display: flex; border-top: 1px solid rgba(201,195,183,.12); }
 .rogue-controls button { flex: 1; border: 0; border-left: 1px solid rgba(201,195,183,.1); background: transparent; color: #e4b064; font-size: 23px; cursor: pointer; }
 .rogue-controls button:last-child { border-right: 1px solid rgba(201,195,183,.1); }
 .rogue-controls button span { display: block; color: #6e7580; font-size: 9px; letter-spacing: .08em; }
-@media (max-width: 680px) { .rogue-map { min-height: 260px; } .rogue-map svg { height: 260px; } }

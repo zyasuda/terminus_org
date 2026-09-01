@@ -1,12 +1,15 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { hallRoom, mapForFloor } from "./core.js";
+import Compass from "./Compass.jsx";
+import { hallRoom, mapForFloor, pendingBattleObstaclesFor } from "./core.js";
 import { hallEnemyPosition } from "./interior.js";
 import { FACING_AHEAD, isOpen } from "./mapwalk.js";
 import { CAM_BACK_DEFAULT, CAM_BACK_MAX, CEIL, createFirstPersonScene } from "./firstPersonScene.js";
 
 // 一人称。壁の判断は探索・戦闘・地図と同じ isOpen / hallBlocked で、ここは入力とHUDだけを持つ。
 // 3Dの組み立てと描画は firstPersonScene.js。
-const COMPASS = { north: { label: "北", angle: 0 }, east: { label: "東", angle: 90 }, south: { label: "南", angle: 180 }, west: { label: "西", angle: 270 } };
+// 障害物の先読み表示を一時的に止める(2026-09-01、作者の指示)。pendingBattleObstaclesFor
+// 自体とその検査(core.test.mjs)は残したまま、表示だけ止める。戻す時はtrueにするだけでよい。
+const OBSTACLES_ON = false;
 
 export default function FirstPerson3D({ floor, onForward, onBack, onTurn, onOpenMap }) {
   const mount = useRef(null), sceneRef = useRef(null);
@@ -14,8 +17,14 @@ export default function FirstPerson3D({ floor, onForward, onBack, onTurn, onOpen
   const [camBack, setCamBack] = useState(CAM_BACK_DEFAULT);
   // 天井の高さ。壁が低く見えるかを実物で決めるための調整。単位は一人称の内部単位。
   const [ceilTiles, setCeilTiles] = useState(CEIL);
+  // 3D画面の縦の高さ。操作ボタンをどれだけ下げるかを実物で決める(2026-09-01、作者の指示)。
+  const [canvasHeight, setCanvasHeight] = useState(400);
   const map = useMemo(() => mapForFloor(floor), [floor.seed, floor.corridorSeed]);
   const room = useMemo(() => hallRoom(floor), [floor.seed, floor.corridorSeed]);
+  // 通路戦・大部屋戦の障害物。入っている部屋(floor.at)とその戦闘の決着(events/hallDefeated)が
+  // 変わった時だけ組み直せばよい。1歩ごとに作り直すと歩くたびに乱数を引き直すことになる。
+  const obstacles = useMemo(() => OBSTACLES_ON ? pendingBattleObstaclesFor(floor) : [],
+    [floor.seed, floor.at, floor.events, floor.hallDefeated]);
 
   // 地図が変わった時だけ組み直す。1歩ごとに作り直さない。
   // 天井を変えると壁も床も作り直しになるので、地図が変わった時と同じ扱いで組み直す。
@@ -28,6 +37,12 @@ export default function FirstPerson3D({ floor, onForward, onBack, onTurn, onOpen
   }, [map, ceilTiles]);
 
   useEffect(() => { sceneRef.current?.setBack(camBack); }, [camBack, map, ceilTiles]);
+  // 高さを変えた分をレンダラーへ反映する(画面のresizeイベントは飛ばないため)。
+  useEffect(() => { sceneRef.current?.resize(); }, [canvasHeight]);
+  // 障害物だけの差し替え。壁・床・カメラの組み直し(上のeffect)にぶら下げると、
+  // 部屋⇄通路の境目をまたぐたびにシーン全体が作り直され、歩行アニメが毎回リセットされる
+  // (2026-09-01、実際にこの不具合を作って踏んだ)。
+  useEffect(() => { sceneRef.current?.setObstacles(obstacles); }, [obstacles, map, ceilTiles]);
 
   const enemy = room && !floor.hallDefeated ? hallEnemyPosition(room) : null;
   useEffect(() => {
@@ -36,19 +51,14 @@ export default function FirstPerson3D({ floor, onForward, onBack, onTurn, onOpen
 
   const [ax, ay] = FACING_AHEAD[floor.facing] || FACING_AHEAD.north;
   const canForward = isOpen(map, floor.pos.x + ax, floor.pos.y + ay);
-  const compass = COMPASS[floor.facing];
+  // 「地下1階」は今のところ唯一のフロアなので固定値。フロアが増えたらfloor側から読む形にする。
+  const placeName = room && floor.at === room.id ? room.name : map.rooms.get(floor.at)?.name || "通路";
   return <section style={S.shell} aria-label="一人称視点">
     <div style={S.hud}>
-      <b>{room && floor.at === room.id ? room.name : map.rooms.get(floor.at)?.name || "通路"}</b>
-      <span style={S.compass}>
-        <svg viewBox="-12 -12 24 24" width="22" height="22" aria-hidden="true">
-          <circle r="11" fill="#171b24" stroke="#4a5366"/>
-          <polygon points="0,-8 4,5 0,2 -4,5" fill="#e4b064" transform={`rotate(${compass.angle})`}/>
-        </svg>
-        <span>{compass.label}を向いている</span>
-      </span>
+      <b>地下 1F : {placeName}</b>
+      <Compass facing={floor.facing}/>
     </div>
-    <div ref={mount} style={S.canvas} data-facing={floor.facing} data-pos={`${floor.pos.x},${floor.pos.y}`}/>
+    <div ref={mount} style={{ ...S.canvas, height: canvasHeight }} data-facing={floor.facing} data-pos={`${floor.pos.x},${floor.pos.y}`}/>
     <div style={S.controls}>
       <button style={S.turnBtn} onClick={() => onTurn("left")} aria-label="左へ旋回">↺</button>
       <div style={S.moveCol}>
@@ -76,6 +86,12 @@ export default function FirstPerson3D({ floor, onForward, onBack, onTurn, onOpen
           onChange={e => setCeilTiles(Number(e.target.value))} style={{ flex: 1 }}/>
         <b style={{ fontVariantNumeric: "tabular-nums" }}>{ceilTiles.toFixed(1)}</b>
       </label>
+      <label style={S.tunerRow}>
+        画面の高さ
+        <input type="range" min="200" max="600" step="10" value={canvasHeight}
+          onChange={e => setCanvasHeight(Number(e.target.value))} style={{ flex: 1 }}/>
+        <b style={{ fontVariantNumeric: "tabular-nums" }}>{canvasHeight}</b>
+      </label>
       <div style={{ ...S.tunerRow, opacity: .65 }}>
         物差し: 1マス=3.0 / 天井=1マス / 入口アーチ2.0 / リディア1.21 / 目の高さ1.15
       </div>
@@ -83,9 +99,8 @@ export default function FirstPerson3D({ floor, onForward, onBack, onTurn, onOpen
   </section>;
 }
 const S = {
-  shell: { position: "relative", width: 300, background: "#0a0d14", borderRadius: 8, overflow: "hidden", border: "1px solid #3c4354" },
+  shell: { position: "relative", width: "100%", background: "#0a0d14", borderRadius: 8, overflow: "hidden", border: "1px solid #3c4354" },
   hud: { display: "flex", justifyContent: "space-between", alignItems: "center", padding: "5px 10px", color: "#c3ccdd", fontSize: 12, background: "rgba(20,24,32,.9)" },
-  compass: { display: "flex", alignItems: "center", gap: 6 },
   canvas: { width: "100%", height: 250 },
   controls: { display: "flex", justifyContent: "center", alignItems: "center", gap: 10, padding: 10, background: "rgba(20,24,32,.9)" },
   turnBtn: { background: "#2b303c", color: "#e6e8ee", border: "1px solid #4a5366", borderRadius: 8, width: 44, height: 44, fontSize: 18 },

@@ -59,14 +59,14 @@ const parse = key => key.split(",").map(Number);
 const STEP_MS = 190, TURN_MS = 170;
 // カメラを立ち位置からどれだけ後ろへ引くか。マスの大きさに対する割合で持つ。
 // 引くほど広く見えるが、マスの外へ出ると後ろの壁を突き抜けるので上限を設ける。
-// 割合は作者が絵を見て決めた(2026-09-01。CELL=3のとき0.70)。
-export const CAM_BACK_DEFAULT = CELL * 7 / 30, CAM_BACK_MAX = CELL * 0.43;
+// 割合は作者が絵を見て決めた(2026-09-01、1.00に変更)。
+export const CAM_BACK_DEFAULT = 1.0, CAM_BACK_MAX = CELL * 0.43;
 // 塵の見た目は戦闘と同じ dustLook.js を読む(2画面で食い違わせない)。
 // ここで決めるのは「どこに、何個置くか」だけ。
 // 撒く範囲はカメラの周り±1マス。粒の数はそこが混みすぎず、まばらにも見えない数を選んだ。
 const DUST_COUNT = 38, DUST_RANGE = CELL;
 
-export function createFirstPersonScene(container, map, { ceilTiles = CEIL } = {}) {
+export function createFirstPersonScene(container, map, { ceilTiles = CEIL, obstacles = [] } = {}) {
   const ceil = ceilTiles;   // 天井の高さ。開発用スライダーで動かして決める
   const scene = new THREE.Scene();
   scene.background = new THREE.Color(BG);
@@ -242,7 +242,7 @@ export function createFirstPersonScene(container, map, { ceilTiles = CEIL } = {}
      ガレス0.884)では横に2人並べられない。縦一列にする。
      主人公(ガレス)はカメラそのものなので置かない。 */
   const PARTY = [
-    { model: "lydia", side: 0, ahead: 0.9 },   // 半歩先を歩く
+    { model: "lydia", side: 0, ahead: 0.35 },   // カメラ側(自分寄り)に立つ(2026-09-01、作者の指示)
   ];
   const partyGroup = new THREE.Group();
   scene.add(partyGroup);
@@ -269,6 +269,33 @@ export function createFirstPersonScene(container, map, { ceilTiles = CEIL } = {}
       g.add(gltf.scene);
     }, undefined, () => { /* モデルが無くても探索は続けられる。その駒が出ないだけ */ });
   }
+
+  /* 通路戦・大部屋戦の障害物。位置と高さは戦闘盤(battleState.createExpeditionBattleLayout)と
+     同じ計算から来るので、ここで見えたものと戦闘開始後の配置は一致する
+     (2026-09-01、作者の要望。まだ当たり判定は持たず、見た目だけ)。
+
+     壁や床と違って部屋をまたぐたびに変わる(floor.at が部屋⇄通路でnullとroom idを
+     行き来する)ので、地図と同じ組み直し(createFirstPersonScene)にぶら下げると
+     1マス移動するたびシーン全体が壊れて作り直され、tick()の歩行アニメが毎回リセットされる
+     (2026-09-01、実際にこの不具合を作って踏んだ)。setObstacles だけを別に持ち、
+     壁・床・カメラは触らずに障害物の見た目だけ差し替える。 */
+  const obstacleMat = new THREE.MeshLambertMaterial({ color: 0x3a4150, fog: true });
+  const obstacleGroup = new THREE.Group();
+  scene.add(obstacleGroup);
+  const clearObstacles = () => {
+    for (const child of [...obstacleGroup.children]) { child.geometry?.dispose(); obstacleGroup.remove(child); }
+  };
+  const setObstacles = list => {
+    clearObstacles();
+    for (const o of list) {
+      const w = CELL * 0.8, h = Math.max(0.15, o.height) * CELL;
+      const geo = new THREE.BoxGeometry(w, h, w);
+      const m = new THREE.Mesh(geo, obstacleMat);
+      m.position.set(o.x * CELL, h / 2, o.y * CELL);
+      obstacleGroup.add(m, new THREE.LineSegments(new THREE.EdgesGeometry(geo), lineMat));
+    }
+  };
+  setObstacles(obstacles);
 
   // 敵影。位置は外から差し込む(地図には出さない固定敵)。
   const markerGeo = new THREE.ConeGeometry(CELL * 0.22, 0.9, 4);
@@ -393,6 +420,7 @@ export function createFirstPersonScene(container, map, { ceilTiles = CEIL } = {}
       if (!raf) { last = performance.now(); raf = requestAnimationFrame(tick); }
     },
     resize,
+    setObstacles,
     // カメラの引き。決まったら CAM_BACK_DEFAULT に固定して、この口ごと消してよい。
     setBack(value) {
       camBack = Math.max(0, Math.min(CAM_BACK_MAX, value));
@@ -406,10 +434,11 @@ export function createFirstPersonScene(container, map, { ceilTiles = CEIL } = {}
       renderer.domElement.remove();
       renderer.dispose();
       for (const geo of [boxGeo, planeGeo, ceilGeo, edgeGeo, archGeo, archWallGeo, gridGeo, markerGeo]) geo.dispose();
+      clearObstacles();
       for (const tex of [wallTex, archWallTex]) tex.dispose();
       dustMat.map?.dispose();
       stoneTex.dispose();
-      for (const mat of [wallMat, floorMat, ceilMat, lineMat, floorLineMat, dustMat, marker.material]) mat.dispose();
+      for (const mat of [wallMat, floorMat, ceilMat, lineMat, floorLineMat, dustMat, marker.material, obstacleMat]) mat.dispose();
     },
   };
 }

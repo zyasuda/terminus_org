@@ -1,5 +1,6 @@
 import { makeRng } from "../battle/core.js";
 import { EXPEDITION_BATTLE_CONFIG } from "./battleConfig.js";
+import { createExpeditionBattleLayout } from "./battleState.js";
 import { HALL_SIZE, corridorBattleBoard, hallBattleBoard, hallEnemyPosition, hallRoomOf, junctionBattleBoard } from "./interior.js";
 import { generateWithRetry, rerouteCorridorsWithRetry } from "./mapgen.js";
 import { FACING_AHEAD, isOpen, opposite, run, start, turnLeft, turnRight } from "./mapwalk.js";
@@ -189,6 +190,28 @@ export function junctionLayoutFor(floor) {
     .filter(([, [dx, dy]]) => isOpen(map, room.x + dx, room.y + dy))
     .map(([dir]) => dir);
   return junctionBattleBoard(open, opposite(floor.facing));
+}
+// 戦闘のseedの作り方。ExpeditionBattleへ渡す時と、一人称で先読みする時の両方が
+// ここを通ることで、同じ盤面(=同じ障害物配置)になることを保証する。
+export function battleSeedFor(floor, id) { return (floor.seed + [...id].reduce((n, ch) => n + ch.charCodeAt(0), 0)) >>> 0; }
+// 一人称でも戦闘の障害物を先に見せる。盤面が部屋のマスと1対1のとき(大部屋・通路戦)だけ
+// 座標が地図とそのまま合うので、対象はそれだけにする。三叉路の枝・守護者の盤(guardianは
+// ExpeditionBattle.jsxがlayoutを固定の"guardian"へ差し替えるので、corridorLayoutForの
+// 結果は使われない)は地図の実寸ではない模式なので、ここでは扱わない。
+export function pendingBattleObstaclesFor(floor) {
+  const map = mapForFloor(floor), room = map.rooms.get(floor.at);
+  if (!room) return [];
+  const hall = room.kind === "hall" && !floor.hallDefeated ? { board: hallLayoutFor(floor), id: "hall-enemy" } : null;
+  const event = !hall ? eventAt(floor) : null;
+  const picked = hall || (event?.kind === "fight" ? { board: corridorLayoutFor(floor), id: event.id } : null);
+  if (!picked?.board) return [];
+  const { grid } = createExpeditionBattleLayout(picked.board, battleSeedFor(floor, picked.id));
+  const out = [];
+  for (let y = 0; y < grid.h; y += 1) for (let x = 0; x < grid.w; x += 1) {
+    const cell = grid.cells[y * grid.w + x];
+    if (cell.obstacle) out.push({ x: room.x + x, y: room.y + y, height: cell.obstacle.height });
+  }
+  return out;
 }
 export function eventAt(floor) { return floor.events.find(event => !event.done && !event.bypassed && event.roomId === floor.at) || null; }
 export function canOpenChest(floor) { return floor.chest.roomId === floor.at && !floor.chest.opened && floor.events.some(event => event.kind === "guardian" && event.done); }

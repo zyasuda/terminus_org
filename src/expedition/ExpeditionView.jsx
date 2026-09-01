@@ -2,8 +2,12 @@ import React, { useEffect, useState } from "react";
 import ExpeditionBattle from "./ExpeditionBattle.jsx";
 import FirstPerson3D from "./FirstPerson3D.jsx";
 import RogueMap from "./RogueMap.jsx";
-import { ITEMS, back, canOpenChest, corridorLayoutFor, createFloor, equipFromStash, equipInField, eventAt, hallContact, hallLayoutFor, isEntrance, junctionLayoutFor, newVillage, partyMaxHp, retreatToEntrance, rewardFor, turn, useFieldTonic, walk } from "./core.js";
+import { ITEMS, back, battleSeedFor, canOpenChest, corridorLayoutFor, createFloor, equipFromStash, equipInField, eventAt, hallContact, hallLayoutFor, isEntrance, junctionLayoutFor, newVillage, partyMaxHp, retreatToEntrance, rewardFor, turn, useFieldTonic, walk } from "./core.js";
+import "./marquee.css";
 
+// styles.css の body と同じ既定フォント(2026-09-01、作者の指示)。
+// ここは font: "...px system-ui" のショートハンドで上書きしていたので、継承が効かず個別に指定する。
+const FONT = '"Kosugi Maru", "Hiragino Kaku Gothic ProN", "Yu Gothic", sans-serif';
 const SAVE = "ai_companion_expedition_b1";
 // 開発中の検証専用。プレイヤー向け機能ではない(game-debug-tools)。
 // URLに?debugが付いている時だけ、戦闘を即座に勝利扱いでスキップするボタンを出す。
@@ -107,7 +111,7 @@ export default function ExpeditionView() {
   const equip = (id, index) => { if (ITEMS[id]?.slot !== "consumable") setVillage(v => equipFromStash(v, owner, index)); };
   const useTonic = () => { const i = village.stash.indexOf("tonic"); if (i < 0) return false; setVillage(v => ({ ...v, stash: v.stash.filter((_, n) => n !== i) })); return true; };
   if (battle) return <>
-    <ExpeditionBattle guardian={battle.kind === "guardian"} layout={battle.kind === "hall" ? hallLayoutFor(floor) : battle.kind === "junction" ? junctionLayoutFor(floor) : corridorLayoutFor(floor) || "corridor"} equipment={village.equipment} party={floor.party} seed={(floor.seed + [...battle.id].reduce((n, char) => n + char.charCodeAt(0), 0)) >>> 0} tonics={village.stash.filter(i => i === "tonic").length} onUseTonic={useTonic} onFinish={finishBattle}/>
+    <ExpeditionBattle guardian={battle.kind === "guardian"} layout={battle.kind === "hall" ? hallLayoutFor(floor) : battle.kind === "junction" ? junctionLayoutFor(floor) : corridorLayoutFor(floor) || "corridor"} equipment={village.equipment} party={floor.party} seed={battleSeedFor(floor, battle.id)} tonics={village.stash.filter(i => i === "tonic").length} onUseTonic={useTonic} onFinish={finishBattle}/>
     {DEBUG && <button style={S.debugSkip} onClick={() => finishBattle("victory", floor.party)}>[debug] 戦闘スキップ</button>}
   </>;
   if (!floor) return <div style={S.page}>
@@ -165,15 +169,14 @@ export default function ExpeditionView() {
     <button style={S.primary} onClick={() => setMapOpen(false)}>地図を閉じる</button>
   </div>;
   return <div style={S.page}>
-    <header style={S.header}>
-      <b>地下1階 / seed {floor.seed}</b>
-      <span>戦利品: {haul.map(i => ITEMS[i].name).join("、") || "なし"}</span>
-      <button style={S.btn} disabled={!isEntrance(floor)} onClick={returnVillage}>入口から帰還</button>
-    </header>
-    <p style={S.message}>{message}</p>
+    {/* 旧headerの「地下1階/seed/戦利品」表記とmessageの帯を割愛した場所(2026-09-01、作者の指示)。
+        室名は一人称側の見出し(FirstPerson3D.jsx)に「地下 1F : 部屋名」として出す。
+        本文はまだ仮のテスト文言。messageなど実際に流す内容は別途決める。 */}
+    <div className="marquee" style={S.marquee}><span className="marquee-text">地下への入口を探せ…</span></div>
     <div style={S.layout}>
       <FirstPerson3D floor={floor} onForward={moveForward} onBack={moveBack} onTurn={turnPlayer} onOpenMap={() => setMapOpen(true)}/>
       <aside style={S.side}>
+        <button style={S.btn} disabled={!isEntrance(floor)} onClick={returnVillage}>入口から帰還</button>
         <section style={S.field}>
           <b>携行品・装備</b>
           <div>{[["hero", "あなた"], ["mage", "リディア"]].map(([id, name]) => <div key={id}>
@@ -200,8 +203,9 @@ export default function ExpeditionView() {
 }
 // 画面の見た目。1トークン1行にして、色や余白を1つ変えた時にdiffがその1行だけになるようにする。
 const S = {
-  page: { width: "100vw", height: "100dvh", overflowY: "auto", boxSizing: "border-box", padding: "24px", background: "#161a22", color: "#e6e8ee", font: "14px/1.6 system-ui" },
-  header: { display: "flex", gap: 16, alignItems: "center", flexWrap: "wrap" },
+  // 左右は端まで使う(2026-09-01、作者の指示。左右に余白があると3D画面が狭くなる)。
+  page: { width: "100vw", height: "100dvh", overflowY: "auto", boxSizing: "border-box", padding: "24px 0", background: "#161a22", color: "#e6e8ee", fontSize: 14, lineHeight: 1.6, fontFamily: FONT },
+  marquee: { marginBottom: 16 },
   message: { color: "#d8c98c", maxWidth: 680 },
   box: { background: "#20242e", border: "1px solid #3c4354", padding: 12, borderRadius: 8, maxWidth: 620, marginTop: 12 },
   field: { background: "#20242e", border: "1px solid #3c4354", padding: 10, borderRadius: 8, marginBottom: 12 },
@@ -211,7 +215,7 @@ const S = {
   primary: { margin: "6px 0", background: "#3d7fb5", color: "#fff", border: 0, borderRadius: 6, padding: "8px 12px" },
   layout: { display: "flex", gap: 24, alignItems: "start", flexWrap: "wrap" },
   // 地図ボタンの全画面表示。位置・向き(floor.pos/facing)はそのまま保持し、閉じれば同じ場所へ戻る。
-  mapOverlay: { position: "fixed", inset: 0, zIndex: 999, background: "#161a22", color: "#e6e8ee", font: "14px/1.6 system-ui", padding: 16, boxSizing: "border-box", overflowY: "auto" },
+  mapOverlay: { position: "fixed", inset: 0, zIndex: 999, background: "#161a22", color: "#e6e8ee", fontSize: 14, lineHeight: 1.6, fontFamily: FONT, padding: 16, boxSizing: "border-box", display: "flex", flexDirection: "column", gap: 12 },
   side: { maxWidth: 260 },
   selected: { background: "#3d7fb5" },
   muted: { opacity: .6, marginTop: 4 },

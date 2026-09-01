@@ -1,4 +1,5 @@
 import React, { useMemo } from "react";
+import Compass from "./Compass.jsx";
 import { corridorShapes, roomShapes } from "./draw.js";
 import { mapForFloor } from "./core.js";
 import { hallWallCells } from "./interior.js";
@@ -47,7 +48,7 @@ export default function RogueMap({ floor, onMove }) {
   const currentRoom = map.rooms.get(floor.at);
   const lamp = { x: floor.pos.x + .5, y: floor.pos.y + .5 };
   return <section className="rogue-map-shell" aria-label="探索地図">
-    <header className="rogue-map-rail"><b>{currentRoom?.name || "通路"}</b><span>{"↑北 / 現在の向き: " + ({ north: "北", east: "東", south: "南", west: "西" }[floor.facing] || "?")}</span></header>
+    <header className="rogue-map-rail"><b>{currentRoom?.name || "通路"}</b><Compass facing={floor.facing}/></header>
     <div className="rogue-map">
       <svg viewBox={`${left} ${top} ${width} ${height}`} role="img" aria-label="探索地図">
         <defs>
