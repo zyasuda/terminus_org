@@ -147,6 +147,40 @@ assert.equal(eventAt(retreated), null, "入口には遭遇が無いので、戻�
    (実測 3〜5)。刻みの根拠は「細い通路の幅が3マス」という設計値の方であり、
    この board.corridor はその設計値が書いてある最後の場所として残している。
    **盤の縮尺(1マス=1タイル)と一人称の縮尺(1マス=3タイル)は食い違ったままで、未解決。** */
+/* 地図と一人称の整合。**この2つが揃っていることが土台で、戦闘盤はその次。**
+
+   地図(draw.js)は部屋を角丸長方形、通路を中心線のストロークで描く模式図で、
+   寸法の正本ではない(通路の線幅は0.62マス、部屋は0.06マス内側)。
+   なので「形が同じか」ではなく「歩ける場所と塞がれた場所が同じか」で揃える。
+
+   地図が床として塗る集合 = 部屋の全セル + 通路の経路セル − 間仕切り。
+   一人称が歩ける集合 = levelCells(map).open。この2つが一致していなければならない。
+
+   2026-08-31の実測: 60 seed・18,646セルで食い違い0。
+   地図が間仕切りを描かなかった頃(実際にあったバグ)を再現すると480件で落ちる。 */
+{
+  const paintedCells = map => {
+    const painted = new Set();
+    for (const room of map.rooms.values())
+      for (let y = room.y; y < room.y + room.h; y += 1)
+        for (let x = room.x; x < room.x + room.w; x += 1) painted.add(`${x},${y}`);
+    for (const corridor of map.corridors) for (const cell of corridor.path) painted.add(`${cell.x},${cell.y}`);
+    for (const wall of hallWallCells(map)) painted.delete(`${wall.x},${wall.y}`);
+    return painted;
+  };
+  let checked = 0;
+  for (let seed = 1; seed <= 60; seed += 1) {
+    const map = mapForFloor(createFloor(seed));
+    const painted = paintedCells(map), { open } = levelCells(map);
+    checked += open.size;
+    for (const key of painted) assert.ok(open.has(key), `seed ${seed}: 地図は床なのに一人称は壁 ${key}`);
+    for (const key of open) assert.ok(painted.has(key), `seed ${seed}: 一人称は床なのに地図が何も描かない ${key}`);
+    for (const wall of hallWallCells(map))
+      assert.ok(!isOpen(map, wall.x, wall.y), `seed ${seed}: 地図は間仕切りなのに一人称は通れる ${wall.x},${wall.y}`);
+  }
+  assert.ok(checked > 15000, `地図と一人称を十分な数のセルで突き合わせた(実測 ${checked} セル)`);
+}
+
 assert.equal(EXPEDITION_BATTLE_CONFIG.board.corridor.height, 3, "細い通路の幅3マスが一人称の床の刻みの根拠として残っている");
 
 /* 通路戦の盤は、戦う部屋の実寸と入ってきた辺から組む(2026-08-31)。
