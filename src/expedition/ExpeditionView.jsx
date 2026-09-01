@@ -198,7 +198,6 @@ export default function ExpeditionView() {
             </div>)
             : <div style={S.muted}>変更できる装備はありません。</div>}
         </section>
-        <p>↑で前進、↓で後退(向きは変わりません)。←→で旋回します。通路は次の部屋まで自動で通過します。三叉路では止まります。</p>
         {e && <><button style={S.primary} onClick={() => setBattle(e)}>戦う</button><button style={S.primary} onClick={bypass}>迂回する</button></>}
         {chest && <button style={S.primary} onClick={openChest}>宝箱を開ける</button>}
       </aside>
