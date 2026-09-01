@@ -150,6 +150,10 @@ export function createFirstPersonScene(container, map, { ceilTiles = CEIL } = {}
       if ((kindOf(key) === "corridor") === (kindOf(nextKey) === "corridor")) continue;
       const wx = (x + dx / 2) * CELL, wz = (y + dy / 2) * CELL;
       arcAt(wx, wz, dx, dy);
+      // 上端の稜線。他の壁と同じ線として引く(2026-09-01、作者の指示)。
+      // 引かないとアーチ壁だけ上の縁が無く、他の壁と違う面に見える。
+      const ux = -dy, uz = dx, h = CELL / 2;   // 境目に沿う軸
+      edges.push(wx - ux * h, ceil, wz - uz * h, wx + ux * h, ceil, wz + uz * h);
       const wall = new THREE.Mesh(archWallGeo, archWallMat);
       wall.position.set(wx, 0, wz);
       wall.rotation.y = dx ? Math.PI / 2 : 0;   // 幅の軸を境目に沿わせる
@@ -158,7 +162,9 @@ export function createFirstPersonScene(container, map, { ceilTiles = CEIL } = {}
   }
   const archGeo = new THREE.BufferGeometry();
   archGeo.setAttribute("position", new THREE.Float32BufferAttribute(archLines, 3));
-  scene.add(new THREE.LineSegments(archGeo, new THREE.LineBasicMaterial({ color: 0xe4b064, fog: true })));
+  // 線の色は他の稜線と同じ(2026-09-01、作者の指示)。橙で描き分けていたが、
+  // 一人称の線画の中でアーチだけ浮いていた。
+  scene.add(new THREE.LineSegments(archGeo, lineMat));
 
   const edgeGeo = new THREE.BufferGeometry();
   edgeGeo.setAttribute("position", new THREE.Float32BufferAttribute(edges, 3));
