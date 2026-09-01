@@ -81,14 +81,17 @@ export default function RogueMap({ floor, onMove }) {
       {/* 一人称側の見出し(FirstPerson3D.jsx)と表記を揃える(2026-09-01、作者の指示)。 */}
       <b>地下 1F : {currentRoom?.name || "通路"}</b>
       <div className="rogue-map-rail-right">
-        {(pan.x || pan.y) ? <button className="rogue-heading-toggle" onClick={() => setPan({ x: 0, y: 0 })}>現在地へ</button> : null}
         <button className="rogue-heading-toggle" onClick={() => setHeadingUp(v => !v)}>{headingUp ? "北を上へ" : "進行方向を上へ"}</button>
       </div>
     </header>
     <div className="rogue-map" ref={mapRef}
       onPointerDown={onPointerDown} onPointerMove={onPointerMove} onPointerUp={onPointerUp} onPointerCancel={onPointerUp}>
-      {/* バトルと同じ位置・大きさのコンパス(2026-09-01、作者の指示)。 */}
-      <div className="rogue-compass-slot"><Compass facing={floor.facing} headingUp={headingUp}/></div>
+      {/* バトルと同じ位置・大きさのコンパス(2026-09-01、作者の指示)。「現在地へ」ボタンは
+          廃止し、コンパスをタップすると同じ動作(パンを0へ戻す)にした(2026-09-01、作者の指示。
+          1つの場所に2つの入口を作らない)。 */}
+      <button className="rogue-compass-slot" onClick={() => setPan({ x: 0, y: 0 })} aria-label="見回しを解除して現在地へ戻す">
+        <Compass facing={floor.facing} headingUp={headingUp}/>
+      </button>
       <svg viewBox={`${left + pan.x} ${top + pan.y} ${width} ${height}`} role="img" aria-label="探索地図">
         <defs>
           <radialGradient id="expedition-torch" gradientUnits="userSpaceOnUse" cx={lamp.x} cy={lamp.y} r="5"><stop stopColor="white" stopOpacity=".95"/><stop offset=".55" stopColor="white" stopOpacity=".35"/><stop offset="1" stopColor="black" stopOpacity="0"/></radialGradient>

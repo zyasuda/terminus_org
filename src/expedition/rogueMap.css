@@ -9,8 +9,8 @@
 /* touch-action:noneが無いと、一指ドラッグがブラウザのページスクロールに取られる(2026-09-01)。 */
 .rogue-map { position: relative; flex: 1; min-height: 0; overflow: hidden; touch-action: none; }
 .rogue-map svg { display: block; width: 100%; height: 100%; }
-/* バトルと同じ位置(2026-09-01、作者の指示)。ドラッグの邪魔をしないようクリックだけ受け付ける。 */
-.rogue-compass-slot { position: absolute; top: 8px; right: 8px; pointer-events: none; }
+/* バトルと同じ位置(2026-09-01、作者の指示)。タップで見回し(pan)を解除する「現在地へ」を兼ねる。 */
+.rogue-compass-slot { position: absolute; top: 8px; right: 8px; background: none; border: 0; padding: 0; cursor: pointer; }
 .rogue-floor { fill: #454f5a; stroke: #454f5a; stroke-width: .14; }
 .rogue-memory { opacity: .3; }
 .rogue-light { fill: #e4b064; stroke: #e4b064; opacity: .18; mix-blend-mode: screen; }
