@@ -59,8 +59,9 @@ export default function RogueMap({ floor, onMove }) {
   // 読める向きのまま位置だけ動く。北固定モード(headingUp=false)ではどちらも無回転。
   const spin = headingUp ? `rotate(${-bearing} ${lamp.x} ${lamp.y})` : undefined;
   const unspin = headingUp ? `rotate(${bearing})` : undefined;
-  // ドラッグ量(画面px)を地図のマス単位へ直す。見た目がheadingUpで回っている間は、
-  // 画面上の「右」が地図のどちらへ動くかも一緒に回っているので、+bearingで逆回転して合わせる。
+  // ドラッグ量(画面px)を地図のマス単位へ直す。panはrotateする<g>の外側、viewBox自体に
+  // 効くので、headingUpで中身が回っていてもpan側には回転補正は要らない
+  // (2026-09-01、東向きで横ドラッグが縦に動くと判明して回転補正を削除)。
   const onPointerDown = e => {
     const rect = mapRef.current.getBoundingClientRect();
     drag.current = { x: e.clientX, y: e.clientY, rect, pan };
@@ -69,14 +70,7 @@ export default function RogueMap({ floor, onMove }) {
   const onPointerMove = e => {
     if (!drag.current) return;
     const { x, y, rect, pan: base } = drag.current;
-    const dxPx = e.clientX - x, dyPx = e.clientY - y;
-    let dxMap = dxPx * (width / rect.width), dyMap = dyPx * (height / rect.height);
-    if (headingUp) {
-      const rad = bearing * Math.PI / 180;
-      const rx = dxMap * Math.cos(rad) - dyMap * Math.sin(rad);
-      const ry = dxMap * Math.sin(rad) + dyMap * Math.cos(rad);
-      dxMap = rx; dyMap = ry;
-    }
+    const dxMap = (e.clientX - x) * (width / rect.width), dyMap = (e.clientY - y) * (height / rect.height);
     setPan({ x: base.x + dxMap, y: base.y + dyMap });
   };
   const onPointerUp = () => { drag.current = null; };
