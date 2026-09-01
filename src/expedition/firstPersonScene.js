@@ -43,6 +43,13 @@ export const CEIL = CELL, EYE = 1.15;
 // 幅はマスに収める。CELLを縮めた時に、開口がマスより広くなって壁が消えるのを防ぐ。
 const ARCH_W = Math.min(1.4, CELL * 0.7), ARCH_H = DOORWAY_HEIGHT_TILES;
 const BG = 0x0a0d14, LINE = 0x8fb0d8, FLOOR_LINE = 0x6d8399;
+/* 霧の色。背景(BG)と同じにすると「奥が暗くなる」だけで、灯りが届かないのと見分けが
+   つかない。少し明るい青へずらすと、坑道の埃が灯りを拾って霞む感じが出る。
+
+   2026-09-01に3案を並べて作者が選んだ(背景と同色 / これ(背景の2.1倍) / 3.4倍)。
+   3.4倍は奥が読めるようになる代わりに、坑道全体に環境光が回っているように見え、
+   カンテラが主光源だという設定とぶつかった。明るくしすぎないこと。 */
+const FOG_COLOR = 0x151d2b;
 // 霧が効きはじめる距離と、見えなくなる距離。マスの大きさに合わせて伸縮させる。
 const FOG_NEAR = CELL * 0.8, FOG_FAR = CELL * 4.2;
 // 向きは角度で持つ(FACING_YAWが正本)。旋回の補間で北⇄西を跨ぐ時に長い方へ回らないよう、
@@ -63,7 +70,7 @@ export function createFirstPersonScene(container, map, { ceilTiles = CEIL } = {}
   const ceil = ceilTiles;   // 天井の高さ。開発用スライダーで動かして決める
   const scene = new THREE.Scene();
   scene.background = new THREE.Color(BG);
-  scene.fog = new THREE.Fog(BG, FOG_NEAR, FOG_FAR);
+  scene.fog = new THREE.Fog(FOG_COLOR, FOG_NEAR, FOG_FAR);
 
   const { open, solid } = levelCells(map);
 
