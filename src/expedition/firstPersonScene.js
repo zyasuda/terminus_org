@@ -3,7 +3,7 @@ import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import { STANDEE_VERSION } from "../battle/standeeVersion.js";
 import { DUST_TOP, dustMaterial, dustMote } from "../battle/dustLook.js";
 import { FLICKER_SPEED, LANTERN_COLOR, LANTERN_DECAY, LANTERN_INTENSITY, LANTERN_RANGE, flicker } from "../battle/lanternLook.js";
-import { DOORWAY_HEIGHT_TILES, FLOOR_BASE, FLOOR_TEX_TILES, FLOOR_TONE, PASSAGE_HEIGHT_TILES, WALL_COLOR, stoneTexture } from "../battle/stoneLook.js";
+import { DOORWAY_HEIGHT_TILES, FLOOR_BASE, FLOOR_TEX_TILES, FLOOR_TONE, WALL_COLOR, stoneTexture } from "../battle/stoneLook.js";
 import { FACING_YAW, levelCells } from "./mapwalk.js";
 
 // 一人称の3D。戦闘(view3d.js)と同じ「1マス=1タイル」の座標系で組み、
@@ -27,11 +27,19 @@ import { FACING_YAW, levelCells } from "./mapwalk.js";
    値は作者が絵を見て決めた(2026-09-01。小さくすると縦長のスリットになり、
    ゲームとして成立しない)。壁や開口が画面上でマスより広く描かれても、**扱いは1マス**。 */
 const CELL = 3;
-// 天井の高さは stoneLook.js の PASSAGE_HEIGHT_TILES が正本(出入口の高さとは別)。
-// 目の高さは、アーチのコメント「人の約1.6倍」から逆算した背丈(2.0/1.6 = 1.25)のやや下。
-export const CEIL = PASSAGE_HEIGHT_TILES, EYE = 1.15;
+/* 天井の高さは1マス分。通路の断面が1マス角の正方形になる(2026-09-01、作者の決定)。
+   それまで戦闘の stoneLook.js から値を借りていたが、坑道の広さは**見せ方**なので、
+   マスの大きさに合わせて伸縮させる。戦闘に天井は無い(盤を見下ろす)ので、
+   借りる相手がそもそも無かった。
+
+   アーチの高さ(ARCH_H)だけは戦闘と共通のまま。あちらは「人が通れる高さ」という
+   意味を持つ値で、戦闘の書き割りにも同じ入口が描いてある。
+   天井は坑道の広さ(見せ方)、アーチは人の背丈(意味)、と分けている。
+
+   目の高さは、アーチの高さから逆算した背丈(2.0/1.6 = 1.25)のやや下。 */
+export const CEIL = CELL, EYE = 1.15;
 // 入口アーチの寸法。高さは戦闘の書き割りに描いてある入口と同じ値(stoneLook.jsが正本)。
-// 天井(PASSAGE_HEIGHT_TILES)より低い。人が通れる高さであって、坑道の高さではない。
+// 天井より低い。人が通れる高さであって、坑道の高さではない。
 // 幅はマスに収める。CELLを縮めた時に、開口がマスより広くなって壁が消えるのを防ぐ。
 const ARCH_W = Math.min(1.4, CELL * 0.7), ARCH_H = DOORWAY_HEIGHT_TILES;
 const BG = 0x0a0d14, LINE = 0x8fb0d8, FLOOR_LINE = 0x6d8399;
@@ -44,7 +52,8 @@ const parse = key => key.split(",").map(Number);
 const STEP_MS = 190, TURN_MS = 170;
 // カメラを立ち位置からどれだけ後ろへ引くか。マスの大きさに対する割合で持つ。
 // 引くほど広く見えるが、マスの外へ出ると後ろの壁を突き抜けるので上限を設ける。
-export const CAM_BACK_DEFAULT = CELL * 0.2, CAM_BACK_MAX = CELL * 0.43;
+// 割合は作者が絵を見て決めた(2026-09-01。CELL=3のとき0.70)。
+export const CAM_BACK_DEFAULT = CELL * 7 / 30, CAM_BACK_MAX = CELL * 0.43;
 // 塵の見た目は戦闘と同じ dustLook.js を読む(2画面で食い違わせない)。
 // ここで決めるのは「どこに、何個置くか」だけ。
 // 撒く範囲はカメラの周り±1マス。粒の数はそこが混みすぎず、まばらにも見えない数を選んだ。

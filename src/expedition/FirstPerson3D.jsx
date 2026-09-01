@@ -12,7 +12,7 @@ export default function FirstPerson3D({ floor, onForward, onBack, onTurn, onOpen
   const mount = useRef(null), sceneRef = useRef(null);
   // 調整はその場限り。保存すると、既定値を変えても古い値が勝って何が効いているか分からなくなる。
   const [camBack, setCamBack] = useState(CAM_BACK_DEFAULT);
-  // 天井の高さ。壁が低く見えるかを実物で決めるための調整。単位: 戦闘のタイル。
+  // 天井の高さ。壁が低く見えるかを実物で決めるための調整。単位は一人称の内部単位。
   const [ceilTiles, setCeilTiles] = useState(CEIL);
   const map = useMemo(() => mapForFloor(floor), [floor.seed, floor.corridorSeed]);
   const room = useMemo(() => hallRoom(floor), [floor.seed, floor.corridorSeed]);
@@ -68,16 +68,16 @@ export default function FirstPerson3D({ floor, onForward, onBack, onTurn, onOpen
         後ろへ引く
         <input type="range" min="0" max={CAM_BACK_MAX} step="0.05" value={camBack}
           onChange={e => setCamBack(Number(e.target.value))} style={{ flex: 1 }}/>
-        <b style={{ fontVariantNumeric: "tabular-nums" }}>{camBack.toFixed(2)}</b>タイル
+        <b style={{ fontVariantNumeric: "tabular-nums" }}>{camBack.toFixed(2)}</b>
       </label>
       <label style={S.tunerRow}>
         天井の高さ
         <input type="range" min="1.4" max="5" step="0.1" value={ceilTiles}
           onChange={e => setCeilTiles(Number(e.target.value))} style={{ flex: 1 }}/>
-        <b style={{ fontVariantNumeric: "tabular-nums" }}>{ceilTiles.toFixed(1)}</b>タイル
+        <b style={{ fontVariantNumeric: "tabular-nums" }}>{ceilTiles.toFixed(1)}</b>
       </label>
       <div style={{ ...S.tunerRow, opacity: .65 }}>
-        物差し: 入口アーチ2.0 / リディア1.21 / 目の高さ1.15タイル（1タイル=1.5m）
+        物差し: 1マス=3.0 / 天井=1マス / 入口アーチ2.0 / リディア1.21 / 目の高さ1.15
       </div>
     </details>
   </section>;
