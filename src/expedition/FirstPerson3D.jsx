@@ -11,7 +11,7 @@ import { CAM_BACK_DEFAULT, CAM_BACK_MAX, CEIL, createFirstPersonScene } from "./
 // 自体とその検査(core.test.mjs)は残したまま、表示だけ止める。戻す時はtrueにするだけでよい。
 const OBSTACLES_ON = false;
 
-export default function FirstPerson3D({ floor, onForward, onBack, onTurn, onOpenMap }) {
+export default function FirstPerson3D({ floor, onForward, onBack, onTurn, onOpenMap, lanternOn, onToggleLantern }) {
   const mount = useRef(null), sceneRef = useRef(null);
   // 調整はその場限り。保存すると、既定値を変えても古い値が勝って何が効いているか分からなくなる。
   const [camBack, setCamBack] = useState(CAM_BACK_DEFAULT);
@@ -19,8 +19,6 @@ export default function FirstPerson3D({ floor, onForward, onBack, onTurn, onOpen
   const [ceilTiles, setCeilTiles] = useState(CEIL);
   // 3D画面の縦の高さ。操作ボタンをどれだけ下げるかを実物で決める(2026-09-01、作者の指示)。
   const [canvasHeight, setCanvasHeight] = useState(400);
-  // 灯りの角ボタン(2026-09-01、作者の指示)。カンテラのON/OFFだけ(明るさ調整はまだ無い)。
-  const [lanternOn, setLanternOn] = useState(true);
   const map = useMemo(() => mapForFloor(floor), [floor.seed, floor.corridorSeed]);
   const room = useMemo(() => hallRoom(floor), [floor.seed, floor.corridorSeed]);
   // 通路戦・大部屋戦の障害物。入っている部屋(floor.at)とその戦闘の決着(events/hallDefeated)が
@@ -78,7 +76,7 @@ export default function FirstPerson3D({ floor, onForward, onBack, onTurn, onOpen
       <button style={S.turnBtn} onClick={() => onTurn("right")} aria-label="右へ旋回">↻</button>
       {/* 角の三角ボタン(2026-09-01、作者の指示・下絵どおりの試作)。左は仮置き(灯りは
           まだ何も繋がっていない)、右は元々あった地図ボタンをここへ移しただけ。 */}
-      <button style={{ ...S.cornerBtnLeft, opacity: lanternOn ? 1 : .55 }} onClick={() => setLanternOn(v => !v)} aria-label="灯り">
+      <button style={{ ...S.cornerBtnLeft, opacity: lanternOn ? 1 : .55 }} onClick={onToggleLantern} aria-label="灯り">
         <span style={S.cornerLabelLeft}>灯り</span>
       </button>
       <button style={S.cornerBtnRight} onClick={onOpenMap} aria-label="地図">

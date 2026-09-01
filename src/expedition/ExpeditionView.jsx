@@ -52,6 +52,9 @@ export default function ExpeditionView() {
   const [village, setVillage] = useState(saved.village), [floor, setFloor] = useState(saved.floor), [battle, setBattle] = useState(() => saved.floor?.events.find(e => e.id === saved.battleId) || null), [haul, setHaul] = useState(saved.haul), [message, setMessage] = useState(saved.message);
   useEffect(() => { localStorage.setItem(SAVE, JSON.stringify({ village, floor, haul, message, battleId: battle?.id || null })); }, [village, floor, haul, message, battle]);
   const [mapOpen, setMapOpen] = useState(false);
+  // 地図を開くとFirstPerson3Dがアンマウントされ、そのローカルstateだと消灯が地図を
+  // 開くだけで元に戻ってしまっていた(2026-09-01、Codex分析で指摘・実機で再現確認)。
+  const [lanternOn, setLanternOn] = useState(true);
   const start = () => { setFloor(createFloor(Date.now() >>> 0)); setHaul([]); setMessage("リディア「宝箱があるなら、寄り道も悪くないですね。」"); };
   const move = direction => {
     const next = walk(floor, direction);
@@ -174,7 +177,8 @@ export default function ExpeditionView() {
         本文はまだ仮のテスト文言。messageなど実際に流す内容は別途決める。 */}
     <div className="marquee" style={S.marquee}><span className="marquee-text">地下への入口を探せ…</span></div>
     <div style={S.layout}>
-      <FirstPerson3D floor={floor} onForward={moveForward} onBack={moveBack} onTurn={turnPlayer} onOpenMap={() => setMapOpen(true)}/>
+      <FirstPerson3D floor={floor} onForward={moveForward} onBack={moveBack} onTurn={turnPlayer} onOpenMap={() => setMapOpen(true)}
+        lanternOn={lanternOn} onToggleLantern={() => setLanternOn(v => !v)}/>
       <aside style={S.side}>
         <button style={S.btn} disabled={!isEntrance(floor)} onClick={returnVillage}>入口から帰還</button>
         <section style={S.field}>
