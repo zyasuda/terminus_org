@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import fs from "node:fs";
 import { ITEMS, back, canOpenChest, corridorLayoutFor, createFloor, roomDoorways, retreatToEntrance, equipFromStash, equipInField, eventAt, hallContact, hallLayoutFor, hallRoom, isEntrance, junctionLayoutFor, mapForFloor, newVillage, partyMaxHp, route, useFieldTonic, walk } from "./core.js";
 import { hallBlocked, hallEnemyPosition, hallWallCells } from "./interior.js";
 import { FACING_AHEAD, FACING_YAW, isOpen, levelCells, opposite } from "./mapwalk.js";
@@ -147,6 +148,22 @@ assert.equal(eventAt(retreated), null, "入口には遭遇が無いので、戻�
    (実測 3〜5)。刻みの根拠は「細い通路の幅が3マス」という設計値の方であり、
    この board.corridor はその設計値が書いてある最後の場所として残している。
    **盤の縮尺(1マス=1タイル)と一人称の縮尺(1マス=3タイル)は食い違ったままで、未解決。** */
+/* 一人称の見せ方の倍率(CELL)が、firstPersonScene.js の外へ漏れていないこと。
+
+   漏らすと「探索の1マスは戦闘の◯タイル」という換算が生まれ、戦闘盤の組み方が
+   絵の都合に引きずられる。2026-08-31に実際にそれが起き、三叉路の盤の枝を3タイル幅で
+   組むところまで波及した。正本は「マス」で、戦闘盤は1マス=1タイルで組む。
+   一人称が1マスを何単位の幅に描くかは、絵の話であって寸法ではない。 */
+{
+  const dir = new URL("./", import.meta.url).pathname;
+  const leaked = fs.readdirSync(dir)
+    .filter(name => /\.(js|jsx)$/.test(name) && name !== "firstPersonScene.js")
+    .filter(name => /\bCELL\b/.test(fs.readFileSync(dir + name, "utf8")));
+  assert.deepEqual(leaked, [], `CELL は firstPersonScene.js の中だけで使う(漏れ: ${leaked.join(", ")})`);
+  assert.ok(!/^export const CELL\b/m.test(fs.readFileSync(dir + "firstPersonScene.js", "utf8")),
+    "CELL を export しない(外から読めると誤った換算が生まれる)");
+}
+
 /* 地図と一人称の整合。**この2つが揃っていることが土台で、戦闘盤はその次。**
 
    地図(draw.js)は部屋を角丸長方形、通路を中心線のストロークで描く模式図で、
