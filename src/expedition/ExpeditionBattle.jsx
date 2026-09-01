@@ -38,7 +38,7 @@ const makeState = (guardian, layout, equipment = {}, party = {}, seed = 0) => {
   const hero = { atk: atkOf(heroConfig.atk, equipment.hero), hp: partyMaxHp("hero", equipment) };
   const mage = { atk: atkOf(mageConfig.atk, equipment.mage), hp: partyMaxHp("mage", equipment) };
   const battleLayout = guardian ? "guardian" : layout;
-  const { grid, starts } = createExpeditionBattleLayout(battleLayout, seed);
+  const { grid, starts, openings } = createExpeditionBattleLayout(battleLayout, seed);
   // 味方の初期の向きは1体目の敵に対して決める(2体目は少し離れた位置に見えるだけでよい)。
   const foeFaceTo = starts.enemies[0];
   const foes = starts.enemies.map((pos, i) =>
@@ -55,7 +55,7 @@ const makeState = (guardian, layout, equipment = {}, party = {}, seed = 0) => {
     : layout?.kind === "junction" ? "坑道の獣が三叉路を塞いだ。"
     : layout?.kind === "hall" ? "大広間の奥で、坑道の獣が振り返った。"
     : "坑道の獣が2匹、狭い通路を塞いだ。";
-  return { grid, units, order: turnOrder(units, { enemyFirst }).map(u => u.id), turn: 0, log: [openingLine] };
+  return { grid, openings, units, order: turnOrder(units, { enemyFirst }).map(u => u.id), turn: 0, log: [openingLine] };
 };
 const alive = (units, side) => units.some(u => u.side === side && u.hp > 0);
 // ポケモンアングルの「向き」側。手番の駒が向いている方向(facing)を画面奥にする水平角度(度)。
@@ -209,7 +209,7 @@ export default function ExpeditionBattle({ guardian, layout = "corridor", equipm
     setState(s => ({ ...s, units: s.units.map(u => u.id === unit.id ? { ...u, ...to, facing: facingToward(unit, to, u.facing) } : u), log: [...s.log, line] }));
   };
   useEffect(() => {
-    const grid = state.grid; const s = createBattleScene(mount.current, grid, { voidBoundaryWalls: typeof battleLayout === "object", cameraElevationDeg: EXPEDITION_BATTLE_CONFIG.presentation.cameraElevationDeg, cameraZoom: EXPEDITION_BATTLE_CONFIG.presentation.cameraZoom }); scene.current = s;
+    const grid = state.grid; const s = createBattleScene(mount.current, grid, { openings: state.openings, voidBoundaryWalls: typeof battleLayout === "object", cameraElevationDeg: EXPEDITION_BATTLE_CONFIG.presentation.cameraElevationDeg, cameraZoom: EXPEDITION_BATTLE_CONFIG.presentation.cameraZoom }); scene.current = s;
     s.setFogEnabled(fogOn); s.setFogIntensity(fogLevel); s.setFogColor(fogColor);
     s.setDustEnabled(dustOn); s.setRainEnabled(rainOn); s.setWallsEnabled(wallsOn);
     s.setBackgroundColor(bgColor); s.setLightPreset(lightPreset);

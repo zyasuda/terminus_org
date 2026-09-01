@@ -148,13 +148,36 @@ export function hallContact(floor) {
   const enemy = hallEnemyPosition(room);
   return floor.pos.x === enemy.x && floor.pos.y === enemy.y;
 }
+/* 部屋の出入口(部屋ローカル座標と外向きの方向)。地図の通路の端点に隣接する部屋のセルが出入口。
+   戦闘盤はこれを読んでアーチを描く。読まないと盤の外周ぜんぶが「通路が続いている」扱いになり、
+   出入口が2本しかない部屋に4枚のアーチが立つ(2026-08-31の実測で80/80件がそうなっていた)。
+   door.direction は「部屋aから見た向き」なので、bの側では逆になる。ここでは方向名を使わず、
+   通路の端点の隣が部屋かどうかで決める。両側から同じ答えが出る。 */
+export function roomDoorways(map, room) {
+  const out = [];
+  for (const corridor of map.corridors) {
+    if (corridor.a !== room.id && corridor.b !== room.id) continue;
+    for (const end of [corridor.path[0], corridor.path[corridor.path.length - 1]]) {
+      for (const [dx, dy] of [[0, -1], [1, 0], [0, 1], [-1, 0]]) {
+        const x = end.x - dx, y = end.y - dy;   // 端点から見て逆側が部屋
+        if (x < room.x || y < room.y || x >= room.x + room.w || y >= room.y + room.h) continue;
+        out.push({ x: x - room.x, y: y - room.y, dx, dy });
+      }
+    }
+  }
+  return out;
+}
 // 探索と同じ壁(間仕切り)・座標を使う戦闘盤面。
-export function hallLayoutFor(floor) { const room = hallRoom(floor); return room ? hallBattleBoard(room) : null; }
+export function hallLayoutFor(floor) {
+  const map = mapForFloor(floor), room = hallRoomOf(map);
+  return room ? { ...hallBattleBoard(room), openings: roomDoorways(map, room) } : null;
+}
 // 通路戦の盤。現在地を部屋ローカル座標へ直し、実際に入ってきた辺へ味方を置く。
 export function corridorLayoutFor(floor) {
   const map = mapForFloor(floor), room = map.rooms.get(floor.at);
   if (!room) return null;
-  return corridorBattleBoard(room, { x: floor.pos.x - room.x, y: floor.pos.y - room.y });
+  return { ...corridorBattleBoard(room, { x: floor.pos.x - room.x, y: floor.pos.y - room.y }),
+    openings: roomDoorways(map, room) };
 }
 // 三叉路の戦闘盤。地図でその交差点が実際に開いている向きだけに枝を生やす。
 // 味方は入ってきた枝から出るので、向き(floor.facing)の逆が入口の枝になる。

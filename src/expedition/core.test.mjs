@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { ITEMS, back, canOpenChest, corridorLayoutFor, createFloor, retreatToEntrance, equipFromStash, equipInField, eventAt, hallContact, hallLayoutFor, hallRoom, isEntrance, junctionLayoutFor, mapForFloor, newVillage, partyMaxHp, route, useFieldTonic, walk } from "./core.js";
+import { ITEMS, back, canOpenChest, corridorLayoutFor, createFloor, roomDoorways, retreatToEntrance, equipFromStash, equipInField, eventAt, hallContact, hallLayoutFor, hallRoom, isEntrance, junctionLayoutFor, mapForFloor, newVillage, partyMaxHp, route, useFieldTonic, walk } from "./core.js";
 import { hallBlocked, hallEnemyPosition, hallWallCells } from "./interior.js";
 import { FACING_AHEAD, FACING_YAW, isOpen, levelCells, opposite } from "./mapwalk.js";
 import { EXPEDITION_BATTLE_CONFIG } from "./battleConfig.js";
@@ -233,4 +233,32 @@ assert.ok(boardSizes.size >= 8, `部屋ごとに盤の形が変わる(実測 ${b
   const east = corridorBattleBoard({ w: 7, h: 3 }, { x: 6, y: 1 });
   assert.deepEqual(east.partySlots, [{ x: 6, y: 0 }, { x: 6, y: 2 }], "東から入れば味方は東の辺に並ぶ(固定盤では常に西だった)");
 }
+
+/* 戦闘盤のアーチは、地図に本当にある出入口の場所だけに立つ。
+
+   戦闘は開口部を「盤の縁」から作っていた(view3d.js)。三叉路は枝の先だけが縁なので
+   合っていたが、2026-08-31に通路戦の盤を部屋の実寸から組むようにしたら盤が全面床の
+   長方形になり、外周ぜんぶが縁になった。実測で80/80件の戦闘部屋が出入口2本なのに、
+   四辺に4枚のアーチが立っていた(私が入れた回帰)。 */
+for (let seed = 1; seed <= 40; seed += 1) for (const roomId of ["fight-0", "fight-1"]) {
+  const floor = walkTo(seed, roomId);
+  if (!floor) continue;
+  const map = mapForFloor(floor), room = map.rooms.get(roomId);
+  const board = corridorLayoutFor(floor);
+  const doors = roomDoorways(map, room);
+  assert.deepEqual(board.openings, doors, `seed ${seed} ${roomId}: 盤の出入口は地図から読む`);
+  assert.equal(doors.length, map.corridors.filter(c => c.a === roomId || c.b === roomId).length,
+    `seed ${seed} ${roomId}: 出入口の数は接続している通路の本数と同じ`);
+  for (const o of doors) {
+    assert.ok(o.x === 0 || o.y === 0 || o.x === room.w - 1 || o.y === room.h - 1,
+      `seed ${seed} ${roomId}: 出入口は部屋の縁にある ${o.x},${o.y}`);
+    // 外向きの1マス先は通路。壁のある方向へアーチを開けない。
+    assert.ok(isOpen(map, room.x + o.x + o.dx, room.y + o.y + o.dy),
+      `seed ${seed} ${roomId}: 出入口の外は通路 ${o.x},${o.y} 向き ${o.dx},${o.dy}`);
+    // 外周の辺の総数より少ない = 全部が出入口ではない
+  }
+  assert.ok(doors.length < 2 * room.w + 2 * room.h,
+    `seed ${seed} ${roomId}: 外周ぜんぶが出入口になっていない`);
+}
+
 console.log("expedition core: ok");

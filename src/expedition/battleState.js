@@ -80,6 +80,8 @@ export function createExpeditionBattleLayout(layout, seed = 0) {
     enemies: enemyStarts.map(pos => ({ ...pos })),
   };
   const grid = gridFor(board);
+  // 出入口(アーチを描く場所)。地図から組んだ盤だけが持つ。三叉路は枝の先が盤の縁なので不要。
+  const openings = board.openings ?? null;
   const { min, max, rampHeight, rampChance } = EXPEDITION_BATTLE_CONFIG.board.obstacles;
   const partyMovement = { maxStep: EXPEDITION_BATTLE_CONFIG.movement.maxStep };
   scatterObstacles(grid, rng, {
@@ -94,5 +96,5 @@ export function createExpeditionBattleLayout(layout, seed = 0) {
   const traverse = (x, y, from) => canOccupyCell(grid, x, y, partyMovement, from);
   // 形は最後に決める。法面は隣に0.5があるかを見るので、全部置き終わってからでないと決まらない
   assignObstacleShapes(grid, rng, { keepClear, canTraverse: traverse });
-  return { grid, starts };
+  return { grid, starts, openings };
 }

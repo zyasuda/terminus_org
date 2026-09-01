@@ -293,7 +293,7 @@ function obstacleGeometry(shape, h, seed, facing) {
   return geo;
 }
 
-export function createBattleScene(container, grid, { voidBoundaryWalls = false, cameraElevationDeg = TRUE_ISO_ELEVATION_DEG, cameraZoom: initialCameraZoom = 1 } = {}) {
+export function createBattleScene(container, grid, { openings: mapOpenings = null, voidBoundaryWalls = false, cameraElevationDeg = TRUE_ISO_ELEVATION_DEG, cameraZoom: initialCameraZoom = 1 } = {}) {
   let cameraElevation = cameraElevationDeg * Math.PI / 180;   // setCameraElevationDeg()で見た目を確認しながら調整できる
   const scene = new THREE.Scene();
   scene.background = new THREE.Color(COLOR.bg);
@@ -937,10 +937,17 @@ export function createBattleScene(container, grid, { voidBoundaryWalls = false, 
       if (!cell || cell.void) continue;
       for (const [dx, dy] of [[0, -1], [1, 0], [0, 1], [-1, 0]]) {
         const nx = x + dx, ny = y + dy;
-        // グリッド外の三つの枝先は出口として開けておく。ここで描くのは
-        // グリッド内の盤外セルとの境目だけで、T字の凹角も自然に含まれる。
-        // 枝先は openings に控えておき、下で「奥へ続いている」見せ方を載せる。
-        if (nx < 0 || ny < 0 || nx >= grid.w || ny >= grid.h) { openings.push({ x, y, dx, dy }); continue; }
+        /* グリッドの外へ出る辺。ここが「通路が続いている」場所になり、下でアーチを描く。
+
+           mapOpenings が渡されていれば、そこに載っている辺だけを出入口とし、
+           残りの外周は普通の壁にする。部屋をそのまま盤にすると外周ぜんぶが縁になるため、
+           これを読まないと出入口2本の部屋に4枚のアーチが立つ(2026-08-31の実測で80/80件)。
+           渡されない盤(三叉路)は枝の先だけが縁なので、従来どおり全部を出入口にする。 */
+        if (nx < 0 || ny < 0 || nx >= grid.w || ny >= grid.h) {
+          if (!mapOpenings || mapOpenings.some(o => o.x === x && o.y === y && o.dx === dx && o.dy === dy)) openings.push({ x, y, dx, dy });
+          else edgeWall(x, y, dx, dy);
+          continue;
+        }
         if (grid.cells[ny * grid.w + nx]?.void) edgeWall(x, y, dx, dy);
       }
     }
