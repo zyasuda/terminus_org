@@ -156,7 +156,9 @@ export function createFirstPersonScene(container, map, { ceilTiles = CEIL } = {}
   edgeGeo.setAttribute("position", new THREE.Float32BufferAttribute(edges, 3));
   scene.add(new THREE.LineSegments(edgeGeo, lineMat));
 
-  // 床と天井。床には戦闘と同じ1タイルきざみの目盛りを引く。
+  /* 床と天井。床の目盛りは**マスの境目だけ**に引く。1マスの中を3分割していた頃の名残を
+     消したもの(2026-09-01、作者の指示)。「1マス=3タイル」という誤った換算の見た目の現れで、
+     読む人を混乱させていた。地図の1マスと、床の1区画が1対1で対応する。 */
   const grid = [];
   for (const key of open) {
     const [x, y] = parse(key);
@@ -169,7 +171,7 @@ export function createFirstPersonScene(container, map, { ceilTiles = CEIL } = {}
     ceilMesh.rotation.x = Math.PI / 2;
     ceilMesh.position.set(cx, ceil, cz);
     floorGroup.add(ceilMesh);
-    for (let i = 0; i <= Math.round(CELL); i += 1) {
+    for (const i of [0, CELL]) {
       grid.push(cx - h + i, .01, cz - h, cx - h + i, .01, cz + h);
       grid.push(cx - h, .01, cz - h + i, cx + h, .01, cz - h + i);
     }
