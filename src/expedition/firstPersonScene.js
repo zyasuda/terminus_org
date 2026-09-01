@@ -248,6 +248,13 @@ export function createFirstPersonScene(container, map, { ceilTiles = CEIL, obsta
   scene.add(partyGroup);
   const members = [];
   let companionDisposed = false;
+  // 同行者の板はMeshBasicMaterialで光源の影響を受けないので、灯りのON/OFFに
+  // 自分で追従させる(2026-09-01、作者の指示。消灯してもリディアだけ明るいままだった)。
+  const plateMaterials = [];
+  const LANTERN_OFF_DIM = 0.2;
+  const applyPlateLantern = () => {
+    for (const material of plateMaterials) material.color.setScalar(lanternOn ? 1 : LANTERN_OFF_DIM);
+  };
   for (const spec of PARTY) {
     const g = new THREE.Group();
     partyGroup.add(g);
@@ -264,9 +271,11 @@ export function createFirstPersonScene(container, map, { ceilTiles = CEIL, obsta
           map: m.map, alphaMap: m.alphaMap, transparent: true, alphaTest: 0.04,
           side: THREE.FrontSide, depthWrite: true, fog: true,
         }));
+        plateMaterials.push(...made);
         obj.material = Array.isArray(obj.material) ? made : made[0];
       });
       g.add(gltf.scene);
+      applyPlateLantern();
     }, undefined, () => { /* モデルが無くても探索は続けられる。その駒が出ないだけ */ });
   }
 
@@ -337,6 +346,7 @@ export function createFirstPersonScene(container, map, { ceilTiles = CEIL, obsta
   // 目標(pos/facing)と、いま画面に出ている値。差がある間だけ描き続ける。
   const state = { x: 0, z: 0, yaw: 0, tx: 0, tz: 0, tyaw: 0, enemy: null };
   let camBack = CAM_BACK_DEFAULT;
+  let lanternOn = true;
   let raf = 0, last = 0, started = false;
 
   // 塵を1フレーム分動かす。戦闘と同じく「上へゆっくり立ち上り、XZで円を描くように揺れる」。
@@ -366,8 +376,8 @@ export function createFirstPersonScene(container, map, { ceilTiles = CEIL, obsta
     // カンテラは立ち位置(マスの中心)に置いたまま、カメラだけ後ろへ引く。
     // カメラに付けると引いた分だけ前が暗くなり、明るさが操作で変わってしまう。
     lantern.position.set(state.x, EYE, state.z);
-    // 炎の揺らぎ。戦闘と同じ式・同じ速さ。
-    lantern.intensity = LANTERN_INTENSITY * flicker(elapsed * FLICKER_SPEED);
+    // 炎の揺らぎ。戦闘と同じ式・同じ速さ。灯り角ボタンでOFFにした間は0のまま(環境光だけ残る)。
+    lantern.intensity = lanternOn ? LANTERN_INTENSITY * flicker(elapsed * FLICKER_SPEED) : 0;
     camera.position.set(state.x + Math.sin(state.yaw) * camBack, EYE, state.z + Math.cos(state.yaw) * camBack);
     camera.rotation.set(0, state.yaw, 0);
     // 味方は進行方向を向いて歩く。
@@ -424,6 +434,12 @@ export function createFirstPersonScene(container, map, { ceilTiles = CEIL, obsta
     // カメラの引き。決まったら CAM_BACK_DEFAULT に固定して、この口ごと消してよい。
     setBack(value) {
       camBack = Math.max(0, Math.min(CAM_BACK_MAX, value));
+      draw();
+    },
+    // 灯りの角ボタン(FirstPerson3D.jsx)から呼ぶ。カンテラの光だけ消す(環境光は残す)。
+    setLanternOn(on) {
+      lanternOn = on;
+      applyPlateLantern();
       draw();
     },
     dispose() {

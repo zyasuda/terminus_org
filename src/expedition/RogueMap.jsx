@@ -1,5 +1,5 @@
-import React, { useMemo } from "react";
-import Compass from "./Compass.jsx";
+import React, { useEffect, useMemo, useRef, useState } from "react";
+import Compass, { ANGLE } from "./Compass.jsx";
 import { corridorShapes, roomShapes } from "./draw.js";
 import { mapForFloor } from "./core.js";
 import { hallWallCells } from "./interior.js";
@@ -7,8 +7,6 @@ import { lit } from "./mapwalk.js";
 import "./rogueMap.css";
 
 const keyOf = cell => `${cell.x},${cell.y}`;
-// 地図上の自分の向き。北を0度として時計回り。三角形は-y(上)を向いた形で描く。
-const FACING_ANGLE = { north: 0, east: 90, south: 180, west: 270 };
 const markerFor = (floor, room) => {
   if (room.id === "entrance") return "△";
   const event = floor.events.find(item => item.roomId === room.id && !item.done);
@@ -19,6 +17,15 @@ const markerFor = (floor, room) => {
 };
 
 export default function RogueMap({ floor, onMove }) {
+  // 「進行方向を必ず上」モード(2026-09-01、作者の指示。実機で見比べた上で既定に採用)。
+  // 地図全体を向いている方角の逆へ回し、代わりに部屋名・記号・コンパスのNだけ
+  // 逆回転させて読める向きに戻す。
+  const [headingUp, setHeadingUp] = useState(true);
+  // 一指ドラッグで地図を見回す(2026-09-01、作者の指示)。マス単位のズレをviewBoxへ足す。
+  // 1歩でも動いたら現在地の表示へ戻す(見回した状態のまま迷子にならないように)。
+  const [pan, setPan] = useState({ x: 0, y: 0 });
+  const mapRef = useRef(null), drag = useRef(null);
+  useEffect(() => { setPan({ x: 0, y: 0 }); }, [floor.pos.x, floor.pos.y]);
   const map = useMemo(() => mapForFloor(floor), [floor.seed, floor.corridorSeed]);
   const state = useMemo(() => ({ pos: floor.pos, at: floor.at, visited: new Set(floor.visited), walked: new Set(floor.walked), seen: new Set(floor.seen) }), [floor]);
   const visible = useMemo(() => lit(state, map), [state, map]);
@@ -47,24 +54,62 @@ export default function RogueMap({ floor, onMove }) {
     [[1, 0], [-1, 0], [0, 1], [0, -1]].some(([dx, dy]) => state.seen.has(`${cell.x + dx},${cell.y + dy}`)));
   const currentRoom = map.rooms.get(floor.at);
   const lamp = { x: floor.pos.x + .5, y: floor.pos.y + .5 };
+  const bearing = ANGLE[floor.facing] ?? 0;
+  // 空間(部屋・通路・自分)は-bearingだけ回す。文字(部屋名・記号)は逆に+bearingで打ち消し、
+  // 読める向きのまま位置だけ動く。北固定モード(headingUp=false)ではどちらも無回転。
+  const spin = headingUp ? `rotate(${-bearing} ${lamp.x} ${lamp.y})` : undefined;
+  const unspin = headingUp ? `rotate(${bearing})` : undefined;
+  // ドラッグ量(画面px)を地図のマス単位へ直す。見た目がheadingUpで回っている間は、
+  // 画面上の「右」が地図のどちらへ動くかも一緒に回っているので、+bearingで逆回転して合わせる。
+  const onPointerDown = e => {
+    const rect = mapRef.current.getBoundingClientRect();
+    drag.current = { x: e.clientX, y: e.clientY, rect, pan };
+    e.currentTarget.setPointerCapture(e.pointerId);
+  };
+  const onPointerMove = e => {
+    if (!drag.current) return;
+    const { x, y, rect, pan: base } = drag.current;
+    const dxPx = e.clientX - x, dyPx = e.clientY - y;
+    let dxMap = dxPx * (width / rect.width), dyMap = dyPx * (height / rect.height);
+    if (headingUp) {
+      const rad = bearing * Math.PI / 180;
+      const rx = dxMap * Math.cos(rad) - dyMap * Math.sin(rad);
+      const ry = dxMap * Math.sin(rad) + dyMap * Math.cos(rad);
+      dxMap = rx; dyMap = ry;
+    }
+    setPan({ x: base.x + dxMap, y: base.y + dyMap });
+  };
+  const onPointerUp = () => { drag.current = null; };
   return <section className="rogue-map-shell" aria-label="探索地図">
-    <header className="rogue-map-rail"><b>{currentRoom?.name || "通路"}</b><Compass facing={floor.facing}/></header>
-    <div className="rogue-map">
-      <svg viewBox={`${left} ${top} ${width} ${height}`} role="img" aria-label="探索地図">
+    <header className="rogue-map-rail">
+      {/* 一人称側の見出し(FirstPerson3D.jsx)と表記を揃える(2026-09-01、作者の指示)。 */}
+      <b>地下 1F : {currentRoom?.name || "通路"}</b>
+      <div className="rogue-map-rail-right">
+        {(pan.x || pan.y) ? <button className="rogue-heading-toggle" onClick={() => setPan({ x: 0, y: 0 })}>現在地へ</button> : null}
+        <button className="rogue-heading-toggle" onClick={() => setHeadingUp(v => !v)}>{headingUp ? "北を上へ" : "進行方向を上へ"}</button>
+      </div>
+    </header>
+    <div className="rogue-map" ref={mapRef}
+      onPointerDown={onPointerDown} onPointerMove={onPointerMove} onPointerUp={onPointerUp} onPointerCancel={onPointerUp}>
+      {/* バトルと同じ位置・大きさのコンパス(2026-09-01、作者の指示)。 */}
+      <div className="rogue-compass-slot"><Compass facing={floor.facing} headingUp={headingUp}/></div>
+      <svg viewBox={`${left + pan.x} ${top + pan.y} ${width} ${height}`} role="img" aria-label="探索地図">
         <defs>
           <radialGradient id="expedition-torch" gradientUnits="userSpaceOnUse" cx={lamp.x} cy={lamp.y} r="5"><stop stopColor="white" stopOpacity=".95"/><stop offset=".55" stopColor="white" stopOpacity=".35"/><stop offset="1" stopColor="black" stopOpacity="0"/></radialGradient>
           <mask id="expedition-torch-mask" maskUnits="userSpaceOnUse" x={left} y={top} width={width} height={height}><rect x={left} y={top} width={width} height={height} fill="url(#expedition-torch)"/></mask>
           <radialGradient id="expedition-glow" gradientUnits="userSpaceOnUse" cx={lamp.x} cy={lamp.y} r="5"><stop stopColor="#e4b064" stopOpacity=".38"/><stop offset="1" stopColor="#e4b064" stopOpacity="0"/></radialGradient>
         </defs>
-        <g className="rogue-floor rogue-memory" dangerouslySetInnerHTML={{ __html: rooms + memoryCorridors }}/>
-        <g mask="url(#expedition-torch-mask)" className="rogue-floor rogue-light" dangerouslySetInnerHTML={{ __html: rooms + lightCorridors }}/>
-        {partition.map(cell => <rect key={`w${cell.x},${cell.y}`} className="rogue-partition" x={cell.x} y={cell.y} width="1" height="1"/>)}
-        {Array.from(map.rooms.values()).filter(room => state.visited.has(room.id)).map(room => <g key={room.id} className="rogue-marker" transform={`translate(${room.x + room.w / 2} ${room.y + room.h / 2})`}><text y=".12">{markerFor(floor, room)}</text><text className="rogue-room-name" y={-room.h / 2 - .35}>{room.name}</text></g>)}
-        <circle className="rogue-lamp-glow" cx={lamp.x} cy={lamp.y} r="5" fill="url(#expedition-glow)"/>
-        <g className="rogue-player-mark" transform={`translate(${lamp.x} ${lamp.y}) rotate(${FACING_ANGLE[floor.facing] ?? 0})`}>
-          <circle className="rogue-player-halo" r=".42"/>
-          <circle className="rogue-player" r=".17"/>
-          <polygon className="rogue-player-arrow" points="0,-.95 .34,-.2 0,-.38 -.34,-.2"/>
+        <g transform={spin}>
+          <g className="rogue-floor rogue-memory" dangerouslySetInnerHTML={{ __html: rooms + memoryCorridors }}/>
+          <g mask="url(#expedition-torch-mask)" className="rogue-floor rogue-light" dangerouslySetInnerHTML={{ __html: rooms + lightCorridors }}/>
+          {partition.map(cell => <rect key={`w${cell.x},${cell.y}`} className="rogue-partition" x={cell.x} y={cell.y} width="1" height="1"/>)}
+          {Array.from(map.rooms.values()).filter(room => state.visited.has(room.id)).map(room => <g key={room.id} className="rogue-marker" transform={`translate(${room.x + room.w / 2} ${room.y + room.h / 2})`}><g transform={unspin}><text y=".12">{markerFor(floor, room)}</text><text className="rogue-room-name" y={-room.h / 2 - .35}>{room.name}</text></g></g>)}
+          <circle className="rogue-lamp-glow" cx={lamp.x} cy={lamp.y} r="5" fill="url(#expedition-glow)"/>
+          <g className="rogue-player-mark" transform={`translate(${lamp.x} ${lamp.y}) rotate(${bearing})`}>
+            <circle className="rogue-player-halo" r=".42"/>
+            <circle className="rogue-player" r=".17"/>
+            <polygon className="rogue-player-arrow" points="0,-.95 .34,-.2 0,-.38 -.34,-.2"/>
+          </g>
         </g>
       </svg>
     </div>

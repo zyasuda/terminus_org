@@ -204,8 +204,9 @@ export default function ExpeditionView() {
 // 画面の見た目。1トークン1行にして、色や余白を1つ変えた時にdiffがその1行だけになるようにする。
 const S = {
   // 左右は端まで使う(2026-09-01、作者の指示。左右に余白があると3D画面が狭くなる)。
-  page: { width: "100vw", height: "100dvh", overflowY: "auto", boxSizing: "border-box", padding: "24px 0", background: "#161a22", color: "#e6e8ee", fontSize: 14, lineHeight: 1.6, fontFamily: FONT },
-  marquee: { marginBottom: 16 },
+  // 上も詰める(2026-09-01、作者の指示。マーキーと一人称の間の余白が無駄と指摘された)。
+  page: { width: "100vw", height: "100dvh", overflowY: "auto", boxSizing: "border-box", padding: "8px 0 24px", background: "#161a22", color: "#e6e8ee", fontSize: 14, lineHeight: 1.6, fontFamily: FONT },
+  marquee: { marginBottom: 6 },
   message: { color: "#d8c98c", maxWidth: 680 },
   box: { background: "#20242e", border: "1px solid #3c4354", padding: 12, borderRadius: 8, maxWidth: 620, marginTop: 12 },
   field: { background: "#20242e", border: "1px solid #3c4354", padding: 10, borderRadius: 8, marginBottom: 12 },
