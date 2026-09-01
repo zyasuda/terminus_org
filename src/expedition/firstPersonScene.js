@@ -3,7 +3,7 @@ import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import { STANDEE_VERSION } from "../battle/standeeVersion.js";
 import { DUST_TOP, dustMaterial, dustMote } from "../battle/dustLook.js";
 import { FLICKER_SPEED, LANTERN_COLOR, LANTERN_DECAY, LANTERN_INTENSITY, LANTERN_RANGE, flicker } from "../battle/lanternLook.js";
-import { DOORWAY_HEIGHT_TILES, FLOOR_BASE, FLOOR_TEX_TILES, FLOOR_TONE, WALL_COLOR, stoneTexture } from "../battle/stoneLook.js";
+import { DOORWAY_HEIGHT_TILES, FLOOR_BASE, FLOOR_TEX_TILES, FLOOR_TONE, stoneTexture, wallGradientTexture } from "../battle/stoneLook.js";
 import { FACING_YAW, levelCells } from "./mapwalk.js";
 
 // 一人称の3D。戦闘(view3d.js)と同じ「1マス=1タイル」の座標系で組み、
@@ -68,8 +68,13 @@ export function createFirstPersonScene(container, map, { ceilTiles = CEIL } = {}
   const { open, solid } = levelCells(map);
 
   const dark = hex => new THREE.MeshLambertMaterial({ color: hex, fog: true });
-  // 壁と天井は無地。戦闘の壁も無地(COLOR.wall)なので、探索だけ石を貼ると食い違う。
-  const wallMat = dark(WALL_COLOR), ceilMat = dark(0x232833);
+  /* 壁は戦闘の書き割りと同じ縦グラデーション(stoneLook.js が正本)。上が見えて、
+     下へ向かうほど闇に沈む。戦闘は透過で床際を落とすが、こちらはカメラが中を歩くので
+     不透明に焼き込む(opaque。背景色の上へ合成するので見た目は同じ)。
+     色はテクスチャが持つので、材質の color は白にして光だけ乗せる。 */
+  const wallTex = wallGradientTexture({ opaque: true, over: [BG >> 16 & 255, BG >> 8 & 255, BG & 255] });
+  const wallMat = new THREE.MeshLambertMaterial({ map: wallTex, fog: true });
+  const ceilMat = dark(0x232833);
   // 床は戦闘と同じ石。石の目の細かさを戦闘に揃えるため、stoneLook.js の FLOOR_TEX_TILES で
   // repeat を決める。マス1枚にテクスチャを1回だけ貼ると、石が細かくなりすぎる。
   const stoneTex = stoneTexture();
@@ -127,7 +132,13 @@ export function createFirstPersonScene(container, map, { ceilTiles = CEIL } = {}
   };
   const archWallGeo = archWallShape();
   // 部屋からも通路からも見えるので両面。稜線とアーチの線が同じ面に載るので、面だけ奥へ押す。
-  const archWallMat = new THREE.MeshLambertMaterial({ color: WALL_COLOR, fog: true,
+  /* ShapeGeometry のUVは頂点座標そのものなので、y(0〜ceil)をvの0〜1へ畳む。
+     畳まないとグラデーションが天井の高さぶん繰り返して縞になる。
+     横は2pxの縦グラデーションなので、uがどう伸びても見た目は変わらない。 */
+  const archWallTex = wallTex.clone();
+  archWallTex.needsUpdate = true;
+  archWallTex.repeat.set(1, 1 / ceil);
+  const archWallMat = new THREE.MeshLambertMaterial({ map: archWallTex, fog: true,
     side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: 1, polygonOffsetUnits: 1 });
   const arcAt = (cx, cz, dirX, dirZ) => {
     // 境目に垂直な面へ描く。境目の向き(dirX,dirZ)に直交する軸が開口の幅になる。
@@ -385,6 +396,7 @@ export function createFirstPersonScene(container, map, { ceilTiles = CEIL } = {}
       renderer.domElement.remove();
       renderer.dispose();
       for (const geo of [boxGeo, planeGeo, ceilGeo, edgeGeo, archGeo, archWallGeo, gridGeo, markerGeo]) geo.dispose();
+      for (const tex of [wallTex, archWallTex]) tex.dispose();
       dustMat.map?.dispose();
       stoneTex.dispose();
       for (const mat of [wallMat, floorMat, ceilMat, lineMat, floorLineMat, dustMat, marker.material]) mat.dispose();

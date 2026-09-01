@@ -15,7 +15,7 @@ import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import { elevationAt, makeRng } from "./core.js";
 import { DUST_TOP, dustMaterial, dustMote } from "./dustLook.js";
 import { FLICKER_SPEED, LANTERN_COLOR, LANTERN_DECAY, LANTERN_INTENSITY, LANTERN_RANGE, flicker } from "./lanternLook.js";
-import { FLOOR_BASE, FLOOR_TEX_TILES, FLOOR_TONE, DOORWAY_HEIGHT_TILES, WALL_COLOR, stoneTexture } from "./stoneLook.js";
+import { FLOOR_BASE, FLOOR_TEX_TILES, FLOOR_TONE, DOORWAY_HEIGHT_TILES, WALL_COLOR, stoneTexture, wallGradientTexture } from "./stoneLook.js";
 
 // 床の紙は1マスちょうどで隙間なく敷く。TILEはマス内に物を置くときの
 // 「はみ出さない範囲」の目安として、水溜りや瓦礫の大きさに使う。
@@ -865,23 +865,8 @@ export function createBattleScene(container, grid, { openings: mapOpenings = nul
     g.lineTo(x0 + aw, h);
     g.closePath();
   };
-  const backdropTexture = () => {
-    const c = document.createElement("canvas");
-    c.width = 2;
-    c.height = 128;
-    const g = c.getContext("2d");
-    const grad = g.createLinearGradient(0, 0, 0, c.height);
-    grad.addColorStop(0, "rgba(30,35,49,0.9)");    // 上端: いちばん見える
-    grad.addColorStop(0.45, "rgba(15,18,26,0.5)");
-    grad.addColorStop(1, "rgba(5,6,10,0)");        // 下端: 透過して闇へ沈む
-    g.fillStyle = grad;
-    g.fillRect(0, 0, c.width, c.height);
-    const tex = new THREE.CanvasTexture(c);
-    // 色空間を指定しないとcanvasの値が線形として扱われ、出力時のsRGB変換で
-    // 持ち上げられてしまう(指定した色よりかなり明るく出る)
-    tex.colorSpace = THREE.SRGBColorSpace;
-    return tex;
-  };
+  // 壁のグラデーションは stoneLook.js が正本(探索の一人称も同じものを読む)。
+  const backdropTexture = () => wallGradientTexture();
 
   // 陰影を付けない(MeshBasic)。Lambertだと指向性ライトが当たらない向きの壁だけ
   // 環境光のみになって背景に沈み、カメラの向きによって壁が消えて見えた。
