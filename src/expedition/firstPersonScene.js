@@ -252,8 +252,13 @@ export function createFirstPersonScene(container, map, { ceilTiles = CEIL, obsta
   // 自分で追従させる(2026-09-01、作者の指示。消灯してもリディアだけ明るいままだった)。
   const plateMaterials = [];
   const LANTERN_OFF_DIM = 0.2;
+  // 壁・床・アーチの縁線もLineBasicMaterialで光源を無視するため、リディアの板と同じ理由で
+  // 灯り消灯時に浮いて見える(2026-09-01、作者の指摘)。地の色を保って明るさだけ落とす。
+  const lineColor = lineMat.color.clone(), floorLineColor = floorLineMat.color.clone();
   const applyPlateLantern = () => {
     for (const material of plateMaterials) material.color.setScalar(lanternOn ? 1 : LANTERN_OFF_DIM);
+    lineMat.color.copy(lineColor).multiplyScalar(lanternOn ? 1 : LANTERN_OFF_DIM);
+    floorLineMat.color.copy(floorLineColor).multiplyScalar(lanternOn ? 1 : LANTERN_OFF_DIM);
   };
   for (const spec of PARTY) {
     const g = new THREE.Group();
