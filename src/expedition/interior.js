@@ -95,13 +95,13 @@ export function corridorBattleBoard(room, entryCell) {
    焼き込まれていて、地図と方角が合っていなかった(実測: seed 1453439713の三叉路は
    東・西・北に開いているのに、戦闘盤には無いはずの南の枝が出て、東の枝が消えていた)。
 
-   枝の長さは2タイル。3タイル(=探索の1マスぶん)にすると盤が9×9へ広がり、
-   歩数と密度が変わってしまう。方角の食い違いだけを直し、盤の大きさは据え置く。
+   枝の長さは2マス。伸ばすと盤が9×9へ広がり、歩数と密度が変わってしまう。
+   方角の食い違いだけを直し、盤の大きさは据え置く。
    北・西・南に開いている三叉路では、以前の固定盤と1文字も違わない形が出る。 */
-const JUNCTION_ARM = 2;                            // 枝の長さ。単位: 戦闘タイル
-const JUNCTION_SPAN = 3;                           // 枝と交差点の幅。通路と同じ3タイル
+const JUNCTION_ARM = 2;                            // 枝の長さ。単位: 盤のマス
+const JUNCTION_SPAN = 3;                           // 枝と交差点の幅。陣取りの余地を残すため盤の上で広げてある
 const JUNCTION_SIZE = JUNCTION_ARM * 2 + JUNCTION_SPAN;
-// 枝が占めるタイル。dx/dyは交差点から外を向く向き(探索のFACING_AHEADと同じ取り方)。
+// 枝が占めるマス。dx/dyは交差点から外を向く向き(探索のFACING_AHEADと同じ取り方)。
 const JUNCTION_DIR = { north: [0, -1], south: [0, 1], west: [-1, 0], east: [1, 0] };
 // 枝の外端の中央マス。ここが盤の出入口になる。
 function junctionArmEnd(dir) {

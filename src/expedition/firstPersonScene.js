@@ -20,36 +20,35 @@ import { FACING_YAW, levelCells } from "./mapwalk.js";
    戦闘盤はそれを1マス=1タイルで組む(hallBattleBoard / corridorBattleBoard が
    room.w×room.h をそのまま行データにしている)。CELL はそこに一切関与しない。
 
-   だから **CELL を export しない。** ここから外へ出すと「探索1マスは戦闘の3タイル」という
-   誤った換算が生まれる。2026-08-31に私(Claude)が実際にそれをやり、三叉路の戦闘盤の枝を
-   3タイル幅で組むところまで波及させた。この定数を読んでよいのはこのファイルだけ。
+   だから **CELL を export しない。** これを外から読むと、絵の都合が寸法として扱われ、
+   戦闘盤の組み方まで引きずられる。実際に一度そうなった。読んでよいのはこのファイルだけで、
+   `core.test.mjs` が見張っている。
 
-   値は作者が絵を見て決めた(2026-09-01。1では縦長のスリットになりゲームとして成立しない)。
-   アーチ壁は画面上3マスぶんの幅で描かれるが、**扱いは1マス**。 */
+   値は作者が絵を見て決めた(2026-09-01。小さくすると縦長のスリットになり、
+   ゲームとして成立しない)。壁や開口が画面上でマスより広く描かれても、**扱いは1マス**。 */
 const CELL = 3;
 // 天井の高さは stoneLook.js の PASSAGE_HEIGHT_TILES が正本(出入口の高さとは別)。
 // 目の高さは、アーチのコメント「人の約1.6倍」から逆算した背丈(2.0/1.6 = 1.25)のやや下。
 export const CEIL = PASSAGE_HEIGHT_TILES, EYE = 1.15;
-// 入口アーチの寸法。戦闘の書き割りに描いてある入口と同じ大きさ(単位: タイル)。
+// 入口アーチの寸法。高さは戦闘の書き割りに描いてある入口と同じ値(stoneLook.jsが正本)。
 // 天井(PASSAGE_HEIGHT_TILES)より低い。人が通れる高さであって、坑道の高さではない。
 // 幅はマスに収める。CELLを縮めた時に、開口がマスより広くなって壁が消えるのを防ぐ。
 const ARCH_W = Math.min(1.4, CELL * 0.7), ARCH_H = DOORWAY_HEIGHT_TILES;
 const BG = 0x0a0d14, LINE = 0x8fb0d8, FLOOR_LINE = 0x6d8399;
-// 霧はカメラからの実距離なので、マスの大きさではなくタイルで持つ。
-const FOG_NEAR = 2.4, FOG_FAR = 12.6;
+// 霧が効きはじめる距離と、見えなくなる距離。マスの大きさに合わせて伸縮させる。
+const FOG_NEAR = CELL * 0.8, FOG_FAR = CELL * 4.2;
 // 向きは角度で持つ(FACING_YAWが正本)。旋回の補間で北⇄西を跨ぐ時に長い方へ回らないよう、
 // 目標角を現在地から±πの範囲へ畳んで使う。
 const parse = key => key.split(",").map(Number);
 // 歩行と旋回にかける時間。長いと待たされ、短いとどこへ動いたか分からない。単位: ミリ秒。
 const STEP_MS = 190, TURN_MS = 170;
-// カメラを立ち位置からどれだけ後ろへ引くか。単位: 戦闘のタイル(1マス = 3タイル)。
+// カメラを立ち位置からどれだけ後ろへ引くか。マスの大きさに対する割合で持つ。
 // 引くほど広く見えるが、マスの外へ出ると後ろの壁を突き抜けるので上限を設ける。
 export const CAM_BACK_DEFAULT = CELL * 0.2, CAM_BACK_MAX = CELL * 0.43;
 // 塵の見た目は戦闘と同じ dustLook.js を読む(2画面で食い違わせない)。
 // ここで決めるのは「どこに、何個置くか」だけ。
-// 戦闘は7×3=21タイルの盤に22個。同じ密度になるよう、カメラの周り±3タイル(6×6=36タイル)に
-// 置く。マスの大きさではなくタイルで持つ(塵の粒の間隔は物理的な値)。
-const DUST_COUNT = 38, DUST_RANGE = 3;
+// 撒く範囲はカメラの周り±1マス。粒の数はそこが混みすぎず、まばらにも見えない数を選んだ。
+const DUST_COUNT = 38, DUST_RANGE = CELL;
 
 export function createFirstPersonScene(container, map, { ceilTiles = CEIL } = {}) {
   const ceil = ceilTiles;   // 天井の高さ。開発用スライダーで動かして決める
@@ -62,8 +61,8 @@ export function createFirstPersonScene(container, map, { ceilTiles = CEIL } = {}
   const dark = hex => new THREE.MeshLambertMaterial({ color: hex, fog: true });
   // 壁と天井は無地。戦闘の壁も無地(COLOR.wall)なので、探索だけ石を貼ると食い違う。
   const wallMat = dark(WALL_COLOR), ceilMat = dark(0x232833);
-  // 床は戦闘と同じ石。戦闘は「テクスチャ1枚 = FLOOR_TEX_TILES(3)タイル」でUVを振っている。
-  // こちらは1マスの板1枚にrepeatで同じ密度を作る。マス1枚に1回貼ると石が3倍細かくなる。
+  // 床は戦闘と同じ石。石の目の細かさを戦闘に揃えるため、stoneLook.js の FLOOR_TEX_TILES で
+  // repeat を決める。マス1枚にテクスチャを1回だけ貼ると、石が細かくなりすぎる。
   const stoneTex = stoneTexture();
   stoneTex.repeat.set(CELL / FLOOR_TEX_TILES, CELL / FLOOR_TEX_TILES);
   const floorMat = new THREE.MeshLambertMaterial({ map: stoneTex, fog: true,
@@ -157,8 +156,8 @@ export function createFirstPersonScene(container, map, { ceilTiles = CEIL } = {}
   scene.add(new THREE.LineSegments(edgeGeo, lineMat));
 
   /* 床と天井。床の目盛りは**マスの境目だけ**に引く。1マスの中を3分割していた頃の名残を
-     消したもの(2026-09-01、作者の指示)。「1マス=3タイル」という誤った換算の見た目の現れで、
-     読む人を混乱させていた。地図の1マスと、床の1区画が1対1で対応する。 */
+     消したもの(2026-09-01、作者の指示)。マスの中に線を入れると「1マスは分割されている」と
+     読まれ、混乱の元になっていた。地図の1マスと、床の1区画が1対1で対応する。 */
   const grid = [];
   for (const key of open) {
     const [x, y] = parse(key);
@@ -236,17 +235,17 @@ export function createFirstPersonScene(container, map, { ceilTiles = CEIL } = {}
   }
 
   // 敵影。位置は外から差し込む(地図には出さない固定敵)。
-  const markerGeo = new THREE.ConeGeometry(0.66, 0.9, 4);
+  const markerGeo = new THREE.ConeGeometry(CELL * 0.22, 0.9, 4);
   const marker = new THREE.Mesh(markerGeo, new THREE.MeshBasicMaterial({ color: 0x6b3a3a, fog: true }));
   marker.visible = false;
   scene.add(marker);
 
-  const camera = new THREE.PerspectiveCamera(72, 1, 0.05, 36);
+  const camera = new THREE.PerspectiveCamera(72, 1, 0.05, CELL * 12);
   camera.position.y = EYE;
   // カンテラ。色・強さ・減衰・揺らぎは戦闘と同じ lanternLook.js を読む。
-  // 射程だけは場面で違う。戦闘は盤を見下ろすので3タイルで足りるが、一人称は
+  // 射程だけは場面で違う。戦闘は盤を見下ろすので短くて足りるが、一人称は
   // 進行方向の奥まで見えるため、灯りが届かないと真っ暗な穴を覗くことになる。
-  // 探索の1マス = 3タイルなので、LANTERN_RANGE_CELLS マス先までを照らす。
+  // ここでは LANTERN_RANGE_CELLS マス先までを照らす。
   const LANTERN_RANGE_CELLS = 1.6;
   const lantern = new THREE.PointLight(LANTERN_COLOR, LANTERN_INTENSITY,
     LANTERN_RANGE * LANTERN_RANGE_CELLS, LANTERN_DECAY);

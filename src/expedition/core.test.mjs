@@ -3,7 +3,6 @@ import fs from "node:fs";
 import { ITEMS, back, canOpenChest, corridorLayoutFor, createFloor, roomDoorways, retreatToEntrance, equipFromStash, equipInField, eventAt, hallContact, hallLayoutFor, hallRoom, isEntrance, junctionLayoutFor, mapForFloor, newVillage, partyMaxHp, route, useFieldTonic, walk } from "./core.js";
 import { hallBlocked, hallEnemyPosition, hallWallCells } from "./interior.js";
 import { FACING_AHEAD, FACING_YAW, isOpen, levelCells, opposite } from "./mapwalk.js";
-import { EXPEDITION_BATTLE_CONFIG } from "./battleConfig.js";
 const a = createFloor(123), b = createFloor(123);
 assert.equal(a.seed, b.seed);
 assert.deepEqual([...mapForFloor(a).rooms], [...mapForFloor(b).rooms]);
@@ -141,19 +140,11 @@ assert.deepEqual(retreated.events, midFight.events, "離脱しても敵は倒し
 assert.equal(retreated.hallDefeated, false, "大広間の固定敵も残る");
 assert.equal(eventAt(retreated), null, "入口には遭遇が無いので、戻った直後に再戦にならない");
 
-// 一人称の床の目盛りは「探索1マス = 戦闘3タイル」を前提にしている(FirstPersonView.jsx の TILES_PER_CELL)。
-// 通路盤の幅を変えたらここで落ちるので、床の刻みも一緒に直すこと。
-/* 一人称の床の刻み(firstPersonScene.js の CELL = 3)の根拠。
-   2026-08-31に通路戦の盤を部屋から組むようにしたので、盤の縦幅はもう3固定ではない
-   (実測 3〜5)。刻みの根拠は「細い通路の幅が3マス」という設計値の方であり、
-   この board.corridor はその設計値が書いてある最後の場所として残している。
-   **盤の縮尺(1マス=1タイル)と一人称の縮尺(1マス=3タイル)は食い違ったままで、未解決。** */
 /* 一人称の見せ方の倍率(CELL)が、firstPersonScene.js の外へ漏れていないこと。
 
-   漏らすと「探索の1マスは戦闘の◯タイル」という換算が生まれ、戦闘盤の組み方が
-   絵の都合に引きずられる。2026-08-31に実際にそれが起き、三叉路の盤の枝を3タイル幅で
-   組むところまで波及した。正本は「マス」で、戦闘盤は1マス=1タイルで組む。
-   一人称が1マスを何単位の幅に描くかは、絵の話であって寸法ではない。 */
+   漏らすと絵の都合が寸法として扱われ、戦闘盤の組み方まで引きずられる。実際に一度そうなった。
+   正本は「マス」の側にあり、戦闘盤は部屋のマス数をそのまま盤のマス数にして組む。
+   一人称が1マスを画面上でどれだけの幅に描くかは、絵の話であって寸法ではない。 */
 {
   const dir = new URL("./", import.meta.url).pathname;
   const leaked = fs.readdirSync(dir)
@@ -198,7 +189,6 @@ assert.equal(eventAt(retreated), null, "入口には遭遇が無いので、戻�
   assert.ok(checked > 15000, `地図と一人称を十分な数のセルで突き合わせた(実測 ${checked} セル)`);
 }
 
-assert.equal(EXPEDITION_BATTLE_CONFIG.board.corridor.height, 3, "細い通路の幅3マスが一人称の床の刻みの根拠として残っている");
 
 /* 通路戦の盤は、戦う部屋の実寸と入ってきた辺から組む(2026-08-31)。
    それまでは固定の7×3で、部屋の形と無関係だった。
