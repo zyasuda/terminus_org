@@ -70,8 +70,10 @@ export default function RogueMap({ floor, onMove }) {
   const onPointerMove = e => {
     if (!drag.current) return;
     const { x, y, rect, pan: base } = drag.current;
+    // 指についてくる向き(地図アプリの標準)。viewBoxの最小値を下げると中身は右へ動くので、
+    // 引く(2026-09-01、南向きで逆に感じると指摘され、向きに依らない一貫した符号に直す)。
     const dxMap = (e.clientX - x) * (width / rect.width), dyMap = (e.clientY - y) * (height / rect.height);
-    setPan({ x: base.x + dxMap, y: base.y + dyMap });
+    setPan({ x: base.x - dxMap, y: base.y - dyMap });
   };
   const onPointerUp = () => { drag.current = null; };
   return <section className="rogue-map-shell" aria-label="探索地図">
