@@ -31,3 +31,8 @@ trpg-gm-mock2/images/Gemini_Generated_Image_8tyb3c8tyb3c8tyb.png
 # ローカルツール設定・作業用スクリプト(gitでは追跡しない)
 .codex/
 trpg-gm-mock2/scripts/
+
+# 独立したリポジトリへ分離した(2026-09-02)。正本は zyasuda/standee-wiz。
+# ここには .gitmodules の無い gitlink が残っていて、クローンしても中身が
+# 取れなかった。参照ごと外し、ローカルの作業ディレクトリとして無視する。
+trpg-gm-isometric/
