@@ -16,6 +16,8 @@ design/*.psd
 # Secrets
 .env
 **/.env
+**/.dev.vars
+**/.wrangler/
 
 # 配布されたシナリオデータ(生成物)。正本は scenario/ だけを追跡する。
 # 復元は リポジトリ直下で node scripts/distribute-scenario.mjs --write
