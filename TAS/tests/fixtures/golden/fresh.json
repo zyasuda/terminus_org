@@ -82,9 +82,10 @@
         "aliases": [
           "ランプ",
           "灯り",
-          "ていとう",
+          "らんぷ",
+          "火",
           "らんたん",
-          "手元灯",
+          "手元",
           "照明"
         ],
         "kind": "item",
@@ -148,7 +149,24 @@
           "光る石",
           "かけら",
           "破片",
-          "石"
+          "石",
+          "あおいし",
+          "ひかるいし",
+          "いし",
+          "心臓の石",
+          "心の石",
+          "胸の石",
+          "ど",
+          "どう",
+          "りょ",
+          "どうりょく",
+          "動力",
+          "動力源",
+          "力",
+          "力のみなもと",
+          "力の源",
+          "輝く石",
+          "心いし"
         ],
         "kind": "item",
         "importance": "background",
@@ -166,8 +184,8 @@
         "kind": "enemy",
         "importance": "support",
         "surface": "",
-        "truth": "/images/s2_rust_eater.png",
-        "visual": "/images/s2_rust_eater.png",
+        "truth": "s2_rust_eater.png",
+        "visual": "s2_rust_eater.png",
         "affordances": [
           "inspect",
           "fight"
@@ -177,7 +195,7 @@
         "id": "monster_2",
         "ja": "灯りの番人",
         "aliases": [],
-        "kind": "enemy",
+        "kind": "npc",
         "importance": "support",
         "surface": "",
         "truth": "/images/s3_guardian.png",
@@ -197,7 +215,7 @@
         "importance": "support",
         "surface": "",
         "truth": "/images/s2_rust_eater.png",
-        "visual": "/images/s2_rust_eater.png",
+        "visual": "s2_mine_bat.png",
         "affordances": [
           "inspect",
           "fight"
@@ -222,6 +240,36 @@
         "storyKey": true,
         "surface": "ゆっくりと脈動している青く光る石",
         "truth": "何かの動力源になるような不思議な力を宿す"
+      },
+      {
+        "id": "npc_3",
+        "ja": "村人",
+        "aliases": [],
+        "kind": "npc",
+        "importance": "support",
+        "surface": "",
+        "truth": "",
+        "visual": "",
+        "affordances": [
+          "talk",
+          "inspect"
+        ]
+      },
+      {
+        "id": "item_5-msicql8t-ewjn8d",
+        "ja": "回復薬",
+        "aliases": [
+          "薬",
+          "くすり"
+        ],
+        "kind": "item",
+        "importance": "background",
+        "surface": "体力（HP）を少し回復する",
+        "truth": "",
+        "visual": "",
+        "affordances": [
+          "inspect"
+        ]
       }
     ],
     "companionsHint": "",
@@ -240,11 +288,16 @@
           },
           {
             "mutter": "ガレス、壊すのは調べてからにして。"
+          },
+          {
+            "mutter": "足元を見て。古い仕掛けかもしれない。"
           }
         ],
         "battleMutters": [
-          "足元を見て。古い仕掛けかもしれない。",
-          "無茶をしないで、ガレス。"
+          "無茶をしないで、ガレス。",
+          "急がないで。相手の癖を見てからでも遅くないわ。",
+          "間合いが遠いわ。もう半歩、退がって。",
+          "息を整えて、あなた。一度で決めなくていい。"
         ],
         "battleEnd": {
           "win": [
@@ -315,11 +368,16 @@
           },
           {
             "mutter": "ガレス、壊すのは調べてからにして。"
+          },
+          {
+            "mutter": "足元を見て。古い仕掛けかもしれない。"
           }
         ],
         "battleMutters": [
-          "足元を見て。古い仕掛けかもしれない。",
-          "無茶をしないで、ガレス。"
+          "無茶をしないで、ガレス。",
+          "急がないで。相手の癖を見てからでも遅くないわ。",
+          "間合いが遠いわ。もう半歩、退がって。",
+          "息を整えて、あなた。一度で決めなくていい。"
         ],
         "battleEnd": {
           "win": [
@@ -367,11 +425,20 @@
     "id": 1,
     "title": "チャプター1",
     "quest": "灯りの正体を確かめ、坑道が使えるか村に報告する(依頼人:村の顔役マイラ・ヴェイン)",
-    "flagsOut": [],
+    "flagsOut": [
+      "kept_heartstone_shard"
+    ],
+    "healing": [
+      {
+        "name": "回復薬",
+        "amount": 4,
+        "text": "封を切って一息にあおった。傷の熱が引いていく。"
+      }
+    ],
     "intro": {
       "id": "ch1_intro",
       "name": "マイラの部屋",
-      "brief": "夕暮れの村。マイラ・ヴェインは机に坑道の古い見取り図を広げ、消えた作業員と坑道の奥から聞こえる金属音について語り始める。",
+      "brief": "夕暮れの村。マイラ・ヴェインは机に「坑道」の古い「見取り図」を広げ、坑道の奥から聞こえる「金属音」について静かに語り始める。",
       "img": "s4_myra_room.jpg",
       "npcSprite": "s4_myra_full_transparent.png",
       "npc": {
@@ -391,14 +458,97 @@
             "どうする"
           ],
           "to": "scene:1",
-          "npcSay": "ええ、頼んだわよ。気をつけて。"
+          "addItems": [
+            "干し肉と水袋"
+          ],
+          "npcSay": "坑道の奥から、まだ物音がするの。危ないのは分かってる。……これを持って行って。無理はしないで。"
         }
       ],
-      "greeting": "坑道の奥から、まだ物音がするの。危ないのは分かってる。でも、確かめてきてほしい。",
+      "greeting": "わたしの依頼は、火山の古い坑道の奥から、何か物音がしているらしいの。その正体が何か確かめてきて欲しいのだけど、受けてもらえないかしら？",
       "hintChips": [
         "見取り図",
-        "金属音"
-      ]
+        "金属音",
+        "引き受ける"
+      ],
+      "secrets": [
+        {
+          "id": "intro_face",
+          "entity": "マイラの表情",
+          "aliases": [
+            "表情",
+            "顔",
+            "マイラ",
+            "様子"
+          ],
+          "dc": 2,
+          "surface": "話しながら、マイラは何度も窓の外へ目をやる。",
+          "text": "マイラは目を伏せたまま指を組んでいる。もう少し、この依頼について聞き出せそうだ。",
+          "trigger": "",
+          "category": "object",
+          "importance": "support",
+          "usage": "inspect"
+        },
+        {
+          "id": "intro_mine",
+          "entity": "坑道",
+          "aliases": [
+            "坑道",
+            "廃坑",
+            "鉱山"
+          ],
+          "dc": 2,
+          "surface": "火山のふもとの古い坑道。村はここで生きてきた。",
+          "text": "「もう十年以上、誰も使っていない捨てられた坑道だわ。もう誰も近づかない……」",
+          "trigger": "",
+          "category": "object",
+          "importance": "support",
+          "usage": "inspect"
+        },
+        {
+          "id": "intro_map",
+          "entity": "見取り図",
+          "aliases": [
+            "見取り図",
+            "地図",
+            "図面",
+            "図"
+          ],
+          "dc": 2,
+          "surface": "机に広げられた、坑道の古い見取り図。",
+          "text": "「一応、何かの手がかりにはなるかもね。でも、かなりの場所が崩れているらしいわ」",
+          "trigger": "",
+          "category": "object",
+          "importance": "support",
+          "usage": "inspect"
+        },
+        {
+          "id": "intro_sound",
+          "entity": "金属音",
+          "aliases": [
+            "金属音",
+            "物音",
+            "音",
+            "かんかん"
+          ],
+          "dc": 2,
+          "surface": "マイラは声を落として、坑道の奥から聞こえるという音の話をした。",
+          "text": "「坑道の奥から微かに響いているわ。これが何を意味しているのか、わたしには分からない」",
+          "trigger": "",
+          "category": "object",
+          "importance": "support",
+          "usage": "inspect"
+        }
+      ],
+      "loot": [],
+      "authoring": {
+        "actionCandidateLabels": {
+          "exit:to_scean01": "依頼を引き受ける",
+          "secret:intro_face": "マイラの表情を見る",
+          "secret:intro_mine": "坑道について尋ねる",
+          "secret:intro_map": "見取り図を見る",
+          "secret:intro_sound": "金属音について尋ねる"
+        }
+      }
     },
     "flagRules": {},
     "reference": {
@@ -443,15 +593,18 @@
               "心石の欠片"
             ]
           },
-          "removeItems": [
-            "心石の欠片"
-          ],
           "addItems": [
             "30ゴールド"
           ],
-          "npcSay": "よくやってくれた。これは謝礼だ。しかし、この欠片にはまだ秘密がある。もう少し手伝ってくれないか?"
+          "npcSay": "よくやってくれた。これは謝礼だ。しかし、この欠片にはまだ秘密があるわ。もう少し手伝ってくれないかしら?",
+          "blockedText": "まだ渡していないものがある。"
         }
-      ]
+      ],
+      "authoring": {
+        "actionCandidateLabels": {
+          "exit:hand_over": "心石の欠片をマイラへ渡す"
+        }
+      }
     },
     "startingInventory": {
       "player": [
@@ -463,7 +616,8 @@
         "ナイフ",
         "ランタン"
       ]
-    }
+    },
+    "revision": "rev6 2026-08-13"
   },
   "chapterFile": "chapter_01.json",
   "assets": {
