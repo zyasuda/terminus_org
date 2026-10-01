@@ -11,7 +11,7 @@
     "smoke:battle": "node src/battle/smoke.mjs",
     "build": "vite build",
     "build:present": "vite build && rm -rf dist/models && cp -R images dist/images",
-    "deploy:present": "npm run build:present && wrangler pages deploy dist --project-name mock2-present --branch main",
+    "deploy:present": "npm run build:present && npx --yes wrangler pages deploy dist --project-name mock2-present --branch main",
     "preview": "vite preview",
     "test:inventory": "node src/inventory.test.mjs",
     "test:scenario": "node src/scenario.test.mjs",
