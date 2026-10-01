@@ -6,13 +6,13 @@ import React, { useEffect, useState } from "react";
 // def は styles.css の :root と同じ値にする(「元に戻す」で戻る先)。unit は CSS 変数の単位
 const KNOBS = [
   { key: "--font-scale", label: "文字の大きさ", min: 0.8, max: 1.8, step: 0.05, def: 1.3, unit: "", fmt: v => "×" + v.toFixed(2) },
-  { key: "--tab-scale", label: "開閉タブの大きさ", min: 1, max: 3, step: 0.1, def: 1.5, unit: "", fmt: v => "×" + v.toFixed(2) },
-  { key: "--tab-top", label: "開閉タブの縦位置", min: 0, max: 30, step: 1, def: 16, unit: "%", fmt: v => v + "%" },
+  { key: "--tab-scale", label: "開閉タブの大きさ", min: 1, max: 3, step: 0.1, def: 1.4, unit: "", fmt: v => "×" + v.toFixed(2) },
+  { key: "--tab-top", label: "開閉タブの縦位置", min: 0, max: 30, step: 1, def: 8, unit: "%", fmt: v => v + "%" },
   { key: "--portrait-scale", label: "同行者の立ち絵", min: 1, max: 2, step: 0.05, def: 1.1, unit: "", fmt: v => "×" + v.toFixed(2) },
   { key: "--npc-scale", label: "マイラ等の立ち絵", min: 1, max: 2, step: 0.05, def: 1.5, unit: "", fmt: v => "×" + v.toFixed(2) },
 ];
 // 既定値を変えたら番号を上げる(古い既定を基準に覚えた値を読まないため)
-const STORE = "mock2_tune_v3";
+const STORE = "mock2_tune_v4";
 
 function load() {
   try { return JSON.parse(localStorage.getItem(STORE)) || {}; } catch (e) { return {}; }
