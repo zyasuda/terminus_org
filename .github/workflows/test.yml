@@ -28,6 +28,8 @@ jobs:
         working-directory: trpg-gm-mock2
         run: |
           npm ci --no-audit --no-fund
+          # TAS の検査はここの playwright を借りてブラウザを起動する(TAS側には入れない)
+          npx playwright install --with-deps chromium
           npm test
           npm run check:assets
           npm run build
