@@ -1,0 +1,45 @@
+# pushのたびに、配布してから全クライアントの検査を通す(Terminus/AGENTS.md「シナリオデータの正本」)。
+# 手元で走らせ忘れても、壊れたまま main に残らないようにする(2026-10-01)。
+# 章データは配布された生成物で git に入っていないため、検査の前に必ず配布する。
+name: test
+
+on:
+  push:
+    branches: [main, scenario-single-source]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24.20.0
+          cache: npm
+          cache-dependency-path: trpg-gm-mock2/package-lock.json
+
+      - name: シナリオを配布する
+        run: node scripts/distribute-scenario.mjs --write
+
+      - name: mock2
+        working-directory: trpg-gm-mock2
+        run: |
+          npm ci --no-audit --no-fund
+          npm test
+          npm run check:assets
+          npm run build
+
+      - name: gamebook
+        working-directory: trpg-gamebook
+        run: npm test
+
+      - name: rogue-map
+        working-directory: trpg-rogue-map
+        run: npm test
+
+      - name: TAS
+        working-directory: TAS
+        run: npm test

@@ -33,7 +33,7 @@ TAS/data/ · trpg-gm-mock2/public/data/campaigns/<id>/ · trpg-gamebook/data/
 - 例外は経路が1本だけある。gamebookのエディタで直した分は `正本への修正案を書き出す` → `node scripts/apply-proposal.mjs <file> --write` で**正本へ戻してから**配布する(2026-08-20追加。詳細は `trpg-gamebook/CLAUDE.md`)
 - 配布は既定がdry-run。`--write` で実行する。配る前にJSON構文を検証する
 - 配布先には `TAS/data/` も含む。ここが古いままだとTASから出力した瞬間に旧版へ戻る
-- 配布したら、少なくとも mock2 の `npm test` と `npm run check:assets`、gamebook の `npm test` を通す
+- 配布したら、少なくとも mock2 の `npm test` と `npm run check:assets`、gamebook の `npm test`、TAS の `npm test` を通す。push すると GitHub Actions(`.github/workflows/test.yml`)が同じ検査を配布からやり直す(2026-10-01。TAS は一覧に無く、出力の基準比較が6週間落ちたままだった)
 
 なぜ1箇所にしたか: 2026-08-19時点で `chapter_01.json` が5箇所に**5つとも別内容で**存在し、同期する仕組みが1つも無かった。
 どのコピーを直したかで結果が変わるため、作者に「直した実感」が得られない状態だった。
