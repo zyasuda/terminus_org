@@ -16,9 +16,18 @@
   --danger: #f87171;
   --success: #7dd3fc;
   --scene-bg: linear-gradient(135deg, #151720 0%, #1e2230 100%);
-  /* 文字とパネル開閉タブの大きさの倍率。?tune で開くチューナーで作者が決める(2026-10-01) */
-  --font-scale: 1;
-  --tab-scale: 1;
+  /* 見た目の倍率・位置。?tune で開くチューナーで作者が実機で決めた値(2026-10-01、iPhone 15) */
+  --font-scale: 1.3;
+  --tab-scale: 1.5;
+  --tab-top: 16%;          /* 開閉タブの縦位置。上すぎると画面の角丸で欠ける */
+  /* 立ち絵の倍率。同行者(ガレス・リディア)は×1.10が上限: それ以上だと下パネルの
+     チップ・入力欄・行動ボタンを覆って押せなくなる(852x393で実測、×1.15で「相手」、×1.20で「行動」)。
+     シーンNPC(マイラ等)は画面中央でボタンに掛からないので、作者の指定どおり×1.5 */
+  --portrait-scale: 1.1;
+  --npc-scale: 1.5;
+  /* 横持ちのDynamic Island(端から約11〜47pt)を避ける左右パネルの最小余白。
+     env(safe-area-inset-*)が実機で効いていないため、それに頼らない下限を置く */
+  --island-gap: 6%;
 }
 
 html, body { height: 100%; height: 100svh; height: 100dvh; overflow: hidden; background: #000; } /* svhはSafariのバー切替時のフォールバック */
@@ -86,8 +95,10 @@ body {
      下端の位置は変えず、topを下げて高さを縮めているので、見える行数だけが減る */
   top: 46%;
   width: 39.79%;
-  /* チップ列はsafe-bottomぶん上へ逃げるので、ログの下端も同じ量だけ詰めて重なりを防ぐ */
-  height: calc(35.68% - var(--safe-bottom));
+  /* チップ列はsafe-bottomぶん上へ逃げるので、ログの下端も同じ量だけ詰めて重なりを防ぐ。
+     下端(46%+高さ)はチップ列の上端(下パネル75.06% + 24.94%×#entityChipsのtop)に揃える。
+     チップを8%へ上げたので 35.68% → 31.19%(2026-10-01)。ずれるとログの行がチップを覆って押せなくなる */
+  height: calc(31.19% - var(--safe-bottom));
   z-index: 21; /* 下パネル(20)より前。立ち絵の外側枠(22)より後ろ */
   overflow-y: auto;
   /* 上に行くほど文字が透けて消えていく(スクロール中の古いログのフェード)。
@@ -171,6 +182,14 @@ body {
 /* 下パネル表示中: シーン上のキャラ(NPC/敵)も背景と一緒にパネル高さ(24.94%)分だけ上へ。
    transformのtranslateYは自身の高さ基準になるため、ステージ基準のbottomで動かす */
 #stage.panelUp #enemySprite { bottom: 42.94%; /* 18% + パネル24.94%。42.94+55=97.94% で収まる */ }
+/* シーンNPC(依頼人マイラ等)だけ立ち絵の倍率を掛ける。敵は戦闘の見せ方があるので対象外。
+   bottom + height が100%を超えると頭が切れるので、bottomを上限で抑える */
+#enemySprite.npc {
+  width: calc(30% * var(--npc-scale));
+  height: calc(55% * var(--npc-scale));
+  bottom: min(18%, calc(100% - 55% * var(--npc-scale)));
+}
+#stage.panelUp #enemySprite.npc { bottom: min(42.94%, calc(100% - 55% * var(--npc-scale))); }
 
 @keyframes spriteIn { from { opacity: 0; } }
 
@@ -265,6 +284,12 @@ body {
 .partySlot.active { filter: brightness(1.05) drop-shadow(0 0 4px rgba(255, 255, 255, .8)) drop-shadow(0 0 12px rgba(255, 255, 255, .45)); }
 /* タップで入力欄に「名前、」を差し込む(チップと同機能)。
    枠(.partySlot)はpointer-events:noneのままパネル操作を妨げず、画像だけクリックを受ける */
+.partySlot {
+  /* 立ち絵の倍率。足元を基準に、画面の内側へ向けて広げる(外側へ広げると左端のガレスが画面外へ切れる) */
+  transform: scale(var(--portrait-scale));
+  transform-origin: bottom left;
+}
+.partySlot.slotR1, .partySlot.slotR2 { transform-origin: bottom right; }
 .partySlot img { max-width: 100%; max-height: 100%; object-fit: contain; pointer-events: auto; cursor: pointer; }
 .partySlot img.flip { transform: scaleX(-1); }
 /* 下パネル(z20)のテーブルより手前に出す。pointer-events:noneなので操作は妨げない */
@@ -605,7 +630,7 @@ body {
    縦中央に来るため、以前の33%だと重なってタップしづらかった(2026-10-01、iPhone 15で作者が確認) */
 .panelTab {
   position: absolute;
-  top: calc(3% + var(--safe-top));
+  top: calc(var(--tab-top) + var(--safe-top));
   z-index: 16;
   padding: calc(8px * var(--tab-scale)) calc(4px * var(--tab-scale));
   font-size: calc(1.6vw * var(--tab-scale));
@@ -641,7 +666,8 @@ body {
   border: none;
   border-top: 1px solid rgba(192, 202, 243, .4);
   border-radius: 6px 6px 0 0;
-  padding: 4px 10px;
+  padding: 4px 4px; /* 90度回しているので、左右の余白が見た目の高さになる。小さくして入力欄から離す */
+  font-size: 1.6vw; /* 左右のタブの倍率(--tab-scale)は掛けない。大きくすると入力欄の例文に重なる */
   transition: transform .2s ease, opacity .2s ease;
 }
 #underPanelTab.open {
@@ -657,7 +683,7 @@ body {
   height: 75.06%;
   background: var(--panel-bg);
   z-index: 15;
-  padding: 2% 2.3% 2% max(2.3%, var(--safe-left)); /* 横持ちのDynamic Islandを避ける */
+  padding: 2% 2.3% 2% max(var(--island-gap), var(--safe-left)); /* 横持ちのDynamic Islandを避ける */
   overflow-y: auto;
   /* 縦に積んで、GMの語りだけを残り高さいっぱいに伸ばす。
      画面が縦長になるほどパネル下部に余白が増えるのを防ぐ(実測: 横持ちで159pxの空き) */
@@ -756,7 +782,7 @@ body {
   height: 75.06%;
   background: var(--panel-bg);
   z-index: 15;
-  padding: 2% max(2.3%, var(--safe-right)) 2% 2.3%;
+  padding: 2% max(var(--island-gap), var(--safe-right)) 2% 2.3%;
   overflow-y: auto;
   font-size: calc(1.1vw * var(--font-scale));
   opacity: 0;
@@ -817,7 +843,9 @@ body {
 #entityChips {
   position: absolute;
   left: 16.08%;
-  top: 26%;
+  /* チップと入力欄は下パネルの上寄りに置き、最下部の開閉タブ(∨)の分を空ける。
+     26%/60%だと文字×1.3で入力欄の下端が∨に23px重なった(2026-10-01) */
+  top: 8%;
   transform: translateY(calc(-1 * var(--safe-bottom)));
   width: 66.9%;
   height: 32%; /* チップ+横スクロールバーが縦に収まる高さ(縦スクロールさせない) */
@@ -864,7 +892,7 @@ body {
 #inputRow {
   position: absolute;
   left: 16.08%;
-  top: 60%;
+  top: 42%; /* チップの位置(#entityChips)と一緒に動かす */
   transform: translateY(calc(-1 * var(--safe-bottom))); /* ホームインジケータを避ける */
   width: 67.49%;
   height: 36%;
