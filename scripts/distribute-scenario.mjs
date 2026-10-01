@@ -21,7 +21,9 @@ const SOURCE_DIR = join(ROOT, "scenario", "lanternhill");
 // 配布先。キャンペーンIDを含むパスの形はクライアントごとに違うので、ここに書き出す
 const TARGETS = [
   "trpg-gm-mock2/public/data/campaigns/lanternhill",
-  "trpg-gm-isometric/public/data/campaigns/lanternhill",
+  /* trpg-gm-isometric は配らない。2026-09-02に独立リポジトリ zyasuda/standee-wiz へ分離し、
+     ここには凍結したローカル作業ディレクトリ(.gitignore 済み・独自の .git あり)だけが残っている。
+     配ると凍結したリポジトリに未コミットの変更を作ってしまう(2026-10-01に発生) */
   // gamebookは data/ 直下を chapter_01.json 固定で読む(src/editor.js, src/ui.js)
   "trpg-gamebook/data",
   /* TAS自身の読み元。TASはここを /api/context の dataFiles としてブラウザへ渡すだけで、

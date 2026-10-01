@@ -24,7 +24,7 @@
 ```
 scenario/lanternhill/chapter_01.json          ← 正本。直すのはここだけ
         ↓  node scripts/distribute-scenario.mjs --write
-TAS/data/ · trpg-gm-mock2/public/data/campaigns/<id>/ · trpg-gm-isometric/… · trpg-gamebook/data/
+TAS/data/ · trpg-gm-mock2/public/data/campaigns/<id>/ · trpg-gamebook/data/
 ```
 
 - **クライアント側のコピーを直接編集しない。** 直しても次の配布で消える
