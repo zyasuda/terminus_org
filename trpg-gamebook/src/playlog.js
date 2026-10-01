@@ -2,8 +2,7 @@ export const FIX_FIELDS = Object.freeze({
   "": new Set(["name", "brief", "blockedText", "greeting"]),
   secret: new Set(["text", "surface"]),
   exit: new Set(["text", "blockedText", "npcSay", "arrivalText"]),
-  encounter: new Set(["onsetText"]),
-  decision: new Set(["prompt"])
+  encounter: new Set(["onsetText"])
 });
 
 export function revisionOf(markdown) {
@@ -13,13 +12,12 @@ export function revisionOf(markdown) {
 
 const nodeFor = (chapter, scene) => scene === "intro" ? chapter?.intro : scene === "ending" ? chapter?.ending : (chapter?.scenes || []).find(node => String(node.id) === String(scene));
 const sceneLabel = (chapter, node, scene) => scene === "intro" ? "イントロ" : scene === "ending" ? "エンディング" : `シーン${(chapter?.scenes || []).indexOf(node) + 1}`;
-const targetLabel = { secret:"調べられるもの", exit:"行き先", encounter:"遭遇", decision:"決断" };
+const targetLabel = { secret:"調べられるもの", exit:"行き先", encounter:"遭遇" };
 /* AIは "secret:s1a" と書くよう指示しても "s1a" とだけ返してくる(実測4件中4件)。
    IDそのものは正しいので、頭書きが無ければ場面の中から探して補う。
    同じIDが2種類にまたがる場合だけ、どれか決められないので諦める */
 function targetIn(node, target) {
   if (target === "" || target === undefined) return ["", node];
-  if (target === "decision") return node.decision ? ["decision", node.decision] : [];
   const [, prefix, rest] = /^(secret|exit|encounter):(.+)$/.exec(target) || [];
   const id = prefix ? rest : target;
   const found = ["secret", "exit", "encounter"]

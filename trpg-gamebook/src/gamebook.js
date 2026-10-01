@@ -115,8 +115,6 @@ export function newGame(chapter, opts = {}) {
 
 export function candidates(state) {
   const node = currentNode(state);
-  const decision = node.decision;
-  if (decision && !state.flags[`decision:${decision.id}`]) return decision.choices.map(({ id, label, input }) => ({ id, label, input }));
   const labels = node.authoring?.actionCandidateLabels || {};
   /* requires を満たさない秘密は、候補を組む前に外す。actionCandidates は
      3件で打ち切るので、後から弾くと「打ち切りで消えた枠」が戻らない。
@@ -147,17 +145,9 @@ export function candidates(state) {
   return availableChoices;
 }
 
-export function act(state, originalInput) {
+export function act(state, input) {
   const events = [];
   const node = currentNode(state);
-  let input = originalInput;
-  const decision = node.decision;
-  if (decision && !state.flags[`decision:${decision.id}`]) {
-    const choice = decision.choices.find(choice => choice.input === input);
-    if (!choice) return [{ type: "unknown", text: input }];
-    state.flags[`decision:${decision.id}`] = choice.id;
-    input = choice.input;
-  }
 
   const healing = (state.chapter.healing || []).find(({ name }) =>
     input.includes(name) && (input.includes("飲む") || input.includes("使う")) && inv.has(state.inventory, name)

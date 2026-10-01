@@ -29,13 +29,6 @@ console.log("ok 3 - 出口なしは静的検査と自動プレイの両方で検
 
 {
   const broken = copy();
-  broken.scenes[1].decision.choices[0].input = "あああ";
-  assert.ok(inspect(broken).structure.some(({ message }) => message.includes("解決できない")));
-}
-console.log("ok 4 - 解決できない決断入力を検出する");
-
-{
-  const broken = copy();
   broken.intro.brief = "「秘密の扉」について話す。";
   broken.intro.hintChips = [];
   assert.ok(inspect(broken).structure.some(({ message }) => message === "導入文の「秘密の扉」に反応するものが無い"));
@@ -80,10 +73,11 @@ console.log("ok 8 - 場面をまたぐ綴りの揺れだけを警告する");
 {
   const result = inspect(copy());
   assert.ok(result.play.outcomes.length > 0);
-  assert.ok(result.play.outcomes.some(({ label }) => label.includes("木柵を調べ、安全な通路を探す")));
-  assert.ok(result.play.outcomes.every(({ label }) => !/choice_\d+/.test(label)));
+  // 決断を廃止したので、集計に残るのは交戦の結果だけ。内部IDが混じらないことを見る
+  assert.ok(result.play.outcomes.some(({ label }) => /を倒した|を逃がした|死亡した/.test(label)));
+  assert.ok(result.play.outcomes.every(({ label }) => !/^(secret|exit|encounter|choice)_?\d*:/.test(label)));
 }
-console.log("ok 9 - 自動プレイの分岐を人間向けの言葉で集計する");
+console.log("ok 9 - 自動プレイの結果を人間向けの言葉で集計する");
 
 {
   const result = inspect(copy());

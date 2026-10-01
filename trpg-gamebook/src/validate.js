@@ -1,6 +1,5 @@
 import { newGame, candidates, act } from "./gamebook.js";
 import {
-  decisionInputResolves,
   encounterRequiredElementsMet,
   exitTargetIndexIn
 } from "./progression.js";
@@ -157,17 +156,6 @@ function structureFor(chapter) {
         if (!allSecrets.has(id)) structure.push(issue("error", sceneLabel(where), "必要な発見が存在しない"));
       }
     }
-    if (node.decision) {
-      const decisionWhere = `${sceneLabel(where)} / 決断`;
-      if (!decisionInputResolves(node, node.decision.choices?.[0]?.input || "")) {
-        // choices are checked below; this branch only keeps empty choices visible.
-      }
-      for (const choice of node.decision.choices || []) {
-        if (!decisionInputResolves(node, choice.input || "")) {
-          structure.push(issue("error", decisionWhere, `決断の入力「${choice.input || ""}」を解決できない`));
-        }
-      }
-    }
     for (const encounter of node.encounters || []) {
       const labels = new Set((node.secrets || []).flatMap(secret => [secret.entity, ...(secret.aliases || [])]));
       const ctx = { revealed: new Set((node.secrets || []).map(secret => secret.id)) };
@@ -179,11 +167,6 @@ function structureFor(chapter) {
     }
   }
 
-  const decisions = new Set();
-  for (const [where, node] of nodes(chapter)) if (node?.decision?.id) {
-    if (decisions.has(node.decision.id)) structure.push(issue("error", sceneLabel(where), "同じ決断が章内で2つある"));
-    decisions.add(node.decision.id);
-  }
   for (const [id, { where, secret }] of allSecrets) {
     if (usedSecrets.has(id) && !secret.trigger && !(secret.aliases || []).length && !reveals.has(id)) {
       structure.push(issue("warn", sceneLabel(where), `「${secret.entity}」は必要とされているのに、調べる手段も他の開示経路も無い`));
@@ -195,13 +178,6 @@ function structureFor(chapter) {
 function collectOutcomes(result, state, chapter) {
   const labels = new Map();
   const count = label => labels.set(label, (labels.get(label) || 0) + 1);
-  const decisions = new Map(nodes(chapter).flatMap(([, node]) => node?.decision ? [[node.decision.id, node.decision]] : []));
-  for (const [key, value] of Object.entries(state.flags)) {
-    if (!key.startsWith("decision:")) continue;
-    const decision = decisions.get(key.slice("decision:".length));
-    const choice = decision?.choices?.find(item => item.id === value);
-    if (choice?.label) count(`${choice.label} を選んだ`);
-  }
   for (const name of state.defeated || []) count(`${name}を倒した`);
   for (const name of state.fled || []) count(`${name}を逃がした`);
   if (state.hp <= 0) count("死亡した");

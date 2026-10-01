@@ -84,14 +84,14 @@ export function act(state, input)            // -> events[]（stateは破壊的�
 ## candidates(state)
 
 - `actionCandidates(node, ctx, node.authoring?.actionCandidateLabels || {})` を呼ぶ
-- `node.decision` があり、かつ `state.flags["decision:" + decision.id]` が未設定なら、**通常候補の代わりに** decision の `choices` を `{id, label, input}` として返す（決断は割り込みで、他の選択より優先する）
+- `requires`（`secretsAny` / `secretsAll` / `itemsAny` / `itemsAll`）を満たさない秘密は、`actionCandidates` を呼ぶ**前に**外す。あの関数は候補を3件で打ち切るので、後から弾くと出口が枠から押し出される
 - 交戦中（`state.enemy`）で、敵に `weakness.triggers` があり、その語を含む持ち物を持っているなら、弱点を突く候補を1件足してよい。ラベルは `weakness.hint` があればそれ、無ければ「ランタンで照らす」等の素直な文言
 
 ## act(state, input) の解決順
 
 **この順で最初に当たったものを実行する。** 新しい解決経路を作らない。
 
-1. **決断イベント**: 現ノードに未選択の `decision` があり、`input` がその `choices[].input` と一致するなら、`state.flags["decision:"+id] = choiceId` を立て、そのまま `choice.input` を 2 以降へ流して続行する
+1. **回復**: `chapter.healing` の品名を含み、「飲む」「使う」のいずれかを含み、その品を持っている → 回復（傷が無ければ品を消費せず断る）
 2. **交戦中の行動**（`state.enemy` がある場合、ここで打ち切る）
    - `weakness.triggers` のいずれかを含み、かつその語を含む持ち物を持っている → 弱点処理（後述）
    - 「攻撃」を含む → 攻撃
@@ -105,7 +105,7 @@ export function act(state, input)            // -> events[]（stateは破壊的�
    - 満たさない → `{type:"blocked", text: exit.blockedText || node.blockedText}`。**手番は進めない**
 6. どれにも当たらない → `{type:"unknown"}`。状態を変えない
 
-**手番（`state.turn`）は、1〜5 のいずれかで実際に何かが起きたときだけ +1 する。** `unknown` と `blocked` では進めない。
+**手番（`state.turn`）は、1〜6 のいずれかで実際に何かが起きたときだけ +1 する。** `unknown` と `blocked` では進めない。
 
 ## 調査の判定
 

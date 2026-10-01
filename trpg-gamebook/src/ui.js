@@ -250,17 +250,7 @@ function paintChoices() {
     return;
   }
 
-  const n = node();
   const list = candidates(state) || [];
-  const dec = n && n.decision && !state.flags?.[`decision:${n.decision.id}`] ? n.decision : null;
-
-  if (dec) {
-    box.className = "decision";
-    const p = document.createElement("p");
-    p.id = "prompt";
-    p.textContent = dec.prompt;
-    box.appendChild(p);
-  }
 
   if (!list.length) {
     const p = document.createElement("p");

@@ -29,8 +29,7 @@ console.log("ok 3 - 壊れたJSONでも返事を失わない");
   const result = inspect(copy); assert.equal(result.structure.filter(x => x.level === "error").length, 0); assert.ok(result.play.cleared > 0);
 
   const categoryReplies = {
-    encounters: "危険の気配を追います。\n```json\n{\"proposals\":[{\"triggerTerms\":[\"奥へ進む\"],\"requiredElements\":[\"封鎖の木柵\"],\"onsetText\":\"気配がした\",\"enemyName\":\"影\",\"enemyHp\":6,\"revealOnDefeatLabel\":\"抜け道\"}]}\n```",
-    decision: "安全と急ぎのどちらを選ぶかです。\n```json\n{\"proposals\":[{\"prompt\":\"安全を確かめますか。\",\"choices\":[{\"label\":\"札を見る\",\"input\":\"木の札を調べる\"},{\"label\":\"奥へ進む\",\"input\":\"奥へ進む\"}]}]}\n```"
+    encounters: "危険の気配を追います。\n```json\n{\"proposals\":[{\"triggerTerms\":[\"奥へ進む\"],\"requiredElements\":[\"封鎖の木柵\"],\"onsetText\":\"気配がした\",\"enemyName\":\"影\",\"enemyHp\":6,\"revealOnDefeatLabel\":\"抜け道\"}]}\n```"
   };
   const categoryRequests = [];
   for (const [category, raw] of Object.entries(categoryReplies)) {
@@ -39,18 +38,17 @@ console.log("ok 3 - 壊れたJSONでも返事を失わない");
       return new Response(`data: ${JSON.stringify({ delta:{ type:"text", text:raw } })}\n\n`);
     } });
     assert.equal(result.proposals.length, 1);
-    if (category === "encounters") assert.equal(result.proposals[0].enemyName, "影");
-    else assert.equal(result.proposals[0].choices[1].input, "奥へ進む");
+    assert.equal(result.proposals[0].enemyName, "影");
   }
-  assert.equal(categoryRequests.length, 2);
+  assert.equal(categoryRequests.length, 1);
   for (const { category, body } of categoryRequests) {
     assert.doesNotMatch(body.input, /最大3件|評価語や感想|JSONブロック|提案は \{"proposals"/);
     assert.match(body.system_instruction, /```json/);
-    assert.match(body.input, category === "encounters" ? /封鎖の木柵/ : /木の札を調べる/);
-    assert.match(body.system_instruction, category === "encounters" ? /triggerTerms.*requiredElements/s : /prompt.*choices/s);
+    assert.match(body.input, /封鎖の木柵/);
+    assert.match(body.system_instruction, /triggerTerms.*requiredElements/s);
   }
 }
-console.log("ok 4 - バックアップと遭遇・決断のSSEを解釈し、カードを拾える");
+console.log("ok 4 - バックアップと遭遇のSSEを解釈し、カードを拾える");
 
 {
   const copy = structuredClone(chapter), scene = copy.scenes[0];
@@ -66,25 +64,6 @@ console.log("ok 5 - 未知の行き先は採用してもtoを書き込まない"
   assert.deepEqual(encounter.requiredElements, ["封鎖の木柵"]);
 }
 console.log("ok 6 - 遭遇の未知の必要要素を除いて採用する");
-
-{
-  const copy = structuredClone(chapter), scene = copy.scenes[0];
-  const before = structuredClone(scene);
-  const result = applyProposal("decision", { prompt:"選ぶ", choices:[{ label:"未知", input:"存在しない行動" }, { label:"進む", input:"奥へ進む" }] }, scene, { decisions:[] });
-  assert.equal(result, null);
-  assert.deepEqual(scene, before);
-}
-console.log("ok 7 - 解決不能な決断は章データへ書き込まない");
-
-{
-  const copy = structuredClone(chapter), scene = copy.scenes[0];
-  const result = applyProposal("decision", { prompt:"どちらを選ぶか", choices:[{ label:"札を見る", input:"木の札を調べる" }, { label:"奥へ進む", input:"奥へ進む" }] }, scene, { decisions:copy.scenes.map(item => item.decision).filter(Boolean) });
-  assert.ok(result);
-  const inspected = inspect(copy);
-  assert.equal(inspected.structure.filter(({ level }) => level === "error").length, 0);
-  assert.ok(inspected.play.cleared > 0);
-}
-console.log("ok 8 - 解決可能な決断を採用するとinspectを通る");
 
 {
   const copy = structuredClone(chapter), scene = copy.scenes[1]; let body;

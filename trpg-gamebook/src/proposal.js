@@ -40,7 +40,6 @@ function* leafDiffs(before, after, path = []) {
    (entity・match・dc・requires などの照合キーと数値は、文字の直しではないため) */
 function fixTargetFor(node, path) {
   if (path.length === 1) return { target: "", field: path[0] };
-  if (path.length === 2 && path[0] === "decision") return { target: "decision", field: path[1] };
   if (path.length !== 3) return null;
   const [group, index, field] = path;
   const kind = { secrets: "secret", exits: "exit", encounters: "encounter" }[group];
@@ -66,7 +65,7 @@ export function buildProposal(base, draft) {
       const at = fixTargetFor(baseNode, diff.path);
       const label = `${key} / ${diff.path.join(".")}`;
       if (!at) { unsupported.push({ where: label, why: "文字の直しとして扱える場所ではない" }); continue; }
-      const kind = at.target === "" ? "" : at.target === "decision" ? "decision" : at.target.split(":")[0];
+      const kind = at.target === "" ? "" : at.target.split(":")[0];
       if (!FIX_FIELDS[kind]?.has(at.field)) { unsupported.push({ where: label, why: `${at.field} は書き換えてよい欄ではない` }); continue; }
       if (typeof diff.before !== "string" || typeof diff.after !== "string") { unsupported.push({ where: label, why: "文字列以外の値" }); continue; }
       const fix = { kind: "data", scene, target: at.target, field: at.field, before: diff.before, after: diff.after };

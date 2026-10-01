@@ -41,7 +41,6 @@ function enterRustEater(state) {
   act(state, candidates(state).find(option => option.id === "secret:s1a").input);
   // 秘密が3枠を埋めると出口が候補から押し出される。出口が現れるまで調べてから進む
   act(state, revealUntilExit(state, "exit:to_scean02").input);
-  act(state, candidates(state).find(option => option.id === "inspect_barrier").input);
   if (!state.revealed.has("s2a")) act(state, candidates(state).find(option => option.id === "secret:s2a").input);
   act(state, candidates(state).find(option => option.id === "encounter:encounter_1").input);
 }
@@ -181,7 +180,6 @@ console.log(`ok 1 - 完走: ${labels.join(" -> ")}`);
   enterScene1(state);
   while (!state.revealed.has("s1a")) act(state, candidates(state).find(option => option.id === "secret:s1a").input);
   act(state, candidates(state).find(option => option.id.startsWith("exit:")).input);
-  act(state, candidates(state).find(option => option.id === "inspect_barrier").input);
   while (!state.revealed.has("s2a")) act(state, candidates(state).find(option => option.id === "secret:s2a").input);
   const encounter = candidates(state).find(option => option.id.startsWith("encounter:"));
   act(state, encounter.input);
