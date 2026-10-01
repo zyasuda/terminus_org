@@ -54,3 +54,8 @@ trpg-gm-mock2/images/Gemini_Generated_Image_8tyb3c8tyb3c8tyb.png
 # ここには .gitmodules の無い gitlink が残っていて、クローンしても中身が
 # 取れなかった。参照ごと外し、ローカルの作業ディレクトリとして無視する。
 trpg-gm-isometric/
+
+# 生成物・作業場所。画像やpptxはgitへ入れない(2026-10-01)
+# output/ にはClaude/Codexの書き出し、.codex-build/ にはCodexが企画書を作った作業場所がある
+output/
+.codex-build/
