@@ -448,7 +448,11 @@ export function resetGame() {
   setBusy(false);
   const intro = SCENARIO.intro;
   const introIsObject = intro && typeof intro === "object";
-  state.pendingIntro = introIsObject; // currentBackdropNode()より先に立てる(この状態を見て背景を選ぶ)
+  /* TASの「mock2で確認」(?scene=<id>)。編集中のシーンから直接始め、導入を飛ばす。
+     セーブがあれば boot が「続きから/最初から」を先に聞くので、ここへ来るのは新規プレイだけ。
+     見つからないidは通常の導入開始へ落とす。導入の出口で渡す支度品は入らない */
+  const startIdx = CONTENT_SELECTION?.sceneId ? exitTargetIndexIn(SCENARIO.scenes, CONTENT_SELECTION.sceneId) : -1;
+  state.pendingIntro = introIsObject && startIdx < 0; // currentBackdropNode()より先に立てる(この状態を見て背景を選ぶ)
   clearChat();
   // 依頼導入(intro)は通知型ポップアップで提示し、シーン説明(brief)は主画面オーバーレイ+左パネルへ。
   // 下パネルのチャットは会話専用にする(UI_REDESIGN.md / EVENT_MAP.mdの「シナリオ開始=依頼ポップアップ」)。
@@ -460,10 +464,10 @@ export function resetGame() {
   // null=未作成(ポップアップを出さない)、文字列=旧形式、オブジェクト(exits[]あり)=新形式。
   // 新形式の場合、"はじめる"の後はシーン0へ直行せず、intro.exits[]の解決を待つ(sendAction側で処理)
   const popups = [];
-  if (CAMPAIGN.opening) {
+  if (startIdx < 0 && CAMPAIGN.opening) {
     popups.push({ kind: "intro", title: CAMPAIGN.opening.name || "オープニング", body: CAMPAIGN.opening.brief || CAMPAIGN.opening.text || "", img: CAMPAIGN.opening.img || "locked_iron_gate.jpg" });
   }
-  if (!introIsObject && typeof intro === "string" && intro) {
+  if (startIdx < 0 && !introIsObject && typeof intro === "string" && intro) {
     popups.push({ kind: "intro", title: "依頼", body: intro, img: "locked_iron_gate.jpg" });
   }
   setStore({
@@ -491,7 +495,8 @@ export function resetGame() {
   /* 新形式introにはポップアップを挟まない。既存の幕開けと同じく、説明を表示してから入力を受ける。
      真っ黒のまま少し止めてから明転する。同じフレームでshowDialogueNodeが幕を上げると、
      黒が一度も描画されずCSSの遷移が始まらない(実測: 降りると上がるの間が11msだった) */
-  if (introIsObject && popups.length === 0) {
+  if (startIdx >= 0) { state.visited = []; advanceScene(startIdx); } // 場面へは通常の経路(暗転→到着の語り)で入る。通っていない場面1は訪問済みにしない
+  else if (introIsObject && popups.length === 0) {
     setTimeout(() => showDialogueNode(intro), SCENE_FADE_MS + SCENE_HOLD_MS);
   }
 }

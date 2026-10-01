@@ -18,7 +18,7 @@ export let SCENARIO = null;
 export let CAST = null;
 export let GM = null; // GM自身の人格。campaign.gmが無い既存キャンペーンでは下のGM_DEFAULTで動く
 export let BANTER = null;
-export let CONTENT_SELECTION = null; // {campaignId, chapterId, campaign, chapter}
+export let CONTENT_SELECTION = null; // {campaignId, chapterId, sceneId, campaign, chapter}
 
 async function fetchJson(path) {
   const res = await fetch(path);
@@ -149,7 +149,8 @@ export async function loadScenarioData() {
     campaignEntry,
     chapterEntry,
     campaignId: campaignEntry.id,
-    chapterId: chapterEntry.id
+    chapterId: chapterEntry.id,
+    sceneId: params.get("scene") // TASの「mock2で確認」が渡す、編集中のシーン(resetGameで使う)
   };
 
   /* GM自身の人格。TASは未入力の項目を空文字列で出すので、スプレッドだけでは既定値が空で潰れる。
