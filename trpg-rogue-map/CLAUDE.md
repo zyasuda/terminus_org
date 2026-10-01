@@ -28,10 +28,7 @@ Claudeは仕様書を `docs/SPEC_*.md` に書いてから渡す。完了後、Cl
 
 ## 触ってはいけないもの（2026-08-17 訂正）
 
-`../trpg-gm-isometric/` は、AI相棒ローグ遠征の実装先として作者が編集を許可した（BORG
-`Inbox/AI相棒ローグ遠征_*` 系の文書群を参照）。**もう読むだけの対象ではない。**
-このモジュール（trpg-rogue-map）の地図生成・描画の成果は、既にあちらの
-`src/expedition/` へ移植されている。
+`../trpg-gm-isometric/` は2026-09-02に独立リポジトリ Standee-wiz（`~/Desktop/Standee-wiz`）へ分離し、2026-10-01にTerminusから削除した。地図生成・描画の成果は Standee-wiz の `src/expedition/` にある。
 
 | 場所 | 理由 |
 |---|---|
