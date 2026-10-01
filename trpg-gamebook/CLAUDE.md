@@ -1,5 +1,7 @@
 # gamebook専用作業ガイド
 
+共通ルールは [Terminus/CLAUDE.md](../CLAUDE.md) を参照する。
+
 ## 適用範囲
 
 このファイルは `trpg-gamebook` 内の編集・検証作業に適用します。実装経緯、個別シナリオ、設計の背景はBORGまたは `docs/` を参照します。
@@ -25,7 +27,42 @@
 npm run serve                 # → http://localhost:8123/（キャッシュ無効。http.serverは使わない）
 ```
 
-出典はmock2 spike（`codex/mock2-candidate-spike`）の `chapter_01.json`。**mock2側のJSONは正本ではない**（main側はシーン3の出口が壊れ、spike側はシーン4の出口が欠落していた。`data/` のコピーだけが両方を満たす）。mock2側のJSONを編集・上書きしない。
+**`data/chapter_01.json` は正本ではない。配布された生成物である。**（2026-08-19に方針変更）
+
+正本は `Terminus/scenario/<キャンペーンID>/` のみ。詳細は [Terminus/CLAUDE.md](../CLAUDE.md) の「シナリオデータの正本」を参照する。
+
+```
+scenario/lanternhill/chapter_01.json   ← 直すのはここだけ
+        ↓  node scripts/distribute-scenario.mjs --write   （リポジトリ直下で実行）
+trpg-gamebook/data/chapter_01.json
+```
+
+- `data/` を直接編集しない。直しても次の配布で消える
+- 以前は「`data/` のコピーだけが正しい」という運用だった。その結果 `chapter_01.json` が5箇所に別内容で分岐し、同期する仕組みも無かったため、1箇所へ統合した
+- エディタ（`editor.html`）の編集結果は localStorage の下書きに入る。`.jsonを書き出す` で落ちる .json は Downloads に置かれるだけで、**正本には反映されない**
+
+### 遊んでいて気づいた1行を、正本へ戻す（2026-08-20 追加）
+
+エディタの `正本への修正案を書き出す` は、下書きと配布済みの章データを比べて**差分だけ**を `proposal_chapter_01.json` として書き出す。取り込みはリポジトリ直下のコマンドで行う。
+
+```bash
+node scripts/apply-proposal.mjs ~/Downloads/proposal_chapter_01.json           # 中身の確認（既定）
+node scripts/apply-proposal.mjs ~/Downloads/proposal_chapter_01.json --write   # 正本へ取り込む
+node scripts/distribute-scenario.mjs --write                                   # 配布
+```
+
+- 修正案の形式は `src/playlog.js` の fix と同じ。書き換えてよい欄は `FIX_FIELDS` が決める。**照合キー（`entity` / `match`）・数値（`dc` 等）・場面や秘密の増減は修正案にできない**（`src/proposal.js` が `unsupported` として理由付きで返し、エディタが画面に出す）。これらは `.jsonを書き出す` で丸ごと持ち帰る
+- 取り込み側は各 fix の `before` を正本の現在の文と突き合わせる。**1件でも食い違えば何も書かずに止まる**（部分適用はしない）。同じ修正案を2回流すのは安全
+- ブラウザからリポジトリへ直接書く経路は作っていない。何が変わるかを見てから入れるため
+
+### このエンジン固有の制約（章データを書くとき）
+
+正本は複数のクライアントが読む。gamebook側には次の制約があるため、章データがこれを踏むと gamebook だけ壊れる。
+
+- **候補は3件で打ち切る**（`src/progression.js` の `actionCandidates`）。1つのノードに未開示の秘密が3件以上あると**出口が候補から押し出され、進めなくなる**
+- 候補のボタン文言は `<match[0]>へ進む` で作る。`match[0]` に「〜へ戻る」を置くと「柵の場所へ戻るへ進む」になる（`inspect()` が警告する）。**`match[0]` は行き先の名詞にする**
+- 単独の「進む」を照合語に入れない。移動を表すあらゆる宣言に部分一致し、戻る出口の入力まで吸う
+- `loot` は秘密の開示と同時に自動付与される（拾う操作は無い）
 
 ## 状態・セーブ・進行
 
@@ -34,10 +71,10 @@ npm run serve                 # → http://localhost:8123/（キャッシュ無�
 | 関数 | 役割 |
 |---|---|
 | `newGame(chapter, {rng})` | 初期状態。`rng` を渡せば出目が再現する（テストは必ず渡す） |
-| `candidates(state)` | 今押せる選択肢。決断イベント中は通常候補の代わりに決断の選択肢を返す |
+| `candidates(state)` | 今押せる選択肢。`requires` を満たさない秘密は、3件で打ち切る前に外す |
 | `act(state, input)` | 状態を更新し、描画用の `events[]` を返す |
 
-`act` の解決順は **決断 → 回復 → 交戦中の行動 → 遭遇の発火 → 調査 → 出口**。新しい解決経路を足さない。手番は実際に何かが起きたときだけ進む（`unknown` / `blocked` では進めない）。
+`act` の解決順は **回復 → 交戦中の行動 → 遭遇の発火 → 調査 → 出口**。新しい解決経路を足さない。手番は実際に何かが起きたときだけ進む（`unknown` / `blocked` では進めない）。
 
 接近度は `approachLevel(turn, sceneEnteredTurn)`。数値は画面に出さず、ランタンの光溜まりが狭まることで伝える。
 
@@ -69,7 +106,7 @@ BORGへ保存するよう依頼された場合だけ、BORG側の保存ルール
 
 ## UIを足す前に（2026-08-13 追加）
 
-同じ失敗を2回した。決断の選択肢欄と、連鎖の図。どちらも**エンジンのデータの形をそのまま作者に見せた**。どちらも「表示されること」をPlaywrightで確かめ、「使えること」を確かめなかった。
+同じ失敗を2回した。決断の選択肢欄（2026-08-20に機能ごと廃止）と、連鎖の図。どちらも**エンジンのデータの形をそのまま作者に見せた**。どちらも「表示されること」をPlaywrightで確かめ、「使えること」を確かめなかった。
 
 UIを足す前に、この3つを必ず行う。仕様書を書く前、委譲する前。
 

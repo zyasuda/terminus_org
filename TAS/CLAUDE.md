@@ -1,5 +1,7 @@
 # BORGローカル設定
 
+共通ルールは [Terminus/CLAUDE.md](../CLAUDE.md) を参照する。
+
 ## 目的
 
 BORGを作業対象にするときだけ適用する、Vaultの場所・読み取り順・保存ルールをまとめる。

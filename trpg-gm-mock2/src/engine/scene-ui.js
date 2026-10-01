@@ -19,21 +19,17 @@ export function setDialogueNodeInfo(node, state) {
   } });
 }
 
-let overlayTimer = null;
-
-export function clearSceneOverlayTimer() {
-  clearTimeout(overlayTimer);
-}
-
-export function openUnderPanelAfterOverlay() {
-  clearSceneOverlayTimer();
-  overlayTimer = setTimeout(() => setStore({ underPanelOpen: true }), 1000);
-}
-
-// シーン説明はGMペットの吹き出しで語る(呼び出し側のaddGm)。ここは下パネルを閉じて
-// 1秒後に開き直すだけ(演出の間合い)。以前はここで主画面にもフェード表示していたが、
-// GMペットの吹き出しと文面が重複していたため削除した
-export function showSceneOverlay() {
+/* 下パネルを開けるのは「語りが終わってから」。時間で開ける経路(1秒後に開く
+   openUnderPanelAfterOverlay / showSceneOverlay と、そのタイマー)は 2026-08-21 に削除した。
+   あれが残っていると、場面遷移でもイントロでも、依頼人や同行者の吹き出しを読んでいる
+   途中でパネルが上がって主画面が狭くなる。作者の要望で、場面遷移(advanceScene)・
+   イントロ・アウトロ・開幕の4経路すべてを runSpeechSequence の onDone に揃えた。
+   GM・NPC・同行者の吹き出しは主画面に出るので、閉じている間の方がよく読める。
+   タイマーを持たないので「前の遷移の予約が割り込む」ことも起きない。 */
+export function closeUnderPanelForScene() {
   setStore({ underPanelOpen: false });
-  openUnderPanelAfterOverlay();
+}
+
+export function openUnderPanel() {
+  setStore({ underPanelOpen: true });
 }

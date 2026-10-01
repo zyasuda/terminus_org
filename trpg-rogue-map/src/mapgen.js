@@ -215,14 +215,20 @@ export function generate(chapter, seed, options = {}) {
   };
   const [lo, hi] = settings.aspect;
   const ratio = (bounds.maxX - bounds.minX + 1) / (bounds.maxY - bounds.minY + 1);
-  if (lo !== null && (ratio < lo || ratio > hi)) return null;
+  /* 上限・下限は片側だけの指定を許す。以前は lo だけを見て hi を無条件に比べていたため、
+     aspect:[0.35, null] は ratio > null が ratio > 0 になって常に真=必ずnullだった(実測) */
+  if (lo !== null && ratio < lo) return null;
+  if (hi !== null && hi !== undefined && ratio > hi) return null;
   return { rooms, corridors, cells, bounds, entrance };
 }
 
-export function generateWithRetry(chapter, seed, maxTries = 200) {
+/* optionsは素通しする。渡す口が無かったため、aspectを指定した再試行(縦持ちからの復帰で
+   必要になる)ができなかった。実データでは2000 seedすべて1発成功するので再試行の経路は
+   一度も走っていない——だから気づかれないままだった(2026-08-20) */
+export function generateWithRetry(chapter, seed, maxTries = 200, options = {}) {
   for (let offset = 0; offset < maxTries; offset += 1) {
     const candidateSeed = Number(seed) + offset;
-    const map = generate(chapter, candidateSeed);
+    const map = generate(chapter, candidateSeed, options);
     if (map) return { map, seed: candidateSeed };
   }
   throw new Error(`地図を${maxTries}回生成できませんでした`);

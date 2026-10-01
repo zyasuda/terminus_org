@@ -85,6 +85,14 @@ export default function App() {
   }
   // 吹き出しはペットのいる側と逆へ伸ばす(右半分にいれば左へ、左半分にいれば右へ)
   const bubbleOnLeft = petPos.x > 50;
+  /* ポップアップ(判定オーバーレイ・結果や被弾の通知)が出ている間は吹き出しを一切出さない。
+     裏で誰かが喋ると、読み手はどちらを見ればいいのか分からなくなる(2026-08-19の指摘)。
+     engine側でも発話の順番を待たせているが、被弾の通知のようにポップアップと同時に
+     語りが確定する経路があるため、最後の砦として表示側でも止める。
+     keyにこのフラグを混ぜてあるので、ポップアップを閉じた瞬間に出し直され、
+     フェードのアニメーションが最初から再生される(閉じた後に読む時間が残る) */
+  const popupOpen = (eng.popups?.length || 0) > 0 || Boolean(eng.pendingRoll);
+  const bubbleKeySuffix = popupOpen ? "-held" : "";
   // 素材は右側配置(既定x:92)向けの向き。画面中心をまたいで左半分に来たら左右反転する
   const gmFlipped = petPos.x <= 50;
 
@@ -152,6 +160,23 @@ export default function App() {
     if (gmLogRef.current) gmLogRef.current.scrollTop = gmLogRef.current.scrollHeight;
   }, [eng.chat, eng.underPanelOpen]);
 
+  /* 敵スプライトの被弾・回避・踏み込み。body.shakeと同じ手法で、クラスを外して
+     offsetWidthを読んでから貼り直し、同じ演出が連続しても必ず再生させる。
+     #enemySpriteはstyleで背景画像を持つのでkeyでの再マウントは使わない
+     (再マウントするとspriteInの登場アニメが毎回やり直しになる) */
+  useEffect(() => {
+    const fx = eng.battleFx;
+    if (!fx || !fx.seq || !fx.kind) return;
+    const el = document.getElementById("enemySprite");
+    if (!el) return;
+    const cls = "fx-" + fx.kind;
+    ["fx-hit", "fx-crit", "fx-miss", "fx-lunge"].forEach(c => el.classList.remove(c));
+    void el.offsetWidth;
+    el.classList.add(cls);
+    const t = setTimeout(() => el.classList.remove(cls), 1000);
+    return () => clearTimeout(t);
+  }, [eng.battleFx?.seq]);
+
   // クリティカル/ファンブル時の画面シェイクはdocument.bodyへの副作用(旧app.jsのscreenFxと同じ手法)
   useEffect(() => {
     if (!eng.shakeSeq) return;
@@ -194,7 +219,10 @@ export default function App() {
         {eng.enemySprite && (
           <div
             id="enemySprite"
-            className={eng.enemySprite.identified ? "identified" : ""}
+            /* npc: このスロットが敵ではなくシーンNPC(依頼人マイラ等)の立ち絵である印。
+               平常時のゆらぎ(idleSway)は戦闘の手触りなので、NPCには効かせない
+               (2026-08-21 作者の指摘「マイラが上下にゆらゆらする。不要な処理」) */
+            className={[eng.enemySprite.identified ? "identified" : "", eng.sceneNpcName ? "npc" : ""].filter(Boolean).join(" ")}
             /* CSSの#enemySpriteはpointer-events:none(敵スプライトがパネルのスワイプを邪魔しないため)。
                NPC表示の時だけタップを受け取れるように上書きする */
             style={{
@@ -211,12 +239,22 @@ export default function App() {
           ></div>
         )}
 
+        {/* 浮かび上がるダメージ数値。keyにseqを入れて、同じ値が連続しても必ず出し直す。
+            ポップアップ中は出さない(吹き出しと同じ理由。裏で動かさない) */}
+        {eng.battleFx?.text && !popupOpen && (
+          <div
+            id="battleFloat"
+            key={"float" + eng.battleFx.seq}
+            className={eng.battleFx.kind === "crit" ? "crit" : ""}
+          >{eng.battleFx.text}</div>
+        )}
+
         {/* シーンNPC(依頼人マイラ等)の吹き出し。GM/同行者と同じ見た目で、中央のnpcSpriteの上に出す(下向きの尻尾)。
             応答の生成中は「…」の考え中表示に差し替える */}
         {eng.thinking.npc ? (
           <div className="npcBubble thinking"><ThinkingDots /></div>
-        ) : eng.npcBubble.text && !eng.npcBubble.hidden && (
-          <div key={"npcbub" + eng.npcBubble.seq} className="npcBubble">{eng.npcBubble.text}</div>
+        ) : eng.npcBubble.text && !eng.npcBubble.hidden && !popupOpen && (
+          <div key={"npcbub" + eng.npcBubble.seq + bubbleKeySuffix} className="npcBubble">{eng.npcBubble.text}</div>
         )}
 
         {/* パーティ立ち絵(4枠)。テーブルを囲む配置で、下部の左右に外側+内側の2枠ずつ。
@@ -250,10 +288,10 @@ export default function App() {
             return <div key={s.slot + "-think"} className={cls + " thinking"}><ThinkingDots /></div>;
           }
           const b = eng.companionBubbles[s.who];
-          if (!b || !b.text || b.hidden) return null;
+          if (!b || !b.text || b.hidden || popupOpen) return null;
           return (
             <div
-              key={s.slot + "-bub" + b.seq}
+              key={s.slot + "-bub" + b.seq + bubbleKeySuffix}
               className={cls}
             >{b.text}</div>
           );
@@ -293,10 +331,10 @@ export default function App() {
               ? { right: (100 - petPos.x + 5.5) + "%", top: petPos.y + "%" }
               : { left: (petPos.x + 5.5) + "%", top: petPos.y + "%" }}
           ><ThinkingDots /></div>
-        ) : eng.gmBubble.text && !eng.gmBubble.hidden && (
+        ) : eng.gmBubble.text && !eng.gmBubble.hidden && !popupOpen && (
           <div
             id="gmBubble"
-            key={"bub" + eng.gmBubble.seq}
+            key={"bub" + eng.gmBubble.seq + bubbleKeySuffix}
             className={bubbleOnLeft ? "tailRight" : "tailLeft"}
             style={bubbleOnLeft
               ? { right: (100 - petPos.x + 5.5) + "%", top: petPos.y + "%" }
@@ -434,7 +472,7 @@ export default function App() {
         </div>
 
         <div id="underPanel" className={eng.underPanelOpen ? "open" : ""}>
-          {(eng.introHints.length > 0 || eng.revealedEntities.length > 0 || eng.verbChips.length > 0) && (
+          {(eng.introHints.length > 0 || eng.revealedEntities.length > 0 || eng.verbChips.length > 0 || eng.moveChips.length > 0) && (
             <div id="entityChips">
               {/* 名詞(既定の目的語+イントロのヒント+開示済みオブジェクト)→動詞(使用頻度順)の
                   2タップで指示が完成する。助詞は動詞側が持つ(「扉を調べる」「坑道に進む」)ので
@@ -445,9 +483,20 @@ export default function App() {
                   {name}
                 </button>
               ))}
-              {eng.verbChips.map(({ v, p }) => (
+              {/* 移動チップと同じ語(「進む」)が動詞チップにも学習されているため、
+                  移動チップを出す間は動詞側から外す(同じ文字の異なる動きのチップが
+                  2つ並ぶのを防ぐ。動詞側は組み立て、移動側は単体で完成) */}
+              {eng.verbChips.filter(({ v }) => !(eng.moveChips.includes(v))).map(({ v, p }) => (
                 <button key={"v" + v} className="entityChip verbChip" onClick={() => setInput(prev => prev + joinParticle(prev, p) + v)}>
                   {v}
+                </button>
+              ))}
+              {/* 移動チップ。名詞・動詞と違い単体で完成した宣言なので、押したら入力欄を
+                  置き換える(組み立て途中の文の後ろに足すと「周辺進む」になる)。
+                  行き先は載せない(作者の判断: 並べると探索の余地が消える) */}
+              {eng.moveChips.map(text => (
+                <button key={"m" + text} className="entityChip moveChip" onClick={() => setInput(text)}>
+                  {text}
                 </button>
               ))}
             </div>
@@ -486,8 +535,9 @@ export default function App() {
         <div id="fx" className={eng.fx}></div>
         <PhaserFx />
 
-        {/* 新規開始の幕: 依頼ポップアップの間は背景を隠し、「はじめる」でフェードアウトして開ける */}
-        <div id="curtain" className={eng.curtain ? "" : "lifted"}></div>
+        {/* 幕: 依頼ポップアップの間は背景を隠し、「はじめる」でフェードアウトして開ける。
+            場面の切り替え・アウトロでも同じ幕で暗転する(quick=0.6s、開幕は1.2s) */}
+        <div id="curtain" className={[eng.curtain ? "" : "lifted", eng.curtainFade].filter(Boolean).join(" ")}></div>
 
         {eng.pendingRoll && <D20Overlay
           open

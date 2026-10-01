@@ -1,5 +1,7 @@
 # mock2専用作業ガイド
 
+共通ルールは [Terminus/CLAUDE.md](../CLAUDE.md) を参照する。
+
 ## 適用範囲
 
 このファイルは `trpg-gm-mock2` 内の編集・検証作業に適用します。実装経緯、個別シナリオ、設計の背景はBORGまたは `docs/` を参照します。
@@ -18,7 +20,19 @@
 
 ## データ読込・TAS連携
 
-データの正式な読込経路は次の通りです。
+**`public/data/campaigns/` 配下の章データは正本ではありません。配布された生成物です。**(2026-08-19に方針変更)
+
+正本は `Terminus/scenario/<キャンペーンID>/` のみ。詳細は [Terminus/CLAUDE.md](../CLAUDE.md) の「シナリオデータの正本」を参照します。
+
+```text
+scenario/lanternhill/chapter_01.json   ← 直すのはここだけ
+        ↓  node scripts/distribute-scenario.mjs --write   (リポジトリ直下で実行)
+public/data/campaigns/lanternhill/chapter_01.json
+```
+
+`public/data/` を直接編集しないでください。直しても次の配布で消えます。TASの「mock側へ出力」も同じ場所へ書くため、**TASから出力したら、その内容を正本へ戻してから配布し直します**(戻さないと次の配布で消えます)。
+
+実行時の読込経路は次の通りです。
 
 ```text
 public/data/campaigns.json
@@ -64,7 +78,12 @@ campaigns/<campaignId>/chapter_XX.json
 | 所持品 | `src/inventory.js` |
 | 戦闘ロジック | `src/battle/core.js` |
 | 素材検証 | `scripts/check-assets.mjs` |
-| TAS連携時のパララックス契約 | `scripts/_tas_prompt.md` |
+| TAS連携時のパララックス契約 | `scripts/_tas_prompt.md` (注記あり↓) |
+
+`scripts/_tas_prompt.md` は元々TASへ一度渡すための連絡メモとして書かれ、冒頭に
+「内容をコピーしたら削除してください」と書かれている。しかしその後この表からパララックス契約の
+参照先として指され、実質的に契約の正本になっている。**冒頭の記述に従って削除しないこと。**
+契約として使い続けるなら `docs/` へ移して名前と冒頭を書き換えるべきで、それは未実施(2026-08-19)。
 
 ## 検証
 

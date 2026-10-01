@@ -59,12 +59,24 @@ export function D20Overlay({ open, result, onComplete, title = "判定", rollLab
     return () => { window.clearInterval(timer); window.clearTimeout(stop); };
   }, [phase]);
 
+  /* onCompleteはrefで持つ。呼び出し側は onComplete={() => ...} と書くのが自然で、
+     その場合レンダーごとに関数の同一性が変わる。これを依存配列へ入れていると、
+     着地中(1050msの待ち)に親が再描画されるたびにcleanupがタイマーを消し、
+     done.currentが既にtrueなので再登録もされず、ダイスが「停止」のまま永久に止まる。
+     mock2では開示後の同行者の一言(revealFlavor)が数秒遅れて届くため、この窓に高確率で当たる。
+     2026-08-19の実プレイで、場面2の判定がここで固まったのを確認した。
+     「1回の判定でonCompleteは1回だけ」は、タイマーの中でdoneを見て担保する */
+  const completeRef = useRef(onComplete);
+  useEffect(() => { completeRef.current = onComplete; }, [onComplete]);
   useEffect(() => {
-    if (phase !== "landed" || done.current) return;
-    done.current = true;
-    const timer = window.setTimeout(() => onComplete?.(result), 1050);
+    if (phase !== "landed") return;
+    const timer = window.setTimeout(() => {
+      if (done.current) return;
+      done.current = true;
+      completeRef.current?.(result);
+    }, 1050);
     return () => window.clearTimeout(timer);
-  }, [phase, result, onComplete]);
+  }, [phase, result]);
 
   if (!open) return null;
   const critical = result === 20;

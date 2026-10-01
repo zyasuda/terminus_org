@@ -103,6 +103,15 @@ export function pickExamineSecret(sc, triggerText, entityText, ctx) {
   return { secret: textHit || triggerHit, triggerHit, textHit };
 }
 
+/* その言葉を投げたとき、この場面で何かが起きるかを聞く。
+   編集画面のAI取材が、実際には何も起きない候補を作者へ見せないために使う。 */
+export function inputResolves(sc, text) {
+  const ctx = { revealed: new Set(), inventory: [], enemy: null, defeated: [], fled: [], encounterCounts: {} };
+  if (availableEncounters(sc, ctx).some(({ enc }) => (enc.triggerTerms || []).some(t => text.includes(t)))) return true;
+  if (pickExamineSecret(sc, text, text, ctx).secret) return true;
+  return Boolean(resolveExit(sc, text));
+}
+
 export function examineDifficulty(secret, failures = 0) {
   const base = secret.dc || 12;
   return Math.max(2, base - 2 * Math.max(0, failures));
@@ -186,13 +195,3 @@ export function resolveSecretTarget(sc, targetEntity, reason, playerText, ctx) {
   return byText || authored;
 }
 
-/* 決断イベント(scene.decision)のchoices[].inputが、既存の確定処理(遭遇/調査/出口)の
-   どれかへ解決できるかを見る。作者がinputを打ち間違えると、chooseDecisionは選択を
-   自由入力として送るだけなので、何にも解決できずに黙って何も起きない
-   (候補外の未知入力と同じ扱いになる)。これを作者に気付かせるための検査専用ヘルパー */
-export function decisionInputResolves(sc, text) {
-  const ctx = { revealed: new Set(), inventory: [], enemy: null, defeated: [], fled: [], encounterCounts: {} };
-  if (availableEncounters(sc, ctx).some(({ enc }) => (enc.triggerTerms || []).some(t => text.includes(t)))) return true;
-  if (pickExamineSecret(sc, text, text, ctx).secret) return true;
-  return Boolean(resolveExit(sc, text));
-}

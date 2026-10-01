@@ -15,12 +15,12 @@ import {
 import { callGmApi } from "../llm.js";
 import { CAST, GM, BANTER, SCENARIO, CAMPAIGN, CONTENT_SELECTION, loadScenarioData } from "../scenario.js";
 import { pushChat, clearChat, setStore, getSnapshot } from "./store.js";
-import { openUnderPanelAfterOverlay, setDialogueNodeInfo, setSceneInfo, showSceneOverlay } from "./scene-ui.js";
+import { closeUnderPanelForScene, openUnderPanel, setDialogueNodeInfo, setSceneInfo } from "./scene-ui.js";
 import { gmGreeting, gmVoiceRule, voiceRule, fixCompanionVoice } from "./voice.js";
 import {
-  EXAMINE_RE,
+  EXAMINE_RE, MOVE_RE, BACK_RE, exitDeclaration,
   encounterRequiredElementsMet, resolveEncounterFoe,
-  matchSecretByText, matchSecretByTrigger, pickExamineSecret, examineDifficulty, requiresMet,
+  matchSecretByText, matchSecretByTrigger, pickExamineSecret, examinable, findableSecret, examineDifficulty, requiresMet,
   resolveExit, normalizeExit, exitTargetIndexIn, resolveSecretTarget
 } from "./progression.js";
 
@@ -108,7 +108,15 @@ function ownerDisplayName(ownerId) {
 /* LLMへ渡す所持品。誰が何を持つかまで渡す。品名は正式名のまま。
    持ち物が空の同行者は出さない(プロンプトを短く保つ) */
 function inventoryForPrompt() {
-  const rows = inv.byOwner(state.inventory, ownerDisplayName).filter(r => r.items.length);
+  /* 回復薬は state.healPotions(個数)で持つため state.inventory に入っていない。
+     合流させないとLLMには「回復薬」がそもそも見えず、持っているのか使い切ったのかを
+     判断できない。2026-08-19のプレイでは、飲み終えたあとの手番で同行者が
+     「その回復薬をしっかり持っておくんね」と言った(存在しない品への言及)。
+     表示側(renderDebugのinventoryByOwner)と同じ合流をここでも行う */
+  const merged = state.healPotions > 0
+    ? { ...state.inventory, [inv.PLAYER]: [...(state.inventory[inv.PLAYER] || []), `${HEAL_POTION_NAME}×${state.healPotions}`] }
+    : state.inventory;
+  const rows = inv.byOwner(merged, ownerDisplayName).filter(r => r.items.length);
   if (!rows.length) return "なし";
   return rows.map(r => `${r.name}=${JSON.stringify(r.items)}`).join(" / ");
 }
@@ -129,14 +137,19 @@ function showDialogueNode(node) {
     companionBubbles: {},
     npcBubble: { text: "", seq: 0 }
   });
-  openUnderPanelAfterOverlay();
+  /* 下パネルを開けるのは語り終わってから。場面遷移(advanceScene)と同じ扱いにする
+     (2026-08-21 作者の要望)。以前は1秒後に開く固定タイマーで、依頼人の第一声を
+     読んでいる途中でパネルが上がって主画面が狭くなっていた。
+     閉じる操作は上の setStore({ underPanelOpen: false }) が済ませている */
   const gmText = node.brief || node.text || "";
   // NPCの第一声は作者がnode.greetingを書いた場合のみ。GMの発言に続けて話す
   const steps = [{ text: gmText, speak: () => addGm(gmText, "Neutral") }];
-  if (node.npc && node.greeting) {
+  if (node.npc && !node.npc.silent && node.greeting) {
     steps.push({ text: node.greeting, speak: () => addNpc(node.greeting, node.npc) });
   }
-  runSpeechSequence(steps);
+  /* 明転(0.6s)を待ってから語り始める。イントロは幕が開いた直後、アウトロは
+     fadeThroughBlack の暗転中にこの関数が呼ばれるので、どちらも「見えてから喋る」になる */
+  setTimeout(() => runSpeechSequence(steps, openUnderPanel), SCENE_FADE_MS);
   renderDebug();
 }
 
@@ -161,8 +174,11 @@ export function dismissPopup() {
       if (state.pendingIntro) {
         showDialogueNode(SCENARIO.intro);
       } else {
-        showSceneOverlay(); // 下パネルのスライドインだけ行う(showSceneOverlay内)
-        setTimeout(() => addGm(gmGreeting(), "Happy"), 1000);
+        // 会話ノードを持たない章の開幕。ここも自己紹介を語り終えてから開ける
+        closeUnderPanelForScene();
+        const greeting = gmGreeting(); // 毎回引き直さない(語りと待ち時間で同じ文を使う)
+        setTimeout(() => runSpeechSequence(
+          [{ text: greeting, speak: () => addGm(greeting, "Happy") }], openUnderPanel), 1000);
       }
     }, 1200);
   }
@@ -179,6 +195,26 @@ function setSceneBackdrop(sc) {
     : "linear-gradient(135deg, #151720 0%, #1e2230 100%)";
   // parallaxがあれば空レイヤー+透過前景の2層で表示(素材が404の間は単層imgにフォールバック)
   setStore({ sceneBg: value, parallax: (sc && sc.parallax) || null });
+}
+
+/* 場面の切り替えを黒でつなぐ(2026-08-21 作者の要望)。以前は背景画像が1フレームで
+   入れ替わっていたので、前の場所から次の場所へ「移動した」感じが出ていなかった。
+   専用のレイヤーは作らず、開幕の幕(#curtain)を使い回す——全面を覆う黒で、
+   透明度の遷移をCSSが持っており、ポップアップより下・演出より上という重なりも既に正しい。
+   速さだけが違うので、curtainFadeでCSSの継続時間を0.6sへ差し替える。
+   swap()は暗転しきってから呼ぶ。SCENE_FADE_MSはstyles.cssの #curtain.quick と同値。 */
+const SCENE_FADE_MS = 600;  // 暗転・明転それぞれの長さ。styles.cssの .6s と必ず一致させる
+/* 真っ黒で止める時間。背景の差し替えをこの中で行う。0にすると、暗転しきった
+   まさにそのフレームで明転が始まるため、フレームの巡り合わせで差し替えが素見えする */
+const SCENE_HOLD_MS = 200;
+const SCENE_FADE_TOTAL_MS = SCENE_FADE_MS * 2 + SCENE_HOLD_MS; // 暗転→止め→明転の合計
+
+function fadeThroughBlack(swap) {
+  setStore({ curtain: true, curtainFade: "quick" });
+  setTimeout(() => {
+    swap(); // 真っ黒の中で差し替える
+    setTimeout(() => setStore({ curtain: false }), SCENE_HOLD_MS); // ここから明転(0.6s)
+  }, SCENE_FADE_MS);
 }
 
 /* 現在の進行状態(イントロ中/アウトロ中/通常シーン)に応じて、背景に使うノードを1箇所で決める。
@@ -198,6 +234,19 @@ function currentBackdropNode() {
 }
 
 // chronの1件をstoreへ再生する(chronへの再pushはしない=保存済みログをそのまま画面に描き直すだけ)
+/* その発言がどの場面のものかを表す印。再開時に「前の場面の発言」を復元しないために使う。
+   sceneIndexだけでは足りない——イントロ中も sceneIndex は 0 で、シーン1と同じ値になる。
+   2026-08-21の実プレイ: シーン1のターン3で再開したのに、リディアがイントロ最後の
+   「わたしも賛成。あなたが受けるなら、同行するわ。」を喋ったままだった */
+function speechScope() {
+  /* pendingIntro は受諾した瞬間に落ちるが、そのあと依頼人の返事と同行者の同意が続く。
+     そこまでは「イントロでの発言」として扱う。introTail が無いと、同意の台詞が
+     シーン1(sceneIndex 0)の発言として記録され、再開時に持ち込まれてしまう */
+  if (state.pendingIntro || state.introTail) return "intro";
+  if (state.pendingEnding || state.chapterEnded) return "ending";
+  return state.sceneIndex;
+}
+
 function renderChronEntry(e) {
   switch (e.kind) {
     case "gm": pushChat({ kind: "msg", cls: "gm", text: e.text }); break;
@@ -228,6 +277,8 @@ function pushDiceLog(t, roll, diff, ok, crit, fumble, reason) {
 }
 
 export function restoreGame(saved) {
+  bumpGeneration(); // 復元も「別のゲーム」。飛んでいる非同期は捨てる
+  cancelPendingRoll();
   state = saved.state;
   // 旧セーブの単一値は全同行者へ複製し、復元直後の従来の抑制を維持する。
   if (!state.lastCompanionTurnByWho) {
@@ -240,6 +291,12 @@ export function restoreGame(saved) {
      読み替えたあと items は消す。両方残すと以後どちらが正か分からなくなる */
   state.inventory = inv.normalizeInventory(state);
   delete state.items;
+  /* 旧セーブに visited が無い。当時は分岐を辿った記録が残っていないので、
+     復元できる最良の近似として 0..sceneIndex を訪問済みとみなす(従来のクロニクルの
+     解釈と同じ)。以後の遷移からは実際の訪問が積まれる */
+  if (!Array.isArray(state.visited) || !state.visited.length) {
+    state.visited = Array.from({ length: (state.sceneIndex ?? 0) + 1 }, (_, i) => i);
+  }
   (CAMPAIGN.companions || []).forEach(c => c?.id && inv.ensureOwner(state.inventory, c.id));
   chron = saved.chron || [];
   history = saved.history || [];
@@ -258,17 +315,30 @@ export function restoreGame(saved) {
   // GM/NPC/同行者、それぞれの立ち絵にも直前の発言を喋らせる(左パネルの履歴と同期。
   // タップでの再表示もここから効くようになる)。以前はgmBubbleしか復元しておらず、
   // リロード直後にマイラや同行者をタップしても何も出ない不具合があった
-  const lastGm = [...chron].reverse().find(e => e.kind === "gm");
-  if (lastGm) setStore(s => ({ gmBubble: { text: lastGm.text, emotion: lastGm.emotion || "Neutral", seq: s.gmBubble.seq + 1 } }));
-  const lastNpc = [...chron].reverse().find(e => e.kind === "npc");
-  if (lastNpc) setStore(s => ({ npcBubble: { text: lastNpc.text, seq: s.npcBubble.seq + 1 } }));
+  /* 復元はhidden:trueで積む。可視にするのは最後に喋った1人だけ。
+     hiddenを付けずに3人分を復元していたため、再開直後の画面にGM・マイラ・同行者の
+     吹き出しが同時に並んでいた(2026-08-19の指摘。会話が破綻して見える主因) */
+  /* 復元するのは「いまの場面での発言」だけ。場面を移ったら、その前の発言は持ち込まない
+     (2026-08-21 作者の指摘。シーン1で再開したのにリディアがイントロ最後の台詞を
+     喋ったままだった)。印(sc)を持たない古いセーブの発言は復元しない——その場合、
+     立ち絵をタップすると replayCompanionBubble が既定の一言(idleLine)で受け答えする */
+  const scope = speechScope();
+  const rev = [...chron].reverse().filter(e => e.sc === scope);
+  const lastGm = rev.find(e => e.kind === "gm");
+  if (lastGm) setStore(s => ({ gmBubble: { text: lastGm.text, emotion: lastGm.emotion || "Neutral", hidden: true, seq: s.gmBubble.seq + 1 } }));
+  const lastNpc = rev.find(e => e.kind === "npc");
+  if (lastNpc) setStore(s => ({ npcBubble: { text: lastNpc.text, hidden: true, seq: s.npcBubble.seq + 1 } }));
   Object.keys(CAST).forEach(who => {
-    const lastLine = [...chron].reverse().find(e => e.kind === "companion" && e.who === who);
+    const lastLine = rev.find(e => e.kind === "companion" && e.who === who);
     if (lastLine) {
       setStore(s => ({ companionBubbles: { ...s.companionBubbles,
-        [who]: { text: lastLine.text, seq: ((s.companionBubbles[who] || {}).seq || 0) + 1 } } }));
+        [who]: { text: lastLine.text, hidden: true, seq: ((s.companionBubbles[who] || {}).seq || 0) + 1 } } }));
     }
   });
+  const newest = rev.find(e => ["gm", "npc", "companion"].includes(e.kind));
+  if (newest && newest.kind === "gm") replayGmBubble();
+  else if (newest && newest.kind === "npc") replayNpcBubble();
+  else if (newest) replayCompanionBubble(newest.who);
   setSceneInfo(state);
   renderDebug();
 }
@@ -356,7 +426,13 @@ export function switchContent(campaignId, chapterId) {
 }
 
 export function resetGame() {
+  /* 飛んでいる非同期(NPCの一言・開示の余韻・停滞の促し・演出のタイマー)を
+     まとめて無効にし、待っている判定も捨てる。これをしないと、旧ゲームの応答が
+     新ゲームへ混入し、判定中にリセットされた手番は永久に待ち続ける */
+  bumpGeneration();
+  cancelPendingRoll();
   clearSave();
+  clearVerbFreq(); // 学習した動詞チップも初期化する(シードの6語に戻る)
   state = initialState();
   /* 章開始時の所持品。chapter.startingInventory(キャラクター別)が正。
      無ければ campaign.initialInventory(平坦な配列)をプレイヤーの持ち物として読む */
@@ -373,7 +449,6 @@ export function resetGame() {
   const intro = SCENARIO.intro;
   const introIsObject = intro && typeof intro === "object";
   state.pendingIntro = introIsObject; // currentBackdropNode()より先に立てる(この状態を見て背景を選ぶ)
-  setSceneBackdrop(currentBackdropNode());
   clearChat();
   // 依頼導入(intro)は通知型ポップアップで提示し、シーン説明(brief)は主画面オーバーレイ+左パネルへ。
   // 下パネルのチャットは会話専用にする(UI_REDESIGN.md / EVENT_MAP.mdの「シナリオ開始=依頼ポップアップ」)。
@@ -393,17 +468,32 @@ export function resetGame() {
   }
   setStore({
     diceLog: [], popups,
-    curtain: popups.length > 0,
+    /* 幕は必ず降ろす。ポップアップがある章は「はじめる」で上がり(1.2s、枠の色)。
+       ポップアップの無い章(lanternhill)は "instant" ——「最初から」を押した瞬間に
+       真っ黒へ落とし、直後のshowDialogueNodeが0.6sで明転させる。
+       遷移させて暗転すると、この関数が差し替えた次の場面が暗くなっていく様子が
+       見えてしまう(2026-08-21 作者の指摘「マイラの部屋が表示されてからフェードインが始まる」)。
+       以前はポップアップの無い章だけ幕を張らず、イントロが黒を経ずに現れていた */
+    curtain: true, curtainFade: popups.length === 0 ? "instant" : "",
     leftPanelOpen: false, rightPanelOpen: false, underPanelOpen: false
   });
+  /* 背景の差し替えは幕を降ろした後に行う。先に差し替えると、ストア上に
+     「次の場面が幕なしで見えている」状態が一瞬できる。instantなら描画上は
+     同じフレームに畳まれるが、順番を正しくしておく(検査もこの順番を見る) */
+  setSceneBackdrop(currentBackdropNode());
   setSceneInfo(state);
   const introNarration = introIsObject ? (intro.brief || "") : (typeof intro === "string" && intro ? intro : "");
   const openingBrief = introIsObject ? introNarration : (introNarration ? introNarration + "\n\n" : "") + SCENARIO.scenes[0].brief;
   history.push({ role: "user", content: "【システム】セッションが始まった。" });
   history.push({ role: "assistant", content: JSON.stringify({ narration: openingBrief, companion: null, npc: null, check: null, state_updates: null, engage_enemy: false, flee_enemy: false, scene_complete: false, meta_request: null }) });
   renderDebug();
-  // 新形式introにはポップアップを挟まない。既存の幕開けと同じく、説明を表示してから入力を受ける。
-  if (introIsObject && popups.length === 0) showDialogueNode(intro);
+  pushVerbChips(); // 動詞チップはrenderDebugの外なので、初期化した結果を明示的に反映する
+  /* 新形式introにはポップアップを挟まない。既存の幕開けと同じく、説明を表示してから入力を受ける。
+     真っ黒のまま少し止めてから明転する。同じフレームでshowDialogueNodeが幕を上げると、
+     黒が一度も描画されずCSSの遷移が始まらない(実測: 降りると上がるの間が11msだった) */
+  if (introIsObject && popups.length === 0) {
+    setTimeout(() => showDialogueNode(intro), SCENE_FADE_MS + SCENE_HOLD_MS);
+  }
 }
 
 /* ---------------- 動詞チップ(入力補助の実験) ----------------
@@ -442,6 +532,17 @@ export function joinParticle(prev, particle) {
   return particle;
 }
 function canonVerb(v) { return VERB_CANON[v] || v; }
+/* 「最初から」で学習した動詞を捨てる(2026-08-21 作者の判断)。
+   この辞書はセーブとは別枠(localStorage)で7日間持つため、消さないと前の周の動詞が
+   新しい周のチップに並ぶ。実プレイ動画では、導入で使った「受け取る」がシーン1でも
+   出ていて、前の場面の残りに見えた。
+   セーブの外に置いてあるのは「使うほど育つ」実験のためだが、周を跨いで育てる必要は無い
+   ——最初からやり直したなら、覚えた語も最初からでよい。
+   VERB_KEY は他のどこからも読んでいない(チップ表示の3箇所だけ。宣言コーパスの
+   corpus:declarations はクロニクルを読むので影響しない) */
+function clearVerbFreq() {
+  try { localStorage.removeItem(VERB_KEY); } catch (e) { /* no-op */ }
+}
 function loadVerbFreq() {
   // 旧形式 {verb: count} は {verb: {n, t}} へ移行する(tは最終使用時刻。旧データはt=0で「古い」扱い)
   try {
@@ -533,30 +634,85 @@ function trimNarration(text) {
 // 感情はCONVERSATION_ENGINE.mdの定義に合わせる。GMペットの表情アニメ(将来の差分フレーム)の駆動データ
 const EMOTIONS = ["Happy", "Angry", "Fear", "Sad", "Neutral"];
 const normalizeEmotion = e => (EMOTIONS.includes(e) ? e : "Neutral");
+/* 判定の見出し。誰の判定かを必ず頭に付ける。以前はプレイヤーだけ無名にしていたため、
+   同行者は「ガレス: 錆喰いへの攻撃」なのに本人は「坑道蝙蝠への攻撃」で、
+   ポップアップだけを見ると誰の手番か分からなかった(2026-08-19の指摘) */
+function rollReason(actorName, what) {
+  return `${actorName || "あなた"}: ${what}`;
+}
+
+/* 直前に吹き出しへ出した文。次の話者が「読み終わる頃合いまで待って、消してから話す」ために使う。
+   吹き出しはCSSで8〜10.6秒表示され続けるので、消さずに次が話すと画面上で必ず重なる
+   (runSpeechSequenceの原則を、通常の手番でも守るためのもの) */
+let lastBubbleText = "";
+/* ポップアップ(ダイスの判定オーバーレイ・結果や被弾の通知)が開いている間は誰も喋らない。
+   閉じるのはプレイヤーの操作なので、ここは「閉じるまで待つ」ことになる。
+   裏で吹き出しが動くと、読み手はどちらを見ればいいのか分からなくなる(2026-08-19の指摘)。
+   閉じられないまま固まった時に進行を殺さないよう、上限を置いて諦める */
+const POPUP_WAIT_CAP_MS = 20000;
+async function awaitPopupsClear() {
+  const until = Date.now() + POPUP_WAIT_CAP_MS;
+  while (Date.now() < until) {
+    const s = getSnapshot();
+    if (!s.pendingRoll && !(s.popups || []).length) return true;
+    await sleep(150);
+  }
+  return false; // 上限に達した。以後は待たずに進む(沈黙で詰まらせない)
+}
+/* 前の話者から次の話者へ渡す。読了目安だけ待ち、ポップアップが引くのを待ってから、
+   前の吹き出しを消す。前の発言が無ければ最小の間だけ置く(無言の手番でテンポを落とさない) */
+async function handOffBubble() {
+  await sleep(lastBubbleText ? readDelayMs(lastBubbleText) : SHORT_PACING_MS);
+  await awaitPopupsClear();
+  clearAllBubbles();
+}
+
+/* 吹き出しは画面に常に1つだけ。前の話者を消す責任を呼び出し側(clearAllBubbles/
+   handOffBubble)に置いていたため、それを通らない経路で複数が並んでいた(2026-08-19の指摘)。
+   実際に並んでいた経路:
+   - 立ち絵タップの replay*Bubble(): 消さずに hidden=false にするだけなので、
+     リディア→ガレス→マイラと続けて叩くと3人の古い発言が同時に出る
+   - dialogueNodeReply(導入・終端ノードのNPC)の非同期着地: handOffBubbleを通らない
+   出す側で一本化する。hiddenBubblesは同じsetStore内で適用し、1回の再描画で切り替える */
+function hiddenBubbles(s) {
+  return {
+    gmBubble: { ...s.gmBubble, hidden: true },
+    npcBubble: { ...s.npcBubble, hidden: true },
+    companionBubbles: Object.fromEntries(
+      Object.entries(s.companionBubbles).map(([who, b]) => [who, { ...b, hidden: true }]))
+  };
+}
+
 const addGm = (t, emotion) => {
+  lastBubbleText = t || "";
   const emo = normalizeEmotion(emotion);
-  chron.push({ t: state.turn, ts: Date.now(), kind: "gm", text: t, emotion: emo });
+  chron.push({ t: state.turn, sc: speechScope(), ts: Date.now(), kind: "gm", text: t, emotion: emo });
   addMsg("gm", t);
-  setStore(s => ({ gmBubble: { text: t, emotion: emo, hidden: false, seq: s.gmBubble.seq + 1 } }));
+  setStore(s => ({ ...hiddenBubbles(s), gmBubble: { text: t, emotion: emo, hidden: false, seq: s.gmBubble.seq + 1 } }));
 };
 // GMペットをタップした時: 最後の発言の吹き出しを出し直す(seqの増分で再マウント→フェードが再スタート)
 export function replayGmBubble() {
-  setStore(s => s.gmBubble.text ? { gmBubble: { ...s.gmBubble, hidden: false, seq: s.gmBubble.seq + 1 } } : {});
+  setStore(s => s.gmBubble.text
+    ? { ...hiddenBubbles(s), gmBubble: { ...s.gmBubble, hidden: false, seq: s.gmBubble.seq + 1 } }
+    : {});
 }
 // 同行者の立ち絵をタップした時: その同行者の最後の発言の吹き出しを出し直す。
 // まだ一度も喋っていない場面では反応が無く「壊れている」ように見えるので、
 // CAST[who].idleLine(scenario.jsが一人称から既定値を用意する)で受け答えする
 export function replayCompanionBubble(who) {
   setStore(s => {
+    const base = hiddenBubbles(s);
     const b = s.companionBubbles[who];
-    if (b && b.text) return { companionBubbles: { ...s.companionBubbles, [who]: { ...b, hidden: false, seq: b.seq + 1 } } };
-    const idle = (CAST[who] && CAST[who].idleLine) || "…どうした?";
-    return { companionBubbles: { ...s.companionBubbles, [who]: { text: idle, hidden: false, seq: ((b || {}).seq || 0) + 1 } } };
+    const text = b && b.text ? b.text : ((CAST[who] && CAST[who].idleLine) || "…どうした?");
+    return { ...base, companionBubbles: { ...base.companionBubbles,
+      [who]: { text, hidden: false, seq: ((b || {}).seq || 0) + 1 } } };
   });
 }
 // NPC(依頼人マイラ等)の立ち絵をタップした時: 最後の発言の吹き出しを出し直す
 export function replayNpcBubble() {
-  setStore(s => s.npcBubble.text ? { npcBubble: { ...s.npcBubble, hidden: false, seq: s.npcBubble.seq + 1 } } : {});
+  setStore(s => s.npcBubble.text
+    ? { ...hiddenBubbles(s), npcBubble: { ...s.npcBubble, hidden: false, seq: s.npcBubble.seq + 1 } }
+    : {});
 }
 // AI応答待ちの「考え中(…)」表示。key: "gm" | 同行者id | "npc"
 function setThinking(key, on) {
@@ -622,11 +778,15 @@ const addCompanion = (t, who = Object.keys(CAST)[0]) => {
   const name = (CAST[who] && CAST[who].name) || who;
   t = sanitizeSay(t);
   if (!t) return;
-  chron.push({ t: state.turn, ts: Date.now(), kind: "companion", who, text: t });
+  lastBubbleText = t;
+  chron.push({ t: state.turn, sc: speechScope(), ts: Date.now(), kind: "companion", who, text: t });
   addMsg("companion companion-" + who, name + "「" + t + "」");
   // GMペットと同じ形式の吹き出しを、その同行者の立ち絵の脇に出す(約8秒でフェードアウト)
-  setStore(s => ({ companionBubbles: { ...s.companionBubbles,
-    [who]: { text: t, hidden: false, seq: ((s.companionBubbles[who] || {}).seq || 0) + 1 } } }));
+  setStore(s => {
+    const base = hiddenBubbles(s);
+    return { ...base, companionBubbles: { ...base.companionBubbles,
+      [who]: { text: t, hidden: false, seq: ((s.companionBubbles[who] || {}).seq || 0) + 1 } } };
+  });
   highlightPortrait(who);
 };
 // シーンNPC(依頼人マイラ等)の台詞。話者名はシーン定義から取る(モデルに選ばせない)
@@ -637,10 +797,11 @@ const addNpc = (t, speaker) => {
   if (!npc) return;
   t = sanitizeSay(t);
   if (!t) return;
-  chron.push({ t: state.turn, ts: Date.now(), kind: "npc", name: npc.name, text: t });
+  lastBubbleText = t;
+  chron.push({ t: state.turn, sc: speechScope(), ts: Date.now(), kind: "npc", name: npc.name, text: t });
   addMsg("companion companion-npc", npc.name + "「" + t + "」");
   // GM/同行者と同じ形式の吹き出しを、中央のnpcSprite(#enemySprite)の上に出す
-  setStore(s => ({ npcBubble: { text: t, hidden: false, seq: s.npcBubble.seq + 1 } }));
+  setStore(s => ({ ...hiddenBubbles(s), npcBubble: { text: t, hidden: false, seq: s.npcBubble.seq + 1 } }));
   saveGame(); // 非同期(npcAgentReply)でターン確定後に届くため、ここで保存しないとリロードで消える
 };
 /* ---------------- 表示シーケンス ----------------
@@ -659,24 +820,12 @@ function readDelayMs(text) {
 /* 吹き出しを隠すのは hidden フラグで行い、text は最後の発言として残す。
    text を空にすると立ち絵タップの replay*Bubble() が「何も無い」になってしまうため
    (シーケンス中に前の話者を消すたび、その話者の発言が復元できなくなっていた) */
-function clearGmBubble() {
-  setStore(s => (s.gmBubble.hidden ? {} : { gmBubble: { ...s.gmBubble, hidden: true } }));
-}
-function clearNpcBubble() {
-  setStore(s => (s.npcBubble.hidden ? {} : { npcBubble: { ...s.npcBubble, hidden: true } }));
-}
-function clearCompanionBubble(who) {
-  setStore(s => (s.companionBubbles[who] && !s.companionBubbles[who].hidden
-    ? { companionBubbles: { ...s.companionBubbles, [who]: { ...s.companionBubbles[who], hidden: true } } }
-    : {}));
-}
+/* 話者ごとの個別消去(clearGmBubble等)は置かない。吹き出しは常に1つだけ見せる方針に
+   したため(hiddenBubbles)、消すのは「全部消す」しか使い道が無くなった。
+   2026-08-20の時点で参照0件だったので消した——残すと「片方だけ消す」経路が
+   復活し、また複数の吹き出しが並ぶ */
 function clearAllBubbles() {
-  clearGmBubble();
-  clearNpcBubble();
-  setStore(s => ({
-    companionBubbles: Object.fromEntries(
-      Object.entries(s.companionBubbles).map(([who, b]) => [who, { ...b, hidden: true }]))
-  }));
+  setStore(s => hiddenBubbles(s));
 }
 /* steps: [{ text, speak(), clear() }, ...]。各stepの直前にclear()(省略時はclearAllBubbles)
    を呼んで前の話者の吹き出しを消し、speak()を呼ぶ。次のstepまではreadDelayMs(text)だけ待つ。
@@ -703,6 +852,17 @@ function firePhaserFx(type, payload) {
   setStore(s => ({ phaserFx: { type, seq: s.phaserFx.seq + 1, ...payload } }));
 }
 const sleep = ms => new Promise(r => setTimeout(r, ms));
+
+/* 戦闘の手触り(2026-08-19の依頼)。「自分→ガレス→リディア→敵」の判定通知が連続するだけで、
+   当たった/避けられたが画面で見えないという指摘への対処。CSSアニメーションだけで作り、
+   新しい依存は入れない。engine側はkindとseqを立てて、その長さだけ待つ。
+   待つのが要点で、この「間」があるから同行者の一言が演出の後に来る。 */
+const BATTLE_FX_MS = { hit: 460, crit: 760, miss: 420, lunge: 480 };
+async function playBattleFx(kind, text = "") {
+  if (!getSnapshot().enemySprite) return; // 敵の絵が無い場面では何もしない(待たない)
+  setStore(s => ({ battleFx: { kind, seq: s.battleFx.seq + 1, text } }));
+  await sleep(BATTLE_FX_MS[kind] || 400);
+}
 function screenFx(kind) {
   if (USE_PHASER_FX) {
     firePhaserFx(kind);
@@ -773,22 +933,159 @@ async function renderModelInfo() {
   }
 }
 
+/* その秘密を指す語のうち、場面説明に実際に書かれているものを1つ返す(無ければ空)。
+   照合用の別名辞書(aliases)をそのまま出すのではなく、必ず作者が場面説明へ書いた語を
+   使うのが要点。entity名を出すと「柵の内側」のように場面説明より踏み込んだ名前が漏れる。
+
+   選び方: entityの末尾に一致する語を優先し、その中で最も長いものを採る。日本語は
+   修飾が前・主名詞が後ろに来るため、末尾側が「物の名前」になる。これが無いと
+   「青白い岩肌」から形容詞の「青白い」が選ばれてチップの見た目が崩れる(実測)。
+   末尾一致が無ければ、場面説明に出てくる最も長い語にする(「酸の跡」→「匂い」)。
+   回帰検査: briefChip.test.mjs */
+export function briefWord(secret, brief) {
+  const text = String(brief || "");
+  if (!text) return "";
+  const entity = String(secret.entity || "");
+  const found = [secret.entity, ...(secret.aliases || [])]
+    .filter(w => w && text.includes(w))
+    .sort((a, b) => b.length - a.length);
+  return found.find(w => entity.endsWith(w)) || found[0] || "";
+}
+
+/* 同じ場所で手番を空転させているプレイヤーへ、GMが1度だけ声をかける。
+ *
+ * 名指しするのは「チップと同じ語」、つまり作者が場面説明へ書いた語だけである。
+ * シナリオデータに無い語は作らない——だからLLMは呼ばない。scriptedでも同じに動く。
+ * チップを勝手に増やすのではなく一言で促すのは作者の判断(2026-08-20):
+ * 押せる選択肢が増えると総当たりになるが、一言なら探索のままでいられる。
+ *
+ * 1つの場面につき1度だけ。詰まっている間ずっと言い続けると、答えを配るのと同じになる。
+ * 非同期で、前の話者の吹き出しを読み終える頃合いを待ってから話す(吹き出しは常に1つ)。
+ * 回帰検査: stagnationHint.test.mjs
+ */
+const STAGNATION_NAME = STAGNATION_SOFT + 1; // 名指しは、ぼかした一言の次の手番
+
+/* 名指しする対象を1つ選ぶ。出口の前提になっている秘密を先に挙げる——そこが本当の
+   詰まりだからである。場面説明にある語(=既にチップ)を挙げても、詰まりは解けない。
+   調べても開かない秘密(撃破など出来事だけで開くもの)は挙げない。判別はexaminable()に
+   任せる——エンジンが「調べる」の対象にするかどうかと同じ規則で選ばないと、押しても
+   開かない語を名指しすることになる(usage:"event"で判別していた時は、場面3の
+   「人影」を挙げられず、代わりに手・銘を挙げていた。実データではあれがeventである)。
+   名前は「場面説明に書かれた語」を優先し、無ければ作者が付けたentityを使う。
+   どちらもシナリオにある語で、こちらで語を作ることはしない */
+function stagnationTarget(sc) {
+  const examined = state.examined || [];
+  const gated = new Set((sc.exits || []).flatMap(e => (e.requires && e.requires.secretsAll) || []));
+  const ctx = { revealed, inventory: state.inventory };
+  const usable = (sc.secrets || []).filter(s =>
+    findableSecret(s, ctx) && !examined.includes(s.entity) && examinable(s));
+  const target = [...usable.filter(s => gated.has(s.id)), ...usable.filter(s => !gated.has(s.id))][0];
+  return target ? (briefWord(target, sc.brief || "") || target.entity) : "";
+}
+
+/* 同じ場所で手番を空転させているプレイヤーへ、GMが2段階で声をかける。
+ *   3手番: 「調べていないものがあるみたいだね。」   — 何があるかは言わない
+ *   4手番: 「封鎖の木柵は、まだ確かめていないね。」 — 名指しし、以後その語をチップに出す
+ * 調べる先が残っていない場面では段を踏まず、3手番で「先へ進めそうだ」だけを言う。
+ *
+ * 名指しに使うのは作者が書いた語だけである。シナリオデータに無い語は作らない——
+ * だからLLMは呼ばない。scriptedでも同じに動く。
+ * 段は1つの場面で各1度だけ。言い続けると答えを配るのと同じになる。
+ * 非同期で、前の話者の吹き出しを読み終える頃合いを待ってから話す(吹き出しは常に1つ)。
+ * 回帰検査: stagnationHint.test.mjs
+ */
+async function stagnationHint() {
+  if (state.pendingIntro || state.pendingEnding || state.chapterEnded || state.enemy) return;
+  const idx = state.sceneIndex;
+  const sc = SCENARIO.scenes[idx];
+  if (!sc) return;
+  state.hints ||= {}; // 旧セーブデータ(このキーが無い)の互換
+  const done = state.hints[idx] || { stage: 0, word: "" };
+  const target = stagnationTarget(sc);
+  let line = "", next = null;
+  /* 調べる先が残っているかで、言うことが変わる。残っていないのに「調べていないものが
+     あるみたいだね」と言うと、無いものを探させることになる(2026-08-20 実測。全部開示した
+     場面でこれが出ていた)。残っていなければぼかす段は飛ばし、先へ促す一言だけにする */
+  if (!target) {
+    if (done.stage < 2 && state.stuckTurns >= STAGNATION_SOFT) {
+      line = viableExits(sc).length ? "ここでできることは、あらかた確かめたか。先へ進めそうだ。" : "";
+      next = { stage: 2, word: "" }; // ぼかす段は使い終わったものとして飛ばす
+    }
+  } else if (done.stage < 1 && state.stuckTurns >= STAGNATION_SOFT) {
+    line = "調べていないものがあるみたいだね。";
+    next = { stage: 1, word: done.word };
+  } else if (done.stage < 2 && state.stuckTurns >= STAGNATION_NAME) {
+    line = `${target}は、まだ確かめていないね。`;
+    next = { stage: 2, word: target };
+  }
+  if (!line || !next) return;
+  const stale = turnGuard();
+  await handOffBubble();
+  if (stale()) return; // 待っている間にプレイヤーが動いたなら、もう促す必要はない
+  /* 段を進めるのは、実際に話せたあと。待っている間に捨てられた分まで消費すると、
+     次に本当に詰まった時に使える段が減る(Codexレビュー2026-08-20の指摘) */
+  state.hints[idx] = next;
+  addGm(line, "Neutral");
+  renderDebug(); // 名指しした語をチップへ反映する
+  saveGame();
+}
+
 function renderDebug() {
   renderTokens();
   const curScene = SCENARIO.scenes[state.sceneIndex];
   const secrets = [];
   const revealedEntities = [];
   const clues = [];
+  /* 名詞チップは「GMがその場面を説明した」ことが前提である。導入は場面ではなく会話で、
+     この時点でプレイヤーが読んでいるのは依頼人との話だけ——坑道の描写はまだ読んでいない。
+     ここを見ていなかったため、ゲーム開始時にシーン1の「木の札」「レール」が並んでいた(実測)。
+     導入で押せるのは作者が書いたhintChips(「依頼について」等)だけにする(2026-08-20)。
+     終端(pendingEnding)は除外しない。あそこは最後のシーンに立ったまま依頼人と話す場面で、
+     場面の名詞を消すと「渡す」以外の話題に触れられなくなる(hintChipsも持たない) */
+  // 旧セーブに sceneNarrated が無い場合は「語り終えている」とみなす(undefined !== false)
+  const sceneNarrated = !state.pendingIntro && state.sceneNarrated !== false;
   SCENARIO.scenes.forEach(sc => sc.secrets.forEach(s => {
     const open = revealed.has(s.id);
     secrets.push({ open, text: open ? s.text : "シーン" + sc.id + "の未開示情報(判定成功で開放)" });
     // 名詞チップは現在のシーンの分だけ(チップ列が横に伸び続けるのを防ぐ。過去の手がかりは左パネルで参照)。
-    // 開示済みに加え、一度でも判定を振った対象(examined)も出す(失敗後の再挑戦を2タップに)
-    const known = open || (state.examined || []).includes(s.entity);
+    // シーンが変われば前の場面の名詞は自動的に落ちる——ここが唯一の絞り込みである
+    /* 前提(secret.requires)を満たしていない対象はチップにしない。押しても
+       「特に変わったものは見つからない。」になるので、押せる状態で見せてはいけない。
+       章1の場面3では「ランタン」がこれに当たる——銘を読むには先に正体と手を見る */
+    const inScene = sc === curScene && sceneNarrated
+      && requiresMet(s.requires, { revealed, inventory: state.inventory });
+    const attempted = (state.examined || []).includes(s.entity);
+    const known = open || attempted;
+    /* 判定を振ったが開かなかった対象だけを出す(失敗後の再挑戦を2タップに)。
+       開示済み(open)は出さない——用が済んでおり、内容は左パネルの手がかりに載る。
+       もう一度調べても「改めて確かめる」と読み直すだけで進行は動かないので、
+       押せる状態で残しておくと、済んだものを総当たりし直すことになる(2026-08-20 作者の判断)。
+       これで1つの場面のチップは「まだ手が付いていない」「試したが開かない」の2種類に揃う */
     const chipLabel = s.entity; // aliasesは入力照合用の別名辞書。表示は作者が書いたentityを使う
-    if (known && chipLabel && sc === curScene && !revealedEntities.includes(chipLabel)) revealedEntities.push(chipLabel);
+    if (attempted && !open && chipLabel && inScene && !revealedEntities.includes(chipLabel)) revealedEntities.push(chipLabel);
+    /* まだ調べていない対象でも、場面説明(brief)に書かれている語はチップに出す。
+       プレイヤーは左パネルとGMの語りでその語を既に読んでいるので、読んでいない情報は
+       漏れない。逆に、読んだ語に触れられないのは不便だった——シーン1の「レール」は
+       場面説明にあるのに、一度手で打つまでチップにならなかった(2026-08-20 作者の判断)。
+       表示するのは必ずbriefに出てくる語そのもの。entity名を出すと「柵の内側」のように
+       場面説明より踏み込んだ名前が漏れる */
+    if (!known && inScene) {
+      const word = briefWord(s, curScene.brief || "");
+      if (word && !revealedEntities.includes(word)) revealedEntities.push(word);
+    }
     if (open) clues.push(s.playerText || s.text);
   }));
+  /* GMが名指しで促した語はチップに出す(2026-08-20 作者の判断)。
+     場面説明に無い対象——シーン2の「崩れた坑道」のように、出口の前提なのに
+     読んだだけでは気づけないもの——は、ここで初めて押せるようになる。
+     促す前に出すことはしない。段を踏んで初めて開く */
+  const hinted = sceneNarrated ? (state.hints || {})[state.sceneIndex] : null;
+  /* 名指しの語も、その秘密が開いたら落とす(開示済みを出さない規則に揃える)。
+     hintsには語しか入っていないので、名指しした時と同じ辻褄——entity名か場面説明の語——で
+     秘密を引き当てる。saveGameで保存済みのhintsに秘密idが無いため、語から辿るしかない */
+  const hintedOpen = hinted && hinted.word && (curScene.secrets || []).some(s =>
+    revealed.has(s.id) && (s.entity === hinted.word || briefWord(s, curScene.brief || "") === hinted.word));
+  if (hinted && hinted.word && !hintedOpen && !revealedEntities.includes(hinted.word)) revealedEntities.push(hinted.word);
   // 交戦中の敵は名詞チップの先頭に出す(未識別は「不気味な影」、正体判明で「錆喰い」に切り替わる)
   if (state.enemy) revealedEntities.unshift(enemyName(state.enemy));
   (state.unknownTarget?.candidates || []).forEach(name => {
@@ -798,8 +1095,22 @@ function renderDebug() {
   // 名詞チップ(revealedEntities)と違い「を」を付け足さずそのまま入力欄に入れるため別枠にする
   const introHints = state.pendingIntro && SCENARIO.intro && Array.isArray(SCENARIO.intro.hintChips)
     ? SCENARIO.intro.hintChips : [];
+  /* 移動チップ。行き先の名前は出さない——「奥へ進む」「右へ進む」と並べると、
+     探索の余地がなくなり自由度が下がる(2026-08-20 作者の判断)。
+     押すと入力は「進む」だけになる。そこから先は:
+       - 通れる出口が1つなら、そのまま通る
+       - 複数あるなら moveBlockedNote が作者の語で聞き返す。その語は
+         exitDeclaration が作るので、そのまま打てば必ず通る
+     つまり行き先は「進もうとした結果」として現れる。先に並べて見せない。
+     - 導入・終端ノードでは出さない(あれはシーンではなく会話。hintChipsが担う)
+     - 交戦中は出さない(移動は敵にふさがれるので、押せる操作として見せない)
+     - 通れる出口が1つも無い場面では出さない(押しても断られるだけ) */
+  const canMove = !(state.pendingIntro || state.pendingEnding || state.chapterEnded || state.enemy)
+    && viableExits(curScene).length > 0;
+  const moveChips = canMove ? ["進む"] : [];
   setStore({
     introHints,
+    moveChips,
     directionText: curScene.report ? reportDirection() : curScene.direction,
     hp: state.hp, maxHp: state.maxHp, items: inv.held(state.inventory),
     // 回復薬はinventory(一意な品名)の外で個数管理しているため、表示だけここで合流させる
@@ -849,20 +1160,34 @@ function rollD20() { return 1 + Math.floor(Math.random() * 20); }
 /* ダイスはプレイヤー自身に振らせる: 判定が要求されたら「ダイスを振る!」ボタンで手を止め、
    タップされてから出目を確定する(乱数は従来通りJS側)。同行者(actor)の判定はプレイヤーの
    手を止めず自動で確定する——止まるのはプレイヤー自身の判定だけ */
+/* 判定待ちは1つだけ。リセットで解除しないと、旧ターンが永久に待ち続ける
+   (Codexレビュー2026-08-20)。世代も一緒に持ち、破棄済みの判定にダイスを
+   振られても旧ターンを再開させない */
 let rollResolver = null;
+/* リセットで中断された手番の合図。通信エラーと区別するために例外の中身で見分ける
+   (「通信エラー: リセットされた」と出るのを避ける) */
+const TURN_ABORTED = { aborted: true };
 function requestPlayerRoll(reason, diff, actorName) {
   if (actorName && actorName !== "あなた") return Promise.resolve(rollD20());
   // 出目は演出の開始前に確定する。UIはこの値を見せるだけで、演出完了後に解決する。
   setStore({ pendingRoll: { reason, diff, actorName, result: rollD20() } });
-  return new Promise(resolve => { rollResolver = resolve; });
+  return new Promise((resolve, reject) => { rollResolver = { resolve, reject, gen: generation }; });
 }
 export function performRoll(result) {
   if (!rollResolver) return;
-  const resolve = rollResolver;
+  const pending = rollResolver;
   rollResolver = null;
-  const value = result ?? getSnapshot().pendingRoll?.result ?? rollD20();
+  const value = result ?? getSnapshot().pendingRoll?.result ?? rollD20(); // 消す前に読む
   setStore({ pendingRoll: null });
-  resolve(value);
+  if (pending.gen !== generation) return; // 破棄された手番の判定。旧ターンを起こさない
+  pending.resolve(value);
+}
+// 待っている判定を捨てる。待っていた手番は TURN_ABORTED で終わる
+function cancelPendingRoll() {
+  const pending = rollResolver;
+  rollResolver = null;
+  setStore({ pendingRoll: null });
+  if (pending) pending.reject(TURN_ABORTED);
 }
 
 function applyUpdates(u, opts = {}) {
@@ -880,12 +1205,40 @@ function applyUpdates(u, opts = {}) {
   if (Array.isArray(u.add_items)) {
     const allowed = availableLoot(SCENARIO.scenes[state.sceneIndex]); // requires付きは開示前は入手不可
     u.add_items.slice(0, 2).forEach(i => {
-      if (typeof i === "string" && allowed.includes(i) && inv.give(state.inventory, i)) {
+      if (typeof i === "string" && allowed.includes(i) && grantItem(i)) {
         logSceneEvent(`「${i}」を手に入れた`);
       }
     });
   }
-  if (Array.isArray(u.remove_items)) u.remove_items.forEach(i => inv.take(state.inventory, i));
+  if (Array.isArray(u.remove_items)) {
+    u.remove_items.forEach(i => {
+      /* LLMの提案で、進行に必要な品を失わせない。作者が出口の前提(requires.itemsAll /
+         itemsAny)に書いた品は、失うと章を完了できなくなる(Codexレビュー2026-08-20:
+         remove_itemsだけガードが無かった)。
+         opts.authored の呼び出し(作者が書いた exit.removeItems)は素通しする——
+         あれは作者の意図そのものなので止めてはいけない */
+      if (!opts.authored && progressItems().has(i)) {
+        addNote(`🛡 「${i}」は進行に必要なので手放さなかった(LLMの提案を却下)`);
+        return;
+      }
+      inv.take(state.inventory, i);
+    });
+  }
+}
+
+/* 出口の前提に書かれている品名。章データから導くので、シナリオを差し替えれば自動で追随する。
+   同じ章の間は変わらないので、章ごとに1度だけ数えて覚えておく */
+let progressItemsCache = null;
+function progressItems() {
+  if (progressItemsCache && progressItemsCache.for === SCENARIO) return progressItemsCache.set;
+  const names = new Set();
+  const nodes = [SCENARIO.intro, SCENARIO.ending, ...(SCENARIO.scenes || [])];
+  nodes.forEach(node => (node && node.exits || []).forEach(e => {
+    const r = e.requires || {};
+    [...(r.itemsAll || []), ...(r.itemsAny || [])].forEach(n => n && names.add(n));
+  }));
+  progressItemsCache = { for: SCENARIO, set: names };
+  return names;
 }
 
 // cause(任意): ダメージの原因(敵の攻撃のダイス結果など)。ポップアップに明示する
@@ -924,8 +1277,29 @@ function normalizeWho(w, fallback) {
 }
 
 // 現在のシーンに常在するNPC(依頼人マイラ等)。同行者(CAST)とは別の話者区分
+/* 今いるノードのNPC。導入(intro)・終端(ending)はシーン配列の外なので、
+   scenes[sceneIndex]を見ると導入中に「シーン1のNPC(いない)」を答えてしまう。
+   背景の選択と同じ分岐(currentBackdropNode)に合わせる */
 function sceneNpc() {
-  return SCENARIO.scenes[state.sceneIndex].npc || null;
+  return currentBackdropNode().npc || null;
+}
+/* 秘密の開示テキストが丸ごと台詞(「…」)なら、それは地の文ではなく誰かの発言である。
+   作者は導入の秘密を「マイラに尋ねた答え」として書く(章1のintro_sound「坑道の奥から
+   微かに響いているわ」等)。これをGMの語りへ流していたため、GMが女性語で喋っていた
+   (2026-08-19の指摘)。その場にNPCがいればNPCの吹き出しへ、いなければ従来どおりGMへ。
+   作者はデータを台詞のまま書けて、話者だけが正しくなる。回帰テスト: revealVoice.test.mjs */
+function isQuotedLine(t) { return /^「[^「」]*」$/.test(String(t || "").trim()); }
+function speakReveal(text, emotion = "Neutral") {
+  const t = String(text || "").trim();
+  const npc = sceneNpc();
+  if (npc && npc.name && isQuotedLine(t)) { addNpc(t.slice(1, -1), npc); return; }
+  addGm(t, emotion);
+}
+/* 既に開示済みの秘密をもう一度確かめた時。台詞ならNPCが言い直す(「改めて確かめる。」を
+   前置きするとGMの地の文と台詞が1つの吹き出しに混ざる) */
+function speakRecheck(text) {
+  if (isQuotedLine(text) && sceneNpc()) { speakReveal(text); return; }
+  addGm("改めて確かめる。" + text, "Neutral");
 }
 // whoがシーンNPCを指しているか(名前・id・部分一致で判定)
 function matchesNpc(w, npc) {
@@ -978,7 +1352,10 @@ async function revealTurnBeats(r, addressed) {
   const companion = resolveCompanion(r);
   const willSpeak = companion && companion.who && shouldShowCompanion(companion, addressed);
   if (willSpeak) setThinking(companion.who, true);
-  await sleep(SHORT_PACING_MS);
+  /* 同行者が話すなら、GMの語りを読み終わる頃合いまで待ってから吹き出しを消す。
+     以前は350msだけ待って消さずに話していたため、GMと同行者の吹き出しが並んで出ていた */
+  if (willSpeak) await handOffBubble();
+  else await sleep(SHORT_PACING_MS);
   if (willSpeak) setThinking(companion.who, false);
   return maybeCompanion(r, addressed, companion);
 }
@@ -991,9 +1368,42 @@ async function revealTurnBeats(r, addressed) {
 // NPCの部分エージェント化: revealFlavorと同じ「専用の小さな呼び出し・非同期・本編を待たせない」
 // パターンで、シーンNPC(依頼人マイラ等)の一言を生成する。メインGMのJSONから独立した
 // コンテキストを持つため、briefの複写や他キャラとの混同が構造的に起きない
+/* 章が決着したあとに届いた非同期の一言は捨てる。
+   NPC・同行者の一言はLLM呼び出しの結果を待って数秒遅れで着地するため、締めの直後に
+   割り込むことがある(2026-08-19のクロニクルで「物語は決着した」の次の行に村人の
+   「無事でよかった……！ それで、奥で何があったの？」が出た)。
+   決着の記録より後には何も足さない。 */
+function tooLateToSpeak() {
+  return Boolean(state.chapterEnded);
+}
+
+/* 非同期の一言(NPC・導入ノードのNPC)は、生成を待つ間にプレイヤーが次の宣言を
+   済ませていることがある。その場合は場面がもう変わっているため、古い手番の一言は捨てる。
+   2026-08-19の画面では、導入で「受ける」を促すマイラの一言が、調べる手番のあとまで
+   出続けていた。turnはsendActionの先頭で1つ進むので、手番の同一性の判定に使える */
+/* 非同期の世代。リセット・シーン遷移・章の切り替えで進む。
+   手番番号だけでは足りない: 「最初から」は手番を0へ戻すので、旧ゲームの応答が
+   新ゲームの同じ手番番号と一致してstale判定を抜ける(Codexレビュー2026-08-20で
+   インメモリ再現)。シーン遷移でも進めるのは、前のシーンについての一言が
+   次のシーンに着地するのを止めるため。
+   セーブへは入れない——リロードすれば飛んでいる非同期は残らないので、
+   このセッションの中で一意であれば足りる */
+let generation = 0;
+function bumpGeneration() { generation++; }
+
+function turnGuard() {
+  const at = state.turn, gen = generation;
+  return () => generation !== gen || state.turn !== at || tooLateToSpeak();
+}
+
 function npcAgentReply(playerText, revealGate) {
   const npc = sceneNpc();
-  if (!npc) return;
+  /* npc.silent=true のNPCは一言も生成しない。存在感は佇まいと所作(GMの地の文)と立ち絵で出す。
+     灯りの番人のように「そこに居るが言葉を持たない」相手のための設定。
+     sceneNpc()自体をnullにしないのは、立ち絵と名前の表示・報告先の判定が同じnpcを見ているため
+     (ここでnullにすると姿まで消える)。 */
+  if (!npc || npc.silent) return;
+  if (gmMode === "scripted") return; // scriptedは「LLM呼び出し完全ゼロ」が契約
   const sc = SCENARIO.scenes[state.sceneIndex];
   const direction = sc.report ? reportDirection() : (sc.direction || "");
   // 直近のやり取り(プレイヤー宣言・GM語り・自分の過去の発言)だけを渡す。未開示の真相は渡らない
@@ -1004,6 +1414,7 @@ function npcAgentReply(playerText, revealGate) {
       : `${npc.name}(あなた): ${e.text}`)
     .join("\n");
   setThinking("npc", true); // 非同期でターン終了後に届くため、GM/同行者とは別に自前で消す
+  const stale = turnGuard();
   callGmApi({
     system: `ソロTRPGの登場人物「${npc.name}」として一言だけ返す。${direction}\n` +
       `日本語の口語。40字以内で言い切る。直前の自分の発言と同じ文・同じ問いを繰り返すな。` +
@@ -1014,9 +1425,11 @@ function npcAgentReply(playerText, revealGate) {
     const raw = ((data && data.content) || []).map(b => b.text || "").join("");
     const r = parseLlmJson(raw);
     const say = sanitizeSay(String(r.say || "").slice(0, 120));
-    if (revealGate && await revealGate) await sleep(SHORT_PACING_MS);
+    // 同行者の一言が先に出ていたら、それを読み終わる頃合いまで待ってから吹き出しを消して話す
+    if (revealGate) await revealGate;
+    await handOffBubble();
     // 前回と同じ一言は表示しない(固定化の再発防止。沈黙の方が壊れて見えない)
-    if (!say || say === state.lastNpcLine) return;
+    if (!say || say === state.lastNpcLine || stale()) return;
     state.lastNpcLine = say;
     addNpc(say);
   }).catch(() => {}).finally(() => setThinking("npc", false));
@@ -1036,7 +1449,13 @@ function dialogueNodeReply(node, playerText) {
       : `${npc.name}(あなた): ${e.text}`)
     .join("\n");
   const accept = (node.exits || []).flatMap(e => e.match || []).filter(Boolean).slice(0, 6);
+  /* scriptedは「LLM呼び出し完全ゼロ」が契約なのに、ここだけ gmMode を見ておらず素通りしていた。
+     2026-08-20に実測(scriptedで導入の宣言が照合語に外れると、マイラの一言でLLMを1回呼ぶ)。
+     既存の通しプレイ検査は導入を照合語一発で抜けるため、この漏れを踏んでいなかった。
+     受け皿(dialogueNodeFallback)は作者が書いた blockedText と次の一手を返すので、黙らない */
+  if (gmMode === "scripted") { dialogueNodeFallback(node, accept); return; }
   setThinking("npc", true);
+  const stale = turnGuard();
   callGmApi({
     system: `ソロTRPGの登場人物「${npc.name}」として一言だけ返す。${node.direction || ""}\n` +
       `場面: ${node.brief || ""}\n` +
@@ -1050,12 +1469,13 @@ function dialogueNodeReply(node, playerText) {
   }).then(data => {
     const raw = ((data && data.content) || []).map(b => b.text || "").join("");
     const say = sanitizeSay(String(parseLlmJson(raw).say || "").slice(0, 120));
+    if (stale()) return; // 締めの後・次の手番が始まったあとには足さない(受け皿も呼ばない)
     if (!say || say === state.lastNpcLine) { dialogueNodeFallback(node, accept); return; }
     state.lastNpcLine = say;
     // 話者を必ず渡す。導入ノードはシーン配列の外なので、渡さないとaddNpcが
     // SCENARIO.scenes[sceneIndex].npc を見て何も出さずに終わる(addNpcのコメント参照)
     addNpc(say, npc);
-  }).catch(() => dialogueNodeFallback(node, accept))
+  }).catch(() => { if (!stale()) dialogueNodeFallback(node, accept); })
     .finally(() => setThinking("npc", false));
 }
 /* 導入・終端ノードでLLMが応答しなかった時の受け皿。ここを黙って落とすと、この手番の出力が
@@ -1063,6 +1483,7 @@ function dialogueNodeReply(node, playerText) {
    無料枠のレート制限(429)は server.cjs が最大65秒待ってリトライするため、実際に起こりうる。
    次の一手が分かる形で返すこと——プレイヤーを手詰まりにしない */
 function dialogueNodeFallback(node, accept) {
+  if (tooLateToSpeak()) return; // 締めの後に「どう答えるか分からない」と促さない
   const hint = (accept || []).length ? `「${accept[0]}」のように答えてくれ。` : "";
   addGm(node.blockedText || `どう答えるか、はっきりしない。${hint}`, "Neutral");
 }
@@ -1271,7 +1692,7 @@ async function tryCombatTurn(text) {
 
   const attackOnce = async (who, auto) => {
     const dc = enemy.defenseDc || 12;
-    const reason = `${who === "あなた" ? "" : who + ": "}${enemyName(enemy)}への攻撃`;
+    const reason = rollReason(who, `${enemyName(enemy)}への攻撃`);
     const roll = auto ? rollD20() : await requestPlayerRoll(reason, dc, who);
     const crit = roll === 20, fumble = roll === 1;
     const ok = crit || (!fumble && roll >= dc);
@@ -1281,8 +1702,10 @@ async function tryCombatTurn(text) {
       const dmg = crit ? 2 : 1;
       enemy.hp = Math.max(0, enemy.hp - dmg);
       fact(`${who}の攻撃が${crit ? "深々と" : ""}命中! ${enemyName(enemy)}に${dmg}ダメージ(敵HP ${enemy.hp}/${enemy.maxHp})`);
+      await playBattleFx(crit ? "crit" : "hit", `-${dmg}`); // のけぞり+閃光+ダメージ数値
     } else {
       fact(`${who}の攻撃は${fumble ? "大きく外れ、体勢を崩した" : "外れた"}`);
+      await playBattleFx("miss"); // 横へ身をかわす
     }
     return { ok, fumble };
   };
@@ -1359,6 +1782,7 @@ async function tryCombatTurn(text) {
       const roll = rollD20();
       const hit = roll >= 10;
       addNote(`⚔ ${enemyName(enemy)}の行動: d20=${roll} → ${hit ? "攻撃が届く" : "外れ/牽制"}`);
+      await playBattleFx("lunge"); // 敵が前へ踏み込む(当たり判定の前に見せる)
       if (hit) {
         const dmg = Math.max(0, (enemy.atk || 1) - defending);
         if (dmg > 0) {
@@ -1397,6 +1821,9 @@ async function tryCombatTurn(text) {
           if (lines.length) {
             const line = lines[Math.floor(Math.random() * lines.length)];
             state.lastBattleMutter = { ...(state.lastBattleMutter || {}), [a.id]: line };
+            /* 戦闘中はこの直前に判定・被弾のポップアップが出ている。渡しを通さないと
+               ポップアップの裏で吹き出しが動く(2026-08-19の実測で戦闘中に最大3つ同時) */
+            await handOffBubble();
             addCompanion(line, a.id);
           } else await attackOnce(a.name, true);
         }
@@ -1407,8 +1834,9 @@ async function tryCombatTurn(text) {
   const downedName = state.enemy ? state.enemy.name : null;
   const downed = checkEnemyDown(); // 撃破処理(正体判明・revealOnDefeat開示)は従来関数に集約
   if (downed) {
+    await handOffBubble(); // 撃破時の判定ポップアップが引くのを待つ
     addGm(`とどめだ! ${downedName}は動かなくなった。`, "Happy");
-    companionBattleEndLine("win");
+    await companionBattleEndLine("win"); // GMのとどめの一行を読み終えてから同行者が言う
   }
   // 戦闘中はLLMを一切呼ばない(ウォーム6秒でもテンポを壊す。2026-07-17(4)で確認)。
   // 進行はターンごとの⚔行+ダメージ通知で全て見えているので、追加の語りは不要
@@ -1446,12 +1874,15 @@ function pickCompanionSceneArrivalLine() {
   return { who, text };
 }
 
-function companionBattleEndLine(outcome) {
+/* 戦闘の締めの一言。前の話者(GMのとどめの一行など)を読み終え、ポップアップが引いてから話す。
+   awaitしない呼び出し元(逃走・撃退)でも、話すのは渡しの後になる */
+async function companionBattleEndLine(outcome) {
   const candidates = Object.entries(CAST)
     .map(([id, c]) => ({ id, lines: (c.battleEnd || {})[outcome] || [] }))
     .filter(c => c.lines.length);
   if (!candidates.length) return;
   const pick = candidates[Math.floor(Math.random() * candidates.length)];
+  await handOffBubble();
   addCompanion(pick.lines[Math.floor(Math.random() * pick.lines.length)], pick.id);
 }
 
@@ -1475,9 +1906,10 @@ export function toggleGmMode() {
 /* 宣言をどのレーンへ流すかを決める動詞辞書。語幹で照合するので活用は考えなくてよい
    (「調べ」が調べる/調べた/調べて/調べようを全部拾う)。語を増やす時はdictLane.test.mjsの
    ゴールデンを必ず確認する——特にMOVE_REは一致するとscriptedMoveForwardがシーンを進めるため、
-   機械的に語を足すと意図しない遷移が起きる(EXAMINE_RE等は外しても定型文が出るだけで済む) */
-export const MOVE_RE = /進む|進も|向かう|向かお|入る|入ろ|行く|行こ|降り|登る|渡る/;
-export const BACK_RE = /戻る|戻ろ|引き返|退く/;
+   機械的に語を足すと意図しない遷移が起きる(EXAMINE_RE等は外しても定型文が出るだけで済む)。
+   MOVE_RE / BACK_RE は progression.js が正本(移動チップの組み立てと同じ辞書を使うため)。
+   ここは既存のimport元(dictLane.test.mjs等)を壊さないための再輸出 */
+export { MOVE_RE, BACK_RE };
 export const TALK_RE = /話|聞く|聞いて|尋ね|訊|呼びかけ|声をかけ/;
 export const TAKE_RE = /拾|取る|取っ|手に入れ|回収|持ち帰|持って(いく|行く)/;
 export const SCRIPTED_ATTACK_RE = /攻撃|斬|切りかか|殴|撃つ|叩く|突く|蹴/;
@@ -1496,6 +1928,15 @@ export function mentionsHealPotionUse(text) {
 }
 function canUseHealPotion(text) {
   return state.healPotions > 0 && mentionsHealPotionUse(text);
+}
+/* 品物を渡す唯一の入口。回復薬だけは state.inventory(一意な品名の集合)ではなく
+   state.healPotions(個数)で持つ約束になっているため、ここで振り分ける。
+   これを通さずに inv.give を直接呼ぶと、鞄には見えるのに飲めない回復薬ができる
+   (2026-08-19の実プレイで発生: 場面5のlootで入手 → 「回復薬はもう残っていない」)。
+   ponytail: 特別扱いは回復薬1品だけ。2品目が出たら消耗品の一般表現へ寄せる */
+function grantItem(name) {
+  if (name === HEAL_POTION_NAME) { state.healPotions++; return true; }
+  return inv.give(state.inventory, name);
 }
 // 呼び出し前にcanUseHealPotion()を確認していること。満タンなら消費せずnullを返す
 function useHealPotion() {
@@ -1536,6 +1977,24 @@ function emptyHandedNote() {
   return notes[state.turn % notes.length];
 }
 
+/* 調べたが、指した対象が場に無かった時の一文。
+   状態を見ずに「特に変わったものは見つからない。」だけを返していたため、全部開示した
+   場面でも同じ文が延々と返り、まだ何か残っているのか、もう無いのかが区別できなかった
+   (2026-08-20 実測。促しは1場面1回なので、5手番目以降は手がかりが何も無くなる)。
+   見つけられる秘密が残っているかで言い分ける。総当たりを止める合図になる。
+   通れる出口も無い場合だけ、手立てが要ることまで言う——出口があるなら促しの一言が
+   別に出るので、ここで重ねて急かさない。
+   文はコードに置いてある。campaign.styleへ作者用の枠を作るのはデータ契約の変更なので、
+   承認を得てからにする(style.emptyHandedは「調べたが分からなかった」別経路の枠) */
+function emptySearchNote(sc) {
+  const ctx = { revealed, inventory: state.inventory };
+  const remains = (sc.secrets || []).some(s => findableSecret(s, ctx) && examinable(s));
+  if (remains) return "特に変わったものは見つからない。";
+  return viableExits(sc).length
+    ? "ここはもう見尽くした。"
+    : "ここはもう見尽くした。先へ進むには、何か手立てが要るようだ。";
+}
+
 /* 調査の難易度。失敗を重ねるほど下がる。
    進行に必須な秘密がダイス運のゲートの奥にあると、同じ宣言を成功するまで連打するだけの
    体験になる(設計メモ3節が「初期モックの失敗」として名指しした構造)。失敗を無駄にせず、
@@ -1548,7 +2007,7 @@ async function scriptedExamine(secret, actorName = "あなた") {
   state.examineFails = state.examineFails || {};
   const failures = state.examineFails[secret.id] || 0;
   const diff = examineDifficulty(secret, failures);
-  const reason = (actorName === "あなた" ? "" : `${actorName}: `) + `${secret.entity}を調べる`;
+  const reason = rollReason(actorName, `${secret.entity}を調べる`);
   const roll = await requestPlayerRoll(reason, diff, actorName);
   const crit = roll === 20, fumble = roll === 1;
   const ok = crit || (!fumble && roll >= diff);
@@ -1556,7 +2015,7 @@ async function scriptedExamine(secret, actorName = "あなた") {
   if (ok) {
     delete state.examineFails[secret.id];
     unlockSecret(secret);
-    addGm(secret.playerText || secret.text, "Happy");
+    speakReveal(secret.playerText || secret.text, "Happy");
     state.noProgressTurns = 0;
     revealFlavor(secret); // 開示の余韻(同行者の一言)を非同期で追加。失敗しても進行に影響なし
   } else {
@@ -1576,6 +2035,10 @@ async function scriptedExamine(secret, actorName = "あなた") {
 function revealFlavor(secret) {
   // scriptedモードは「LLM呼び出し完全ゼロ」が契約(:1295の説明)。彩りのためにそれを破らない
   if (gmMode === "scripted") return;
+  /* この開示がどの手番・どのシーンの話だったかを捕まえておく。数秒後に応答が届くので、
+     その間にシーンが変わっていたら捨てる——前の場所の余韻が次の場所で喋られるのを防ぐ
+     (Codexレビュー2026-08-20。npcAgentReply/dialogueNodeReplyには入れたのにここが漏れていた) */
+  const stale = turnGuard();
   const names = Object.entries(CAST)
     .map(([id, c]) => `${id}=${c.name}(${c.persona}${voiceRule(c)})`).join(" / ");
   const whoIds = Object.keys(CAST).join(" または ");
@@ -1588,7 +2051,12 @@ function revealFlavor(secret) {
     const r = parseLlmJson(raw);
     // 話者が同行者に解決できなければ捨てる(リディアへの機械的フォールバックは誤帰属のもと)
     const flavorWho = normalizeWho(r.who, null);
-    if (r.say && flavorWho) addCompanion(fixCompanionVoice(String(r.say).slice(0, 80), flavorWho), flavorWho);
+    if (!r.say || !flavorWho || stale()) return;
+    // 開示の地の文(GM)が出た直後に届くため、読了目安まで待って前の吹き出しを消してから話す
+    return handOffBubble().then(() => {
+      if (stale()) return;
+      addCompanion(fixCompanionVoice(String(r.say).slice(0, 80), flavorWho), flavorWho);
+    });
   }).catch(() => {});
 }
 
@@ -1598,9 +2066,12 @@ function revealFlavor(secret) {
 function viableExits(node) {
   return (node.exits || []).filter(e => requiresMet(e.requires, { revealed, inventory: state.inventory }) && e.to !== null && e.to !== undefined);
 }
-// 通れる出口の呼び方(作者が書いたmatchの先頭語)。聞き返しの候補に使う。そのまま打てば必ず通る
+/* 通れる出口へ行くための宣言文。聞き返しの候補と、下パネルの移動チップの両方で使う。
+   以前は作者のmatch[0](「奥」「分かれ道」等)をそのまま出しており、そのまま打つと
+   移動の動詞が無くて移動レーンに入らない、あるいは動詞を足すと助詞が変わって
+   照合を外す、という二重の穴があった。exitDeclarationが両方を満たす文を作る */
 function exitChoiceLabels(node) {
-  return viableExits(node).map(e => (e.match || [])[0]).filter(Boolean);
+  return viableExits(node).map(exitDeclaration).filter(Boolean);
 }
 /* 「先へ進めない」時の文言。通れる出口があるのに blockedText を出すと嘘になる
    (ログT28: LLMが「道が開いている」と言った直後に「ふさいでいる」と否定していた)。
@@ -1609,8 +2080,8 @@ function moveBlockedNote(node) {
   const labels = exitChoiceLabels(node);
   if (!labels.length) return node.blockedText || "これより先へは、まだ進めない。何かを見落としている気がする。";
   return labels.length > 1
-    ? `どちらへ向かう? ${labels.join(" か ")} だ。`
-    : `どちらへ向かうか、宣言してくれ。${labels[0]}へ行けそうだ。`;
+    ? `どちらへ向かう? 「${labels.join("」か「")}」だ。`
+    : `どちらへ向かうか、宣言してくれ。「${labels[0]}」と言えば行ける。`;
 }
 export function resolveExitTargetIndex(to) {
   return exitTargetIndexIn(SCENARIO.scenes, to);
@@ -1685,8 +2156,8 @@ async function tryScripted(text) {
     const { secret } = pickExamineSecret(sc, text, rest, ctx);
     if (secret) { await scriptedExamine(secret, actorName); return true; }
     const known = matchSecretByText(sc, rest, true, undefined, ctx);
-    if (known) { addGm("改めて確かめる。" + (known.playerText || known.text), "Neutral"); return true; }
-    if (gmMode === "scripted") { addGm("特に変わったものは見つからない。", "Neutral"); return true; }
+    if (known) { speakRecheck(known.playerText || known.text); return true; }
+    if (gmMode === "scripted") { addGm(emptySearchNote(sc), "Neutral"); return true; }
     return false; // hybrid: secretのない対象の描写はLLMの領分
   }
   if (mentionsHealPotionUse(text)) {
@@ -1711,7 +2182,7 @@ async function tryScripted(text) {
   if (TAKE_RE.test(text)) {
     const item = availableLoot(sc).find(n => text.includes(n));
     if (item) {
-      if (inv.give(state.inventory, item)) {
+      if (grantItem(item)) {
         logSceneEvent(`「${item}」を手に入れた`);
         addGm(`${item}を手に入れた。`, "Happy");
       } else {
@@ -1824,7 +2295,7 @@ targetの規則(厳守):
 function grantAuthoredItems(names) {
   if (!Array.isArray(names)) return;
   names.forEach(n => {
-    if (!inv.give(state.inventory, n)) return;
+    if (!grantItem(n)) return;
     logSceneEvent(`「${n}」を手に入れた`);
   });
 }
@@ -1903,11 +2374,21 @@ function finishChapter() {
 // シーン遷移の実行(LLM経路・scripted経路の両方から使う)。最終シーンなら章を締める
 // targetIndexを渡すとexits[]の任意遷移先へジャンプする(未指定なら従来通り次のシーン)
 function advanceScene(targetIndex) {
+  /* 場所が変わったら、前の場所についての非同期の一言は捨てる。
+     シーン1で開示した余韻(revealFlavor)がシーン2で同行者の口から出る、という
+     混入を止める(Codexレビュー2026-08-20でインメモリ再現) */
+  bumpGeneration();
   const idx = targetIndex !== undefined ? targetIndex : state.sceneIndex + 1;
   if (idx >= 0 && idx < SCENARIO.scenes.length) {
     state.sceneIndex = idx;
+    // 訪問の記録。進捗・到達済み一覧の唯一の根拠(sceneIndexは今いる場所しか表さない)
+    state.visited = state.visited || [];
+    if (!state.visited.includes(idx)) state.visited.push(idx);
     state.sceneTalkTurns = 0; // talkTurnsMin条件(報告シーン等)のカウンタはシーンごとにリセット
-    setSceneBackdrop(SCENARIO.scenes[state.sceneIndex]);
+    // 背景の差し替えは暗転しきってから(明転が終わるまでの間に語り始めないよう、下の待ちも合わせる)
+    fadeThroughBlack(() => setSceneBackdrop(SCENARIO.scenes[state.sceneIndex]));
+    state.sceneNarrated = false; // 場面説明を語り終えるまで、その場面の名詞チップは出さない
+    state.introTail = false; // ここから先の発言は、この場面のものとして記録する
     state.enemy = null;
     state.pendingFailedCheck = null; state.blockedMove = false;
     state.lastBattleMutter = {};
@@ -1918,21 +2399,41 @@ function advanceScene(targetIndex) {
     const newScene = SCENARIO.scenes[state.sceneIndex];
     const newBrief = newScene.brief;
     setSceneInfo(state);
-    showSceneOverlay();
+    closeUnderPanelForScene(); // 開けるのは到着の語りが終わってから(下のonDone)
     // GMペットの吹き出し・語り履歴が前のシーンへの回答のまま残らないよう、
     // 下パネルが開き直す(1s)のを待ってGM→NPC(いれば)→同行者の順に語らせる。
     // 各stepの間隔・前の吹き出しを消すタイミングはrunSpeechSequenceに一本化してある
     const sceneNo = state.sceneIndex + 1;
     const arrivalLine = gmSceneArrivalLine(sceneNo, newScene.name || "");
+    /* 場面説明(brief)を実際に語らせる。2026-08-21の実プレイ動画で作者が気づいた不具合:
+       briefは history(LLMへの履歴)とプロンプトへ入るだけで、画面に出る経路が1つも
+       無かった。つまりLLMには「お前はこう語った」と伝えているのに、プレイヤーは
+       一度も読んでいない。到着の一言「第1話「坑道の入り口」だ。さて、どうする?」しか
+       出ないので、その場に何があるのか分からないまま行動を促されていた。
+       名詞チップはbriefの語から作るため、読んでいない語のボタンが並ぶことにもなっていた。
+       語る順は「到着の一言 → 場面説明」。到着の一言は話数と場面名を告げる見出しなので先に置く */
     const steps = [{ text: arrivalLine, speak: () => addGm(arrivalLine, "Happy") }];
-    if (newScene.npc && newScene.greeting) {
+    if (newBrief) {
+      steps.push({ text: newBrief, speak: () => {
+        addGm(newBrief, "Neutral");
+        /* 説明を語り終えてから名詞チップを出す。同期して出すと、到着の一言すら
+           まだ出ていない時点(実測: 説明より約5秒早い)でチップだけが次の場面へ
+           切り替わり、画面の文章と手元のボタンが食い違って見えた */
+        state.sceneNarrated = true;
+        renderDebug();
+        saveGame();
+      } });
+    }
+    if (newScene.npc && !newScene.npc.silent && newScene.greeting) {
       steps.push({ text: newScene.greeting, speak: () => addNpc(newScene.greeting, newScene.npc) });
     }
     const companionLine = pickCompanionSceneArrivalLine();
     if (companionLine) {
       steps.push({ text: companionLine.text, speak: () => addCompanion(companionLine.text, companionLine.who) });
     }
-    setTimeout(() => runSpeechSequence(steps), 1000);
+    /* 語り出しは明転が終わってから。待つのは暗転(0.6s)+真っ黒(0.2s)+明転(0.6s)。
+       ここを短くすると、まだ暗い画面に向かってGMが到着を告げることになる */
+    setTimeout(() => runSpeechSequence(steps, openUnderPanel), SCENE_FADE_TOTAL_MS);
     history.push({ role: "user", content: "【システム】シーンが切り替わった。" });
     history.push({ role: "assistant", content: JSON.stringify({ narration: newBrief, companion: null, npc: null, check: null, state_updates: null, engage_enemy: false, flee_enemy: false, scene_complete: false, meta_request: null }) });
   } else {
@@ -1942,7 +2443,7 @@ function advanceScene(targetIndex) {
     const chapterEnding = SCENARIO.ending;
     if (chapterEnding && typeof chapterEnding === "object") {
       state.pendingEnding = true;
-      showDialogueNode(chapterEnding);
+      fadeThroughBlack(() => showDialogueNode(chapterEnding)); // アウトロへも暗転してから入る
       return;
     }
     // 旧形式(ending=nullを含む)は従来通り、定型文で即時終了する。
@@ -2088,7 +2589,11 @@ function sceneCompleteAllowed(sc) {
    一致2: 宣言文・判定名・targetEntityに、entityの部分語かaliases(章データの別名辞書)が含まれるか
    0件・複数件なら開示しない——誤った秘密を漏らすより「開示なし」の方が三層モデルとして安全 */
 function unlockSecret(secret) {
-  const sc = SCENARIO.scenes[state.sceneIndex];
+  /* lootを見るのは「いま居るノード」。導入・終端でも秘密を開けるようになったため、
+     ここでシーンを固定していると、イントロでの開示なのにシーン1のlootを勘定してしまう */
+  const sc = state.pendingIntro ? SCENARIO.intro
+    : state.pendingEnding ? SCENARIO.ending
+    : SCENARIO.scenes[state.sceneIndex];
   const before = new Set(availableLoot(sc));
   revealed.add(secret.id);
   addReveal(secret);
@@ -2309,7 +2814,26 @@ async function callGm(userContent, extraSystem) {
    3つとも通常シーンのロジックより先に解決し、決着したらこの手番を終える。
    sendActionのtryブロックより手前で走るので、後始末(busy解除・renderDebug)は
    finallyを通らない——finish()で自前に行う。trueなら呼び出し側はそのままreturnする */
-function turnDialogueNodes(text) {
+/* 導入・終端ノードでも「調べる」を成立させる。
+   pickExamineSecret / matchSecretByText / scriptedExamine はどれも node.secrets しか見ない
+   汎用処理なので、シーンとまったく同じ手順をそのまま当てられる。
+   これが無いと、作者が intro / ending に書いた秘密は一度も開かない
+   (2026-08-19判明。廃坑の灯の intro_face / intro_mine / intro_map / intro_sound の4件が該当し、
+    「見取り図をよく見る」がマイラとの雑談として消費されていた)。
+   llmモードでは従来どおりLLMに任せる。 */
+async function tryExamineOnDialogueNode(node, text) {
+  if (gmMode === "llm" || !(node.secrets || []).length) return false;
+  const ctx = { revealed, inventory: state.inventory };
+  if (!EXAMINE_RE.test(text) && !matchSecretByTrigger(node, text, ctx)) return false;
+  const { actorName, rest } = extractActor(text);
+  const { secret } = pickExamineSecret(node, text, rest, ctx);
+  if (secret) { await scriptedExamine(secret, actorName); return true; }
+  const known = matchSecretByText(node, rest, true, undefined, ctx);
+  if (known) { speakRecheck(known.playerText || known.text); return true; }
+  return false; // 秘密に当たらない宣言は、従来どおり会話として扱う
+}
+
+async function turnDialogueNodes(text) {
   const finish = () => { setBusy(false); renderDebug(); return true; };
 
   // 導入受諾後は、参加者ごとの応答が揃うまでシーンへ進めない。
@@ -2327,13 +2851,26 @@ function turnDialogueNodes(text) {
     if (!exit) {
       /* 照合語に外れた宣言は、依頼人との会話として扱う(死んだターンにしない)。
          受諾を確定させるのは照合語の一致だけなので、ここで話が進んでしまうことはない */
+      if (await tryExamineOnDialogueNode(intro, text)) return finish();
       if (intro.npc && intro.npc.name) dialogueNodeReply(intro, text);
       else addGm(intro.blockedText || "どう答えるか、はっきりしない。別の言い方を試してくれ。", "Neutral");
     } else if (!requiresMet(exit.requires, { revealed, inventory: state.inventory })) {
       addGm(exit.blockedText || "まだ準備ができていない。", "Neutral");
     } else {
       state.pendingIntro = false;
+      /* 導入を抜けてから場面説明が語られるまでには、同行者の同意のやり取りが挟まる
+         (実測で約5秒)。pendingIntroだけを見ていると、その間ずっと次の場面の名詞チップが
+         並んでしまい、画面の文章(まだ導入の話)と手元のボタンが食い違う。
+         ここで先に伏せておき、advanceSceneが場面説明を語り終えた時に出す */
+      state.sceneNarrated = false;
+      state.introTail = true; // 依頼人の返事と同行者の同意が終わるまでは、まだイントロ
       const targetIdx = exit.to === null || exit.to === undefined ? 0 : resolveExitTargetIndex(exit.to);
+      /* 導入で作者が渡す支度品(章1なら「干し肉と水袋」)。ending側だけが同じ処理を持ち、
+         ここが抜けていたため、マイラが「これを持って行って」と言うのに何も入らなかった
+         (Codexレビュー2026-08-20で発見。実際に通しプレイの所持品に無かった)。
+         導入と終端は対で扱う——片側だけに処理があると、この種の抜けが起きる */
+      if (Array.isArray(exit.removeItems)) applyUpdates({ remove_items: exit.removeItems }, { authored: true });
+      grantAuthoredItems(exit.addItems);
       if (exit.arrivalText) addGm(exit.arrivalText, "Neutral");
       if (exit.npcSay) addNpc(exit.npcSay, intro.npc); // 依頼の一言はNPCの吹き出しへ(GMの地の文にしない。endingと対)
       beginCompanionConsent(targetIdx >= 0 ? targetIdx : 0);
@@ -2346,12 +2883,14 @@ function turnDialogueNodes(text) {
     const ending = SCENARIO.ending;
     const exit = resolveExit(ending, text);
     if (!exit) {
+      // introと同じ欠落を抱えていたので同じ手当をする(アウトロに秘密を書いても開かない状態だった)
+      if (await tryExamineOnDialogueNode(ending, text)) return finish();
       if (ending.npc && ending.npc.name) dialogueNodeReply(ending, text);
       else addGm(ending.blockedText || "どう締めくくるか、はっきりしない。別の言い方を試してくれ。", "Neutral");
     } else if (!requiresMet(exit.requires, { revealed, inventory: state.inventory })) {
       addGm(exit.blockedText || ending.blockedText || "まだ進めない。", "Neutral");
     } else {
-      if (Array.isArray(exit.removeItems)) applyUpdates({ remove_items: exit.removeItems });
+      if (Array.isArray(exit.removeItems)) applyUpdates({ remove_items: exit.removeItems }, { authored: true });
       grantAuthoredItems(exit.addItems); // 謝礼など、作者が書いた報酬
       state.pendingEnding = false;
       if (exit.arrivalText) addGm(exit.arrivalText, "Neutral");
@@ -2371,6 +2910,11 @@ function turnRepeatGuard(normalizedText, fp) {
   addNote("🔁 同じ状況で同じ行動を繰り返した。判定の余地もなく、結論は変わらない(APIは呼んでいない) — 別の行動を試すか、先へ進もう");
   renderDebug();
   setBusy(false);
+  /* この手番はsendActionのtry/finallyより前で終わるので、空転の数えも促しも
+     自前で通す。ここは「同じ状況で同じ宣言」——数え上げるべき空転そのものであり、
+     一番詰まっている場面で促しが止まるのは本末転倒である(Codexレビュー2026-08-20) */
+  state.stuckTurns = (state.stuckTurns || 0) + 1;
+  void stagnationHint();
   return true;
 }
 
@@ -2425,7 +2969,7 @@ async function turnFreeform(text, ctx) {
     const already = SCENARIO.scenes[state.sceneIndex].secrets
       .find(s => revealed.has(s.id) && s.entity === r.check.targetEntity);
     if (already) {
-      addGm("改めて確かめる。" + (already.playerText || already.text), "Neutral");
+      speakRecheck(already.playerText || already.text);
       r.check = null;
     }
   }
@@ -2435,7 +2979,7 @@ async function turnFreeform(text, ctx) {
     // 誰の判定か(同行者に任せた行動はLLMがcheck.actorで申告)。ダイスは名義を出してプレイヤーが振る
     const actor = normalizeWho(r.check.actor, "player");
     const actorName = actor === "player" ? "あなた" : CAST[actor].name;
-    const reason = (actor === "player" ? "" : `${actorName}: `) + (r.check.reason || "判定");
+    const reason = rollReason(actor === "player" ? "あなた" : actorName, r.check.reason || "判定");
     const roll = await requestPlayerRoll(reason, diff, actorName);
     const crit = roll === 20, fumble = roll === 1;
     const ok = crit || (!fumble && roll >= diff);
@@ -2529,13 +3073,18 @@ export async function sendAction(text) {
   // マイラが際限なく聞き返すループになる(クロニクル2026-07-20 T27-30)。終幕後はここで止める
   if (state.chapterEnded) { addNote("物語は決着している。「最初から」で別の選択を試せる。"); return; }
   setBusy(true);
+  /* 手番の前後で状態指紋が変わらなければ「空転した手番」と数える(stagnationHint用)。
+     既存のnoProgressTurnsはLLMレーンの中でしか更新されないため、scriptedでは
+     永遠に0のままだった。ここで数えれば、どのレーンを通っても同じに効く */
+  const fpAtTurnStart = stateFingerprint();
+  let aborted = false; // リセットで捨てられた手番。finallyでの後始末を分ける
   state.turn++;
   addPlayer(text);
   recordVerb(text); // 述語を頻度辞書へ記録(動詞チップの学習)
   const previousAskedBack = !!state.unknownTarget?.lastTurnAskedBack;
   state.unknownTarget = { lastTurnAskedBack: false, candidates: [] };
 
-  if (turnDialogueNodes(text)) return;
+  if (await turnDialogueNodes(text)) return;
 
   applySceneStateUpdates(text); // 宣言文中の条件語句からflag_setを発火(プレイヤーの選択によるフラグ確定)
 
@@ -2673,7 +3222,7 @@ export async function sendAction(text) {
           if (!mentionsTarget && mentionsItem) hit = null;
         }
         if (hit && revealed.has(hit.id)) {
-          addGm("改めて確かめる。" + (hit.playerText || hit.text), "Neutral");
+          speakRecheck(hit.playerText || hit.text);
           done(false);
           return;
         }
@@ -2699,7 +3248,7 @@ export async function sendAction(text) {
         // 分類器の対象幻覚ガード(investigateと同様): 対象名が文中に一切現れず、既存の所持品への
         // 言及があるなら分類器のtargetを信用しない(「ロープを触る」→心石の欠片 のような誤紐付け対策)
         if (item && !text.includes(item) && inv.held(state.inventory).some(i => text.includes(i))) item = null;
-        if (item && inv.give(state.inventory, item)) {
+        if (item && grantItem(item)) {
           logSceneEvent(`「${item}」を手に入れた`);
           addGm(`${item}を手に入れた。`, "Happy");
           done(false);
@@ -2736,7 +3285,9 @@ export async function sendAction(text) {
       progressed: false, normalizedText, fp
     });
   } catch (e) {
-    addNote("通信エラー: " + e.message);
+    // リセットで捨てられた手番は、通信エラーではない。何も言わずに終わる
+    if (e === TURN_ABORTED) aborted = true;
+    else addNote("通信エラー: " + e.message);
   } finally {
     // 戦闘ターンの後始末: このターンで戦闘演出のためにパネルを閉じていたら(戦闘開始・戦闘中の宣言)、
     // 解決が終わった今、下パネルだけ再度開いて次の入力を促す
@@ -2748,6 +3299,12 @@ export async function sendAction(text) {
     // ターン終了後も生成中のことがあるため、ここでは消さない(あちらのfinallyが消す)
     setStore(s => ({ thinking: s.thinking.npc ? { npc: true } : {} }));
     setBusy(false);
+    // 空転が続いたらGMが1度だけ促す。待たせないよう手番の外(非同期)で話す。
+    // 捨てられた手番(リセット)では数えない——新しいゲームの数えを汚す
+    if (!aborted) {
+      state.stuckTurns = stateFingerprint() === fpAtTurnStart ? (state.stuckTurns || 0) + 1 : 0;
+      void stagnationHint();
+    }
   }
 }
 

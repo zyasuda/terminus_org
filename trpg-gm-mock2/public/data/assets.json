@@ -62,12 +62,10 @@
       "status": "archived",
       "target": "full-body transparent PNG",
       "alpha": true,
-      "usedBy": [
-        "chapter_01.scenes.4.npcSprite"
-      ],
+      "usedBy": [],
       "source": "imagegen",
       "promptVersion": 1,
-      "notes": "Figmaオーバーレイ UIでパーティ枠に置換され未使用(将来プレイヤー枠で再利用候補)"
+      "notes": "Figmaオーバーレイ UIでパーティ枠に置換され未使用(将来プレイヤー枠で再利用候補) 2026-08-19: 場面4の村人はs4_villagerを新規生成して差し替えたため、参照はゼロになった。"
     },
     "gm_mascot": {
       "file": "gm_mascot.png",
@@ -120,10 +118,12 @@
       "kind": "background",
       "status": "approved",
       "target": "1920x1080",
-      "usedBy": [],
+      "usedBy": [
+        "chapter_01.scenes.6.img"
+      ],
       "source": "imagegen",
       "promptVersion": 1,
-      "notes": "2026-07-12生成。封鎖の木柵に合わせた。16:9にクロップして配置。2026-07-31にシーン2の柵ルートで再利用するためimages/へ戻した。"
+      "notes": "2026-07-12生成。封鎖の木柵に合わせた。16:9にクロップして配置。2026-07-31にシーン2の柵ルートで再利用するためimages/へ戻した。 2026-08-19に場面6「柵のある場所」の背景として採用。"
     },
     "s2_rust_eater": {
       "file": "s2_rust_eater.png",
@@ -132,6 +132,7 @@
       "target": "height 600px",
       "alpha": true,
       "usedBy": [
+        "chapter_01.scenes.2.encounters.encounter_1.enemy.sprite",
         "chapter_01.scenes.2.enemy.sprite"
       ],
       "source": "imagegen",
@@ -141,12 +142,10 @@
     "s3_chamber": {
       "file": "s3_chamber.jpg",
       "kind": "background",
-      "status": "pending",
+      "status": "archived",
       "target": "1920x1080",
-      "usedBy": [
-        "chapter_01.scenes.3.img"
-      ],
-      "notes": "プレースホルダー配置済み(ロジック検証用の仮画像。本番素材で同名上書き予定)"
+      "usedBy": [],
+      "notes": "プレースホルダー配置済み(ロジック検証用の仮画像。本番素材で同名上書き予定) 2026-08-19: 中身がほぼ空(黒地+ぼかし)だったためs3_chamber_v2へ差し替え。"
     },
     "s3_guardian": {
       "file": "s3_guardian.png",
@@ -268,10 +267,12 @@
       "kind": "background",
       "status": "approved",
       "target": "1920x1080",
-      "usedBy": [],
+      "usedBy": [
+        "chapter_01.scenes.5.img"
+      ],
       "source": "imagegen",
       "promptVersion": 1,
-      "notes": "2026-07-31生成（Codex組み込みimage_gen / gpt-image-2）。シーン2の崩落ルート用。1536x1024で生成し中央基準で1920x1080へクロップ。下3割はUIの文字領域のため平坦な床にしている。"
+      "notes": "2026-07-31生成（Codex組み込みimage_gen / gpt-image-2）。シーン2の崩落ルート用。1536x1024で生成し中央基準で1920x1080へクロップ。下3割はUIの文字領域のため平坦な床にしている。 2026-08-19に場面5「崩落した場所」の背景として採用。"
     },
     "s2_mine_bat": {
       "file": "s2_mine_bat.png",
@@ -280,11 +281,48 @@
       "target": "height 600px",
       "alpha": true,
       "usedBy": [
-        "chapter_01.scenes.3.enemy.sprite"
+        "chapter_01.scenes.2.encounters.encounter_2.enemy.sprite"
       ],
       "source": "imagegen",
       "promptVersion": 1,
-      "notes": "2026-07-31生成（Codex組み込みimage_gen / gpt-image-2）。坑道蝙蝠。純黒背景で生成し、sharpで輝度しきい値18/48の二段で透過へ変換（透過率71.2%）。"
+      "notes": "2026-07-31生成（Codex組み込みimage_gen / gpt-image-2）。坑道蝙蝠。純黒背景で生成し、sharpで輝度しきい値18/48の二段で透過へ変換（透過率71.2%）。 2026-08-19: 場面3の敵を廃止したため、参照は場面2のencounter_2のみ。"
+    },
+    "s7_inner_chamber": {
+      "file": "s7_inner_chamber.jpg",
+      "kind": "background",
+      "status": "approved",
+      "target": "1920x1080",
+      "usedBy": [
+        "chapter_01.scenes.7.img"
+      ],
+      "source": "imagegen",
+      "promptVersion": 1,
+      "notes": "2026-08-19生成(Codex組み込みimage_gen / gpt-image-2)。場面7「奥の間」用。プロンプトは prompts/s7_inner_chamber.v1.txt。1536x1024で生成し上寄せで1920x1080へクロップ。下3割はUIの文字領域のため平坦な濡れ床にしている。"
+    },
+    "s3_chamber_v2": {
+      "file": "s3_chamber_v2.jpg",
+      "kind": "background",
+      "status": "approved",
+      "target": "1920x1080",
+      "usedBy": [
+        "chapter_01.scenes.3.img"
+      ],
+      "source": "imagegen",
+      "promptVersion": 2,
+      "notes": "2026-08-19生成。場面3「灯りの部屋」用。旧s3_chamberは黒地に琥珀色のぼかしだけの実質プレースホルダーだったため作り直した。プロンプトは prompts/s3_chamber.v2.txt。番人は立ち絵s3_guardianを重ねるため背景に人影を描かせていない。"
+    },
+    "s4_villager": {
+      "file": "s4_villager.png",
+      "kind": "sprite",
+      "status": "approved",
+      "target": "full-body transparent PNG",
+      "alpha": true,
+      "usedBy": [
+        "chapter_01.scenes.4.npcSprite"
+      ],
+      "source": "imagegen",
+      "promptVersion": 1,
+      "notes": "2026-08-19生成。場面4の村人。プロンプトは prompts/s4_villager.v1.txt。純黒背景で生成し透過を抽出(透過率75.8%)。それまでarchivedのplayer_avatarを流用しており check:assets のERRORになっていたのを解消。"
     }
   }
 }

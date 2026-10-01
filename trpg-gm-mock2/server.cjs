@@ -273,7 +273,11 @@ async function callOpenAICompatible(payload) {
 
 /* ---- Ollama(ローカルSLM): ネイティブ/api/chatを使う。
    OpenAI互換エンドポイントだとqwen3等の思考(thinking)を止められず、
-   全トークンを思考に使い切ってcontentが空になるため、think:false + format:"json" を明示する ---- */
+   全トークンを思考に使い切ってcontentが空になるため、think:false + format:"json" を明示する。
+   ただしQwen3-Swallowは「思考のON/OFF切替に非対応」(モデルカード記載、常に思考する設計)で、
+   think:falseを渡すと壊れたJSON断片を返してくる(2026-08-18に実測)。このモデルだけ思考を
+   許可し、content側に漏れてくることがある<think>...</think>を後段で剥がす ---- */
+const OLLAMA_ALWAYS_THINKS = /swallow/i.test(MODEL);
 async function callOllama(payload) {
   const host = process.env.OLLAMA_HOST || "http://localhost:11434";
   const messages = [
@@ -289,12 +293,13 @@ async function callOllama(payload) {
     body: JSON.stringify({
       model: MODEL,
       messages,
-      think: false,
+      think: !OLLAMA_ALWAYS_THINKS,
       format: "json",
       stream: false,
       keep_alive: "30m", // プレイ中にモデルがアンロードされて次ターンが激遅になるのを防ぐ
       options: {
-        num_predict: payload.max_tokens || 1000,
+        // 思考が止められないモデルは、思考分のトークンも見込んで上限を積み増す
+        num_predict: (payload.max_tokens || 1000) + (OLLAMA_ALWAYS_THINKS ? 1000 : 0),
         temperature: 0.2,
         // Ollama既定のnum_ctx=4096ではゲームのシステムプロンプト+履歴が収まらず、
         // 切り詰めによる品質崩壊(口調崩れ・設定捏造)と毎ターンの再処理遅延が起きる
@@ -309,11 +314,13 @@ async function callOllama(payload) {
     return { status: apiRes.status, body: { error: { type: "ollama_error", message: String(msg) } } };
   }
   const data = JSON.parse(raw);
+  // thinkingフィールドに分離されない版でも壊れないよう、contentに残った<think>ブロックを剥がす
+  const text = String(data.message?.content || "").replace(/<think>[\s\S]*?<\/think>/gi, "").trim();
   /* timingはOllamaが返す実測値(ナノ秒)。プロンプトの長さを削る判断には、トークン数ではなく
      「前処理に実際に何秒かかったか」が要る。prompt_eval_countはプレフィックスキャッシュが
      効いた分を除いた実評価トークン数のはずだが、版によって総数を返すことがあるため、
      カウントと所要時間の両方を残して後から突き合わせられるようにする */
-  return { status: 200, body: { content: [{ type: "text", text: data.message?.content || "" }],
+  return { status: 200, body: { content: [{ type: "text", text }],
     usage: { input_tokens: data.prompt_eval_count || 0, output_tokens: data.eval_count || 0 } },
     timing: {
       promptEvalCount: data.prompt_eval_count ?? null, promptEvalNs: data.prompt_eval_duration ?? null,

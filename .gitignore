@@ -1,5 +1,9 @@
 # Generated media and large files
+# .mp4 は既定、.mov は macOS の画面収録、.webm は Playwright の録画が吐く形式。
+# videos/VIDEO_PROMPTS.md のような文書は追跡を続ける(拡張子で切っているので影響しない)
 videos/*.mp4
+videos/*.mov
+videos/*.webm
 presentation/*.pptx
 
 # Working/brainstorm documents
@@ -12,6 +16,21 @@ design/*.psd
 # Secrets
 .env
 **/.env
+**/.dev.vars
+**/.wrangler/
+
+# 配布されたシナリオデータ(生成物)。正本は scenario/ だけを追跡する。
+# 復元は リポジトリ直下で node scripts/distribute-scenario.mjs --write
+# 新しくcloneした直後はこれらが無いのでゲームが起動しない。先に配布コマンドを実行する。
+TAS/data/chapter_*.json
+TAS/data/campaign.json
+trpg-gamebook/data/chapter_*.json
+trpg-gm-mock2/public/data/campaigns/*/chapter_*.json
+trpg-gm-mock2/public/data/campaigns/*/campaign.json
+
+# Claude Code のローカル状態(端末ごと。共有しない)
+.claude/worktrees/
+.claude/settings.local.json
 
 # OS artifacts
 .DS_Store
@@ -28,9 +47,8 @@ chronicles/
 # mock2側で個別に管理するローカルファイル
 trpg-gm-mock2/images/Gemini_Generated_Image_8tyb3c8tyb3c8tyb.png
 
-# ローカルツール設定・作業用スクリプト(gitでは追跡しない)
+# ローカルツール設定(gitでは追跡しない)
 .codex/
-trpg-gm-mock2/scripts/
 
 # 独立したリポジトリへ分離した(2026-09-02)。正本は zyasuda/standee-wiz。
 # ここには .gitmodules の無い gitlink が残っていて、クローンしても中身が

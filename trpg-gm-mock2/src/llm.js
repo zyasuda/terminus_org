@@ -39,14 +39,32 @@ async function callOnDeviceGm({ system, messages }) {
   return { content: [{ text }], usage: null };
 }
 
-export async function callGmApi({ system, messages, maxTokens = 1000 }) {
+/* プレゼン版(functions/api/gm.js)は合言葉が違うと 401 を返す。手元の server.cjs はこのヘッダを見ない。
+   401 の時だけ聞き、端末に覚えさせる。同時に来た複数の 401 で何度も聞かないよう、聞いている間は1つの約束を共有する */
+const PASS_KEY = "mock2_pass_v1";
+let passAsking = null;
+function storedPass() {
+  try { return localStorage.getItem(PASS_KEY) || ""; } catch (e) { return ""; }
+}
+function askPass() {
+  if (!passAsking) {
+    passAsking = Promise.resolve().then(() => {
+      const pass = window.prompt("合言葉を入れてください") || "";
+      try { localStorage.setItem(PASS_KEY, pass); } catch (e) { /* no-op */ }
+      return pass;
+    }).finally(() => { passAsking = null; });
+  }
+  return passAsking;
+}
+
+export async function callGmApi({ system, messages, maxTokens = 1000 }, retried = false) {
   if (onDeviceModeEnabled()) return callOnDeviceGm({ system, messages, maxTokens });
 
   let res;
   try {
     res = await fetch("/api/gm", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", "x-mock2-pass": storedPass() },
       body: JSON.stringify({
         max_tokens: maxTokens,
         system,
@@ -57,6 +75,10 @@ export async function callGmApi({ system, messages, maxTokens = 1000 }) {
   } catch (e) {
     if (e.name === "TimeoutError") throw new Error("GMの応答が90秒以上ありません。もう一度送信してください");
     throw e;
+  }
+  if (res.status === 401 && !retried) {
+    await askPass();
+    return callGmApi({ system, messages, maxTokens }, true);
   }
   let data;
   try { data = await res.json(); } catch (e) { data = null; }

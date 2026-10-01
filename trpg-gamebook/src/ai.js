@@ -1,4 +1,3 @@
-import { decisionInputResolves } from "./progression.js";
 import { parseFixes } from "./playlog.js";
 
 const keyName = "gamebook:geminiKey";
@@ -35,7 +34,6 @@ const baseInstruction = "あなたはTRPGゲームブックの作者を取材す
 export function referenceListFor(category = "secrets", context = {}) {
   if (category === "exits") return list(context.destinations, item => `- ${item.label}`);
   if (category === "encounters") return list(context.secrets, item => `- ${item.entity} (id: ${item.id})`);
-  if (category === "decision") return list(context.suggestionGroups, ([label, values]) => `${label}:\n${list(values, value => `  - ${value}`)}`);
   return "";
 }
 
@@ -44,8 +42,7 @@ export function systemInstructionFor(category = "secrets", context = {}) {
   const topic = {
     secrets: `場面の「調べられるもの」を取材します。最大3件を提案してください。作者に内部ID、trigger、条件式を書かせず、aliasesには作者が呼びそうな言い方を使ってください。既存の要素と重複する提案は避けてください。提案は {"proposals":[{"entity":"名称","aliases":["呼び名"],"text":"調べると分かること","surface":"見た目","dc":8}]} の形にしてください。`,
     exits: `場面がどこへ通じるかを取材します。行き先は必ず次の一覧から完全にそのまま選び、一覧にない場面を作らないでください。最大3件を提案し、toLabel、match、text、blockedTextを含めてください。提案は {"proposals":[{"toLabel":"名称","match":["きっかけ"],"text":"到着時の一文","blockedText":"進めないときの一文"}]} の形にしてください。\n${references}`,
-    encounters: `場面に潜む敵と発火条件を取材します。requiredElementsは次の秘密のentityからそのまま選び、無ければ空配列にしてください。revealOnDefeatLabelも次の秘密のentityからそのまま選び、無ければ空欄にしてください。最大3件を提案し、triggerTerms、requiredElements、onsetText、enemyName、enemyHp、revealOnDefeatLabelを含めてください。提案は {"proposals":[{"triggerTerms":["きっかけ"],"requiredElements":["秘密のentity"],"onsetText":"遭遇時の文","enemyName":"敵の名前","enemyHp":6,"revealOnDefeatLabel":"秘密のentity"}]} の形にしてください。\n秘密一覧:\n${references}`,
-    decision: `場面でプレイヤーが迫られる葛藤を取材します。選択肢は2つにしてください。それぞれのinputは次の一覧にある言葉から完全にそのまま選び、一覧にない言葉は作らないでください。提案は {"proposals":[{"prompt":"葛藤の問いかけ","choices":[{"label":"選択肢1","input":"一覧の言葉"},{"label":"選択肢2","input":"一覧の言葉"}]}]} の形にしてください。\n${references}`
+    encounters: `場面に潜む敵と発火条件を取材します。requiredElementsは次の秘密のentityからそのまま選び、無ければ空配列にしてください。revealOnDefeatLabelも次の秘密のentityからそのまま選び、無ければ空欄にしてください。最大3件を提案し、triggerTerms、requiredElements、onsetText、enemyName、enemyHp、revealOnDefeatLabelを含めてください。提案は {"proposals":[{"triggerTerms":["きっかけ"],"requiredElements":["秘密のentity"],"onsetText":"遭遇時の文","enemyName":"敵の名前","enemyHp":6,"revealOnDefeatLabel":"秘密のentity"}]} の形にしてください。\n秘密一覧:\n${references}`
   }[category] || "";
   return `${baseInstruction}\n${topic}\n\n${evaluationRule}`;
 }
@@ -107,23 +104,13 @@ export function proposalData(category, proposal = {}, context = {}) {
     const revealed = (context.secrets || []).find(item => item.entity === proposal.revealOnDefeatLabel);
     return { triggerTerms:Array.isArray(proposal.triggerTerms) ? proposal.triggerTerms.filter(x => typeof x === "string") : [], requiredElements:Array.isArray(proposal.requiredElements) ? proposal.requiredElements.filter(value => entities.has(value)) : [], onsetText:typeof proposal.onsetText === "string" ? proposal.onsetText : "", enemy:{ name:typeof proposal.enemyName === "string" ? proposal.enemyName : "", hp:Number.isFinite(Number(proposal.enemyHp)) ? Number(proposal.enemyHp) : 6, revealOnDefeat:revealed?.id || "" } };
   }
-  if (category === "decision") return { prompt:typeof proposal.prompt === "string" ? proposal.prompt : "", choices:Array.isArray(proposal.choices) ? proposal.choices.map(choice => ({ label:typeof choice?.label === "string" ? choice.label : "", input:typeof choice?.input === "string" ? choice.input : "" })) : [] };
   return { entity:typeof proposal.entity === "string" ? proposal.entity : "", aliases:Array.isArray(proposal.aliases) ? proposal.aliases.filter(x => typeof x === "string") : [], text:typeof proposal.text === "string" ? proposal.text : "", surface:typeof proposal.surface === "string" ? proposal.surface : "", dc:Number.isFinite(Number(proposal.dc)) ? Number(proposal.dc) : 8 };
 }
 
-export function decisionProposalResolves(node, proposal, resolver = decisionInputResolves) {
-  return Array.isArray(proposal?.choices) && proposal.choices.length === 2 && proposal.choices.every(choice => resolver(node, typeof choice?.input === "string" ? choice.input : ""));
-}
 
 export function applyProposal(category, proposal, node, context = {}, data = proposalData(category, proposal, context)) {
   if (category === "exits") { const exit = { ...data, id:newId("exit_", node.exits || []) }; (node.exits ||= []).push(exit); return exit; }
   if (category === "encounters") { const encounter = { ...data, id:newId("encounter_", node.encounters || []) }; (node.encounters ||= []).push(encounter); return encounter; }
-  if (category === "decision") {
-    if (node.decision || !decisionProposalResolves(node, data)) return null;
-    const choices = [];
-    node.decision = { ...data, id:newId("decision_", context.decisions || []), choices:data.choices.map(choice => { const item = { ...choice, id:newId("choice_", choices) }; choices.push(item); return item; }) };
-    return node.decision;
-  }
   return null;
 }
 

@@ -142,6 +142,30 @@ console.log("── 回復薬: itemOnDefeatCount未指定なら既定の1個");
   check(s.healPotions === 1, "itemOnDefeatCount未指定なら1個", `実際は${s.healPotions}`);
 }
 
+/* 場面5のlootで手に入れた回復薬が飲めるか。2026-08-19の実プレイで、鞄には見えるのに
+   「回復薬はもう残っていない」と断られた。原因は入手経路が state.inventory へ入れており、
+   使用側が見る state.healPotions を増やしていなかったこと(入手の入口が4箇所あった)。
+   itemOnDefeat経路だけを検査していたため、この経路が素通りしていた */
+console.log("── 回復薬: lootで入手したものが飲める(入手と使用が同じ在庫を見る)");
+{
+  const { SCENARIO } = await import("../scenario.js");
+  const sceneIdx = SCENARIO.scenes.findIndex(s => String(s.id) === "5");
+  check(sceneIdx >= 0, "前提条件: 場面5が存在する");
+  eng.restoreGame({
+    state: { ...initialState(), sceneIndex: sceneIdx, hp: 5, maxHp: 10, healPotions: 0, enemy: null },
+    chron: [], history: [], revealed: ["s5c"] // lootのrequiresを満たしておく
+  });
+  await say("回復薬を受け取る");
+  let s = readSaved();
+  check(s.healPotions === 1, "入手で所持数が1になる", `実際は${s.healPotions}`);
+  const bag = Object.values(s.inventory || {}).flat();
+  check(!bag.includes("回復薬"), "inventory側には入れない(表示は個数から合流させるため)", `実際は${JSON.stringify(bag)}`);
+  await say("回復薬を飲む");
+  s = readSaved();
+  check(s.healPotions === 0, "飲んで所持数が0になる", `実際は${s.healPotions}`);
+  check(s.hp === 7, "HPが5→7へ回復する", `実際は${s.hp}`);
+}
+
 console.log("── 回復薬: 満タンなら消費しない");
 {
   eng.restoreGame({

@@ -105,5 +105,49 @@ console.log("── 保存データが壊れていても、操作可能な状態
   check(getSnapshot().busy === false, "busyがUIへ戻っている", `実際は busy=${getSnapshot().busy}`);
 }
 
+/* 場面を移ったら、前の場面の発言を持ち込まない(2026-08-21 作者の指摘)。
+   実プレイ動画では、シーン1で再開したのにリディアがイントロ最後の
+   「わたしも賛成。あなたが受けるなら、同行するわ。」を喋ったままだった。
+   イントロと シーン1 は sceneIndex がどちらも 0 なので、記録側の印(sc)で見分ける */
+console.log("── 再開しても、前の場面の発言は復元しない");
+{
+  const introLine = "わたしも賛成。あなたが受けるなら、同行するわ。";
+  const sceneLine = "足元を見て。古い仕掛けかもしれない。";
+  seedSave(JSON.stringify({
+    state: { ...initialState(), sceneIndex: 0, turn: 3 },
+    chron: [
+      { t: 0, sc: "intro", kind: "gm", text: "夕暮れの村。" },
+      { t: 0, sc: "intro", kind: "companion", who: "member_1", text: introLine },
+      { t: 1, sc: 0, kind: "gm", text: "古いレールと薄汚れた木の札がある。" },
+    ],
+    history: [], revealed: []
+  }));
+  await eng.boot();
+  await tick();
+  eng.resumeSavedGame();
+  await tick();
+  const bubbles = getSnapshot().companionBubbles || {};
+  const texts = Object.values(bubbles).map(b => b && b.text).filter(Boolean);
+  check(!texts.includes(introLine), "イントロの同意の台詞を復元しない", `実際: ${JSON.stringify(texts)}`);
+  check(getSnapshot().gmBubble.text === "古いレールと薄汚れた木の札がある。",
+    "いまの場面のGMの語りは復元する", `実際: ${JSON.stringify(getSnapshot().gmBubble.text)}`);
+  // 逆方向。いまの場面で喋っていれば、ちゃんと復元する(消しすぎていないことの確認)
+  seedSave(JSON.stringify({
+    state: { ...initialState(), sceneIndex: 0, turn: 3 },
+    chron: [
+      { t: 0, sc: "intro", kind: "companion", who: "member_1", text: introLine },
+      { t: 2, sc: 0, kind: "companion", who: "member_1", text: sceneLine },
+    ],
+    history: [], revealed: []
+  }));
+  await eng.boot();
+  await tick();
+  eng.resumeSavedGame();
+  await tick();
+  const after = Object.values(getSnapshot().companionBubbles || {}).map(b => b && b.text).filter(Boolean);
+  check(after.includes(sceneLine), "いまの場面での発言は復元する", `実際: ${JSON.stringify(after)}`);
+  check(!after.includes(introLine), "同じ人物でも、前の場面の発言は選ばない", `実際: ${JSON.stringify(after)}`);
+}
+
 console.log(`\nPASS: ${passed}/${passed + failures.length} 件`);
 if (failures.length) { console.log("\n失敗:"); failures.forEach(f => console.log(`  - ${f}`)); process.exit(1); }
