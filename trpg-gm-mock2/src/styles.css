@@ -16,6 +16,9 @@
   --danger: #f87171;
   --success: #7dd3fc;
   --scene-bg: linear-gradient(135deg, #151720 0%, #1e2230 100%);
+  /* 文字とパネル開閉タブの大きさの倍率。?tune で開くチューナーで作者が決める(2026-10-01) */
+  --font-scale: 1;
+  --tab-scale: 1;
 }
 
 html, body { height: 100%; height: 100svh; height: 100dvh; overflow: hidden; background: #000; } /* svhはSafariのバー切替時のフォールバック */
@@ -38,7 +41,7 @@ body {
   justify-content: center;
   text-align: center;
   padding: 24px;
-  font-size: 15px;
+  font-size: calc(15px * var(--font-scale));
   color: var(--text);
   background: var(--frame-bg);
 }
@@ -92,7 +95,7 @@ body {
   -webkit-mask-image: linear-gradient(to bottom, rgba(0, 0, 0, 0) 0%, rgba(0, 0, 0, .12) 40%, rgba(0, 0, 0, 1) 82%);
   mask-image: linear-gradient(to bottom, rgba(0, 0, 0, 0) 0%, rgba(0, 0, 0, .12) 40%, rgba(0, 0, 0, 1) 82%);
   color: #fff;
-  font-size: 1.41vw;
+  font-size: calc(1.41vw * var(--font-scale));
   line-height: 2vw;
   letter-spacing: 0.042vw;
   display: flex;
@@ -232,13 +235,13 @@ body {
   transform: translateX(-50%);
   z-index: 6; /* 敵スプライト(5)の上、パネル(15)の下 */
   pointer-events: none;
-  font-size: 3.4vw;
+  font-size: calc(3.4vw * var(--font-scale));
   font-weight: 700;
   color: #ffe9a8;
   text-shadow: 0 0 .35em rgba(0, 0, 0, .95), 0 .06em .12em rgba(0, 0, 0, .9);
   animation: floatUp .9s ease-out forwards;
 }
-#battleFloat.crit { color: #ffd0c0; font-size: 4.6vw; }
+#battleFloat.crit { color: #ffd0c0; font-size: calc(4.6vw * var(--font-scale)); }
 @keyframes floatUp {
   0%   { opacity: 0; transform: translateX(-50%) translateY(.5em) scale(.7); }
   22%  { opacity: 1; transform: translateX(-50%) translateY(0) scale(1.12); }
@@ -314,7 +317,7 @@ body {
   backdrop-filter: blur(3px);
   border-radius: 16px;
   padding: 14px 18px;
-  font-size: 1.6vw;
+  font-size: calc(1.6vw * var(--font-scale));
   line-height: 2.8vw;
   text-shadow: 0 1px 4px rgba(0, 0, 0, .6);
   animation: bubbleIn .25s ease, bubbleOut .6s ease 8s forwards; /* 約8秒表示。ペットのタップで再表示 */
@@ -372,7 +375,7 @@ body {
   backdrop-filter: blur(3px);
   border-radius: 16px;
   padding: 12px 16px;
-  font-size: 1.45vw;
+  font-size: calc(1.45vw * var(--font-scale));
   line-height: 2.3vw;
   text-shadow: 0 1px 4px rgba(0, 0, 0, .6);
   animation: bubbleIn .25s ease, bubbleOut .6s ease 6s forwards; /* GMより短め(台詞が短いため)の約6秒表示 */
@@ -450,7 +453,7 @@ body {
   backdrop-filter: blur(3px);
   border-radius: 16px;
   padding: 12px 18px;
-  font-size: 1.45vw;
+  font-size: calc(1.45vw * var(--font-scale));
   line-height: 2.3vw;
   text-align: center;
   text-shadow: 0 1px 4px rgba(0, 0, 0, .6);
@@ -537,9 +540,9 @@ body {
   padding: 3% 4%;
   text-align: center;
 }
-.popupTitle { font-size: 2vw; margin-bottom: 3%; opacity: .85; flex: none; }
+.popupTitle { font-size: calc(2vw * var(--font-scale)); margin-bottom: 3%; opacity: .85; flex: none; }
 .popupBody {
-  font-size: 1.7vw;
+  font-size: calc(1.7vw * var(--font-scale));
   line-height: 3.2vw;
   text-align: left;
   margin-bottom: 4%;
@@ -567,7 +570,7 @@ body {
 .popup-intro .popupBody { flex: none; }
 .popup-damage .popupTitle { color: var(--danger); font-weight: 700; }
 .popup-damage .popupBody { white-space: pre-line; text-align: center; }
-.popupBtn.rollBtn { font-size: 1.9vw; padding: 12px 40px; animation: rollPulse 1.2s ease-in-out infinite; } /* 振りたくなるように脈打たせる */
+.popupBtn.rollBtn { font-size: calc(1.9vw * var(--font-scale)); padding: 12px 40px; animation: rollPulse 1.2s ease-in-out infinite; } /* 振りたくなるように脈打たせる */
 @keyframes rollPulse {
   0%, 100% { transform: scale(1); }
   50% { transform: scale(1.07); }
@@ -579,7 +582,7 @@ body {
   color: #1a1200;
   font-weight: 700;
   font-family: inherit;
-  font-size: 1.5vw;
+  font-size: calc(1.5vw * var(--font-scale));
   padding: 8px 32px;
   cursor: pointer;
 }
@@ -597,13 +600,15 @@ body {
 
 /* ---- パネル開閉タブ ----
    閉時: 画面端に「>>」「<<」。開時: パネルの内側の縁(29.93%/70.07%)に逆向き矢印。
-   パネル(15)より前・GMペット(25)より後ろ。leftの遷移でパネルの開閉に追従して滑る */
+   パネル(15)より前・GMペット(25)より後ろ。leftの遷移でパネルの開閉に追従して滑る。
+   縦位置は画面の上端寄り。横持ちのiPhoneではDynamic Islandが左右どちらかの端の
+   縦中央に来るため、以前の33%だと重なってタップしづらかった(2026-10-01、iPhone 15で作者が確認) */
 .panelTab {
   position: absolute;
-  top: 33%;
+  top: calc(3% + var(--safe-top));
   z-index: 16;
-  padding: 8px 4px;
-  font-size: 1.6vw;
+  padding: calc(8px * var(--tab-scale)) calc(4px * var(--tab-scale));
+  font-size: calc(1.6vw * var(--tab-scale));
   letter-spacing: -.1em; /* 「>>」の2文字を矢羽根らしく詰める */
   color: var(--text);
   background: rgba(29, 32, 47, .6);
@@ -614,10 +619,12 @@ body {
   opacity: .75;
 }
 #leftPanelTab { left: 0; border-left: none; border-radius: 0 6px 6px 0; }
-/* 開時はパネルの縁の内側に収める(外側だと会話ログ(21)に覆われてタップできない) */
-#leftPanelTab.open { left: 29.93%; transform: translateX(-100%); border-left: 1px solid rgba(192, 202, 243, .4); border-right: none; border-radius: 6px 0 0 6px; }
+/* 開時はパネルの縁の外側(画面中央側)に出す。内側だとパネル上端の題名
+   (「廃坑の灯 第1話:…」)に重なる。中段に置いていた頃は外側が会話ログ(21)に
+   覆われてタップできなかったが、上端には会話ログが来ない */
+#leftPanelTab.open { left: 29.93%; }
 #rightPanelTab { right: 0; border-right: none; border-radius: 6px 0 0 6px; }
-#rightPanelTab.open { right: 29.93%; transform: translateX(100%); border-right: 1px solid rgba(192, 202, 243, .4); border-left: none; border-radius: 0 6px 6px 0; }
+#rightPanelTab.open { right: 29.93%; }
 
 /* 下パネルタブ: 画面下中央、左右パネルと同じ「>>」グリフを90度回転して流用。
    左右パネルは開時に内側の縁へ移動するが、下パネルは縁(パネル上端)だと背後の
@@ -656,7 +663,7 @@ body {
      画面が縦長になるほどパネル下部に余白が増えるのを防ぐ(実測: 横持ちで159pxの空き) */
   display: flex;
   flex-direction: column;
-  font-size: 1.4vw;
+  font-size: calc(1.4vw * var(--font-scale));
   opacity: 1;
   visibility: visible;
   transition: opacity .2s ease, visibility .2s, transform .2s;
@@ -668,7 +675,7 @@ body {
   justify-content: space-between;
   gap: 8px;
   color: #fff;
-  font-size: 1.53vw;
+  font-size: calc(1.53vw * var(--font-scale));
   margin-bottom: 4%;
   padding-bottom: 3%;
   border-bottom: 1px solid rgba(192, 202, 243, .35);
@@ -751,7 +758,7 @@ body {
   z-index: 15;
   padding: 2% max(2.3%, var(--safe-right)) 2% 2.3%;
   overflow-y: auto;
-  font-size: 1.1vw;
+  font-size: calc(1.1vw * var(--font-scale));
   opacity: 0;
   visibility: hidden;
   transition: opacity .2s ease, visibility .2s, transform .2s;
@@ -833,7 +840,7 @@ body {
   color: var(--text);
   border-radius: 999px;
   padding: 4px 12px;
-  font-size: 1.1vw;
+  font-size: calc(1.1vw * var(--font-scale));
   font-family: inherit;
   cursor: pointer;
   white-space: nowrap;
@@ -877,7 +884,7 @@ body {
   outline: none;
   color: var(--text);
   font-family: inherit;
-  font-size: 1.3vw;
+  font-size: calc(1.3vw * var(--font-scale));
   padding: 0 3%;
   margin: 0 2ch; /* 両端を2文字分だけ内側に寄せる */
 }
@@ -896,7 +903,7 @@ body {
   border: none;
   background: rgba(192, 202, 243, .25);
   color: var(--text);
-  font-size: 1.05vw;
+  font-size: calc(1.05vw * var(--font-scale));
   line-height: 1;
   cursor: pointer;
   font-family: inherit;
@@ -914,7 +921,7 @@ body {
   border: none;
   border-radius: 8px;
   color: var(--text);
-  font-size: 1.1vw;
+  font-size: calc(1.1vw * var(--font-scale));
   line-height: 1;
   cursor: pointer;
   font-family: inherit;
@@ -941,7 +948,7 @@ body {
   color: #1a1200;
   font-weight: 700;
   font-family: inherit;
-  font-size: 1.3vw;
+  font-size: calc(1.3vw * var(--font-scale));
   cursor: pointer;
 }
 #sendBtn:disabled { opacity: .5; cursor: default; }
@@ -1009,3 +1016,16 @@ body {
   80% { transform: translate(3px, -1px); }
 }
 body.shake #stage { animation: shakeKf .5s ease; }
+
+/* ---- チューナー(?tune の時だけ出る。作者が実機で数値を決める用) ----
+   自分自身の文字は倍率の影響を受けない固定値にする(動かした値でチューナーが崩れないように) */
+#tuner {
+  position: fixed; top: calc(6px + var(--safe-top)); left: 50%; transform: translateX(-50%);
+  z-index: 1000; display: flex; gap: 10px; align-items: center; flex-wrap: wrap;
+  padding: 6px 10px; font-size: 12px; color: var(--text);
+  background: rgba(20, 22, 32, .92); border: 1px solid var(--panel-border); border-radius: 8px;
+}
+#tuner label { display: flex; flex-direction: column; gap: 2px; }
+#tuner b { color: var(--accent); }
+#tuner input[type="range"] { width: 140px; }
+#tuner button { font-size: 12px; padding: 4px 8px; color: var(--text); background: var(--input-bg); border: 1px solid var(--panel-border); border-radius: 6px; }
