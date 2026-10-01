@@ -491,11 +491,16 @@ export default function App() {
                   {v}
                 </button>
               ))}
-              {/* 移動チップ。名詞・動詞と違い単体で完成した宣言なので、押したら入力欄を
-                  置き換える(組み立て途中の文の後ろに足すと「周辺進む」になる)。
+              {/* 移動チップ。単体で完成した宣言なので、基本は入力欄を置き換える
+                  (「木柵を調べる」の後ろに足すと「木柵を調べるに進む」になる)。
+                  ただし入力が名詞チップ1つだけなら行き先の指定とみなし「〜に進む」と足す。
+                  既定の目的語(「周辺」「相手」)は行き先にならないので、これまでどおり置き換える。
+                  置き換えると名詞が消え、「崩れた坑道に進む」のように出口へ直接届く宣言を
+                  チップで組めなかった(2026-08-21の実プレイ報告)。
                   行き先は載せない(作者の判断: 並べると探索の余地が消える) */}
               {eng.moveChips.map(text => (
-                <button key={"m" + text} className="entityChip moveChip" onClick={() => setInput(text)}>
+                <button key={"m" + text} className="entityChip moveChip" onClick={() => setInput(prev =>
+                  prev.trim() !== contextNoun && nounChips.includes(prev.trim()) ? prev.trim() + joinParticle(prev, "に") + text : text)}>
                   {text}
                 </button>
               ))}
