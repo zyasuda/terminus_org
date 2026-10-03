@@ -1,0 +1,30 @@
+const fs=require('node:fs'),vm=require('node:vm');
+const script=fs.readFileSync(__dirname+'/index.html','utf8').match(/<script>([\s\S]*?)<\/script>/)[1];
+const context=vm.createContext({document:{getElementById(){}},crypto:require('node:crypto').webcrypto});
+vm.runInContext(script.split("$('chat').onsubmit")[0],context);
+vm.runInContext(`(async()=>{
+ let checks=0;const ok=(value,message)=>{checks++;if(!value)throw Error(message);};
+ const rejects=fn=>{try{fn();return false;}catch{return true;}};
+ state=initial();render=()=>{};
+ for(const p of PEOPLE){const own=visibleProfile(p.id,state,p.id);ok(Object.keys(own).length===Object.keys(profileFacts(p.id)).length,p.name+'の本人設定が欠ける');if(p.id!=='ines')ok(!visibleProfile(p.id).past&&!visibleProfile(p.id).fullName&&!visibleProfile(p.id).skill1,p.name+'の未開示情報が見える');}
+ ok(Object.keys(visibleProfile('lydia')).join(',')==='name,role,item0','初期のリディアに公開装備以外が漏れた');const detailed=initial();revealProfile('lydia',[{key:'skillDetail1'}],detailed);ok(knowsProfile('lydia','skill1',detailed)&&knowsProfile('lydia','skillDetail1',detailed)&&!knowsProfile('lydia','skill0',detailed),'詳細を聞いた技能の名称が表示されない');
+ const speech='古い文字を読むことができるわ。';
+ const accepted=validateProfileAudit('lydia',speech,{valid:true,claims:[{key:'skill1',value:profileFacts('lydia').skill1.value,quote:'古い文字を読むことができる'}],conflicts:[]});
+ revealProfile('lydia',accepted.claims);ok(knowsProfile('lydia','skill1')&&!knowsProfile('lydia','past')&&!knowsProfile('lydia','experience')&&!knowsProfile('lydia','skillDetail1'),'技能だけの開示で背景まで開いた');
+ ok(PEOPLE.every(p=>knowsProfile('lydia','skill1',state,p.id)),'全員が聞いた返答の知識がそろわない');
+ revealProfile('lydia',accepted.claims);ok(state.profiles.history.length===1,'再質問で人物記録が重複');
+ ok(rejects(()=>validateProfileAudit('lydia',speech,{valid:true,claims:[{key:'origin',value:'偽の都市',quote:'古い文字'}],conflicts:[]})),'偽の設定値を受理');
+ ok(rejects(()=>validateProfileAudit('lydia',speech,{valid:true,claims:[{key:'origin',value:profileFacts('lydia').origin.value,quote:'南の学術都市'}],conflicts:[]})),'未発言の根拠を受理');
+ ok(rejects(()=>validateProfileAudit('lydia',speech,{valid:true,claims:[{key:'secret',value:'秘密',quote:'古い文字'}],conflicts:[]})),'未知の項目を受理');ok(rejects(()=>validateProfileAudit('lydia',speech,{valid:true,claims:[{key:'__proto__',quote:'古い文字'}],conflicts:[]})),'継承プロパティを正本として受理');const atomic=initial();ok(rejects(()=>revealProfile('lydia',[{key:'origin'},{key:'invalid'}],atomic))&&!knowsProfile('lydia','origin',atomic),'不正な開示で一部だけ更新');
+ ok(rejects(()=>validateProfileAudit('lydia',speech,{valid:true,claims:[],conflicts:[{key:'origin',quote:'古い文字',reason:'矛盾'}]})),'了承と矛盾が不一致');
+ const rejected=validateProfileAudit('lydia','私は北の生まれ。',{valid:false,claims:[{key:'origin',value:profileFacts('lydia').origin.value,quote:'北の生まれ'}],conflicts:[{key:'origin',quote:'北の生まれ',reason:'南の学術都市と異なる'}]});ok(rejected.claims.length===0,'矛盾した返答から情報を公開');
+ ask=async()=>JSON.stringify([{valid:true,claims:[{key:'skill1',value:profileFacts('lydia').skill1.value,quote:'古い文字を読むことができる'}],conflicts:[]}]);ok((await auditProfile('lydia',speech)).valid,'1件配列の実際のGM応答を扱えない');ask=async()=>JSON.stringify([{valid:true,claims:[],conflicts:[]},{valid:true,claims:[],conflicts:[]}]);let ambiguous=false;try{await auditProfile('lydia',speech);}catch{ambiguous=true;}ok(ambiguous,'複数のGM回答を無条件に採用');state=initial();ok(!knowsProfile('lydia','skill1')&&state.profiles.history.length===0,'再開して開示記録が残る');
+ const messages=[];say=(who,text)=>messages.push({who,text});let tries=0,audits=0;
+ aiPlayer=async(p,planning,requested,correction)=>{tries++;if(tries===2)ok(correction[0].key==='origin','訂正の根拠を本人へ渡していない');return {speech:tries===1?'私は北の生まれ。':'南の学術都市から来たの。',action:'wait',share:false};};
+ auditProfile=async(id,speech)=>{audits++;return audits===1?{valid:false,claims:[],conflicts:[{key:'origin',reason:'出身が異なる'}]}:{valid:true,claims:[{key:'origin',value:profileFacts(id).origin.value,quote:'南の学術都市'}],conflicts:[]};};
+ const r=await checkedReply(PEOPLE[3]);ok(tries===2&&audits===2&&r.speech.includes('南の学術都市'),'矛盾後の言い直しが成立しない');ok(!knowsProfile('lydia','origin'),'未受理の返答を先に記録');revealProfile('lydia',r.profileClaims);ok(knowsProfile('lydia','origin'),'検証済みの返答を開示できない');ok(messages.length===1&&!messages[0].text.includes('南の学術都市'),'GMの介入が未開示の正解を漏らした');
+ state=initial();tries=0;aiPlayer=async()=>{tries++;return {speech:'偽の返答'};};auditProfile=async()=>({valid:false,claims:[],conflicts:[{key:'origin',reason:'不一致'}]});let stopped=false;try{await checkedReply(PEOPLE[3]);}catch{stopped=true;}ok(stopped&&tries===2&&!knowsProfile('lydia','origin'),'二度の矛盾で保留しない');
+ tries=0;aiPlayer=async()=>{tries++;return {speech:'返答'};};auditProfile=async()=>{throw Error('接続失敗');};let failed=false;try{await checkedReply(PEOPLE[3]);}catch{failed=true;}ok(failed&&tries===1&&state.profiles.history.length===0,'照合失敗で記録や再実行');
+ auditProfile=async()=>({valid:true,claims:[],conflicts:[]});aiPlayer=async()=>{generation++;return {speech:'古い応答'};};ok(await checkedReply(PEOPLE[3])===null,'リセット前の応答を受理');
+ return checks;
+})()`,context).then(count=>console.log('PASS: '+count+' checks — 本人の全設定 / 未開示の保護 / 発言根拠と正本の照合 / 項目別の開示 / 全員の知識更新 / 重複防止 / 矛盾時の言い直し / 2回で保留 / 接続失敗 / リセットと古い応答')).catch(error=>{console.error(error);process.exitCode=1;});
