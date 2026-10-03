@@ -1,0 +1,618 @@
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#faf9f5;color:#141413}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
+<title>灯りの番人 リプレイ</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Zen+Antique&family=Zen+Kaku+Gothic+New:wght@400;700&family=IBM+Plex+Mono:wght@500&display=swap">
+<style>
+/* レイアウト概念: 製図紙の上に、ミナの遊ぶ画面(PC版1枚)を据え、その下に時間軸と解説を敷く。
+   通話の声は文字にして吹き出しに出し、GMにも渡す(2026-10-02 決定、案C)。
+   画面の中は「場面の絵+人物」と「記録」の2面。声は吹き出し、ゲームへの入力と結果は記録、と置き場所を分ける。
+   署名: 通話の場面では記録が止まったまま、吹き出しだけが次々に出る。 */
+:root{
+  --paper:#e3e7ea; --grid:rgba(29,36,51,.07); --ink:#1d2433; --ink-2:#4b5566; --rule:#c3cad1; --panel:#f1f3f5;
+  --lantern:#b86f0e; --stone:#17839a; --rust:#a3402a;
+  --f-display:"Zen Antique","Hiragino Mincho ProN","Yu Mincho",serif;
+  --f-body:"Zen Kaku Gothic New","Hiragino Sans","Yu Gothic",sans-serif;
+  --f-mono:"IBM Plex Mono",ui-monospace,Menlo,monospace;
+  /* 遊ぶ画面の中は、テーマに関係なく坑道の暗さで固定する */
+  --g-bg:#0d0f12; --g-bg2:#16191e; --g-ink:#ece6d8; --g-dim:#9a9282; --g-line:rgba(236,230,216,.14);
+  --g-amber:#e8a33d; --g-cyan:#57c9da; --g-red:#e0573a; --g-bubble:#f4efe3; --g-bubble-ink:#1c1912;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --paper:#12161b; --grid:rgba(200,220,240,.045); --ink:#e4e8ee; --ink-2:#9aa5b3; --rule:#2b333d; --panel:#181d24;
+  --lantern:#e2a23e; --stone:#4cc3d6; --rust:#d9684c; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --paper:#12161b; --grid:rgba(200,220,240,.045); --ink:#e4e8ee; --ink-2:#9aa5b3; --rule:#2b333d; --panel:#181d24;
+  --lantern:#e2a23e; --stone:#4cc3d6; --rust:#d9684c; color-scheme:dark}
+
+*{box-sizing:border-box}
+body{background:var(--paper);color:var(--ink);font-family:var(--f-body);font-size:15px;line-height:1.7;
+  background-image:linear-gradient(var(--grid) 1px,transparent 1px),linear-gradient(90deg,var(--grid) 1px,transparent 1px);
+  background-size:24px 24px}
+.wrap{max-width:1280px;margin:0 auto;padding-inline:16px;padding-block:20px 28px;display:grid;gap:14px}
+header{display:flex;flex-wrap:wrap;align-items:baseline;gap:6px 18px}
+h1{font-family:var(--f-display);font-weight:400;font-size:clamp(28px,4vw,42px);line-height:1.1;margin:0;letter-spacing:.04em}
+.sub{color:var(--ink-2);font-size:13px;margin:0}
+.sub b{color:var(--ink)}
+
+/* 遊ぶ画面(PC版を1枚。狭い幅では縦に積む) */
+.game{background:var(--g-bg);color:var(--g-ink);border-radius:12px;overflow:hidden;box-shadow:0 18px 40px -20px rgba(0,0,0,.6);
+  border:8px solid #05060a;container-type:inline-size}
+.gbar{display:flex;align-items:center;gap:10px;padding:8px 14px;border-bottom:1px solid var(--g-line);font-size:12.5px;color:var(--g-dim)}
+.gbar .scn{color:var(--g-ink);font-family:var(--f-display);font-size:17px;flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.gbar .me{display:flex;align-items:center;gap:6px}
+.party{display:flex;gap:4px}
+.pdot{width:22px;height:22px;border-radius:50%;background:#333 center 10%/160% auto no-repeat;border:1.5px solid transparent;display:inline-block}
+.pdot.talk{border-color:var(--g-bubble);box-shadow:0 0 8px rgba(244,239,227,.6)}
+.pdot.ai{border-color:var(--g-cyan);border-style:dashed}
+.gbar .me i{width:22px;height:22px;border-radius:50%;background:#333 center 12%/170% auto no-repeat;display:inline-block;border:1.5px solid var(--g-cyan)}
+.gmain{display:grid;grid-template-columns:minmax(0,1fr) 340px}
+@container (max-width:820px){.gmain{grid-template-columns:minmax(0,1fr)}}
+
+/* 場面 */
+.stage{position:relative;aspect-ratio:16/10;background:#000 center/cover no-repeat;overflow:hidden}
+.stage::after{content:"";position:absolute;inset:0;background:linear-gradient(180deg,rgba(0,0,0,0) 45%,rgba(13,15,18,.78));pointer-events:none;z-index:1}
+.av{position:absolute;bottom:0;transform:translateX(-50%);z-index:3;display:flex;flex-direction:column;align-items:center}
+.av img{height:100%;width:auto;object-fit:contain;filter:drop-shadow(0 6px 10px rgba(0,0,0,.6))}
+.av .nm{position:absolute;bottom:-2px;font-size:11px;white-space:nowrap;background:rgba(13,15,18,.8);border:1px solid var(--g-line);border-radius:9px;padding:0 7px;color:var(--g-ink);z-index:2}
+.av .nm small{color:var(--g-dim);margin-left:4px;font-size:10px}
+.av .nm.hurt small{color:var(--g-red)}
+.av.lit img{filter:drop-shadow(0 0 14px rgba(232,163,61,.85)) drop-shadow(0 6px 10px rgba(0,0,0,.6))}
+.av.talk img{filter:drop-shadow(0 0 16px rgba(244,239,227,.7)) drop-shadow(0 6px 10px rgba(0,0,0,.6))}
+.av.ai img{filter:drop-shadow(0 0 10px rgba(87,201,218,.8)) saturate(.6)}
+.av.ai .nm{border-color:var(--g-cyan);border-style:dashed}
+.av.idle .nm{border-color:var(--g-amber)}
+.gmb{position:absolute;z-index:6;top:12px;right:12px;display:grid;justify-items:center;gap:3px}
+.gmb span.f{width:clamp(56px,8cqi,92px);aspect-ratio:1;border-radius:50%;background:#2a2d33 url(img/gm.webp) center 4%/120% auto no-repeat;border:2px solid var(--g-line);box-shadow:0 6px 16px rgba(0,0,0,.5)}
+.gmb.lit span.f{border-color:var(--g-amber);box-shadow:0 0 18px rgba(232,163,61,.7)}
+.gmb b{font-size:10.5px;font-weight:400;background:rgba(13,15,18,.8);border:1px solid var(--g-line);border-radius:9px;padding:0 8px}
+.self{position:absolute;z-index:6;left:12px;bottom:12px;display:flex;align-items:center;gap:8px;background:rgba(13,15,18,.86);border:1.5px solid var(--g-cyan);border-radius:30px;padding:4px 12px 4px 4px}
+.self span.f{width:clamp(40px,5cqi,54px);aspect-ratio:1;border-radius:50%;background:#2a2d33 center 8%/150% auto no-repeat}
+.self .t{display:grid;font-size:11.5px;line-height:1.35}
+.self .t b{font-weight:700;font-size:12.5px}
+.self .t small{color:var(--g-dim)}
+.self.lit{box-shadow:0 0 18px rgba(232,163,61,.7);border-color:var(--g-amber)}
+.self.talk{box-shadow:0 0 16px rgba(244,239,227,.55)}
+.npc{position:absolute;bottom:0;transform:translateX(-50%);z-index:2}
+.npc img{height:100%;width:auto;filter:drop-shadow(0 8px 20px rgba(0,0,0,.7))}
+.npc.boss img{filter:drop-shadow(0 0 30px rgba(224,87,58,.35))}
+.bub{position:absolute;z-index:6;transform:translateX(-50%);width:max-content;max-width:min(30%,260px);background:var(--g-bubble);color:var(--g-bubble-ink);
+  border-radius:12px;padding:6px 10px 7px;font-size:13px;line-height:1.5;box-shadow:0 6px 16px rgba(0,0,0,.45)}
+.bub::after{content:"";position:absolute;left:50%;bottom:-7px;margin-left:-7px;border:7px solid transparent;border-bottom:0;border-top-color:var(--g-bubble)}
+.bub b{display:block;font-size:10.5px;color:#7a6d55;letter-spacing:.06em}
+.bub.ai{background:#0f2a30;color:#d6f3f7;border:1.5px dashed var(--g-cyan)}
+.bub.ai::after{border-top-color:var(--g-cyan)}
+.bub.ai b{color:var(--g-cyan)}
+.bub.npc{background:#efe6d2}
+@media (prefers-reduced-motion:no-preference){.bub{animation:pop .35s ease-out}}
+@keyframes pop{from{opacity:0;transform:translate(-50%,6px) scale(.96)}}
+.tag{position:absolute;z-index:2;transform:translate(-50%,-50%);font-size:12px;background:rgba(13,15,18,.78);border:1px solid var(--g-line);
+  color:var(--g-ink);padding:3px 9px;border-radius:12px;white-space:nowrap;display:flex;gap:5px;align-items:center}
+.tag i{display:inline-block;width:18px;height:18px;border-radius:50%;background:#333 center 12%/170% auto no-repeat;border:1px solid var(--g-amber)}
+.inset{position:absolute;z-index:7;top:12px;left:12px;width:min(46%,320px);background:rgba(13,15,18,.94);border:1.5px dashed var(--g-cyan);border-radius:10px;padding:10px 12px;font-size:12.5px;line-height:1.6}
+.inset .h{display:flex;align-items:center;gap:8px;color:var(--g-cyan);font-size:11.5px;letter-spacing:.06em;margin-bottom:4px}
+.inset .h i{width:24px;height:24px;border-radius:50%;background:#333 center 12%/170% auto no-repeat;display:inline-block;flex:none}
+.inset .chips{padding-top:6px}
+.inset.low{top:28%}
+@media (prefers-reduced-motion:no-preference){.inset{animation:pop2 .45s ease-out}}
+@keyframes pop2{from{opacity:0;transform:translateY(-6px)}}
+.tele{position:absolute;left:12px;top:12px;max-width:52%;z-index:5;background:rgba(13,15,18,.88);border:1px solid var(--g-red);border-radius:8px;padding:8px 11px;font-size:13px}
+.tele .k{font-size:10.5px;letter-spacing:.12em;color:var(--g-red)}
+.bhp{margin-top:6px;font-family:var(--f-mono);font-size:11.5px}
+.bhp.over{display:none;position:absolute;z-index:5;left:83%;bottom:2%;width:26%;transform:translateX(-50%);margin:0;font-size:10px;text-align:center;background:rgba(13,15,18,.8);border-radius:6px;padding:2px 6px 4px}
+.bar{height:6px;background:rgba(236,230,216,.12);border-radius:3px;overflow:hidden;margin-top:3px}
+.bar i{display:block;height:100%;background:var(--g-red)}
+.plat{position:absolute;z-index:1;left:78%;bottom:4%;width:48%;height:14%;transform:translateX(-50%);border-radius:50%;background:radial-gradient(ellipse at 50% 45%,rgba(224,87,58,.22),rgba(0,0,0,.55) 55%,transparent 72%)}
+.av.back{z-index:3}
+.av.rear{z-index:4}
+.bnm{position:absolute;transform:translateX(-50%);z-index:6;font-size:11px;white-space:nowrap;background:rgba(13,15,18,.85);border:1px solid var(--g-line);border-radius:7px;padding:2px 7px 4px;color:var(--g-ink);line-height:1.3}
+.bnm small{color:var(--g-dim);margin-left:4px;font-size:10px}
+.bnm.ai{border-color:var(--g-cyan);border-style:dashed}
+.bnm .hb{display:block;height:4px;margin-top:2px;border-radius:2px;background:rgba(255,255,255,.12);overflow:hidden}
+.bnm .hb i{display:block;height:100%;background:#6fbf73}
+.bnm .hb i.lo{background:var(--g-red)}
+
+/* 卓(集合) */
+.table{position:absolute;inset:0;z-index:2;display:grid;place-items:center;background:rgba(13,15,18,.55)}
+.felt{position:relative;width:min(62%,540px);aspect-ratio:2/1.1;border-radius:50%;background:radial-gradient(ellipse at 50% 40%,#3a2a1c,#1d150e 70%);border:6px solid #4a3522;box-shadow:inset 0 0 40px rgba(0,0,0,.6),0 20px 40px rgba(0,0,0,.5)}
+.felt .center{position:absolute;inset:0;display:grid;place-content:center;text-align:center;gap:2px;color:var(--g-dim);font-size:12px}
+.felt .center b{font-family:var(--f-display);font-weight:400;color:var(--g-ink);font-size:clamp(16px,2.4cqi,24px)}
+.seatx{position:absolute;transform:translate(-50%,-50%);display:grid;justify-items:center;gap:2px;font-size:11.5px;line-height:1.3;color:var(--g-ink);width:96px;text-align:center}
+.seatx .c{width:clamp(38px,5.5cqi,56px);aspect-ratio:1;border-radius:50%;background:#2a2d33;border:2px solid var(--g-line);display:grid;place-items:center;font-family:var(--f-display);font-size:18px}
+.seatx.me .c{border-color:var(--g-cyan)}
+.seatx.empty .c{border-style:dashed;color:var(--g-dim);background:transparent}
+.seatx.empty{color:var(--g-dim)}
+.seatx.talk .c{border-color:var(--g-bubble);box-shadow:0 0 14px rgba(244,239,227,.5)}
+.seatx small{color:var(--g-dim);font-size:10px}
+.seatx .bub{bottom:calc(100% + 8px);left:50%;max-width:200px}
+
+/* 仲間を選ぶ・持ち越し */
+.cast,.carry{position:absolute;inset:0;z-index:2;display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:8px;padding:5% 3% 6%;background:rgba(13,15,18,.5)}
+.cc,.cy{border:1px solid var(--g-line);border-radius:10px;background:rgba(22,25,30,.9);padding:6px;display:grid;gap:3px;text-align:center;position:relative;grid-template-rows:minmax(0,1fr) auto auto;min-height:0}
+.cc img,.cy img{width:100%;height:100%;object-fit:contain;min-height:0}
+.cc .n,.cy b{font-family:var(--f-display);font-weight:400;font-size:15px}
+.cc .r{font-size:10.5px;color:var(--g-dim);line-height:1.4}
+.cy span{font-size:11.5px;line-height:1.45}
+.cc.taken{border-color:var(--g-amber)}
+.cc .by{position:absolute;top:6px;left:6px;font-size:10.5px;background:var(--g-amber);color:#1a1205;border-radius:8px;padding:0 7px}
+.cc.mine,.cy.mine{border-color:var(--g-cyan)}
+.cc.mine .by{background:var(--g-cyan)}
+
+/* 記録 */
+.side{display:flex;flex-direction:column;border-left:1px solid var(--g-line);min-width:0;position:relative}
+.side-in{position:absolute;inset:0;display:flex;flex-direction:column}
+@container (max-width:820px){.side{border-left:0;border-top:1px solid var(--g-line);height:320px}}
+.side .lh{font-size:10.5px;letter-spacing:.14em;color:var(--g-dim);padding:8px 14px 0;display:flex;justify-content:space-between;gap:8px}
+.log{display:flex;flex-direction:column;gap:8px;padding:10px 14px 12px;font-size:13.5px;line-height:1.65;overflow:auto;flex:1;min-height:0}
+.ln{padding-left:10px;border-left:2px solid var(--g-line);opacity:.6}
+.ln.new{opacity:1}
+.ln .who{font-size:10.5px;letter-spacing:.1em;color:var(--g-dim);display:block}
+.ln.gm{border-color:var(--g-amber)} .ln.gm .who{color:var(--g-amber)}
+.ln.me{border-color:#6c6656;color:#d8d1c0}
+.ln.sys{border:none;padding:0;font-size:12px;color:var(--g-dim)}
+.seal{position:relative;background:linear-gradient(180deg,rgba(87,201,218,.13),rgba(87,201,218,.05));border:1px solid rgba(87,201,218,.45);border-radius:6px;padding:8px 10px 8px 12px;opacity:.7}
+.seal.new{opacity:1}
+.seal .who{font-size:10.5px;letter-spacing:.1em;display:block;color:var(--g-cyan)}
+.seal::before{content:"";position:absolute;left:-1px;top:8px;bottom:8px;width:3px;background:var(--g-cyan);border-radius:2px}
+.seal h4{margin:2px 0;font-family:var(--f-display);font-weight:400;font-size:15px;color:var(--g-cyan)}
+.notice{font-size:12px;color:var(--g-cyan);display:flex;gap:6px;align-items:center;opacity:.65}
+.notice.new{opacity:1}
+.notice::before{content:"";width:8px;height:8px;border-radius:50%;border:1.5px solid var(--g-cyan);flex:none}
+.dice{display:flex;align-items:center;gap:10px;font-size:12.5px;opacity:.6}
+.dice.new{opacity:1}
+.d20{width:40px;height:40px;flex:none;object-fit:contain}
+.roll{position:absolute;left:50%;bottom:12%;transform:translateX(-50%);z-index:7;height:62%;display:flex;flex-direction:column;align-items:center;gap:6px;pointer-events:none}
+.roll img{flex:1;min-height:0;aspect-ratio:1;object-fit:contain;filter:drop-shadow(0 14px 14px rgba(0,0,0,.55))}
+.roll.go img{animation:d20Jump 1.25s cubic-bezier(.2,.8,.15,1) both}
+.roll.land img{animation:d20Land .42s ease-out both}
+.roll .rl{font-size:12.5px;background:rgba(13,15,18,.85);border:1px solid var(--g-line);border-radius:8px;padding:3px 10px;white-space:nowrap}
+.roll .rl b.ok{color:var(--g-amber)} .roll .rl b.ng{color:var(--g-red)}
+.roll button{pointer-events:auto;font:700 14px var(--f-body);color:#2b080b;border:0;border-radius:999px;padding:9px 20px;cursor:pointer;background:linear-gradient(#ffd2a6,#f15a43);box-shadow:0 5px 0 #7c1b22}
+.roll button:focus-visible{outline:2px solid var(--g-ink);outline-offset:3px}
+@keyframes d20Jump{0%{transform:translateY(0) scale(1)}20%{transform:translateY(-34%) scale(.94)}62%{transform:translateY(-7%) scale(1.07)}82%{transform:translateY(0) scale(.96)}100%{transform:none}}
+@keyframes d20Land{0%{transform:translateY(-4%) scale(1.06)}100%{transform:none}}
+.log.pending .new:not(.me){display:none}
+@container (max-width:560px){.roll{left:56%!important;bottom:30%!important;height:58%!important}.roll .rl{font-size:10px;white-space:normal;text-align:center;max-width:80vw}.roll button{font-size:12px;padding:6px 14px}}
+@media (prefers-reduced-motion:reduce){.roll.go img,.roll.land img{animation:none}}
+.dice .ok{color:var(--g-amber)} .dice .ng{color:var(--g-red)}
+.queue{display:grid;gap:4px;padding:10px 14px 8px;border-bottom:1px solid var(--g-line)}
+.queue .qh{font-size:10.5px;letter-spacing:.08em;color:var(--g-dim);display:flex;justify-content:space-between;gap:8px}
+.q{display:grid;grid-template-columns:16px 22px minmax(0,1fr);gap:0 8px;align-items:center;font-size:12.5px;background:var(--g-bg2);border:1px solid var(--g-line);border-radius:6px;padding:3px 8px}
+.q .no{font-family:var(--f-mono);color:var(--g-amber);text-align:center}
+.q .pd{width:22px;height:22px;border-radius:50%;background:#333 center 12%/170% auto no-repeat}
+.q .res{grid-column:3;font-family:var(--f-mono);font-size:11px;color:var(--g-amber)}
+.q.foe{border-color:rgba(224,87,58,.5)} .q.foe .no,.q.foe .res{color:var(--g-red)}
+
+/* 入力 */
+.gfoot{border-top:1px solid var(--g-line);padding:8px 14px 10px;display:grid;gap:8px}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chip{font-size:12.5px;padding:3px 11px;border-radius:14px;border:1px solid var(--g-amber);color:var(--g-amber)}
+.chip.picked{background:var(--g-amber);color:#1a1205}
+.input{padding:8px 12px;border:1px solid var(--g-line);border-radius:8px;font-size:12.5px;color:var(--g-dim);display:flex;justify-content:space-between;gap:8px}
+.vote{padding:8px 10px;border:1px solid var(--g-amber);border-radius:8px;display:flex;flex-wrap:wrap;gap:6px 10px;align-items:center;font-size:13px}
+.vt{font-size:11.5px;padding:1px 8px;border-radius:10px;background:rgba(236,230,216,.08)}
+.vt.yes{color:var(--g-amber)} .vt.wait{color:var(--g-red)}
+@container (max-width:560px){
+  .bnm{font-size:9.5px;padding:1px 5px 3px}.bnm small{display:none}.bnm .hb{height:3px}
+  .gbar .me{display:none}.pdot{width:18px;height:18px}.gbar{gap:6px;padding:7px 10px}
+  .cast,.carry{grid-template-columns:repeat(3,minmax(0,1fr));overflow:auto}
+  .av .nm{font-size:9px;padding:0 4px}.bub{font-size:10.5px;max-width:46%;padding:4px 7px}.tag{font-size:10px}
+  .inset{width:70%;font-size:10.5px;padding:7px 9px}.tele{font-size:10px;max-width:44%;padding:4px 7px;left:6px;top:6px}.tele .k{font-size:9px}.tele .bhp{display:none}.bhp.over{display:block}
+  .seatx{width:72px;font-size:10px}.felt{width:70%}}
+
+/* 時間軸と解説 */
+.below{display:grid;grid-template-columns:minmax(0,1fr) 380px;gap:14px;align-items:start}
+@media (max-width:900px){.below{grid-template-columns:minmax(0,1fr)}}
+.box{background:var(--panel);border:1px solid var(--rule);border-radius:6px;padding:12px 14px;min-width:0}
+.ctrl{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.btn{all:unset;cursor:pointer;font-size:13px;padding:5px 12px;border:1px solid var(--ink);border-radius:16px}
+.btn:focus-visible{outline:2px solid var(--stone);outline-offset:2px}
+.btn[disabled]{opacity:.35;cursor:default}
+.btn.primary{background:var(--ink);color:var(--paper)}
+.pos{font-family:var(--f-mono);font-size:12px;color:var(--ink-2);margin-left:auto}
+.track{position:relative;height:50px;margin:10px 7px 0}
+.phase{position:absolute;top:0;height:18px;border-left:1px solid var(--rule);font-size:11px;color:var(--ink-2);padding-left:5px;white-space:nowrap;overflow:hidden}
+.rail{position:absolute;left:0;right:0;top:30px;height:2px;background:var(--rule)}
+.tick{all:unset;cursor:pointer;position:absolute;top:25px;width:8px;height:8px;margin-left:-6px;border-radius:50%;background:var(--paper);border:2px solid var(--ink-2)}
+.tick:focus-visible{outline:2px solid var(--stone);outline-offset:2px}
+.tick.done{background:var(--ink-2)}
+.tick.cur{background:var(--lantern);border-color:var(--lantern);transform:scale(1.5)}
+.tm{position:absolute;top:38px;font-family:var(--f-mono);font-size:10px;color:var(--ink-2);transform:translateX(-50%)}
+.label{font-size:11px;letter-spacing:.14em;color:var(--ink-2);margin:0 0 6px}
+h2.step{font-family:var(--f-display);font-weight:400;font-size:21px;margin:0;line-height:1.3;text-wrap:balance}
+.stepmeta{font-family:var(--f-mono);font-size:12px;color:var(--ink-2);margin-bottom:8px}
+.memo{font-size:14px;line-height:1.8;margin:0}
+.hole{display:inline-block;margin-top:8px;font-size:12px;color:var(--rust);border:1px solid currentColor;border-radius:10px;padding:0 8px}
+.legend{display:flex;flex-wrap:wrap;gap:6px 16px;font-size:12px;color:var(--ink-2);margin-top:10px}
+.legend span{display:flex;align-items:center;gap:6px}
+.legend i{width:14px;height:10px;border-radius:3px;display:inline-block;flex:none}
+</style>
+
+<div class="wrap">
+  <header>
+    <h1>灯りの番人</h1>
+    <p class="sub"><b>プレイ例</b> · 5人卓 · GMはAI · 約120分を34の場面で。<b>ミナ(TRPGは初めて)の画面</b>で見ていきます。</p>
+  </header>
+
+  <div class="game" id="game" aria-live="polite"></div>
+
+  <div class="below">
+    <div class="box">
+      <div class="ctrl">
+        <button class="btn" id="prev">前へ</button>
+        <button class="btn primary" id="next">次へ</button>
+        <button class="btn" id="play">自動で進める</button>
+        <span class="pos" id="pos"></span>
+      </div>
+      <div class="track" id="track"></div>
+      <div class="legend">
+        <span><i style="background:#f4efe3;border:1px solid #c9bfa8"></i>吹き出し = 通話の声を文字にしたもの(GMも読んでいる)</span>
+        <span><i style="background:#e8a33d"></i>記録 = GMの語り・宣言・判定</span>
+        <span><i style="background:#57c9da"></i>封 = ミナにだけ届いたもの</span>
+        <span><i style="border:1.5px dashed #17839a"></i>小窓 = その頃、別の人の画面では</span>
+      </div>
+    </div>
+    <div class="box">
+      <h2 class="step" id="stitle"></h2>
+      <div class="stepmeta" id="smeta"></div>
+      <p class="label">解説</p>
+      <p class="memo" id="memo"></p>
+      <span class="hole" id="hole" hidden></span>
+    </div>
+  </div>
+</div>
+
+<script>
+const IMG = n => `img/${n}.webp`;
+const D20 = r => `img/d20/s${String(r).padStart(2,"0")}.webp`, D20R = i => `img/d20/r${String(i).padStart(2,"0")}.webp`;
+for(let i=0;i<16;i++) new Image().src = D20R(i);
+/* mock3 用に定め直した5つの役割(2026-10-02) */
+const P = {
+  brom:   {name:"ブロム", player:"タケ", role:"盾役", dev:"スマホ", hp:18, line:"ドワーフの盾役。仲間の前に立つ"},
+  gareth: {name:"ガレス", player:"ソウ", role:"盗賊", dev:"スマホ", hp:15, line:"盗賊。鍵と急所に強い"},
+  ines:   {name:"イネス", player:"ミナ", role:"斥候", dev:"スマホ", hp:12, line:"斥候。足跡と罠を読む"},
+  lydia:  {name:"リディア", player:"ケン", role:"魔法使い", dev:"PC", hp:12, line:"魔法使い。古い文字が読める"},
+  maren:  {name:"マレン", player:"ユイ", role:"癒し手", dev:"PC", hp:13, line:"癒し手。仲間の傷を治す"},
+};
+const IDS = Object.keys(P);
+const ME = "ines";
+const BY = Object.fromEntries(IDS.map(id => [P[id].player, id]));
+const SCENE = {square:"s4_village_square", myra:"s4_myra_room", mine:"mine_entrance", junction:"s2_junction", chamber:"s3_chamber_v2", inner:"s7_inner_chamber"};
+const TAGS = [["崩れた岩",14,44],["木の柵",80,40],["壁の刻み",44,14],["正面の灯り",60,28]];
+const tags = (...w) => TAGS.map((t,i) => [...t, w[i]]);
+const REASON = "三年前、あなたはこの坑道で仲間を一人失った。あれはただの崩落ではなかった、と今も思っている。";
+const REL = "三年前の捜索に、最後まで付き合ってくれたのはブロムだけだった。";
+
+/* 台本。log=記録に残るもの、voice=吹き出し(通話・NPC・AI代役の文字)、mine=ミナにだけ届く、notice=他の人だけに届いた印、inset=小窓 */
+const S = [
+ {t:0, ph:"卓", title:"卓に集まる", mode:"lobby", seated:["タケ"],
+  memo:"参加者はリンクから卓に入る。事前に読む資料は無い。空いている席には「待っています」と出る。"},
+ {t:1, ph:"卓", title:"人が集まってくる", mode:"lobby", seated:["タケ","ミナ","ソウ"],
+  voice:[["タケ","こんばんは。初めての人いる?"],["ミナ","……初めてです"],["ソウ","TRPGは初めて。よろしく"]],
+  memo:"待っている間も通話はつながっている。声は文字にされて、話した人の吹き出しに出る。GMもこの文字を読んでいる。"},
+ {t:2, ph:"卓", title:"5人がそろう", mode:"lobby", seated:["タケ","ミナ","ソウ","ケン","ユイ"],
+  voice:[["ケン","遅れました、PCから入ってます"],["ユイ","わたしもPCです"]],
+  memo:"スマホの人とPCの人が同じ卓に混ざる。画面はPC版を基本に作り、スマホでは同じ画面を縦に積んで見せる。"},
+ {t:3, ph:"卓", title:"GMの前説", mode:"lobby", seated:["タケ","ミナ","ソウ","ケン","ユイ"], gm:true,
+  log:[["gm","ようこそ、ランタンヒルへ。今夜は5人で、古い坑道の謎に挑んでもらう。"],["gm","ルールは覚えなくていい。必要なことは、遊びながらわたしが伝える。"],["gm","まずは、旅の仲間を選ぼう。"]],
+  memo:"5人そろうと、GMが画面の中の人物として現れる。ルールブックの代わりに「遊びながら伝える」と約束する。"},
+ {t:4, ph:"卓", title:"仲間を選ぶ", mode:"select",
+  voice:[["タケ","俺ドワーフ。盾やりたい"],["ミナ","……じゃあ、斥候の人で"],["ソウ","盗賊いいね。怪しい役って好きなんだよね"]],
+  memo:"キャラクターは作らず、用意された5人から選ぶ。読むのは絵と役割と1行だけ。"},
+ {t:5, ph:"冒頭", title:"話す理由が届く", scene:"square", reset:true,
+  mine:[["card"]], log:[["sys","他の4人にも、それぞれ別の1行が届いた。"]],
+  memo:"ミナにだけ「話す理由」と「関係」が届く(封)。他の4人にも別の1行が届いているが、ミナの画面には中身が出ない。"},
+ {t:6, ph:"冒頭", title:"GMが仲間を紹介する", scene:"square", lit:IDS,
+  log:[["gm","ドワーフのブロム。仲間の前に立つ盾だ。"],["gm","ガレス。鍵と急所に強い盗賊。"],["gm","イネス。足跡と罠を読む斥候。"],["gm","リディア。古い文字が読める魔法使い。"],["gm","マレン。仲間の傷を治す癒し手。"]],
+  memo:"GMが5人を1人ずつ紹介する。見ている人も、ここで5人の役割を知る。"},
+ {t:7, ph:"冒頭", title:"名乗る — ブロム", scene:"square", lit:["brom"],
+  log:[["gm","夕暮れの酒場。村の灯りは、三年前から少しずつ減っている。今夜も広場の灯りが一つ消えて、残りは三つ。"],["gm","……ブロム、君は何を飲んでいる?"],["me","brom","黒ビールを一気に飲む。「仕事の前はこれに限る」"]],
+  memo:"「三年前から灯りが減っている」は、5人全員が知っている話としてGMが最初に置く伏線。GMの問いは1人に1つ。答えの候補はブロムの画面にだけ出ているので、ミナの画面には出ていない。ブロムの宣言は記録に残る。"},
+ {t:8, ph:"冒頭", title:"名乗る — イネス", scene:"square", lit:["ines"],
+  log:[["gm","ブロムが空の杯を置く。重い音がした。……イネス、君は窓の外を見ている。何を見ている?"]],
+  chips:["坑道のある山","消えた広場の灯り","誰も見ていない"],
+  memo:"ミナの番。ミナの画面にだけ、答えの候補が3つ出る。自由に書いてもよい。"},
+ {t:9, ph:"冒頭", title:"山を見ている", scene:"square",
+  log:[["me","ines","(チップ)坑道のある山"],["gm","イネスが山を見ている。その目は動かない。ブロムだけが、その理由を知っている気がした。"]],
+  chips:["坑道のある山","消えた広場の灯り","誰も見ていない"], picked:"坑道のある山",
+  voice:[["タケ","(ブロムとして)……また、あの山か"],["ミナ","……うん"]],
+  memo:"話すのが苦手なミナも、チップ1つで名乗れた。GMは2人の「関係」を語りに混ぜ、タケが声で拾った。"},
+ {t:10, ph:"依頼", title:"マイラの依頼", scene:"myra", reset:true, npc:"myra",
+  log:[["gm","マイラの部屋。机に古い見取り図が広げてある。"],["gm","奥の寝台で、幼い娘が眠っている。枕元の小瓶が、青く光っている。"]],
+  voice:[["myra","坑道の奥から、まだ物音がするの。正体を確かめてきて"]],
+  inset:{who:"gareth", body:"マイラが一瞬、あなたにだけ目配せをした。"},
+  memo:"寝台の娘リタと青い小瓶は、5人全員に見えている。この時点では誰も気にしない。NPCの台詞は、立ち絵の吹き出しで出る。小窓は見ている人のための補足で、ガレスの画面にだけ届いた一言を見せている。ミナはまだ知らない。"},
+ {t:15, ph:"探索", title:"坑道の入り口", scene:"mine", reset:true, lit:["lydia"],
+  log:[["gm","古いレールと木の札。奥から金属音がかすかに聞こえる。ここは何を調べても危なくない。"],["me","lydia","木の札を読む"],["dice","lydia","判定",6,0,10],["gm","字がかすれて読めない。でも、何も起きない。"]],
+  memo:"最初の判定は、失敗しても何も失わない場所に置く。宣言する → 自分で振る → GMが語る、の手触りを全員が1回覚える。"},
+ {t:25, ph:"探索", title:"分かれ道", scene:"junction", reset:true, tags:tags(),
+  log:[["gm","道が三つに分かれている。左は崩れた岩。右は木の柵。正面の奥に、青い灯りが揺れている。壁には何か刻まれている。"]],
+  memo:"ここから5人が同時に、別々に動く。調べられる場所の札には、いまそこを見ている人の顔が付く。"},
+ {t:31, ph:"探索", title:"崩れた岩を調べる", scene:"junction", tags:tags("ines","gareth","lydia","brom"), lit:["ines"],
+  log:[["me","ines","崩れた岩を調べる"],["dice","ines","痕跡読み",9,5,12]],
+  mine:[["text","岩の割れ目に、つるはしの跡がある。三年くらい前のものだ。……これは崩れたのではない。誰かが掘って、崩したのだ。"]],
+  memo:"出目は全員に見える。分かった中身はミナにだけ届く(封)。"},
+ {t:33, ph:"探索", title:"錠前の音", scene:"junction", tags:tags("ines","gareth","lydia","brom"), lit:["gareth"],
+  log:[["me","gareth","柵の錠前を外す"],["dice","gareth","鍵開け",13,5,15],["gm","カチリ、と音がして、柵の錠前が外れた。"],["notice","gareth"]],
+  inset:{who:"gareth", body:"柵の向こうの床に、袋が落ちている。中に青い石の欠片が3つ。袋には、マイラの家の紋が縫い付けてある。"},
+  memo:"音は全員に、中身はガレスにだけ。ミナの画面には「ガレスだけが何かを知った」とだけ出る。中身を知らない側に、話しかける理由が生まれる。"},
+ {t:36, ph:"探索", title:"壁の文字と金槌の印", scene:"junction", tags:tags("ines","gareth","lydia","brom"), lit:["lydia","brom"],
+  voice:[["ケン","字があるけど、煤に埋まってて読めない"],["タケ","その刻みの形、俺の金槌の柄と同じだ。当ててみる"]],
+  log:[["me","lydia","壁の刻みを読む"],["sys","煤に覆われていて、読めない。"],["me","brom","金槌の柄の印を、壁の刻みに当てる"],["gm","刻みが青く光り、煤が落ちた。文字が浮かぶ。"],["notice","lydia"],["notice","brom"]],
+  memo:"持ち物を組み合わせないと開かない場所。文字を読めるのはリディアだけだが、浮かび上がらせるにはブロムの金槌が要る。自分の持ち物の値打ちは、仲間に話して初めて分かる。"},
+ {t:40, ph:"探索", title:"止まっている人", scene:"junction", tags:tags("ines","gareth","lydia","brom"), idle:["maren"],
+  inset:{who:"maren", body:"マレン。正面の青い灯りが、君のほうへ揺れた気がする。近づいてみる?", chips:["灯りに近づく","鈴を鳴らす","仲間のそばにいる"]},
+  memo:"ユイは90秒、宣言も発言もしていない。会話を読んでいるGMには、迷っているのか話し込んでいるのかの区別がつく。GMはユイにだけ、本人の話す理由につながる方向を示す。読むのが苦手な人には、同じやり方で長い語りを短く言い換えて届ける。ミナの画面には何も出ない(90秒は仮の値)。", hole:"穴5: 「迷っている」をどう判定するか"},
+ {t:41, ph:"探索", title:"声", scene:"junction", tags:tags("ines","gareth","lydia","maren"), lit:["maren"],
+  log:[["me","maren","(チップ)灯りに近づく"],["notice","maren"]],
+  inset:{who:"maren", body:"頭の中で、かすれた声がした。『……かえして』"},
+  memo:"最初に届いた1行「声が聞こえる」が、遊びの中で本物になった。"},
+ {t:44, ph:"探索", title:"同じ柵を、数秒遅れで", scene:"junction", tags:tags("lydia","ines","brom","maren"), lit:["ines"],
+  log:[["me","ines","柵の向こうを調べる"]],
+  mine:[["text","柵の向こうの床に、何かを引きずった跡がある。袋くらいの大きさだ。今はもう無い。"]],
+  memo:"ガレスの数秒後に、ミナが同じ場所を調べた。後から来た人には「先に誰かが動かした跡」を返している。この裁き方は仮。", hole:"穴1: 同じ対象を2人が調べたとき"},
+ {t:55, ph:"共有", title:"話す", scene:"junction", tags:tags("lydia","ines","brom","maren"),
+  voice:[["タケ","柱、うちのじいさんの組み方だったわ"],["ミナ","……あの、崩れた岩。掘った跡があった。三年前の"],["タケ","三年前って、お前の……"]],
+  memo:"GMは口を挟まない。記録は止まったまま、吹き出しだけが出る。ただしGMは文字にされた会話を読んで、誰が何を明かしたかを追っている。", hole:"穴3(更新): 文字起こしの誤変換と、会話が文字で残ることへの同意"},
+ {t:56, ph:"共有", title:"つながっていく", scene:"junction", tags:tags("lydia","ines","brom","maren"),
+  voice:[["ミナ","うん"],["ケン","実は俺、壁の字が読めた。『石を戻せ、さもなくば灯は消える』"],["ユイ","え、わたし、灯りの近くで『かえして』って聞こえた"]],
+  memo:"事前に何も読んでいないのに、5人全員に話す理由がある。それぞれが持っている欠片を声で出し合う。"},
+ {t:58, ph:"共有", title:"問い詰める", scene:"junction", tags:tags("lydia","ines","brom","maren"),
+  voice:[["ミナ","……灯りが減り始めたのも、三年前だ"],["ケン","つながった。三年前、誰かが石を持ち出したんだ"],["ユイ","……ガレス、出発の朝、マイラさんの家から出てきたよね?"]],
+  memo:"冒頭でGMが全員に置いた「三年前から灯りが減っている」が、ミナの古傷とつながる。全員が知っていた話なので、5人とも同時に気づける。マレンの「関係」の1行(ガレスがマイラの屋敷から出てくるのを見た)が、ここで効く。"},
+ {t:60, ph:"共有", title:"告白", scene:"junction", tags:tags("lydia","ines","brom","maren"),
+  voice:[["ソウ","……バレてたか。前金もらってる。青い石を見つけたら、こっそり渡せって。『娘のためなの』って"],["ソウ","で、柵の向こうに欠片の袋があった。マイラの紋つきの"],["ケン","娘……あの寝台の子。枕元の小瓶、青く光ってた"]],
+  log:[["gm","……5人の話がつながったとき、正面の青い灯りが一度だけ強く瞬いた。奥で、何かが動く音がする。"]],
+  memo:"秘密を抱えたまま話す緊張が面白さになるが、明かすと全員が得をする作りにしてある。GMは会話を読んでいて、5人分の手がかりがそろった瞬間に場面を動かした。声をGMに渡すからできる演出。"},
+ {t:63, ph:"共有", title:"奥へ進むか", scene:"junction", ai:["maren"],
+  log:[["me","brom","奥の灯りの部屋へ進もう"],["gm","マレンは黙ってうなずいた。(ユイさんの接続が切れたため、戻るまでAIがマレンを演じます)"]],
+  voice:[["ユイ","ごめん、通信が……"]],
+  vote:{brom:"yes",gareth:"yes",ines:"yes",lydia:"yes",maren:"yes"},
+  memo:"場面の移動だけは全員の合意で決める。ユイの接続が切れ、AIが代わりにマレンを演じて賛成した。", hole:"穴2・穴4: 代役の権限と、反対が残ったとき"},
+ {t:65, ph:"ボス戦", title:"番人", mode:"battle", reset:true, ai:["maren"], round:1, boss:60,
+  tele:"右腕を振りかぶる → 前衛を薙ぎ払う(前衛の全員に5)",
+  log:[["gm","灯りの部屋。ランタンを提げた鉄の巨人がこちらを向く。胸の石が、赤く脈打ち始めた。"],["sys","探索の成果: 祖父の印(ブロム)→ 番人の背中に同じ印。胸の枠の継ぎ目が見えている(急所狙い +2)"],["sys","探索の成果: 壁の文字(リディア)→ 石を戻せば番人は止まる(番人を倒さずに終える道がある)"]],
+  memo:"探索で分かったことが、戦いの有利に変わる。調べた人ほど強くなるのではなく、話して共有した分だけ全員が強くなる。盤面は地図ではなく、前衛と後衛の2列。番人が次にすることは、予告の札で全員に見えている。"},
+ {t:67, ph:"ボス戦", title:"ラウンド1 相談して並べる", mode:"battle", ai:["maren"], round:1, boss:60,
+  tele:"右腕を振りかぶる → 前衛を薙ぎ払う(前衛の全員に5)",
+  queue:[["ines","見抜く"],["gareth","急所狙い"],["lydia","火球"],["maren","守りの光 → ブロム"],["brom","かばう(前衛)"]], confirm:"確定 5/5",
+  voice:[["ミナ","……あの。見抜く、っていうのが、ある"],["ソウ","それ先にやって。弱点が分かってると8出るから"],["ai","わたしはブロムに守りの光をかけておく。かばう前に"]],
+  memo:"全員の行動を1本の列に並べる。誰でも並べ替えられ、全員が確定すると解決へ進む。AIの代役は文字で相談に加わる(破線の吹き出し)。"},
+ {t:70, ph:"ボス戦", title:"ラウンド1 解決", mode:"battle", ai:["maren"], round:1, boss:46, hp:{brom:11}, lit:["brom"],
+  tele:"右腕を振りかぶる → 前衛を薙ぎ払う(前衛の全員に5)",
+  queue:[["ines","見抜く","14 成功 · 弱点が見えた"],["gareth","急所狙い","16 命中 · 8"],["lydia","火球","12 命中 · 6"],["maren","守りの光 → ブロム","次の被ダメ -3"],["brom","かばう(前衛)","前衛の分を受ける"],["boss","薙ぎ払い","ブロムに 2+5"]],
+  log:[["gm","イネスの目が継ぎ目を捉える。ガレスの刃がそこへ入った。火球が鉄を焼く。巨人の腕が振り下ろされる。ブロムが前に出た。二人分の重さを、盾一枚で受けた。"]],
+  memo:"順番が作戦になっている。1と2を逆にすると、急所狙いは弱点を突けず3しか出ない。ダメージと命中はプログラムが決め、AIは語るだけ。"},
+ {t:74, ph:"ボス戦", title:"ラウンド2 予告が順番を見ている", mode:"battle", ai:["maren"], round:2, boss:46, hp:{brom:11},
+  tele:"胸の石が明滅する → 最後に魔法を使った者へ光を放つ(8)",
+  queue:[["ines","手を貸す → リディア"],["lydia","火球(最後の1回)"],["gareth","急所狙い"],["brom","打ち込む"],["maren","守りの光 → 自分"]], confirm:"確定 5/5",
+  voice:[["ケン","最後に魔法使ったやつ? 俺がまた狙われるな"],["タケ","最後にマレンが魔法を使えば、狙いがマレンに行く"],["ai","いいわ。わたしは13ある。最後に、自分に守りの光をかける"]],
+  memo:"予告の中身が、解決の順番を参照している。並べ方そのものが守りになる。初心者には難しい。", hole:"穴6: 順番を参照する予告は後半だけにするか"},
+ {t:77, ph:"ボス戦", title:"ラウンド2 解決", mode:"battle", ai:["maren"], round:2, boss:28, hp:{brom:11, maren:8}, lit:["lydia","ines"],
+  tele:"胸の石が明滅する → 最後に魔法を使った者へ光を放つ(8)",
+  queue:[["ines","手を貸す → リディア","次の判定 +5"],["lydia","火球(最後の1回)","3+5+5=13 命中 · 6"],["gareth","急所狙い","23 命中 · 8"],["brom","打ち込む","14 命中 · 4"],["maren","守りの光 → 自分","次の被ダメ -3"],["boss","光線 → マレン","8-3 = 5"]],
+  log:[["gm","リディアの手が震える。イネスがその肩を押さえた。火球はまっすぐ飛んだ。"]],
+  memo:"リディアの出目は3。弱点の+5だけでは8で外れていた。ミナの「手を貸す」の+5で命中した。話すのが苦手でも、1語で連携に入れる。"},
+ {t:90, ph:"ボス戦", title:"胸の石がむき出しに", mode:"battle", ai:["maren"], round:4, boss:14, stone:true, hp:{brom:9, gareth:13, ines:10, lydia:9, maren:8},
+  tele:"ランタンを掲げる → 前衛の1人を掴む(6)",
+  log:[["sys","(ラウンド3・4は省略)"],["gm","巨人が膝をついた。胸の枠が外れ、石がむき出しになる。石は弱く、青く光っている。"]],
+  inset:{who:"maren", ai:true, body:"あの声が、また聞こえた。『かえして』"},
+  memo:"ラウンド3は落石を後衛が前に出て避け、ラウンド4はガレスの足払いで掴みを遅らせた。マレンに届いた声を、代役のAIは自分からは話さない。", hole:"穴2: 代役中の話す理由をどう扱うか"},
+ {t:95, ph:"結末", title:"戻ってきた人", scene:"inner", reset:true, npc:"guardian",
+  log:[["gm","石は君たちの前にある。欠片の袋もある。どうする?"]],
+  inset:{who:"maren", body:"おかえりなさい。不在の間、AIがマレンを演じました。守りの光を2回、手当てを1回使いました。HPは8です。"},
+  voice:[["ユイ","戻った! 石、戻してって声がまだ聞こえる"],["ケン","壁の字も『石を戻せ』だった"],["ソウ","……マイラの娘、あの小瓶の光で生きてるんだ。全部戻したら、たぶん消える"]],
+  memo:"戻ってきた人には、不在の間の要約が本人にだけ届く。結末を選ぶのはプレイヤー同士の会話で、GMは宣言を待つ。"},
+ {t:98, ph:"結末", title:"選ぶ", scene:"inner", npc:"guardian",
+  voice:[["ミナ","三年前、その欠片のせいで、仲間が死んだ"],["ソウ","わかってる。……一粒だけ、残させてくれ。前金は返す"],["ミナ","……一粒だけ"]],
+  memo:"全部戻せば村の灯りは戻るが、マイラの娘の小瓶は消える。イネス(仲間を失った)とガレス(マイラに雇われた)の話す理由が正面からぶつかり、2人が声で折り合いをつけた。正解は用意していない。全部戻す・一粒残す・全部渡すの、どれを選んでも結末がある。"},
+ {t:102, ph:"結末", title:"灯りがともる", scene:"inner", npc:"guardian", lit:["gareth","brom"],
+  log:[["me","gareth","袋の欠片を胸の石に戻す。一粒だけ、手の中に残す"],["me","brom","祖父の金槌で、胸の枠をはめ直す"],["gm","欠片が石に吸い込まれる。番人は立ち上がり、ランタンを元の場所に掛けた。ガレスの手を一度だけ見て、何もしなかった。"],["gm","……村のほうで、広場の灯りが二つともった。三つ目は、暗いままだ。"]],
+  memo:"ガレスの密約が、最後の選択の重さになった。一粒を残した代償は、村の灯りが一つ欠けたままになること。宣言を受けて、GMが結末を語る。"},
+ {t:104, ph:"結末", title:"マイラに報告する", scene:"myra", reset:true, npc:"myra",
+  log:[["gm","マイラの部屋。寝台のリタは眠ったままだ。小瓶の光は、朝より弱い。"],["gm","5人とも、マイラに何をするかを決めてほしい。そろったら、順に語る。"]],
+  queue:[["gareth","前金を返す。一粒をリタの小瓶に入れる"],["ines","三年前の崩落のことを、マイラに問う"],["lydia","壁の文字を書き写して、マイラに渡す"],["brom","祖父の坑道は、自分が守ると告げる"],["maren","リタの手を取り、声を聞く"]], qh:"宣言(全員がそろってから、順に語る)", confirm:"そろった 5/5",
+  memo:"結末の行動は、物ではなく人に向ける。全員が宣言を出し終えてから、GMが順に語る。先に出た宣言に引きずられないための作り。"},
+ {t:106, ph:"結末", title:"マイラの答え", scene:"myra", npc:"myra", lit:["ines"],
+  voice:[["myra","……三年前、掘らせたのはわたし。崩れるとは思わなかった。でも、それは言い訳ね"]],
+  log:[["gm","マイラはイネスの目を見て、そう言った。"],["me","ines","(チップ+書き足し)許さない。でも、リタの灯りは消さない"]],
+  chips:["許す","許さない","何も言わない"], picked:"許さない",
+  memo:"話す理由「三年前に仲間を失った」の答えが、ここで本人に返る。ミナはチップを選んだうえで、一言を書き足した。この一言がマイラとの関係として残り、次の冒険へ持ち越される。"},
+ {t:108, ph:"種明かし", title:"5人の話す理由を開く", mode:"reveal", reset:true,
+  carry:{brom:"この坑道を掘ったのは、あなたの祖父だ", gareth:"マイラに前金を握らされた。「娘のためなの」", ines:"三年前、この坑道で仲間を一人失った", lydia:"遺工の古い文字が読める。誰にも話したことはない", maren:"青い光のそばで、あなたにだけ声が聞こえる"},
+  log:[["gm","5人の1行を、全員に開く。"],["gm","もしマレンが声のことを話していなければ、番人が石を求めていると分かる人はいなかった。"],["gm","もしブロムが金槌を当てなければ、壁の文字は煤の下のままだった。"]],
+  memo:"遊び終えた後に、互いの話す理由を全員に公開する。AI GMは、話されなかったら届かなかった道を1人ずつ添える。他の人の1行を初めて知る時間が、いちばん盛り上がる。"},
+ {t:110, ph:"持ち越し", title:"次の冒険へ", mode:"carry", reset:true,
+  carry:{brom:"称号「祖父の坑道を継ぐ者」", gareth:"心石の一粒(リタへ) / 前金は返した", ines:"分かったこと「三年前の崩落の真相」 / マイラとの関係「許していない」", lydia:"記録板に「番人の文字」", maren:"心石の近くで、声が聞こえ続ける"},
+  memo:"話す理由と関係は、ここで外れる。キャラクターと、手に入れたものだけが次の冒険へ行く。1回ごとに使い切りになる遊びと違い、続けて遊ぶ理由が残る。"},
+];
+const PHASES = [["卓",0],["冒頭",5],["依頼",10],["探索",15],["共有",55],["ボス戦",65],["結末",95],["種明かし",108],["持ち越し",110]];
+const TOTAL = 120;
+
+let cur = 0, timer = null;
+const $ = id => document.getElementById(id);
+const esc = s => String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const clock = m => `${Math.floor(m/60)}:${String(m%60).padStart(2,"0")}`;
+const faceBg = id => `background-image:url(${IMG(id)})`;
+
+/* 場面が切り替わるまで、記録は積み重なる */
+function history(i){
+  let j = i; while(j > 0 && !S[j].reset) j--;
+  const out = [];
+  for(let k = j; k <= i; k++){
+    (S[k].mine||[]).forEach(e => out.push({e:["mine",...e], fresh:k===i}));
+    (S[k].log||[]).forEach(e => out.push({e, fresh:k===i}));
+  }
+  return out.slice(-9);
+}
+function entryHTML({e, fresh}){
+  const n = fresh ? " new" : "";
+  if(e[0]==="gm") return `<div class="ln gm${n}"><span class="who">GM</span>${esc(e[1])}</div>`;
+  if(e[0]==="me") return `<div class="ln me${n}"><span class="who">${P[e[1]].name}(${P[e[1]].player})の宣言</span>${esc(e[2])}</div>`;
+  if(e[0]==="sys") return `<div class="ln sys${n}">${esc(e[1])}</div>`;
+  if(e[0]==="notice") return `<div class="notice${n}">${P[e[1]].name}だけに届いた結果があります</div>`;
+  if(e[0]==="dice"){ const [,who,sk,r,m,dc]=e, t=r+m, ok=t>=dc;
+    return `<div class="dice${n}"><img class="d20" src="${D20(r)}" alt="d20: ${r}"><span>${P[who].name}の${sk}: ${r}${m?` + ${m}`:""} = ${t} / 難易度 ${dc} … <b class="${ok?"ok":"ng"}">${ok?"成功":"失敗"}</b></span></div>`; }
+  if(e[0]==="mine" && e[1]==="card") return `<div class="seal${n}"><span class="who">GM → あなただけ</span><h4>話す理由</h4>${esc(REASON)}<span class="who" style="margin-top:6px">関係</span>${esc(REL)}</div>`;
+  if(e[0]==="mine") return `<div class="seal${n}"><span class="who">GM → あなただけ</span>${esc(e[2])}</div>`;
+  return "";
+}
+
+/* 人物の立ち位置: [左からの%, 高さの%, 下からの%]。高さは身長(cm)に比例させる。180cm = 場面の高さの44% */
+const CM = {brom:150, gareth:180, ines:160, lydia:170, maren:165};  // イネスとマレンは仮の値
+const tall = (id, k) => +(CM[id] / 180 * k).toFixed(1);
+function layout(s){
+  /* 戦闘は手前から見た構図。後衛は一番手前(大きく、下が切れる)、前衛はその先で番人に近い(小さく、高い) */
+  if(s.mode==="battle") return {self:false, row:{ines:"後衛",lydia:"後衛",maren:"後衛",brom:"前衛",gareth:"前衛"},
+    pos:{ines:[10,tall("ines",68),-28],lydia:[23,tall("lydia",68),-28],maren:[36,tall("maren",68),-28],brom:[50,tall("brom",46),4],gareth:[61,tall("gareth",46),4]}};
+  /* 探索では自分(ミナ)を場面に出さない。自分は左下の札で表す */
+  /* 戦闘以外は、この場面で話した人・宣言した人だけを出す */
+  const act = new Set([...(s.lit||[]), ...(s.voice||[]).map(v=>speakerId(v[0])), ...(s.log||[]).filter(e=>e[0]==="me").map(e=>e[1])]);
+  const others = IDS.filter(id => id !== ME && act.has(id)), n = others.length, mid = s.npc ? 44 : 54;
+  return {self:true, pos:Object.fromEntries(others.map((id,i)=>[id,[mid+(i-(n-1)/2)*13,tall(id,44),0]]))};
+}
+const speakerId = w => w==="ai" ? "maren" : w==="myra" ? "myra" : BY[w];
+
+function stageHTML(s){
+  if(s.mode==="lobby"){
+    const seats = [[50,-4],[98,32],[84,98],[16,98],[2,32]];
+    const order = ["タケ","ミナ","ソウ","ケン","ユイ"];
+    const sat = s.seated||[];
+    const sh = order.map((pl,i) => { const on = sat.includes(pl), id = BY[pl], v = (s.voice||[]).find(x=>x[0]===pl);
+      return `<div class="seatx ${on?"":"empty"} ${v?"talk":""} ${pl==="ミナ"?"me":""}" style="left:${seats[i][0]}%;top:${seats[i][1]}%">
+        ${v?`<div class="bub"><b>${pl}${pl==="ミナ"?"(あなた)":""}</b>${esc(v[1])}</div>`:""}
+        <span class="c">${on?pl[0]:"?"}</span>${on?`<span>${pl}${pl==="ミナ"?"(あなた)":""}</span><small>${P[id].dev}</small>`:"<span>待っています…</span>"}</div>`; }).join("");
+    return `<div class="stage" style="background-image:url(${IMG(SCENE.square)})"><div class="table"><div class="felt">
+      <div class="center"><b>灯りの番人</b><span>${sat.length} / 5 人</span></div>${sh}</div></div>
+      ${s.gm?`<div class="gmb lit"><span class="f"></span><b>GM</b></div>`:""}</div>`;
+  }
+  if(s.mode==="select"){
+    const taken = {brom:"タケ", ines:"ミナ", gareth:"ソウ"};
+    return `<div class="stage" style="background-image:url(${IMG(SCENE.square)})"><div class="cast">${IDS.map(id=>`
+      <div class="cc ${taken[id]?"taken":""} ${id===ME?"mine":""}">${taken[id]?`<span class="by">${taken[id]}${id===ME?"(あなた)":""}</span>`:""}<img src="${IMG(id)}" alt="${P[id].name}"><span class="n">${P[id].name}</span><span class="r">${P[id].line}</span></div>`).join("")}</div>
+      ${bubblesHTML(s, null)}</div>`;
+  }
+  if(s.mode==="carry"||s.mode==="reveal"){
+    return `<div class="stage" style="background-image:url(${IMG(s.mode==="reveal"?SCENE.inner:SCENE.square)})"><div class="carry">${IDS.map(id=>`
+      <div class="cy ${id===ME?"mine":""}"><img src="${IMG(id)}" alt=""><b>${P[id].name}</b><span>${esc(s.carry[id])}</span></div>`).join("")}</div></div>`;
+  }
+  const bg = s.mode==="battle" ? SCENE.chamber : (SCENE[s.scene] || SCENE.square);
+  const L = layout(s);
+  const st = id => ({lit:(s.lit||[]).includes(id), ai:(s.ai||[]).includes(id), idle:(s.idle||[]).includes(id),
+                     talk:(s.voice||[]).some(v=>speakerId(v[0])===id)});
+  const hp = id => (s.hp||{})[id] ?? P[id].hp;
+  let h = "";
+  if(L.self){ h += `<div class="gmb ${(s.log||[]).some(e=>e[0]==="gm")?"lit":""}"><span class="f"></span><b>GM</b></div>`;
+    const k = st(ME);
+    h += `<div class="self ${k.lit?"lit":""} ${k.talk?"talk":""}"><span class="f" style="${faceBg(ME)}"></span><span class="t"><b>${P[ME].name}(あなた)</b><small>${P[ME].role} · HP ${P[ME].hp}/${P[ME].hp}</small></span></div>`; }
+  Object.keys(L.pos).forEach(id => { const [x,ht,b] = L.pos[id], k = st(id);
+    const tail = k.ai ? "<small>AI代役</small>" : "";
+    const back = s.mode==="battle", rear = back && L.row[id]==="後衛";
+    h += `<div class="av ${back?"back":""} ${rear?"rear":""} ${k.lit?"lit":""} ${k.talk?"talk":""} ${k.ai?"ai":""} ${k.idle?"idle":""}" style="left:${x}%;height:${ht}%;bottom:${b}%"><img src="${IMG(back?id+"_back":id)}" alt="${P[id].name}">
+      ${back?"":`<span class="nm ${hp(id)<P[id].hp?"hurt":""}">${P[id].name}${id===ME?"(あなた)":""}${tail}</span>`}</div>`; });
+  // ponytail: 戦闘の名札は x 順に交互に2段へ置き、隣どうしで重ならないようにする
+  if(s.mode==="battle") Object.keys(L.pos).sort((a,b)=>L.pos[a][0]-L.pos[b][0]).forEach((id,i)=>{ const r=hp(id)/P[id].hp;
+    h += `<div class="bnm ${st(id).ai?"ai":""}" style="left:${L.pos[id][0]}%;bottom:${i%2?12:2}%">${P[id].name}${id===ME?"(あなた)":""}<small>${L.row[id]} · ${hp(id)}/${P[id].hp}</small><span class="hb"><i class="${r<=.5?"lo":""}" style="width:${r*100}%"></i></span></div>`; });
+  if(s.npc) h += `<div class="npc" style="left:${s.npc==="myra"?82:82}%;height:${s.npc==="myra"?74:84}%"><img src="${IMG(s.npc)}" alt=""></div>`;
+  if(s.mode==="battle"){
+    h += `<div class="plat"></div><div class="npc boss" style="left:78%;height:84%;bottom:9%"><img src="${IMG(s.stone?"guardian":"guardian_rampage")}" alt="灯りの番人"></div>
+      <div class="tele"><div class="k">予告 · ラウンド${s.round}</div>${esc(s.tele)}<div class="bhp">番人 ${s.boss}/60<div class="bar"><i style="width:${s.boss/60*100}%"></i></div></div></div>
+      <div class="bhp over">番人 ${s.boss}/60<div class="bar"><i style="width:${s.boss/60*100}%"></i></div></div>
+`;
+  }
+  h += (s.tags||[]).map(([n,x,y,w]) => `<span class="tag" style="left:${x}%;top:${y}%">${w?`<i style="${faceBg(w)}"></i>`:""}${esc(n)}</span>`).join("");
+  h += bubblesHTML(s, L);
+  const dz = (s.log||[]).find(e=>e[0]==="dice");
+  // ponytail: ダイスは振った人の横に置く。自分ならカードの上、他の人なら立ち絵の右
+  const dx = dz && (dz[1]===ME ? 24 : Math.min(((L.pos||{})[dz[1]]||[50])[0] + 16, 72));
+  if(dz) h += `<div class="roll" id="roll" style="left:${dx}%;height:${dz[1]===ME?56:42}%;bottom:${dz[1]===ME?20:14}%"><img id="rollimg" src="${D20R(0)}" alt="">${dz[1]===ME?`<button id="rollbtn">ダイスを振る</button>`:`<span class="rl">${P[dz[1]].name}が振っている…</span>`}</div>`;
+  if(s.inset){ const p = P[s.inset.who];
+    h += `<div class="inset ${s.mode==="battle"?"low":""}"><div class="h"><i style="${faceBg(s.inset.who)}"></i>${s.inset.ai?`その頃、${p.name}の席では(AIが演じている)`:`その頃、${p.player}の画面では`}</div>${esc(s.inset.body)}
+      ${s.inset.chips?`<div class="chips">${s.inset.chips.map(c=>`<span class="chip">${esc(c)}</span>`).join("")}</div>`:""}</div>`; }
+  return `<div class="stage" style="background-image:url(${IMG(bg)})">${h}</div>`;
+}
+/* 吹き出しは最新3つまで(狭い画面では2つ)。古いものほど上に積む */
+function bubblesHTML(s, L){
+  const v = (s.voice||[]).slice(innerWidth < 600 ? -2 : -3), n = v.length;
+  return v.map(([w,t],k) => {
+    const id = speakerId(w), up = (n-1-k)*(innerWidth < 600 ? 22 : 13);
+    let x, base;
+    if(id==="myra"){ x = 64; base = 70; }
+    else if(L && L.self && id===ME){ x = 16; base = 15; }
+    else if(L && L.pos[id]){ const [px,ht,b] = L.pos[id]; x = px; base = ht + b + 3; }
+    else if(s.mode==="select" && IDS.includes(id)){ x = 10 + IDS.indexOf(id)*20; base = 74; }
+    else { x = 22 + k*28; base = 74; }
+    x = Math.min(84, Math.max(16, x));
+    const cls = w==="ai" ? "ai" : id==="myra" ? "npc" : "";
+    const who = w==="ai" ? "マレン(AI代役・文字)" : w==="myra" ? "マイラ" : `${w}${id===ME?"(あなた)":""}`;
+    return `<div class="bub ${cls}" style="left:${x}%;bottom:${Math.min(base+up,86)}%"><b>${who}</b>${esc(t)}</div>`;
+  }).join("");
+}
+function sideHTML(s){
+  const q = (s.queue||[]).map(([id,act,res],i) => id==="boss"
+    ? `<div class="q foe"><span class="no">!</span><span class="pd" style="background-image:url(${IMG("guardian_rampage")});background-size:220%;background-position:center 20%"></span><span>番人: ${esc(act)}</span>${res?`<span class="res">${esc(res)}</span>`:""}</div>`
+    : `<div class="q"><span class="no">${i+1}</span><span class="pd" style="${faceBg(id)}"></span><span>${P[id].name}: ${esc(act)}</span>${res?`<span class="res">${esc(res)}</span>`:""}</div>`).join("");
+  let hist = history(cur).map(entryHTML).join("");
+  if(!hist) hist = `<div class="ln sys new">${s.mode==="lobby"?"全員がそろうと、GMが現れる。":s.mode==="select"?"5人から1人を選ぶ。選んだ人の名前が札に付く。":s.mode==="reveal"?"5人の話す理由を、全員に開く。":s.mode==="carry"?"話す理由と関係はここで外れる。キャラクターと手に入れたものだけが、次の冒険へ行く。":"(記録はまだ無い)"}</div>`;
+  const quiet = (s.voice||[]).length && !(s.log||[]).length && !(s.mine||[]).length && s.mode!=="lobby" && s.mode!=="select";
+  return `<div class="side"><div class="side-in">${q?`<div class="queue"><div class="qh"><span>${s.qh||"解決の順番(誰でも並べ替えられる)"}</span><span>${s.confirm||"解決済み"}</span></div>${q}</div>`:""}
+    <div class="lh"><span>記録</span><span>${quiet?"記録は増えない · 会話はGMも読んでいる":""}</span></div><div class="log" id="log">${hist}</div></div></div>`;
+}
+function footHTML(s){
+  let h = "";
+  if(s.vote) h += `<div class="vote"><span>奥の灯りの部屋へ進む?</span>${IDS.map(id=>`<span class="vt ${s.vote[id]}">${P[id].name} ${s.vote[id]==="yes"?"賛成":"まだ待って"}${(s.ai||[]).includes(id)?"(AI)":""}</span>`).join("")}</div>`;
+  if(s.chips) h += `<div class="chips">${s.chips.map(c=>`<span class="chip ${c===s.picked?"picked":""}">${esc(c)}</span>`).join("")}</div>`;
+  h += `<div class="input"><span>${s.mode==="battle"?"自分の行動を選ぶ / GMへ宣言する…":"GMへ宣言する…"}</span><span>送る</span></div>`;
+  return `<div class="gfoot">${h}</div>`;
+}
+
+// 判定の場面では、ステージ中央でd20が転がって止まる。自分の判定はボタンを押してから振る
+let rollT = [];
+function rollDie(s){
+  rollT.forEach(clearTimeout); rollT = [];
+  const box = $("roll"), dz = (s.log||[]).find(e=>e[0]==="dice"); if(!box || !dz) return;
+  const [,who,sk,r,m,dc] = dz, t = r+m, ok = t>=dc, img = $("rollimg");
+  const lg = $("log"); lg.classList.add("pending");   // 振り終わるまで、この場面の結果は記録に出さない
+  const go = () => { box.className = "roll go"; let f = 0;
+    const iv = setInterval(() => { img.src = D20R(f = (f+1)%16); }, 55); rollT.push(iv);
+    rollT.push(setTimeout(() => { clearInterval(iv); img.src = D20(r); box.className = "roll land"; lg.classList.remove("pending"); lg.scrollTop = lg.scrollHeight;
+      box.querySelector("button, .rl").outerHTML = `<span class="rl">${P[who].name}の${sk}: ${r}${m?` + ${m}`:""} = ${t} / 難易度 ${dc} … <b class="${ok?"ok":"ng"}">${ok?"成功":"失敗"}</b></span>`; }, 1250)); };
+  const btn = $("rollbtn");
+  if(btn) btn.onclick = () => { btn.disabled = true; go(); }; else rollT.push(setTimeout(go, 300));
+}
+function render(){
+  const s = S[cur];
+  const dots = IDS.map(id => `<span class="pdot ${(s.voice||[]).some(v=>speakerId(v[0])===id)?"talk":""} ${(s.ai||[]).includes(id)?"ai":""}" style="${faceBg(id)}" title="${P[id].name}"></span>`).join("");
+  $("game").innerHTML = `<div class="gbar"><span class="scn">${esc(s.title)}</span><span>${clock(s.t)}</span>
+      <span class="party" aria-label="通話中の5人">${dots}</span><span class="me"><i style="${faceBg(ME)}"></i>ミナの画面</span></div>
+    <div class="gmain">${stageHTML(s)}${sideHTML(s)}</div>${footHTML(s)}`;
+  const lg = $("log"); if(lg) lg.scrollTop = lg.scrollHeight;
+  rollDie(s);
+  $("stitle").textContent = s.title;
+  $("smeta").textContent = `${clock(s.t)} · ${s.ph} · 場面 ${cur+1}/${S.length}`;
+  $("memo").textContent = s.memo;
+  $("hole").hidden = !s.hole; $("hole").textContent = s.hole || "";
+  $("pos").textContent = `${cur+1} / ${S.length}`;
+  $("prev").disabled = cur===0; $("next").disabled = cur===S.length-1;
+  let h = `<div class="rail"></div>`;
+  PHASES.forEach(([n,t],i) => { const end = (PHASES[i+1]||[0,TOTAL])[1];
+    h += `<span class="phase" style="left:${t/TOTAL*100}%;width:${(end-t)/TOTAL*100}%">${n}</span>`; });
+  S.forEach((x,i) => h += `<button class="tick ${i<cur?"done":""} ${i===cur?"cur":""}" style="left:${x.t/TOTAL*100}%" data-i="${i}" aria-label="${clock(x.t)} ${x.title}"></button>`);
+  [0,30,60,90,120].forEach(m => h += `<span class="tm" style="left:${m/TOTAL*100}%">${clock(m)}</span>`);
+  $("track").innerHTML = h;
+  $("track").querySelectorAll(".tick").forEach(b => b.onclick = () => { stop(); cur = +b.dataset.i; render(); });
+}
+function stop(){ if(timer){ clearInterval(timer); timer=null; $("play").textContent="自動で進める"; } }
+const go = d => { stop(); const n = cur + d; if(n>=0 && n<S.length){ cur = n; render(); } };
+$("prev").onclick = () => go(-1);
+$("next").onclick = () => go(1);
+$("play").onclick = () => {
+  if(timer) return stop();
+  $("play").textContent = "止める";
+  timer = setInterval(() => { if(cur>=S.length-1) return stop(); cur++; render(); }, 6000);
+};
+document.addEventListener("keydown", e => { if(e.key==="ArrowRight") go(1); if(e.key==="ArrowLeft") go(-1); });
+render();
+</script>
+
+</body></html>

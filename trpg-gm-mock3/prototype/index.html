@@ -1,0 +1,469 @@
+<!doctype html>
+<html lang="ja"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>坑道の向こう — 連携プレイ試作</title>
+<style>
+:root{--bg:#121c24;--panel:#192630;--line:#3d5059;--text:#f0f2ed;--dim:#b0bec4;--amber:#e9bb70;--blue:#8bd6dd;--red:#ff9a87;color-scheme:dark;font-family:"Hiragino Kaku Gothic ProN","Yu Gothic",sans-serif;font-size:15px}*{box-sizing:border-box}[hidden]{display:none!important}body{margin:0;background:var(--bg);color:var(--text)}button,input{font:inherit}button{cursor:pointer;color:inherit;background:none;border:1px solid var(--line);border-radius:6px;padding:10px 14px}button:hover{background:#31444e}button:disabled{opacity:.45;cursor:default}button:focus-visible,input:focus-visible{outline:3px solid var(--blue);outline-offset:3px}h1,h2,h3{font-family:"Hiragino Mincho ProN","Yu Mincho",serif;font-weight:500}header{max-width:1480px;margin:auto;padding:18px 26px;display:flex;align-items:center;gap:16px}header h1{font-size:23px;margin:0}header span{color:var(--dim);font-size:12px}header button{margin-left:auto;padding:6px 12px;font-size:12px}.layout{max-width:1480px;margin:auto;padding:0 26px 24px;display:grid;grid-template-columns:minmax(0,1fr) 340px;gap:18px}.world{min-width:0}.scene{height:clamp(280px,calc(100svh - 400px),560px);position:relative;overflow:hidden;border-radius:10px;background:#22323c url('../replay/img/s2_junction.webp') center/cover}.scene:after{content:'';position:absolute;inset:0;background:linear-gradient(0deg,#101a24 0%,transparent 55%,#101a2455);pointer-events:none}.scenehead{position:absolute;z-index:2;top:24px;left:24px;right:24px;display:flex;justify-content:space-between;align-items:start}.scenehead h2{margin:0 0 4px;font-size:28px}.scenehead p{font-size:13px;margin:0;color:var(--text);text-shadow:0 1px 4px black}.phase{font-size:12px;background:#14232be8;border:1px solid var(--line);padding:6px 10px;border-radius:20px}.target{position:absolute;z-index:3;background:#15262ce8;box-shadow:0 4px 16px #0006}.target[aria-pressed=true]{border-color:var(--amber);color:var(--amber)}#door{left:46%;top:40%}#rune{left:15%;top:53%}.figures{position:absolute;inset:0;z-index:1;pointer-events:none}.scene-actor{position:absolute;transform:translateX(-50%);width:26%;pointer-events:none}.scene-actor img{display:block;height:100%;width:100%;object-fit:contain;object-position:center bottom;filter:drop-shadow(0 5px 7px #0007)}.scene-actor:before{content:'';position:absolute;bottom:0;left:20%;width:60%;height:4%;border-radius:50%;background:#060b0bd0;filter:blur(4px);z-index:-1}.figures.battle-layout .scene-actor{width:20%}.boss{position:absolute;transform:translateX(-50%);max-width:34%;object-fit:contain;object-position:center bottom;z-index:1}.tele{position:relative;margin-top:14px;z-index:3;padding:12px 16px;background:#14232beb;border-left:3px solid var(--amber);max-width:none;font-size:13px;line-height:1.65}.tele strong{display:block;color:var(--amber)}.party{display:grid;grid-template-columns:repeat(4,1fr);gap:0;padding:14px 0;border-bottom:1px solid var(--line)}.person{border:0;border-radius:0;display:flex;text-align:left;gap:9px;padding:7px 9px}.person img{width:38px;height:44px;object-fit:cover;object-position:top;border-radius:5px;background:#293b45}.person strong{display:block;font-size:13px}.person small{display:block;color:var(--dim);font-size:11px;margin-top:3px}.person.mine{border-bottom:2px solid var(--blue)}.actions{padding:18px 0 0}.actions h3{font-size:19px;margin:0 0 6px}.actions p{font-size:13px;color:var(--dim);margin:0 0 12px;line-height:1.6}.choices{display:flex;gap:8px;flex-wrap:wrap}.choices button{border-color:#917548;color:var(--amber)}.choices button.primary{background:var(--amber);color:#17232b}.private{margin-top:16px;padding:12px 14px;border-left:2px solid var(--blue);background:#1c333e;color:var(--blue);font-size:13px;line-height:1.7}.side{display:flex;flex-direction:column;background:var(--panel);border-radius:10px;height:calc(100svh - 105px);min-height:500px;max-height:920px}.sidehead{display:flex;align-items:center;justify-content:space-between;padding:16px;border-bottom:1px solid var(--line)}.sidehead h2{font-size:18px;margin:0}.sidehead button{font-size:12px;padding:6px 9px}.log{flex:1;min-height:0;overflow:auto;padding:16px;display:flex;flex-direction:column;gap:16px}.entry{font-size:13px;line-height:1.8;overflow-wrap:anywhere}.entry b{display:block;font-size:11px;margin-bottom:2px;color:var(--blue)}.entry.gm{border-left:2px solid var(--amber);padding-left:12px}.entry.gm b{color:var(--amber)}.entry.you b{color:var(--text)}.entry.error{color:var(--red)}.compose{padding:14px;border-top:1px solid var(--line)}.compose label{font-size:12px;color:var(--dim);display:block;margin-bottom:8px}.compose form{display:flex;gap:6px}.compose input{min-width:0;width:100%;background:#101d26;color:var(--text);border:1px solid var(--line);border-radius:6px;padding:10px}.compose button{padding:8px;flex-shrink:0}.status{padding:0 14px 12px;font-size:11px;color:var(--dim);min-height:26px}.queue{display:grid;gap:6px;margin:14px 0}.queue div{font-size:13px;padding:9px 12px;background:var(--panel);display:flex;gap:10px;align-items:center}.queue span{flex:1}.queue button{padding:3px 8px}.note{font-size:11px;color:var(--dim);line-height:1.7;margin-top:16px}dialog{background:var(--panel);color:var(--text);border:1px solid var(--line);border-radius:12px;width:min(470px,90vw);padding:24px}dialog::backdrop{background:#071017b8}dialog h2{margin-top:0}dialog p{font-size:14px;line-height:1.8}dialog button{float:right}.sheetimg{height:180px;float:left;margin:0 16px 12px 0}.end{padding:18px;border-left:3px solid var(--blue);background:var(--panel);line-height:1.8} @media(max-width:900px){header{padding:14px 16px;flex-wrap:wrap}.layout{padding:0 16px 20px;grid-template-columns:1fr}.scene{height:390px}.side{min-height:380px;max-height:500px}.party{grid-template-columns:repeat(2,1fr)}.scenehead h2{font-size:23px}.tele{font-size:12px}.scenehead{left:16px;top:16px}.target{padding:8px 10px}header span{max-width:160px}}@media(prefers-reduced-motion:no-preference){.entry{animation:appear .2s ease-out}@keyframes appear{from{opacity:0;transform:translateY(4px)}}}
+
+.scene:before{content:'';position:absolute;inset:0;z-index:2;background:#020609;opacity:0;pointer-events:none;transition:opacity 1.2s ease}
+.scene.dark:before{opacity:.94}.scenehead{z-index:4}.target{z-index:4;border-color:#a2c3c3;box-shadow:0 0 18px #8bd6dd42}.scene.dark .figures{opacity:.12}.figures{transition:opacity 1.2s}.scene.drained:after{background:linear-gradient(0deg,#40382a99,transparent 60%)}
+@media(max-width:600px){.map{gap:4px}.map button{padding:7px 3px;font-size:12px}.mapline{font-size:10px}.scenehead p{max-width:220px}.choices button{font-size:13px}}
+@media(prefers-reduced-motion:reduce){.scene:before,.figures{transition:none}}
+
+/* GM専用スペースの高さと歩行・瞬きの速さ。単位はpxと秒です。 */
+.gm-stage{--gm-stage-height:160px;--gm-walk-time:.32s;--gm-blink-time:4.8s;position:relative;height:var(--gm-stage-height);flex-shrink:0;overflow:hidden;border-top:1px solid var(--line);background:linear-gradient(0deg,#101d2680,transparent)}.gm-guide{position:absolute;bottom:8px;left:12px;width:76px}.gm-drag{display:block;position:relative;width:100%;padding:0;border:0;touch-action:none;cursor:grab;transform-origin:50% 95%}.gm-drag:hover{background:none}.gm-guide.walking .gm-drag{cursor:grabbing}.gm-drag img{display:block;width:100%;height:auto;pointer-events:none;filter:drop-shadow(0 3px 6px #0008)}.gm-eye{position:absolute;top:15.2%;left:42%;width:5.8%;height:2.5%;background:#efb573;border-bottom:1px solid #392a23;transform:scaleY(0);transform-origin:center;animation:gm-blink var(--gm-blink-time) infinite;pointer-events:none}.gm-eye.second{left:61.5%}.gm-bubble{position:absolute;bottom:18px;left:84px;width:190px;max-height:112px;overflow:hidden;pointer-events:none;padding:8px 10px;background:#192630f2;border:1px solid var(--amber);border-radius:10px;color:var(--text);font-size:11px;line-height:1.6}.gm-bubble strong{display:block;color:var(--amber);font-size:10px}.gm-guide.right .gm-bubble{left:auto;right:84px}.gm-guide.talking .gm-drag{animation:gm-talk .65s ease-in-out infinite}.gm-guide:not(.talking) .gm-drag{animation:gm-idle 3.6s ease-in-out infinite}.gm-guide.walking .gm-drag{animation:gm-walk var(--gm-walk-time) ease-in-out infinite}@keyframes gm-idle{50%{transform:translateY(-2px) rotate(1deg)}}@keyframes gm-talk{50%{transform:translateY(-3px) rotate(-2deg)}}@keyframes gm-walk{0%,100%{transform:rotate(-4deg)}50%{transform:translateY(-5px) rotate(4deg)}}@keyframes gm-blink{0%,92%,96%,100%{transform:scaleY(0)}94%{transform:scaleY(1)}}@media(prefers-reduced-motion:reduce){.gm-drag,.gm-eye{animation:none!important}}
+.log>.entry{flex-shrink:0}.log>.entry:first-child{margin-top:auto}
+.gm-art{display:block;position:relative;transform:scaleX(-1)}.gm-guide.right .gm-art{transform:scaleX(1)}
+
+/* 会話欄の幅は240〜420px。初期値340px、畳んだ待機場所は84pxです。 */
+.layout{--conversation-width:340px;grid-template-columns:minmax(0,1fr) 8px var(--conversation-width);gap:5px}.conversation-resize{cursor:col-resize;touch-action:none;position:relative;border-radius:4px}.conversation-resize:after{content:'';position:absolute;top:40%;bottom:40%;left:3px;width:2px;background:var(--line)}.conversation-resize:hover:after,.conversation-resize:focus-visible:after{background:var(--blue)}.side{min-width:0}.sidehead{gap:8px;flex-wrap:wrap}.sidehead h2{flex:1;min-width:140px}.sidehead button{flex-shrink:0}.layout.conversation-folded{grid-template-columns:minmax(0,1fr) 84px;gap:18px}.conversation-folded .conversation-resize{display:none}.conversation-folded .side{position:relative;background:transparent;border:1px solid var(--line)}.conversation-folded .sidehead{padding:8px 4px;justify-content:center;border:0}.conversation-folded .sidehead h2,.conversation-folded .log,.conversation-folded .compose,.conversation-folded .status{display:none}.conversation-folded #conversationToggle{font-size:11px;white-space:pre-line;padding:8px 5px;width:100%;border-color:var(--blue)}.conversation-folded .gm-stage{position:absolute;bottom:0;left:0;right:0;border:0;background:none}.conversation-folded .gm-bubble{display:none}.conversation-folded .gm-drag:disabled{opacity:1;cursor:default}@media(max-width:900px){.layout,.layout.conversation-folded{grid-template-columns:1fr;gap:18px}.conversation-resize{display:none}.conversation-folded .side{height:160px;min-height:160px}.conversation-folded .sidehead{justify-content:flex-start;padding:12px}.conversation-folded #conversationToggle{width:auto}.conversation-folded .gm-stage{left:auto;width:84px}.conversation-folded .sidehead{padding-right:100px}}
+
+.exits{position:absolute;z-index:4;top:96px;right:16px;max-width:calc(100% - 32px);display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end}.exits button{background:#15262ce8}.exits button{font-size:13px;padding:8px 12px}.exits>span{font-size:12px;color:var(--dim)}.map-sheet{width:min(760px,94vw);max-height:90svh;overflow:auto}.map-toolbar{display:flex;justify-content:space-between;gap:12px;margin-bottom:16px}.map-toolbar button{float:none;font-size:12px}.map-caption{clear:both;color:var(--dim);font-size:12px!important}.paper-map{position:relative;background:radial-gradient(ellipse at 13% 16%,#71451b45,transparent 30%),radial-gradient(ellipse at 80% 75%,#87562048,transparent 37%),radial-gradient(ellipse at 34% 66%,#61401c25,transparent 23%),linear-gradient(92deg,transparent 48.5%,#69451c39 49.4%,#f5d69655 50%,transparent 51.5%),linear-gradient(2deg,transparent 50%,#744c2440 51%,#ead29c55 51.5%,transparent 52.5%),radial-gradient(ellipse at 48% 43%,#dfc38d,#c29b60 78%,#906434);color:#4d351e;border:1px solid #725024;border-radius:0;box-shadow:inset 0 0 22px 8px #54311260,inset 0 0 80px #744a2350;clip-path:polygon(1% 1%,13% 0%,14% 1%,32% .5%,34% 1.5%,58% 0%,73% 1%,75% .4%,97% 1%,99% 3%,98.5% 16%,100% 18%,99% 43%,99.7% 62%,98.6% 63%,99% 96%,97% 99%,83% 98.5%,80% 100%,59% 99%,57% 98%,31% 99.5%,29% 98.7%,2% 99%,.5% 97%,1% 75%,0% 73%,1% 48%,.5% 29%,1.4% 28%,0% 5%);transform:rotate(-.6deg)}.paper-map:before{content:'';position:absolute;inset:0;pointer-events:none;background-image:radial-gradient(#4b2f1660 .65px,transparent 1px),radial-gradient(#f8e0ad65 .6px,transparent 1.1px);background-size:7px 11px,13px 9px;opacity:.22}.paper-map:after{content:'';position:absolute;inset:8px;pointer-events:none;border:1px solid #7e57273d;border-radius:40% 2% 30% 1%/1% 20% 2% 18%}.paper-map svg{display:block;width:100%;height:auto;max-height:65svh;font-family:'Yu Kyokasho','Hiragino Mincho ProN','Yu Mincho',serif;font-style:italic}.paper-map path{fill:none;stroke:#61452e;stroke-width:2.1;filter:url(#map-ink);stroke-linejoin:round;stroke-linecap:round}.paper-map text{fill:#4b321d;font-size:17px;letter-spacing:.4px}.paper-map .map-title{font-size:24px;letter-spacing:3px}.paper-map .map-small{font-size:12px}.paper-map .map-note{font-size:13px;fill:#835332}.paper-map .map-route{stroke-width:3}.paper-map .unseen{stroke-dasharray:7 6;opacity:.65}.paper-map .map-symbol{stroke-width:1.8}.paper-map .map-current{fill:none;stroke:#476261;stroke-width:1.8;stroke-dasharray:100 3 30 5}
+.scene-effects{position:absolute;inset:0;width:100%;height:100%;z-index:2;pointer-events:none}.scene:before{z-index:3}.effect-controls{margin-top:10px;border:1px solid var(--line);border-radius:6px;color:var(--dim);font-size:12px}.effect-controls summary{padding:9px 12px;cursor:pointer}.effect-fields{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;padding:12px}.effect-fields label{display:flex;align-items:center;gap:8px;flex-wrap:wrap}.effect-fields input[type=range]{width:100%;accent-color:var(--amber);order:2}.effect-fields output{margin-left:auto;color:var(--amber);font-variant-numeric:tabular-nums}.effect-fields p{grid-column:1/-1;margin:0;font-size:11px;line-height:1.7}.effect-check input{accent-color:var(--amber)}.effect-fields button{font-size:12px}@media(max-width:600px){.effect-fields{grid-template-columns:1fr}}
+.recipients{border:0;padding:0;margin:0 0 8px;display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:5px}.recipients legend{font-size:10px;color:var(--dim);margin-bottom:6px}.recipient-choice{position:relative;margin:0!important;cursor:pointer}.recipient-choice input{position:absolute;inset:0;width:100%;height:100%;opacity:0;cursor:pointer;margin:0}.recipient-card{display:flex;flex-direction:column;align-items:center;gap:4px;border:1px solid var(--line);border-radius:6px;padding:5px 1px;font-size:10px;color:var(--dim);pointer-events:none}.recipient-card img,.recipient-card svg{width:32px;height:32px;object-fit:cover;object-position:top;border-radius:4px}.recipient-choice input:checked+.recipient-card{border-color:var(--blue);color:var(--blue);background:#253e49}.recipient-choice input:focus-visible+.recipient-card{outline:2px solid var(--blue);outline-offset:2px}.recipient-choice input:disabled+.recipient-card{opacity:.45}.recipient-note{font-size:10px;color:var(--dim);margin:0 0 8px;line-height:1.5}.compose .recipient-choice input{padding:0}.side{min-height:580px}@media(max-width:900px){.side{min-height:510px;max-height:650px}.conversation-folded .side{min-height:160px}}
+.dust-discovery{position:absolute;left:82%;top:44%;transform:translate(-50%,-50%);width:58px;height:58px;border:0;border-radius:50%;z-index:4;background:radial-gradient(circle,#b6edff55,transparent 70%)}.dust-discovery:hover{background:radial-gradient(circle,#b6edff99,transparent 70%)}.exploration-basics{margin-top:14px}.proposed-actions{margin-top:16px;padding:12px;border-left:2px solid var(--blue);background:var(--panel)}.private button{font-size:12px;margin-top:10px}.scene.dark .scene-effects{opacity:1;z-index:4}.scenehead{z-index:5}.scene.lightning-flash.dark:before{opacity:calc(.94 - var(--lightning-flash,0)*.82);transition:none}
+/* 設定は右側のパネルへ収納。幅は440pxを上限にし、シーンを見ながら調整できます。 */
+.gm-settings{position:absolute;top:8px;left:10px;z-index:6;width:32px;height:32px;padding:0;color:var(--amber);background:#192630d9;font-size:20px}
+.conversation-folded .sidehead{flex-direction:column;align-items:center}.conversation-folded .sidehead .gm-settings{position:static;flex-shrink:0;margin-top:4px;padding:0;font-size:20px}.system-panel{position:fixed;inset:16px 16px 16px auto;margin:0;width:min(440px,calc(100vw - 32px));max-height:calc(100svh - 32px);padding:0 20px 20px;overflow:auto;box-shadow:0 12px 60px #0008}
+.system-panel::backdrop{background:#07101735}.system-panel button{float:none}.system-head{position:sticky;top:0;z-index:1;display:flex;align-items:center;justify-content:space-between;gap:12px;padding:18px 0;background:var(--panel);border-bottom:1px solid var(--line)}.system-head h2{font-size:21px;margin:0}.system-head button{font-size:22px;padding:2px 10px}.system-section{padding:18px 0;border-bottom:1px solid var(--line)}.system-section:last-child{border:0}.system-section h3{font-size:17px;color:var(--amber);margin:0 0 12px}.system-section p{font-size:12px;color:var(--dim);line-height:1.7;margin:8px 0}.system-section summary{cursor:pointer;padding:12px 0;font-size:14px}.system-status{display:block;color:var(--dim);font-size:12px;margin-top:8px}.system-section textarea{display:block;width:100%;height:220px;resize:vertical;background:var(--bg);color:var(--text);border:1px solid var(--line);border-radius:6px;font:12px/1.7 monospace;padding:10px;margin-bottom:12px}.debug-switch{display:flex;align-items:center;gap:8px;font-size:13px}.debug-switch input{accent-color:var(--amber)}.system-panel .effect-controls summary{padding:10px 12px}.system-panel .effect-fields{grid-template-columns:1fr}
+
+.dice-panel{width:min(500px,92vw);max-height:90svh;overflow:auto;padding:22px}.dice-panel button{float:none}.dice-head{display:flex;gap:14px;align-items:center}.dice-head img{width:52px;height:92px;object-fit:contain}.dice-head h2{margin:0;font-size:23px}.dice-head p{margin:6px 0;font-size:12px;color:var(--dim)}.dice-plan{font-size:13px;line-height:1.8;margin:14px 0;padding:12px;border-left:2px solid var(--amber);background:var(--bg)}.dice-support{display:flex;gap:8px;align-items:center;font-size:13px}.dice-support input{accent-color:var(--amber)}.dice-table{display:flex;flex-direction:column;align-items:center;margin:18px 0;background:radial-gradient(ellipse,#43504966,transparent 70%);padding:12px}.die{position:relative;width:180px;height:180px;display:grid;place-items:center}.die:before{content:'';position:absolute;bottom:12px;width:104px;height:20px;border-radius:50%;background:#0008;filter:blur(8px)}.die img{position:relative;width:180px;height:180px;object-fit:contain;filter:drop-shadow(0 8px 8px #0004)}.die.rolling img{animation:d20-jump var(--dice-roll-time,1250ms) cubic-bezier(.2,.8,.15,1) both}.die.rolling:before{animation:d20-shadow var(--dice-roll-time,1250ms) ease-out both}.die.landed img{animation:d20-land .42s ease-out both}.die.critical img{filter:drop-shadow(0 0 14px #ffd13f) drop-shadow(0 0 22px #ff7900)}.die.low-roll img{filter:drop-shadow(0 0 16px #e22525)}.dice-label{font-size:11px;color:var(--amber);margin-bottom:8px}.dice-records{display:grid;gap:10px;font-size:13px;line-height:1.6}.dice-record{padding:10px 12px;border-left:2px solid var(--blue);background:var(--bg)}.dice-record small{display:block;color:var(--dim)}.dice-buttons{display:flex;gap:10px;justify-content:flex-end;margin-top:16px}.dice-buttons .primary{background:var(--amber);color:var(--bg)}.gm-guide.dice-throw .gm-drag{animation:gm-talk .2s ease-in-out infinite}.dice-panel:has(.die.rolling) .dice-head img{animation:gm-talk .2s ease-in-out infinite}@keyframes d20-jump{0%{transform:translateY(0) scale(1)}20%{transform:translateY(-52px) scale(.94)}62%{transform:translateY(-12px) scale(1.07)}82%{transform:translateY(0) scale(.96)}100%{transform:none}}@keyframes d20-shadow{0%,100%{transform:scaleX(1);opacity:.48}22%{transform:scaleX(.5);opacity:.16}82%{transform:scaleX(1.3);opacity:.62}}@keyframes d20-land{0%{transform:translateY(-8px) scale(1.06)}100%{transform:none}}@media(prefers-reduced-motion:reduce){.die.rolling img,.die.rolling:before,.die.landed img,.gm-guide.dice-throw .gm-drag,.dice-panel .dice-head img{animation:none!important}}
+</style>
+<header><h1>坑道の向こう</h1><span>あなたと、3人のAIの仲間</span></header>
+<main class="layout"><section class="world"><div class="scene" id="scene"><div class="scenehead"><div><h2 id="place">封じられた石扉</h2><p id="objective">扉の先から、重い金属音がする。</p></div><span class="phase" id="phase">探索</span></div><canvas id="sceneEffects" class="scene-effects" aria-hidden="true"></canvas><div id="points"></div><div class="figures" id="figures"></div><img id="bossimg" class="boss" src="../replay/img/guardian_rampage.webp" alt="灯りの番人" hidden><nav id="exits" class="exits" aria-label="シーンの出口"></nav></div><nav class="party" id="party" aria-label="仲間の能力"></nav><div class="tele" id="tele" hidden></div><section class="actions" id="actions"></section><div class="private" id="private" hidden></div><p class="note">UIと連携の試作です。あなたはイネスを操作します。仲間の名前を押すと能力を確認できます。AIは発言と行動を選び、結果はゲームのルールで確定します。進行はこの画面内だけで共有され、再読み込みすると戻ります。</p></section><div id="conversationResize" class="conversation-resize" role="separator" aria-label="会話欄の幅" aria-orientation="vertical" aria-valuemin="240" aria-valuemax="420" aria-valuenow="340" tabindex="0"></div><aside class="side" id="conversation"><div class="sidehead"><h2>仲間との会話</h2><button id="conversationToggle" aria-controls="conversation" aria-expanded="true">&gt;&gt;</button></div><div class="log" id="log" role="log" aria-live="polite" aria-relevant="additions"></div><div class="gm-stage" id="gmstage"><button class="gm-settings" id="systemOpen" aria-label="GMのシステム設定を開く" title="システム設定" aria-controls="systemPanel">⚙</button><div class="gm-guide" id="gmguide"><button class="gm-drag" id="gmdrag" aria-label="GMの位置を動かす"><span class="gm-art"><img src="images/gm_mascot.png" alt="GM" draggable="false"><i class="gm-eye" aria-hidden="true"></i><i class="gm-eye second" aria-hidden="true"></i></span></button><div class="gm-bubble" id="gmbubble" hidden><strong>GM</strong><span id="gmspeech"></span></div></div></div><div class="compose"><label for="message" id="messageLabel">相談・発見を全員に伝える</label><fieldset id="recipients" class="recipients"><legend>呼びかけ先</legend></fieldset><p class="recipient-note">全員に聞こえ、選んだ相手が返答します。</p><form id="chat"><input id="message" placeholder="扉の内側に留め具があるよ" maxlength="500" required autocomplete="off"><button>話す</button></form></div><div class="status" id="status" role="status">AIの接続を確認しています…</div></aside></main><dialog id="sheet"></dialog>
+<dialog id="systemPanel" class="system-panel" aria-labelledby="systemTitle">
+ <div class="system-head"><h2 id="systemTitle">GMのシステム設定</h2><button id="systemClose" aria-label="システム設定を閉じる">×</button></div>
+ <section class="system-section"><h3>ゲーム管理</h3><button id="reset">最初から</button><p>現在の進行を消します。実行前に確認します。</p><div id="resetConfirm" hidden role="alert"><p>今の進行を消して、最初から始めますか？</p><button id="resetAccept">進行を消して開始</button> <button id="resetCancel">キャンセル</button></div>
+ <details id="chronicleControls"><summary>クロニクル</summary><p>この卓で交わした会話とGMの記録です。未共有の個別情報は含みません。</p><textarea id="chroniclePreview" readonly aria-label="クロニクルの内容"></textarea><button id="chronicleExport">Markdownで出力</button><span id="chronicleStatus" class="system-status" role="status"></span></details></section>
+ <section class="system-section"><h3>音声設定</h3><p>サウンド・音量・TTS（読み上げ）・STT（音声入力）</p><span class="system-status">この試作では未接続です。</span></section>
+ <section class="system-section"><h3>開発・調整</h3><label class="debug-switch"><input type="checkbox" id="debugEnabled">演出の調整を有効にする</label><button id="diceDemo" hidden>ダイス演出を試す</button><details class="effect-controls" id="effectControls" hidden></details></section>
+</dialog>
+<svg width="0" height="0" aria-hidden="true" style="position:absolute"><defs id="diceColorFilters"></defs></svg>
+<dialog id="dicePanel" class="dice-panel" aria-labelledby="diceTitle"><div class="dice-head"><img src="images/gm_mascot.png" alt="GM"><div><h2 id="diceTitle">GMの判定</h2><p id="diceIntro"></p></div></div><div class="dice-plan" id="dicePlan"></div><label class="dice-support" id="diceSupportLabel" hidden><input type="checkbox" id="diceSupport">イネスが照明と見張りで支援（＋2）</label><label id="diceColorLabel" class="dice-support" hidden>色のプレビュー<select id="diceColorActor" aria-label="ダイスの色"></select></label><div class="dice-table"><span class="dice-label">D20 · 20面ダイス</span><div class="die" id="die"><img id="diceSprite" src="images/d20/d20-red-00.png" alt="赤い20面ダイス"></div></div><div id="diceRecords" class="dice-records" role="status" aria-live="polite"></div><div class="dice-buttons"><button id="diceClose">キャンセル</button><button id="diceRoll" class="primary">GMに判定を頼む</button></div></dialog>
+<script>
+const $=id=>document.getElementById(id);
+const PEOPLE=[
+ {id:'ines',name:'イネス',role:'あなた・斥候',hp:12,skill:'痕跡や仕掛けを調べる。狭い隙間へ入る。工具を使う。戦闘では弱点を見抜く。',tool:'坑道図と投げ縄',motive:'危険を負う前に仕組みを確かめたい。'},
+ {id:'brom',name:'ブロム',role:'AI・盾役',hp:18,skill:'重い扉や操作輪を支える。金槌で壊す。戦闘では仲間をかばう。',tool:'金槌と盾',motive:'力仕事を引き受けるが、仲間の考えも聞きたい。'},
+ {id:'gareth',name:'ガレス',role:'AI・盗賊',hp:15,skill:'鍵を外す。戦闘では弱点を狙う。',tool:'錠前破りと短剣',motive:'危険や無駄を避け、手早く進みたい。'},
+ {id:'lydia',name:'リディア',role:'AI・魔法使い',hp:12,skill:'ランタンを灯す・消す。古い文字や魔法の記号を読み解く。戦闘では火球を2回使える。',tool:'ランタン、記録板と杖、古い坑道の地図',motive:'仕組みを理解してから動きたい。'}
+];
+const ROOMS={entry:{name:'坑道入口',image:'mine_entrance',targets:['cart','rails'],links:['hall','drain']},hall:{name:'石扉の広間',image:'s2_junction',targets:['door','rune'],links:['entry']},drain:{name:'排水室',image:'s7_inner_chamber',targets:['wheel','water'],links:['entry']}};
+const TARGETS={etching:{name:'壁の傷',x:80,y:33},cache:{name:'隠し収納',x:82,y:44},cart:{name:'古い台車',x:21,y:58},rails:{name:'途切れたレール',x:63,y:43},door:{name:'石扉',x:46,y:40},rune:{name:'壁の刻み',x:15,y:53},wheel:{name:'操作輪',x:37,y:44},water:{name:'水溜まり',x:72,y:62}};
+const LABEL={wait:'相談を続ける',scout:'周囲の痕跡を探す',douse:'ランタンを消す',decode:'壁の傷の文字を解読する',find_cache:'塵が集まる場所を調べる',inspect_etching:'壁の傷を調べる',inspect_cache:'隠し収納を調べる',open_cache:'隠し収納の錠前を外す',use_stone:'灯石で足元を照らす',inspect:'石扉を調べる',inspect_cart:'台車を調べる',inspect_rails:'レールを調べる',inspect_rune:'刻みを調べる',inspect_wheel:'操作輪を調べる',inspect_water:'水溜まりを調べる',take:'鉄の工具を拾う',wedge:'工具で石扉の隙間を固定する',pry:'工具で操作輪の引っ掛かりを外す',light:'ランタンを灯す',hold:'操作輪を支える',smash:'金槌で石扉を壊す',crawl:'隙間に入り、留め具を外す',unlock:'鍵を外す',support:'石扉を支える',read:'壁の文字を読む',study:'弱点を見抜く',aid:'リディアを手助けする',throw:'投げ縄で攻撃する',cover:'前衛をかばう',strike:'金槌で打つ',stab:'急所を狙う',fire:'火球',spark:'石つぶて'};
+const ACTION_TARGET={decode:'etching',inspect_etching:'etching',inspect_cache:'cache',open_cache:'cache',inspect:'door',inspect_cart:'cart',inspect_rails:'rails',inspect_rune:'rune',inspect_wheel:'wheel',inspect_water:'water',take:'cart',wedge:'door',pry:'wheel',hold:'wheel',smash:'door',crawl:'door',unlock:'door',support:'door',read:'rune'};
+let redrawEffects=()=>{};
+let state,generation=0,busy=false,target=null,chat=[],plan=[],apiReady=false;
+const esc=t=>String(t).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+function initial(){return {phase:'explore',room:'entry',lit:false,everLit:false,discovery:{etching:false,cache:false,opened:false,stoneOn:false,clues:Object.fromEntries(PEOPLE.map(p=>[p.id,[]])),shared:[],proposals:[],hints:0},visited:['entry'],seen:{},tools:[],holding:false,drained:false,observedDrain:false,locked:true,supported:false,opened:false,noisy:false,runes:false,weak:false,boss:24,round:1,fire:2,hp:Object.fromEntries(PEOPLE.map(p=>[p.id,p.hp])),knowledge:Object.fromEntries(PEOPLE.map(p=>[p.id,[]])),shared:[]};}
+// 見かけだけの奥行き。射程や戦闘判定には使いません。
+const DEPTH_DEFAULT={
+ // 最奥の縮小率を％で指定。25なら手前100％、最奥75％です。
+ shrink:25,
+ // 奥へ進んだ足元を上げる幅。シーン高さに対する％です。
+ rise:16,
+ // 手前に立つ人物の高さ。シーン高さに対する％です。
+ size:46
+};
+const depth={...DEPTH_DEFAULT};
+let placement=null,placementState=null,placementKey='';
+function makePlacement(battle,random=Math.random){
+ const slots=battle?[26,52,40,13]:[30,51,73];
+ if(!battle)for(let i=slots.length-1;i>0;i--){const j=Math.floor(random()*(i+1));[slots[i],slots[j]]=[slots[j],slots[i]];}
+ return (battle?PEOPLE:PEOPLE.slice(1)).map((p,i)=>({id:p.id,x:slots[i]+(random()-.5)*(battle?3:6),z:battle?({ines:.3,brom:.08,gareth:.2,lydia:.5}[p.id]):.1+random()*.75}));
+}
+function projectActor(p,settings=depth){const scale=1-p.z*settings.shrink/100;return {x:p.x,bottom:4+p.z*settings.rise,height:settings.size*scale*(p.id==='brom'?.9:1),scale,layer:Math.round((1-p.z)*100)};}
+function renderPlacement(){
+ const battle=state.phase==='battle',key=state.room+':'+state.phase;
+ if(placementState!==state||placementKey!==key){placement=makePlacement(battle);placementState=state;placementKey=key;}
+ $('figures').classList.toggle('battle-layout',battle);$('scene').classList.toggle('battle-scene',battle);
+ $('figures').innerHTML=placement.map(p=>{const q=projectActor(p),person=PEOPLE.find(a=>a.id===p.id);return `<span class="scene-actor" data-actor="${p.id}" data-depth="${p.z.toFixed(3)}" data-scale="${q.scale.toFixed(3)}" style="left:${q.x}%;bottom:${q.bottom}%;height:${q.height}%;z-index:${q.layer}"><img src="../replay/img/${p.id}.webp" alt="${person.name}"></span>`;}).join('');
+ $('figures').hidden=state.phase==='end';
+ $('figures').querySelectorAll('img').forEach(img=>img.onload=placeTargetLabels);
+ const enemy=projectActor({id:'guardian',x:80,z:.8});
+ Object.assign($('bossimg').style,{left:enemy.x+'%',right:'auto',bottom:(enemy.bottom+10)+'%',height:enemy.height*1.28+'%'});
+ placeTargetLabels();
+}
+// 人物とラベルの間に確保する余白。単位: px。
+const TARGET_CLEARANCE=8;
+function rectOverlap(a,b,gap=0){return a.x<b.x+b.width+gap&&a.x+a.width+gap>b.x&&a.y<b.y+b.height+gap&&a.y+a.height+gap>b.y;}
+function freeLabelPosition(origin,size,bounds,obstacles){
+ const candidates=[origin];
+ for(let y=12;y<=bounds.height-size.height-12;y+=12)for(let x=12;x<=bounds.width-size.width-12;x+=12)candidates.push({x,y});
+ candidates.sort((a,b)=>((a.x-origin.x)**2*1.5+(a.y-origin.y)**2)-((b.x-origin.x)**2*1.5+(b.y-origin.y)**2));
+ return candidates.find(p=>p.x>=8&&p.y>=8&&p.x+size.width<=bounds.width-8&&p.y+size.height<=bounds.height-8&&!obstacles.some(o=>rectOverlap({...p,...size},o,TARGET_CLEARANCE)))||origin;
+}
+function placeTargetLabels(){
+ const scene=$('scene'),bounds=scene.getBoundingClientRect();if(!bounds.width)return;
+ const local=e=>{const r=e.getBoundingClientRect();return {x:r.left-bounds.left,y:r.top-bounds.top,width:r.width,height:r.height};};
+ const actors=[...scene.querySelectorAll('.scene-actor')].map(e=>{
+  const r=local(e),img=e.querySelector('img');if(!img.naturalWidth)return r;
+  const ratio=img.naturalWidth/img.naturalHeight,width=Math.min(r.width,r.height*ratio),height=Math.min(r.height,r.width/ratio);
+  return {x:r.x+(r.width-width)/2,y:r.y+r.height-height,width,height};
+ });
+ const obstacles=[...actors,...[scene.querySelector('.scenehead'),$('exits')].filter(e=>!e.hidden&&e.getBoundingClientRect().height).map(local)];
+ for(const button of $('points').querySelectorAll('[data-target]')){
+  const t=TARGETS[button.dataset.target],size={width:button.offsetWidth,height:button.offsetHeight};
+  const origin={x:bounds.width*t.x/100,y:bounds.height*t.y/100},p=freeLabelPosition(origin,size,bounds,obstacles);
+  button.style.left=p.x+'px';button.style.top=p.y+'px';obstacles.push({...p,...size});
+ }
+}
+let recipient='all';
+let conversationFolded=false,conversationUnread=0;
+let gmTimer,gmWalkTimer,gmDrag=null,gmX=Infinity,gmY=8;
+// 吹き出しの表示時間。単位: ミリ秒。全文は会話ログに残ります。
+const GM_SPEECH_MS=10000;
+function positionGM(){const stage=$('gmstage'),guide=$('gmguide');if(conversationFolded){guide.style.left=Math.max(0,(stage.clientWidth-guide.offsetWidth)/2)+'px';guide.style.bottom='8px';guide.classList.add('right');return;}gmX=Math.max(8,Math.min(gmX,stage.clientWidth-guide.offsetWidth-8));gmY=Math.max(8,Math.min(gmY,stage.clientHeight-guide.offsetHeight-8));guide.style.left=gmX+'px';guide.style.bottom=gmY+'px';guide.classList.toggle('right',gmX+guide.offsetWidth/2>stage.clientWidth/2);const bubble=$('gmbubble');bubble.style.width=Math.max(80,Math.min(190,gmX+guide.offsetWidth/2>stage.clientWidth/2?gmX-16:stage.clientWidth-gmX-guide.offsetWidth-16))+'px';}
+function walkGM(){clearTimeout(gmWalkTimer);$('gmguide').classList.add('walking');gmWalkTimer=setTimeout(()=>$('gmguide').classList.remove('walking'),200);}
+function speakGM(text){clearTimeout(gmTimer);$('gmspeech').textContent=text;$('gmbubble').hidden=false;$('gmguide').classList.add('talking');positionGM();gmTimer=setTimeout(()=>{$('gmbubble').hidden=true;$('gmguide').classList.remove('talking');},GM_SPEECH_MS);}
+function say(who,text,kind=''){if(kind==='gm')speakGM(text);if(conversationFolded&&kind!=='you'){conversationUnread++;updateConversation();}chat.push({who,text,kind});const log=$('log');const follow=log.scrollHeight-log.clientHeight-log.scrollTop<=24;const d=document.createElement('div');d.className='entry '+kind;const b=document.createElement('b');b.textContent=who;d.append(b,document.createTextNode(text));log.append(d);if(follow)log.scrollTop=log.scrollHeight;}
+const CLUES={
+ etching:'壁の傷の中に、古い文字らしい刻みがある。',
+ darkness:'刻みは「灯を伏せよ。蒼き塵は、隠された場所へ帰る」と読める。',
+ cache_lock:'隠し収納には小さな錠前がある。錠前破りが使えそうだ。'
+};
+function knowsClue(id,key,s=state){return s.discovery.clues[id].includes(key)||s.discovery.shared.includes(key);}
+function learnClue(id,key,s=state){if(!s.discovery.clues[id].includes(key)){s.discovery.clues[id].push(key);if(!s.knowledge[id].includes(CLUES[key]))s.knowledge[id].push(CLUES[key]);}}
+function shareClue(id,key,s=state){if(!s.discovery.clues[id].includes(key))return false;if(!s.discovery.shared.includes(key)){s.discovery.shared.push(key);s.shared.push(PEOPLE.find(p=>p.id===id).name+'：'+CLUES[key]);}return true;}
+function discoveryTargets(s=state){return s.room==='entry'?[...(s.discovery.etching?['etching']:[]),...(s.discovery.cache?['cache']:[])]:[];}
+function visibleTargets(s=state){return [...(s.lit?ROOMS[s.room].targets:[]),...(s.lit?discoveryTargets(s):s.room==='entry'&&s.discovery.cache?['cache']:[])];}
+function canShowProposal(id,a,s=state){return !['decode','open_cache'].includes(a)||s.discovery.proposals.some(p=>p.id===id&&p.action===a);}
+function propose(id,a,s=state){if(!['decode','open_cache'].includes(a)||!actionsFor(id,s).includes(a))return false;if(!s.discovery.proposals.some(p=>p.id===id&&p.action===a))s.discovery.proposals.push({id,action:a});return true;}
+function suggestedAction(id,s=state){return actionsFor(id,s).find(a=>['decode','open_cache'].includes(a))||'';}
+function blueDust(s=state){return s.phase==='explore'&&s.room==='entry'&&s.everLit&&!s.lit;}
+function discoveryHint(s=state){
+ const d=s.discovery;
+ if(!s.lit&&!s.everLit)return 'まず灯りを用意しよう。リディアの持ち物を確認できます。';
+ if(blueDust(s)&&!d.cache)return '蒼白い塵が、同じ場所へ流れています。集まる先を目で追ってみよう。';
+ if(d.opened)return '得た灯石は足元を照らせます。残る坑道も仲間と調べてみよう。';
+ if(d.cache&&!s.lit)return '場所は覚えました。灯りを戻すと、収納の細部を調べられます。';
+ if(d.shared.includes('cache_lock'))return '錠前を扱える仲間はいましたね。能力を確認して相談してみよう。';
+ if(d.cache)return '収納を調べ、分かったことを仲間に伝えてみよう。';
+ if(d.shared.includes('darkness'))return '読めた言葉を、周囲の環境と結びつけてみよう。灯りも操作できます。';
+ if(d.shared.includes('etching'))return d.hints>1?'リディアは古い文字を読めます。刻みについて相談してみよう。':'古い文字に詳しい仲間はいましたね。キャラクターシートを確認できます。';
+ if(d.etching)return '気づいたことは、調べた本人だけが知っています。仲間に伝えたいことはありますか？';
+ return '景色の中の痕跡を探せる仲間はいましたね。キャラクターシートから能力を使えます。';
+}
+function actionsFor(id,s=state){
+ if(!PEOPLE.some(p=>p.id===id)||s.phase==='end')return [];
+ if(s.phase==='battle')return id==='ines'?['study','aid','throw']:id==='brom'?['cover','strike']:id==='gareth'?['stab']:s.fire>0?['fire','spark']:['spark'];
+ if(!s.lit)return [...(id==='lydia'?['light']:[]),...(id==='ines'&&blueDust(s)&&!s.discovery.cache?['find_cache']:[]),...(id==='ines'&&s.tools.includes('lampstone')&&!s.discovery.stoneOn?['use_stone']:[])];
+ const out=[...ROOMS[s.room].targets,...discoveryTargets(s)].filter(t=>!(s.seen[id]||[]).includes(t)).map(t=>t==='door'?'inspect':'inspect_'+t);
+ if(id==='lydia')out.push('douse');
+ if(id==='ines'&&s.room==='entry'&&!s.discovery.etching)out.push('scout');
+ if(id==='lydia'&&s.room==='entry'&&s.discovery.etching&&!s.discovery.clues.lydia.includes('darkness')&&knowsClue(id,'etching',s))out.push('decode');
+ if(id==='gareth'&&s.room==='entry'&&s.discovery.cache&&!s.discovery.opened&&knowsClue(id,'cache_lock',s))out.push('open_cache');
+ if(id==='ines'&&s.tools.includes('lampstone')&&!s.discovery.stoneOn)out.push('use_stone');
+ if(id==='ines'&&s.room==='entry'&&s.seen.ines?.includes('cart')&&!s.tools.includes('ironbar'))out.push('take');
+ if(id==='ines'&&s.room==='drain'&&s.holding&&!s.drained&&s.tools.includes('ironbar'))out.push('pry');
+ if(s.room==='hall'&&!s.opened){if(id==='ines'&&!s.locked&&s.supported){out.push('crawl');if(s.tools.includes('ironbar'))out.push('wedge');}if(id==='gareth'&&s.locked)out.push('unlock');if(id==='brom'&&!s.locked){if(s.drained&&!s.supported)out.push('support');out.push('smash');}}
+ if(id==='brom'&&s.room==='drain'&&!s.holding&&!s.drained)out.push('hold');
+ if(id==='lydia'&&s.room==='hall'&&!s.runes)out.push('read');
+ return out;
+}
+function inspectText(id,t,s){
+ if(t==='etching')return CLUES.etching;
+ if(t==='cache')return s.discovery.opened?'収納は空だ。灯石は仲間と持ち歩いている。':CLUES.cache_lock;
+ if(t==='cart')return '空の台車に鉄の工具が残っている。引っ掛かったものを、てこの力で外せそうだ。';
+ if(t==='rails')return '錆びたレールはここで途切れている。古い車輪の跡があるが、道や仕掛けは見つからない。';
+ if(t==='water')return s.drained?'水が引いて、排水口と古い泥の跡が見える。':'水路は広間の石扉の下まで続いている。操作輪で流れを変えられそうだ。';
+ if(t==='wheel')return id==='brom'?'操作輪は逆戻りする。俺が支えている間なら、仲間が引っ掛かりを外せる。':id==='ines'?'操作輪の軸に鉄片が挟まっている。誰かに輪を支えてもらい、工具で外せば排水できそうだ。':'操作輪は固着し、手を離すと逆戻りする。軸に何か挟まっている。';
+ if(t==='rune')return id==='lydia'?'古い文字だ。「水を退け、石を戻せ」と読める。番人の胸の継ぎ目を開けば、心石を戻して鎮められる。':'煤の間に文字のような刻みが見える。古文字を読める仲間に頼めそうだ。';
+ if(id==='ines')return '内側に留め具がある。扉を支えてもらえば、隙間から外せる。水の圧力もかかっている。';
+ if(id==='gareth')return '古い錠前だ。錠前破りで外せる。ただし鍵を外しても、扉を押す水の圧力は残る。';
+ if(id==='brom')return s.drained?'水の圧力がなくなった。鍵が外れれば、この扉を持ち上げて支えられる。':'水の圧力がかかっている。先に水を引けば扉を支えられる。壊して進むなら大きな音が出る。';
+ return '石扉の下から水が染み出している。近くの刻みも確かめたい。';
+}
+function apply(id,a,s=state){
+ if(['decode','open_cache'].includes(a)&&!canShowProposal(id,a,s))throw Error('まず能力について相談し、提案を確かめてください。');
+ if(!actionsFor(id,s).includes(a))throw Error('今はその行動を実行できません。');
+ if(a==='inspect'||a.startsWith('inspect_')){const t=ACTION_TARGET[a];(s.seen[id]??=[]).push(t);const text=inspectText(id,t,s);s.knowledge[id].push(text);if(t==='etching')learnClue(id,'etching',s);if(t==='cache'&&!s.discovery.opened)learnClue(id,'cache_lock',s);return {private:true,text};}
+ let text='';
+ if(a==='scout'){s.discovery.etching=true;learnClue(id,'etching',s);return {private:true,text:CLUES.etching};}
+ if(a==='decode'){learnClue(id,'darkness',s);return {private:true,text:CLUES.darkness};}
+ if(a==='douse'){s.lit=false;text='リディアがランタンを消した。暗闇に蒼白い塵が見え、壁の一角へ流れていく。';if(s.room!=='entry')text='リディアがランタンを消した。周囲は暗闇に戻った。';}
+ if(a==='find_cache'){s.discovery.cache=true;text='塵の集まる壁を確かめると、隠し収納を見つけた。場所を覚えた。';}
+ if(a==='open_cache'){s.discovery.opened=true;s.tools.push('lampstone');text='ガレスが収納の錠前を外した。古い包みの中から灯石を1つ手に入れた。';}
+ if(a==='use_stone'){s.discovery.stoneOn=true;text='イネスが灯石を掲げた。足元だけが淡く照らされる。蒼白い塵はまだ見える。';}
+ if(a==='light'){s.lit=true;s.everLit=true;text='リディアがランタンを灯した。岩肌が明るくなり、台車とレール、広間と排水室への道が浮かび上がった。';}
+ if(a==='take'){s.tools.push('ironbar');text='イネスが鉄の工具を拾った。工具として仲間と使える。';}
+ if(a==='hold'){s.holding=true;text='ブロムが操作輪を支えた。仲間が軸の引っ掛かりを外せる。';}
+ if(a==='pry'){s.drained=true;s.holding=false;text='イネスが鉄の工具で引っ掛かりを外した。操作輪が回り、水が排水口へ流れ始めた。';}
+ if(a==='unlock'){s.locked=false;text=s.drained?'鍵が外れた。扉を持ち上げて支えられる。':'鍵が外れた。だが水の圧力で石扉は動かない。';}
+ if(a==='support'){s.supported=true;text='ブロムが石扉を支えた。人が入れる隙間ができた。';}
+ if(a==='crawl'){s.opened=true;text='イネスが内側の留め具を外した。石扉が開き、奥へ進める。';}
+ if(a==='wedge'){s.opened=true;text='イネスが鉄の工具を扉の下へ差し込み、隙間を固定した。ブロムが手を離しても、皆が通れる。';}
+ if(a==='smash'){s.opened=true;s.noisy=true;text='ブロムが金槌で扉を壊した。大きな音が奥へ響いた。番人に気づかれたようだ。';}
+ if(a==='read'){s.runes=true;const t=inspectText(id,'rune',s);if(!s.knowledge[id].includes(t))s.knowledge[id].push(t);return {private:true,text:t};}
+ return {text};
+}
+function move(to,s=state){
+ if(s.phase!=='explore'||!s.lit||!ROOMS[s.room].links.includes(to))throw Error('今はその場所へ進めません。');
+ s.room=to;if(!s.visited.includes(to))s.visited.push(to);
+ if(to==='hall'&&s.drained&&!s.observedDrain){s.observedDrain=true;return '広間へ戻ると、水の音が消えていた。石扉の下は乾き、扉を押していた水の圧力がなくなっている。';}
+ return ROOMS[to].name+'へ、仲間と移動した。';
+}
+function publicView(){return {phase:state.phase,room:ROOMS[state.room].name,lit:state.lit,targets:visibleTargets().map(t=>TARGETS[t].name),tools:state.tools,holding:state.holding,water:state.room==='drain'?state.drained:undefined,drainChange:state.observedDrain,locked:state.room==='hall'?state.locked:undefined,supported:state.room==='hall'?state.supported:undefined,opened:state.room==='hall'?state.opened:undefined,round:state.round,boss:state.boss,hp:state.hp,weak:state.weak,fire:state.fire};}
+function mapRecord(s=state){const known=new Set(s.visited);if(s.lit||s.everLit)s.visited.forEach(id=>ROOMS[id].links.forEach(next=>known.add(next)));return [...known].map(id=>({id,name:ROOMS[id].name,visited:s.visited.includes(id),current:s.room===id,note:id==='hall'&&s.visited.includes(id)?s.opened?'石扉を開いた':s.observedDrain?'水圧が消えた':'石扉あり':id==='drain'&&s.visited.includes(id)?s.drained?'排水済み':'水が溜まっている':''}));}
+function drawMap(){const records=mapRecord(),byId=Object.fromEntries(records.map(r=>[r.id,r]));const places={entry:{x:135,y:285,path:'M92 240 L177 242 L182 320 L88 323 Z',symbol:'M104 282 Q133 244 162 282 L162 307 L104 307 Z'},hall:{x:435,y:120,path:'M380 78 L488 75 L491 163 L378 165 Z',symbol:'M414 93 L458 95 L456 146 L414 147 Z M434 95 L434 146'},drain:{x:440,y:355,path:'M383 312 L496 309 L500 400 L380 403 Z',symbol:'M420 349 a20 20 0 1 0 40 0 a20 20 0 1 0 -40 0 M439 331 L440 369 M420 349 L461 349'}};
+return `<svg viewBox="0 0 600 465" role="img" aria-labelledby="maptitle mapdesc"><defs><filter id="map-ink" x="-10%" y="-10%" width="120%" height="120%"><feTurbulence type="fractalNoise" baseFrequency=".025" numOctaves="2" seed="17" result="noise"/><feDisplacementMap in="SourceGraphic" in2="noise" scale="1.7" xChannelSelector="R" yChannelSelector="G"/></filter></defs><title id="maptitle">リディアの坑道地図</title><desc id="mapdesc">${esc(records.map(r=>r.name+'：'+(r.current?'現在地、':'')+(r.visited?'訪問済み':'道を発見、未訪問')+(r.note?'、'+r.note:'')).join('。'))}。地図からは移動しません。</desc><text x="30" y="40" class="map-title">坑道見取図</text><text x="32" y="62" class="map-small">リディア筆録　—　歩測による略図</text>${['hall','drain'].filter(id=>byId[id]).map(id=>`<path class="map-route ${byId[id].visited?'':'unseen'}" d="${id==='hall'?'M178 264 C230 260 244 189 286 190 S337 137 380 130':'M180 300 C229 332 266 314 309 345 S354 350 383 357'}"/>`).join('')}${records.map(r=>{const p=places[r.id];return `<g class="map-place ${r.visited?'':'unseen'}"><path d="${p.path}"/><path class="map-symbol" d="${p.symbol}"/>${r.current?`<ellipse class="map-current" cx="${p.x}" cy="${p.y}" rx="69" ry="53"/>`:''}<text x="${p.x}" y="${p.y+66}" text-anchor="middle">${r.name}</text><text class="map-small" x="${p.x}" y="${p.y+85}" text-anchor="middle">${r.current?'ここにいる':r.visited?'訪問済み':'まだ行っていない'}</text>${r.note?`<text class="map-note" x="${p.x}" y="${p.y+104}" text-anchor="middle">${r.note}</text>`:''}</g>`;}).join('')}<text x="30" y="441" class="map-small">実線：通った道　点線：見つけた道　青い印：現在地</text></svg>`;}
+function showMap(){const dialog=$('sheet');dialog.classList.add('map-sheet');dialog.innerHTML=`<div class="map-toolbar"><button id="mapback">リディアの持ち物へ</button><button id="closesheet">閉じる</button></div><h2>古い坑道の地図</h2><p class="map-caption">リディアが持つ地図を、仲間と広げています。</p><div class="paper-map">${drawMap()}</div><p class="map-caption">確認した場所と出来事を書き込みます。移動するときは地図を閉じ、シーンの出口を選んでください。</p>`;$('mapback').onclick=()=>sheet('lydia');$('closesheet').onclick=()=>dialog.close();if(!dialog.open)dialog.showModal();}
+function render(){
+ positionGM();
+ const battle=state.phase==='battle',end=state.phase==='end',room=ROOMS[state.room];
+ if(target&&!visibleTargets().includes(target))target=null;
+ $('phase').textContent=end?'結末':battle?'連携戦':'探索';
+ $('place').textContent=end?(state.outcome==='retreat'?'坑道から撤退':'灯りが戻る'):battle?'灯りの番人':room.name;
+ $('objective').textContent=end?'仲間と一緒に、村へ帰ろう。':battle?'胸の枠を開き、心石を戻す。':!state.lit?(blueDust()?'蒼白い塵が、壁の一角へ流れている。':'真っ暗だ。灯りがあれば、周囲を確かめられる。'):state.room==='entry'?'ランタンの光に、古い道と道具が浮かぶ。':state.room==='drain'?(state.drained?'水が引き、排水口が見えている。':'足元の水が、広間へ流れている。'):state.opened?'石扉が開いた。先へ進める。':state.observedDrain?'水が引いた。扉を動かせそうだ。':'石扉の下から水が染み出している。';
+ $('scene').style.backgroundImage=`url('../replay/img/${battle||end?'s3_chamber_v2':room.image}.webp')`;
+ $('scene').classList.toggle('dark',!state.lit);$('scene').classList.toggle('drained',state.lit&&state.room==='drain'&&state.drained);
+ $('points').innerHTML=!battle&&!end?visibleTargets().map(t=>`<button class="target" style="left:${TARGETS[t].x}%;top:${TARGETS[t].y}%" data-target="${t}" aria-pressed="${target===t}">${t==='cache'&&state.discovery.opened?'開いた収納':t==='door'&&state.opened?'開いた石扉':t==='water'&&state.drained?'乾いた排水口':TARGETS[t].name}</button>`).join(''):'';
+ if(blueDust()&&!state.discovery.cache)$('points').innerHTML+='<button class="dust-discovery" id="dustspot" aria-label="蒼白い塵が集まる場所を調べる"></button>';
+ if($('dustspot'))$('dustspot').onclick=()=>human('find_cache');
+ $('points').querySelectorAll('[data-target]').forEach(b=>b.onclick=()=>{target=b.dataset.target;render();});
+ renderPlacement();
+ $('bossimg').hidden=!battle;$('tele').hidden=!battle;$('tele').innerHTML=`<strong>予告：${state.round%2?'前衛を薙ぎ払う（各4）':'魔法使いへ光線（5）'}</strong>番人の枠 ${state.boss}/${state.noisy?30:24}　ラウンド ${state.round}`;
+ $('exits').innerHTML=!battle&&!end&&state.lit?room.links.map(id=>`<button data-room="${id}" ${busy?'disabled':''}><span aria-hidden="true">↗</span> ${ROOMS[id].name}へ</button>`).join(''):!battle&&!end?'<span>灯りがなく、出口が見えない。</span>':'';$('exits').hidden=battle||end||!state.lit;$('exits').querySelectorAll('[data-room]').forEach(b=>b.onclick=()=>{say('GM',move(b.dataset.room),'gm');target=null;render();});
+ $('party').innerHTML=PEOPLE.map(p=>`<button class="person ${p.id==='ines'?'mine':''}" data-person="${p.id}"><img src="../replay/img/${p.id}.webp" alt=""><span><strong>${p.name}</strong><small>${p.role}　HP ${state.hp[p.id]}/${p.hp}</small></span></button>`).join('');$('party').querySelectorAll('button').forEach(b=>b.onclick=()=>sheet(b.dataset.person));
+ let body=end?`<div class="end">${state.outcome==='retreat'?'仲間を連れて坑道から撤退した。作戦を変えて、もう一度挑もう。':'胸の枠が外れた。心石を戻すと、番人はランタンを掲げ、坑道の灯りが戻った。'}</div>`:battle?`<h3>${plan.length?'作戦の順番':'あなたの行動'}</h3><p>${plan.length?'上下の矢印で順番を変え、作戦を実行します。':'敵の予告を見て、仲間と相談できます。'}</p>`:`<h3>${!state.lit?(blueDust()?'暗闇の中を探る':'灯りを用意する'):target?TARGETS[target].name:'周囲を見渡す'}</h3><p>${!state.lit?(blueDust()?'塵の流れを目で追い、気になる場所を調べられます。':'リディアはランタンを持っています。'):target?'誰でも調べられます。能力によって、気づくことが違います。':'調べたい場所を選ぶか、シーンの出口から仲間と移動できます。'}</p>`;
+ if(plan.length){body+=`<div class="queue">${plan.map((p,i)=>`<div><b>${i+1}</b><span>${PEOPLE.find(x=>x.id===p.id).name}：${LABEL[p.action]}</span><button data-move="${i},-1" aria-label="${i+1}番の行動を上へ" ${busy||i===0?'disabled':''}>↑</button><button data-move="${i},1" aria-label="${i+1}番の行動を下へ" ${busy||i===plan.length-1?'disabled':''}>↓</button></div>`).join('')}</div><div class="choices"><button id="execute" class="primary" ${busy||plan.length!==4?'disabled':''}>この作戦を実行</button><button id="cancelplan" ${busy?'disabled':''}>選び直す</button></div>`;
+ }else if(!end){const own=actionsFor('ines').filter(a=>battle||ACTION_TARGET[a]===target&&canShowProposal('ines',a));body+=`<div class="choices">${own.map(a=>`<button data-act="${a}" ${busy?'disabled':''}>${LABEL[a]}</button>`).join('')}${!state.lit?'<button data-request="lydia,light" class="primary">リディアに点灯を頼む</button>':''}${!battle&&state.lit&&target?PEOPLE.slice(1).flatMap(p=>actionsFor(p.id).filter(a=>ACTION_TARGET[a]===target&&!['decode','open_cache'].includes(a)).map(a=>`<button data-request="${p.id},${a}" ${busy?'disabled':''}>${p.name}に頼む（${LABEL[a]}）</button>`)).join(''):''}${!battle&&state.room==='hall'&&state.opened?`<button id="advance" class="primary" ${busy?'disabled':''}>石扉の奥へ進む</button>`:''}</div>`;}
+ if(!battle&&!end){body+=`<div class="choices exploration-basics">${actionsFor('ines').filter(a=>['scout','use_stone'].includes(a)).map(a=>`<button data-act="${a}" ${busy?'disabled':''}>${LABEL[a]}</button>`).join('')}${state.lit?`<button data-request="lydia,douse" ${busy?'disabled':''}>リディアに消灯を頼む</button>`:''}</div>`;
+ const candidates=state.discovery.proposals.filter(p=>actionsFor(p.id).includes(p.action));if(candidates.length)body+=`<div class="proposed-actions"><p>相談から出た提案</p><div class="choices">${candidates.map(p=>`<button data-request="${p.id},${p.action}" ${busy?'disabled':''}>${PEOPLE.find(a=>a.id===p.id).name}に依頼：${LABEL[p.action]}</button>`).join('')}</div></div>`;
+ }
+ $('actions').innerHTML=body;$('actions').querySelectorAll('[data-act]').forEach(b=>b.onclick=()=>human(b.dataset.act));$('actions').querySelectorAll('[data-request]').forEach(b=>b.onclick=()=>request(...b.dataset.request.split(',')));
+ $('actions').querySelectorAll('[data-move]').forEach(b=>b.onclick=()=>{const [i,d]=b.dataset.move.split(',').map(Number);[plan[i],plan[i+d]]=[plan[i+d],plan[i]];render();});
+ if($('execute'))$('execute').onclick=execute;if($('cancelplan'))$('cancelplan').onclick=()=>{plan=[];render();};
+ if($('advance'))$('advance').onclick=()=>{state.phase='battle';state.boss=state.noisy?30:24;say('GM',state.noisy?'音に気づいた番人が身構えた。胸の枠が強く閉じている。':'番人が振り向いた。敵の予告を見て作戦を決めよう。','gm');render();};
+ $('private').hidden=!state.knowledge.ines.length;$('private').innerHTML='あなただけの発見：'+esc(state.knowledge.ines.join(' / '))+state.discovery.clues.ines.filter(k=>!state.discovery.shared.includes(k)).map(k=>`<div><button data-share-clue="${k}" ${busy?'disabled':''}>この発見を仲間に伝える：${k==='etching'?'古い文字の刻み':'収納の錠前'}</button></div>`).join('');
+ $('private').querySelectorAll('[data-share-clue]').forEach(b=>b.onclick=()=>{shareClue('ines',b.dataset.shareClue);say('イネス（あなた）',CLUES[b.dataset.shareClue],'you');run(()=>companions(false,'all'));});
+ placeTargetLabels();updateRecipients();$('message').disabled=busy;$('chat').querySelector('button').disabled=busy;$('status').textContent=busy?(diceJob&&$('dicePanel').open?'GMが判定しています…':'AIの仲間が考えています…'):apiReady?'AI接続済み。仲間に話しかけてみてください。':'AI未接続。GMを選んで相談すると再試行できます。';redrawEffects();
+}
+function sheet(id){$('sheet').classList.remove('map-sheet');const p=PEOPLE.find(p=>p.id===id);$('sheet').innerHTML=`<button id="closesheet">閉じる</button><h2>${p.name}</h2><img class="sheetimg" src="../replay/img/${id}.webp" alt="${p.name}"><p>${p.role}</p><p>${p.skill}</p><p>持ち物：${id==='lydia'?p.tool.replace('古い坑道の地図','<button id="openmap">古い坑道の地図</button>'):p.tool}${state.tools.length?'、'+state.tools.map(t=>t==='ironbar'?'鉄の工具（共有）':'灯石（共有）').join('、'):''}</p><p>考え方：${p.motive}</p><div class="choices">${state.phase==='explore'?actionsFor(id).filter(a=>['scout','light','douse','use_stone'].includes(a)).map(a=>`<button data-sheet-action="${a}">${LABEL[a]}を${id==='ines'?'実行':'頼む'}</button>`).join(''):''}<button id="discussAbility">この能力について相談する</button></div><p>${id==='lydia'?'火球の残り：'+state.fire+'回':''}</p><p>共有された情報：${esc(state.shared.join(' / ')||'まだありません。')}</p>`;$('closesheet').onclick=()=>$('sheet').close();if($('openmap'))$('openmap').onclick=showMap;
+ $('sheet').querySelectorAll('[data-sheet-action]').forEach(b=>b.onclick=()=>{$('sheet').close();id==='ines'?human(b.dataset.sheetAction):request(id,b.dataset.sheetAction);});
+ $('discussAbility').onclick=()=>{$('sheet').close();recipient=id==='ines'?'all':id;updateRecipients();say('イネス（あなた）',p.name+'の能力を、見つけたことに使えるか相談したい。','you');run(()=>companions(false,recipient));};if(!$('sheet').open)$('sheet').showModal();}
+async function ask(system,payload){const res=await fetch('/api/gm',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({system,messages:[{role:'user',content:JSON.stringify(payload)}],max_tokens:450}),signal:AbortSignal.timeout(45000)});const data=await res.json();if(!res.ok)throw Error(data.error?.message||'AI中継からエラーが返りました。');apiReady=true;return (data.content||[]).map(c=>c.text||'').join('');}
+async function aiPlayer(p,planning=false,requested=null){
+ const possible=actionsFor(p.id),allowed=planning||requested?possible:['wait'];
+ const proposalChoices=possible.filter(a=>['decode','open_cache'].includes(a));
+ const text=await ask(`あなたは協力型TRPGのプレイヤー「${p.name}」。${p.motive} GMではない。能力:${p.skill}。渡された情報以外の秘密を知らない。相談の仮定を実行と取り違えない。現在地にある対象だけに行動する。allowedは実行可能な行動と日本語説明。${planning?'戦闘計画ではallowedから必ず1つ選ぶ。':requested?'requestedの行動を仲間から頼まれた。可能なら実行し、発言とactionを一致させる。':'相談のみです。実行せずaction=wait。実行済みと語らない。依頼を受けたら画面の実行ボタンを案内する。proposalChoicesに今使える能力があれば、その行動を提案する。'}知っている情報をspeechで伝えた時だけshare=true。JSONだけを返す:{"speech":"80文字以内","action":"IDまたはwait","share":false,"proposal":"提案するIDまたは空文字","shareClues":["発言で実際に伝えたcluesのキー"]}。cluesにある自分の発見は、質問されたら自然に仲間へ伝える。秘密を知ったふりをしない。`,{clues:Object.fromEntries(state.discovery.clues[p.id].map(k=>[k,CLUES[k]])),proposalChoices:Object.fromEntries(proposalChoices.map(a=>[a,LABEL[a]])),public:publicView(),knowledge:state.knowledge[p.id],shared:state.shared.slice(-16),conversation:chat.filter(c=>c.kind!=='private'&&c.kind!=='error').slice(-12),allowed:Object.fromEntries(allowed.map(a=>[a,LABEL[a]])),planning,requested,plan});
+ const r=JSON.parse(text.trim().replace(/^```(?:json)?\s*/,'').replace(/\s*```$/,''));
+ if(typeof r.speech!=='string'||r.speech.length>350||!(planning?allowed:['wait',...allowed]).includes(r.action)||typeof r.share!=='boolean')throw Error('AIの返答が行動の形式に合いません。もう一度相談してください。');if(requested&&r.action!=='wait'&&r.action!==requested)throw Error('依頼と異なる行動は実行しません。');r.requested=requested;r.proposal=proposalChoices.includes(r.proposal)?r.proposal:'';r.shareClues=Array.isArray(r.shareClues)?r.shareClues.filter(k=>state.discovery.clues[p.id].includes(k)):[];return r;
+}
+function acceptAI(p,r,planning){say(p.name+'（AI）',r.speech);if(r.share)state.shared.push(p.name+'：'+r.speech);for(const key of r.shareClues||[])shareClue(p.id,key);if(r.proposal)propose(p.id,r.proposal);if(r.action!=='wait'&&(planning||r.requested&&state.phase==='explore')){if(planning)plan.push({id:p.id,action:r.action});else{const out=apply(p.id,r.action);if(!out.private)say('GM',out.text,'gm');}}render();}
+function listeners(id='all',planning=false){if(planning||id==='all')return !state.lit?[PEOPLE[3],PEOPLE[1],PEOPLE[2]]:PEOPLE.slice(1);return PEOPLE.slice(1).filter(p=>p.id===id);}
+async function companions(planning=false,addressedTo='all'){const order=listeners(addressedTo,planning);for(const p of order){const epoch=generation;const r=await aiPlayer(p,planning);if(epoch!==generation)return;acceptAI(p,r,planning);}}
+async function run(task){if(busy)return;const epoch=generation;busy=true;render();try{await task();}catch(e){if(epoch===generation)say('接続・応答の確認',e.message+' ゲームの状態は保持しています。','error');}finally{if(epoch===generation){busy=false;render();}}}
+function request(id,a){if(busy||!actionsFor(id).includes(a))return;if(a==='smash'&&!confirm('扉を壊すと大きな音が出て、番人が警戒します。ブロムに頼みますか？'))return;const p=PEOPLE.find(p=>p.id===id);if(a==='open_cache'){if(!canShowProposal(id,a))return;if($('sheet').open)$('sheet').close();openDice('cache');return;}if(['light','douse','decode'].includes(a)){say('イネス（あなた）',p.name+'、'+LABEL[a]+'をお願い。','you');const out=apply(id,a);say(p.name,out.private?'調べました。分かったことを相談で伝えます。':out.text);render();return;}say('イネス（あなた）',`${p.name}、「${LABEL[a]}」をお願い。`,'you');run(async()=>{const epoch=generation;const r=await aiPlayer(p,false,a);if(epoch!==generation)return;acceptAI(p,r,false);});}
+async function human(a){if(busy)return;if(state.phase==='battle'){plan=[{id:'ines',action:a}];say('イネス（あなた）',LABEL[a]+'でいこう。','you');const epoch=generation;await run(()=>companions(true));if(epoch!==generation)return;if(plan.length!==4){plan=[];render();}return;}const out=apply('ines',a);if(!out.private)say('GM',out.text,'gm');render();}
+function d20(){const n=new Uint32Array(1);do{crypto.getRandomValues(n);}while(n[0]>=4294967280);return n[0]%20+1;}
+function resolve(s,items,roll,onCheck=()=>{}){if(items.length!==4||new Set(items.map(p=>p.id)).size!==4||items.some(p=>!actionsFor(p.id,s).includes(p.action)))throw Error('4人分の実行可能な作戦を確認してください。');let aid=false,cover=false,results=[];for(const p of items){const a=p.action;if(a==='study'){const n=roll();onCheck({id:p.id,action:a,n,bonus:5,total:n+5,target:10,hit:n+5>=10,source:'見抜く能力＋5'});s.weak=s.weak||n+5>=10;results.push(`イネスの見抜く：${n}+5。${s.weak?'弱点を発見。':'弱点は捉えられなかった。'}`);}else if(a==='aid'){aid=true;results.push('イネスがリディアを支援。次の攻撃判定+5。');}else if(a==='cover'){cover=true;results.push('ブロムが前衛をかばう。');}else{const n=roll(),bonus=(s.weak?5:0)+(p.id==='lydia'&&aid?5:0),hit=n+bonus>=10,damage=a==='fire'?6:a==='spark'?2:a==='stab'?(s.weak?8:3):a==='strike'?4:3;onCheck({id:p.id,action:a,n,bonus,total:n+bonus,target:10,hit,source:[s.weak?'弱点＋5':'',p.id==='lydia'&&aid?'イネスの支援＋5':''].filter(Boolean).join(' / ')||'補正なし'});if(a==='fire')s.fire--;if(p.id==='lydia')aid=false;s.boss=Math.max(0,s.boss-(hit?damage:0));results.push(`${PEOPLE.find(x=>x.id===p.id).name}の${LABEL[a]}：${n}+${bonus}。${hit?damage+'ダメージ。':'外れた。'}`);}}if(s.boss===0){s.phase='end';s.outcome='win';results.push('胸の枠が外れた。心石を戻すと、番人は静かになった。');}else{if(s.round%2){if(cover){s.hp.brom=Math.max(0,s.hp.brom-6);results.push('ブロムが薙ぎ払いを引き受け、盾で軽減。6ダメージ。');}else{for(const id of ['brom','gareth'])s.hp[id]=Math.max(0,s.hp[id]-4);results.push('前衛の2人に4ダメージ。');}}else{s.hp.lydia=Math.max(0,s.hp.lydia-5);results.push('リディアに光線。5ダメージ。');}if(Object.values(s.hp).some(h=>h===0)){s.phase='end';s.outcome='retreat';results.push('仲間が倒れた。全員で撤退し、今回の探索を終える。');}s.round++;}return results;}
+function execute(){if(busy||plan.length!==4)return;openDice('battle');}
+
+// 判定の演出時間（ms）。ゲーム用の乱数は1判定に1回だけ使用します。
+const DICE_CONFIG={
+ // ダイスが転がる演出時間。単位ms。判定結果は変えません。
+ duration:1250,
+ // 着地した出目を見せる時間。単位ms。元のD20Overlayと同じ長さです。
+ landedDuration:1050,
+ // 回転画像の切り替え間隔。単位ms。元のD20Overlayと同じ55msです。
+ frameInterval:55,
+ // ガレスの収納解錠の能力補正。値が大きいほど成功しやすくなります。
+ cacheSkill:3,
+ // イネスの任意支援による解錠補正。
+ support:2,
+ // 解錠に失敗して構造を把握した後の補正。
+ retry:2,
+ // 収納の静かな解錠に必要な合計値。
+ target:10,
+ // 代償つき解錠に必要な合計値。この値未満では開きません。
+ partial:5
+};
+function cacheBonus(s,support){return DICE_CONFIG.cacheSkill+(support?DICE_CONFIG.support:0)+(s.discovery.cacheRetry?DICE_CONFIG.retry:0);}
+function cacheOdds(s,support){let success=0,partial=0;for(let n=1;n<=20;n++){const total=n+cacheBonus(s,support);if(total>=DICE_CONFIG.target)success++;else if(total>=DICE_CONFIG.partial)partial++;}return {success:success*5,partial:partial*5,failure:(20-success-partial)*5};}
+function resolveCache(s,n,support=false){
+ if(!Number.isInteger(n)||n<1||n>20)throw Error('出目は1〜20です。');
+ if(!actionsFor('gareth',s).includes('open_cache')||!canShowProposal('gareth','open_cache',s))throw Error('解錠の提案を確認してください。');
+ const retry=!!s.discovery.cacheRetry,bonus=cacheBonus(s,support),total=n+bonus,outcome=total>=DICE_CONFIG.target?'success':total>=DICE_CONFIG.partial?'partial':'failure';
+ let text;if(outcome==='failure'){s.discovery.cacheRetry=true;s.noisy=true;text='錠前は開かなかったが、引っ掛かる構造が分かった。再挑戦に＋'+DICE_CONFIG.retry+'。金属音が奥へ響いた。';}
+ else{text=apply('gareth','open_cache',s).text;if(outcome==='partial'){s.noisy=true;text+=' ただし錠前が軋み、大きな音が奥へ響いた。';}}
+ return {id:'gareth',action:'open_cache',n,bonus,total,target:DICE_CONFIG.target,hit:outcome==='success',outcome,text,source:'錠前破り＋'+DICE_CONFIG.cacheSkill+(support?' / イネスの支援＋'+DICE_CONFIG.support:'')+(retry?' / 構造の発見＋'+DICE_CONFIG.retry:'')};
+}
+// ダイスの面だけの色替え。角度は赤を基準にした色相の回転（度）です。
+const DICE_COLORS={ines:{hue:180,name:'青緑'},brom:{hue:35,name:'琥珀'},gareth:{hue:280,name:'紫'},lydia:{hue:210,name:'青'},gm:{hue:0,name:'赤'}};
+function setDiceActor(id){const color=DICE_COLORS[id]||DICE_COLORS.gm;$('die').style.filter=color.hue?'url(#dice-color-'+id+')':'none';$('die').dataset.actor=id;$('die').dataset.color=color.name;$('diceSprite').alt=color.name+'の20面ダイス'+($('die').dataset.face?'：'+$('die').dataset.face:'');}
+function diceAsset(kind,value){if(kind==='stop'&&(!Number.isInteger(value)||value<1||value>20))throw Error('停止画像の出目は1〜20です。');if(kind==='red'&&(!Number.isInteger(value)||value<0||value>15))throw Error('回転画像は0〜15です。');return 'images/d20/d20-'+kind+'-'+String(value).padStart(2,'0')+'.png';}
+let diceImagesReady;
+function preloadDice(){return diceImagesReady??=Promise.all([...Array.from({length:16},(_,n)=>diceAsset('red',n)),...Array.from({length:20},(_,n)=>diceAsset('stop',n+1))].map(src=>{const image=new Image();image.src=src;return image.decode();})).catch(e=>{diceImagesReady=null;throw Error('ダイス画像を読み込めませんでした。再度お試しください。');});}
+async function animateDice(value,job){
+ const die=$('die'),sprite=$('diceSprite'),valid=()=>job.session===diceSession&&job.epoch===generation,reduced=matchMedia('(prefers-reduced-motion: reduce)').matches;
+ await preloadDice();if(!valid())return;
+ die.style.setProperty('--dice-roll-time',DICE_CONFIG.duration+'ms');die.classList.remove('rolling','landed','critical','low-roll');sprite.alt='20面ダイスを振っています';sprite.src=diceAsset('red',0);die.removeAttribute('data-face');
+ if(!reduced){void die.offsetWidth;die.classList.add('rolling');let frame=0;const timer=setInterval(()=>{if(valid())sprite.src=diceAsset('red',++frame%16);},DICE_CONFIG.frameInterval);try{await new Promise(done=>setTimeout(done,DICE_CONFIG.duration));}finally{clearInterval(timer);}}
+ if(!valid())return;
+ die.classList.remove('rolling');die.classList.add('landed');die.classList.toggle('critical',value===20);die.classList.toggle('low-roll',value===1);die.dataset.face=String(value);sprite.src=diceAsset('stop',value);sprite.alt=DICE_COLORS[die.dataset.actor].name+'の20面ダイス：'+value;
+ await new Promise(done=>setTimeout(done,reduced?80:DICE_CONFIG.landedDuration));
+}
+let diceSession=0,diceJob=null;
+function openDice(mode){
+ if(busy)return;const dialog=$('dicePanel');diceJob={mode,epoch:generation,source:state,items:plan.map(p=>({...p})),session:++diceSession};
+ $('die').classList.remove('rolling','landed','critical','low-roll');$('diceSprite').src=diceAsset('red',0);$('diceSprite').alt='赤い20面ダイス';$('die').removeAttribute('data-face');setDiceActor(mode==='cache'?'gareth':mode==='battle'?diceJob.items.find(p=>!['aid','cover'].includes(p.action))?.id||'gm':'gm');$('diceRecords').replaceChildren();$('diceRoll').disabled=false;$('diceRoll').hidden=false;$('diceClose').textContent='キャンセル';$('diceClose').disabled=false;$('diceSupport').checked=false;$('diceSupport').disabled=false;$('diceSupportLabel').hidden=mode!=='cache';$('diceColorLabel').hidden=mode!=='demo';$('diceColorActor').disabled=false;$('diceColorActor').value='gm';
+ $('diceIntro').textContent=mode==='demo'?'演出テスト · ゲーム進行には影響しません。':mode==='cache'?'ガレスが挑戦します。支援するか決めてください。':'決めた作戦の順に判定します。';
+ const preview=()=>{if(mode==='cache'){const b=cacheBonus(state,$('diceSupport').checked),odds=cacheOdds(state,$('diceSupport').checked);$('dicePlan').textContent='収納の解錠：D20 ＋ '+b+' ／ 目標'+DICE_CONFIG.target+'。成功 '+odds.success+'％・代償つき '+odds.partial+'％・失敗 '+odds.failure+'％。'+DICE_CONFIG.partial+'〜'+(DICE_CONFIG.target-1)+'なら開くが音が響き、奥の敵が警戒します。'+(DICE_CONFIG.partial-1)+'以下なら開かず、音が響きますが再挑戦に＋'+DICE_CONFIG.retry+'。報酬は灯石1個です。';}else if(mode==='battle'){$('dicePlan').textContent=diceJob.items.map(p=>PEOPLE.find(x=>x.id===p.id).name+'：'+LABEL[p.action]).join(' → ')+'。目標10。見抜く＋5、弱点発見後の攻撃＋5、支援後の次のリディアの攻撃＋5（支援は重複しません）。攻撃失敗はダメージ0。ラウンド後に敵が残れば反撃します。かばう・支援は振らずに実行します。';}else $('dicePlan').textContent='D20、補正なし、目標10。出目と計算・結果の表示を試します。';};
+ $('diceSupportLabel').lastChild.textContent='イネスが照明と見張りで支援（＋'+DICE_CONFIG.support+'）';$('diceSupport').onchange=preview;preview();dialog.showModal();
+}
+function setupDice(){
+ const dialog=$('dicePanel');$('diceColorActor').innerHTML=[{id:'gm',name:'GM'},...PEOPLE].map(p=>`<option value="${p.id}">${p.name} · ${DICE_COLORS[p.id].name}</option>`).join('');$('diceColorActor').onchange=e=>setDiceActor(e.target.value);$('diceColorFilters').innerHTML=Object.entries(DICE_COLORS).filter(([,c])=>c.hue).map(([id,c])=>`<filter id="dice-color-${id}" x="-35%" y="-35%" width="170%" height="170%" color-interpolation-filters="sRGB"><feColorMatrix in="SourceGraphic" values="0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 3 -4 -1 0 0" result="redMask"/><feColorMatrix in="SourceGraphic" type="hueRotate" values="${c.hue}" result="tint"/><feComposite in="tint" in2="redMask" operator="in" result="coloredFace"/><feComposite in="SourceGraphic" in2="redMask" operator="out" result="originalRest"/><feComposite in="coloredFace" in2="originalRest" operator="arithmetic" k2="1" k3="1"/></filter>`).join('');$('diceClose').onclick=()=>dialog.close();
+ dialog.addEventListener('cancel',e=>{if(busy)e.preventDefault();});
+ dialog.addEventListener('close',()=>{diceSession++;$('gmguide').classList.remove('dice-throw');$('die').classList.remove('rolling');if(diceJob&&diceJob.epoch===generation){busy=false;render();}diceJob=null;});
+ $('diceRoll').onclick=async()=>{
+  const job=diceJob;if(!job||busy)return;busy=true;$('diceColorActor').disabled=true;$('diceRoll').disabled=true;$('diceClose').disabled=true;$('diceSupport').disabled=true;render();
+  const draft=structuredClone(state),records=[];let results=[];
+  try{
+   if(job.mode==='battle')results=resolve(draft,job.items,d20,r=>records.push(r));
+   else if(job.mode==='cache'){const r=resolveCache(draft,d20(),$('diceSupport').checked);records.push(r);results=[r.text];}
+   else {const n=d20();records.push({id:$('diceColorActor').value,action:'demo',n,bonus:0,total:n,target:10,hit:n>=10,source:'補正なし'});}
+   for(const r of records){
+    if(job.session!==diceSession||job.epoch!==generation)return;
+    setDiceActor(r.id);const name=r.id==='gm'?'GM':PEOPLE.find(p=>p.id===r.id).name;
+    $('diceIntro').textContent=job.mode==='demo'?'GM：ダイスを振ります。':'GM：'+name+'の判定です。';$('die').classList.remove('rolling','landed','critical','low-roll');$('diceSprite').src=diceAsset('red',0);$('diceSprite').alt='赤い20面ダイス';$('die').removeAttribute('data-face');$('gmguide').classList.add('dice-throw');
+    await animateDice(r.n,job);
+    if(job.session!==diceSession||job.epoch!==generation)return;
+    $('gmguide').classList.remove('dice-throw');
+    const outcome=r.outcome==='partial'?'代償つき成功':r.outcome==='failure'?'失敗':r.hit?'成功':'失敗',line=name+'：'+r.n+' ＋ '+r.bonus+' ＝ '+r.total+' ／ 目標'+r.target+' · '+outcome;
+    const entry=document.createElement('div');entry.className='dice-record';entry.textContent=line;const source=document.createElement('small');source.textContent=r.source;entry.append(source);$('diceRecords').append(entry);
+   }
+   if(job.mode!=='demo'){
+    if(job.source!==state)return;state=draft;if(job.mode==='battle')plan=[];
+    records.forEach(r=>say('GM',PEOPLE.find(p=>p.id===r.id).name+'の判定：'+r.n+'＋'+r.bonus+'＝'+r.total+'（'+r.source+' / 目標'+r.target+'）'+(r.outcome==='partial'?'代償つき成功':r.hit?'成功':'失敗'),'gm'));results.forEach(t=>say('GM',t,'gm'));
+    if(job.mode==='cache')say('ガレス',records[0].outcome==='failure'?'仕組みは掴めた。次は開けられそうだ。':records[0].outcome==='partial'?'開いたけど、音を立てたな。奥に気をつけよう。':'静かに開いた。灯石を持っていこう。');
+    else {const actor=records.find(r=>r.id!=='ines');if(actor)say(PEOPLE.find(p=>p.id===actor.id).name,actor.hit?'手応えはあった。次の動きに備えよう。':'捉えきれなかった。支援や順番を考え直そう。');}
+   }
+   results.forEach(t=>{const e=document.createElement('div');e.className='dice-record';e.textContent=t;$('diceRecords').append(e);});
+   $('diceIntro').textContent=job.mode==='demo'?'演出テスト完了。ゲーム状態は変更していません。':'GM：判定が終わりました。';$('diceRoll').hidden=true;$('diceClose').textContent='閉じる';
+  }catch(e){$('diceRecords').textContent=e.message;$('diceRoll').hidden=true;$('diceClose').textContent='閉じる';}
+  finally{if(job.session===diceSession&&job.epoch===generation){busy=false;$('diceColorActor').disabled=false;$('diceClose').disabled=false;$('diceSupport').disabled=$('diceRoll').hidden;$('gmguide').classList.remove('dice-throw');render();}}
+ };
+}
+
+function gmText(text){const clean=text.trim().replace(/^```(?:json)?\s*/,'').replace(/\s*```$/,'');let value;try{value=JSON.parse(clean);}catch{return clean;}if(typeof value==='string')return value;for(const key of ['response','text','speech'])if(typeof value?.[key]==='string')return value[key];throw Error('GMの返答を文章として確認できませんでした。もう一度相談してください。');}
+async function consultGM(question){if(state.phase==='explore'&&state.room==='entry'){state.discovery.hints++;say('GM',discoveryHint(),'gm');return;}const epoch=generation;const text=await ask('あなたはTRPGのGM。現在地で見える事実と共有された情報だけを整理し、次の相談を促す短い問いを1つ出す。能力を案内してよい。未共有の個別情報や未訪問の場所の仕組みを暴露しない。行動を代行しない。入力された相談に答え、120文字以内の本文だけを返す。JSONやコードブロックは不要。',{question,public:publicView(),abilities:PEOPLE.map(p=>({name:p.name,skill:p.skill})),shared:state.shared.slice(-16),conversation:chat.filter(c=>c.kind!=='error').slice(-12)});if(epoch===generation)say('GM',gmText(text),'gm');}
+
+function chronicleMarkdown(entries=chat){return '# クロニクル：坑道の向こう\n\nこの卓で交わした会話とGMの記録（mock3簡易版）。\n\n'+entries.filter(e=>e.kind!=='error').map((e,i)=>'## '+(i+1)+'. '+e.who+'\n\n'+e.text).join('\n\n');}
+function setupSystem(){
+ const panel=$('systemPanel');
+ const refresh=()=>{$('chroniclePreview').value=chronicleMarkdown();};
+ $('systemOpen').onclick=()=>{refresh();$('resetConfirm').hidden=true;panel.showModal();};
+ $('systemClose').onclick=()=>panel.close();
+ $('diceDemo').onclick=()=>{if(busy)return;panel.close();openDice('demo');};
+ $('reset').onclick=()=>{$('resetConfirm').hidden=false;$('resetCancel').focus();};
+ $('resetCancel').onclick=()=>{$('resetConfirm').hidden=true;$('reset').focus();};
+ $('resetAccept').onclick=()=>{reset();$('resetConfirm').hidden=true;panel.close();};
+ $('chronicleControls').ontoggle=()=>{if($('chronicleControls').open)refresh();};
+ $('debugEnabled').onchange=e=>{$('effectControls').hidden=!e.target.checked;$('diceDemo').hidden=!e.target.checked;};
+ $('chronicleExport').onclick=()=>{refresh();const blob=new Blob([chronicleMarkdown()],{type:'text/markdown;charset=utf-8'}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download='mock3_chronicle_'+new Date().toISOString().slice(0,10)+'.md';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);$('chronicleStatus').textContent='Markdownファイルを出力しました。';};
+}
+function recipientName(id){return id==='all'?'全員':id==='gm'?'GM':PEOPLE.find(p=>p.id===id).name;}
+function updateRecipients(){const name=recipientName(recipient);$('messageLabel').textContent='相談・発見を'+name+'に伝える';document.querySelectorAll('input[name="recipient"]').forEach(input=>{input.checked=input.value===recipient;input.disabled=busy;});}
+function setupRecipients(){const allIcon='<svg viewBox="0 0 36 36" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="18" cy="11" r="4"/><circle cx="7" cy="15" r="3"/><circle cx="29" cy="15" r="3"/><path d="M10 29v-5q0-8 8-8t8 8v5M2 29v-5q0-5 5-5M34 29v-5q0-5-5-5"/></g></svg>';$('recipients').innerHTML='<legend>呼びかけ先</legend>'+[{id:'all',name:'全員'},...PEOPLE.slice(1),{id:'gm',name:'GM'}].map(p=>`<label class="recipient-choice"><input type="radio" name="recipient" value="${p.id}"><span class="recipient-card">${p.id==='all'?allIcon:`<img src="${p.id==='gm'?'images/gm_mascot.png':'../replay/img/'+p.id+'.webp'}" alt="">`}<span>${p.name}</span></span></label>`).join('');document.querySelectorAll('input[name="recipient"]').forEach(input=>input.onchange=()=>{if(!busy){recipient=input.value;updateRecipients();}});updateRecipients();}
+function updateConversation(){const layout=document.querySelector('.layout');layout.classList.toggle('conversation-folded',conversationFolded);const toggle=$('conversationToggle');toggle.textContent=conversationFolded?'<<'+(conversationUnread?'\n未読 '+conversationUnread:''):'>>';toggle.setAttribute('aria-label',conversationFolded?'会話欄を開く'+(conversationUnread?'、未読'+conversationUnread+'件':''):'会話欄を畳む');toggle.title=conversationFolded?'会話欄を開く':'会話欄を畳む';toggle.setAttribute('aria-expanded',String(!conversationFolded));$('gmdrag').disabled=conversationFolded;(conversationFolded?document.querySelector('.sidehead'):$('gmstage')).append($('systemOpen'));positionGM();}
+// 演出の初期値。塵は粒数、ほかは0〜100の強さです。
+const FX_DEFAULT={dust:28,flame:35,fog:22,rain:32,wind:25,lightning:55,outdoorsOnly:true,paused:false};
+// 雷の間隔は秒。初回は短めにし、以降は長さをばらつかせます。
+const LIGHTNING_CONFIG={firstDelay:3.5,minInterval:7,maxInterval:15,
+ // 1回の光が減衰する秒数。連続した高速点滅にはしません。
+ duration:.75};
+function lightningLevel(age,duration=LIGHTNING_CONFIG.duration){return age<0||age>=duration?0:(1-age/duration)**2;}
+const fx={...FX_DEFAULT};
+function setupEffects(){
+ const panel=$('effectControls');
+ panel.innerHTML=`<summary>演出テスト・調整</summary><div class="effect-fields">${[['dust','漂う塵',60],['flame','ランタンの揺らぎ',100],['fog','霧の濃さ',100],['rain','雨の量',100],['wind','風の向き・強さ',100],['lightning','雷光の強さ',100]].map(([id,label,max])=>`<label>${label}<input id="fx-${id}" type="range" min="${id==='wind'?-100:0}" max="${max}" value="${fx[id]}" aria-label="${label}"><output id="fx-value-${id}" for="fx-${id}">${fx[id]}</output></label>`).join('')}${[['shrink','奥の縮小率',0,60],['rise','奥の足元の高さ',0,28],['size','人物の基準サイズ',30,60]].map(([id,label,min,max])=>`<label>${label}<input id="depth-${id}" type="range" min="${min}" max="${max}" value="${depth[id]}" aria-label="${label}"><output id="depth-value-${id}">${depth[id]}%</output></label>`).join('')}<button id="fx-lightning-test" type="button">雷光を試す</button><button id="depth-shuffle" type="button">立ち位置を配置し直す</button><label class="effect-check"><input type="checkbox" id="fx-outside" checked>霧と雨は入口（屋外）のみ</label><label class="effect-check"><input type="checkbox" id="fx-pause">動きを停止して比較</label><button id="fx-reset" type="button">演出を初期値へ</button><p>塵とランタンの光は点灯後に表示。雨のある入口では雷光が時折走ります。雷光を試すボタンはどのシーンでも使えます。天候はゲーム進行を変えません。値は再読み込みで戻ります。</p></div>`;
+ for(const id of ['dust','flame','fog','rain','wind','lightning'])$('fx-'+id).oninput=e=>{fx[id]=Number(e.target.value);$('fx-value-'+id).value=fx[id];};
+ for(const id of ['shrink','rise','size'])$('depth-'+id).oninput=e=>{depth[id]=Number(e.target.value);$('depth-value-'+id).value=depth[id]+'%';renderPlacement();};
+ $('depth-shuffle').onclick=()=>{placementKey='';renderPlacement();};
+ $('fx-outside').onchange=e=>fx.outdoorsOnly=e.target.checked;
+ $('fx-pause').onchange=e=>fx.paused=e.target.checked;
+ $('fx-reset').onclick=()=>{Object.assign(depth,DEPTH_DEFAULT);for(const id of ['shrink','rise','size']){$('depth-'+id).value=depth[id];$('depth-value-'+id).value=depth[id]+'%';}renderPlacement();Object.assign(fx,FX_DEFAULT);for(const id of ['dust','flame','fog','rain','wind','lightning']){$('fx-'+id).value=fx[id];$('fx-value-'+id).value=fx[id];}$('fx-outside').checked=fx.outdoorsOnly;$('fx-pause').checked=fx.paused;};
+ const canvas=$('sceneEffects'),ctx=canvas.getContext('2d'),motion=matchMedia('(prefers-reduced-motion: reduce)');
+ let w=0,h=0,time=0,last=0,lastDraw=0,flashStart=-100,nextFlash=LIGHTNING_CONFIG.firstDelay,flashSeed=1,flashState=null,flashRoom=null;
+ function strike(){flashStart=time;flashSeed++;flashRoom=state.room;canvas.dataset.lightningStrikes=String(flashSeed-1);nextFlash=time+LIGHTNING_CONFIG.minInterval+Math.random()*(LIGHTNING_CONFIG.maxInterval-LIGHTNING_CONFIG.minInterval);}
+ $('fx-lightning-test').onclick=()=>{strike();draw();if(motion.matches&&!fx.paused)setTimeout(()=>{flashStart=-100;draw();},LIGHTNING_CONFIG.duration*1000);};
+ // 描画解像度を1.5倍までに制限し、演出は30fpsを上限とします。
+ const maxDpr=1.5,frameMs=1000/30;
+ const resize=()=>{w=canvas.clientWidth;h=canvas.clientHeight;const dpr=Math.min(devicePixelRatio||1,maxDpr);canvas.width=Math.round(w*dpr);canvas.height=Math.round(h*dpr);ctx.setTransform(dpr,0,0,dpr,0,0);};
+ new ResizeObserver(()=>{resize();placeTargetLabels();}).observe(canvas);resize();
+ // 演出だけの固定ばらつき。戦闘判定の乱数には触れません。
+ const noise=i=>{const n=Math.sin(i*127.1+311.7)*43758.5453;return n-Math.floor(n);};
+ const wrap=n=>((n%1)+1)%1;
+ function draw(){
+  ctx.clearRect(0,0,w,h);if(!state||!w||!h)return;
+  const lit=state.lit,weather=!fx.outdoorsOnly||state.room==='entry';
+  if(flashState!==state||flashRoom!==state.room){flashState=state;flashRoom=state.room;flashStart=-100;nextFlash=time+LIGHTNING_CONFIG.firstDelay;}
+  if(weather&&fx.rain>0&&fx.lightning>0&&!fx.paused&&!motion.matches&&time>=nextFlash)strike();
+  const flash=lightningLevel(time-flashStart)*fx.lightning/100*(motion.matches ? .35 : 1);
+  $('scene').style.setProperty('--lightning-flash',flash);
+  $('scene').classList.toggle('lightning-flash',flash>0);
+
+  if(blueDust()){
+   const cx=w*.82,cy=h*.44;ctx.shadowColor='#9cdfff';ctx.shadowBlur=7;
+   for(let i=0;i<48;i++){const t=wrap(time*.12+noise(i+900)),x=(noise(i+910)*w)*(1-t)+cx*t,y=(noise(i+920)*h)*(1-t)+cy*t;ctx.fillStyle=`rgba(177,226,255,${.25+t*.65})`;ctx.beginPath();ctx.arc(x,y,1+noise(i+930)*1.5,0,Math.PI*2);ctx.fill();}
+   ctx.shadowBlur=0;
+  }
+  if(state.discovery.stoneOn){const glow=ctx.createRadialGradient(w*.4,h*.9,0,w*.4,h*.9,h*.28);glow.addColorStop(0,'rgba(166,223,255,.25)');glow.addColorStop(1,'rgba(166,223,255,0)');ctx.fillStyle=glow;ctx.fillRect(0,0,w,h);}
+  if(lit&&fx.flame){
+   const image=$('figures').querySelector('[data-actor="lydia"] img'),r=image?.getBoundingClientRect(),scene=$('scene').getBoundingClientRect();
+   const x=r?.height?r.left-scene.left+r.width*.62:w*.7,y=r?.height?r.top-scene.top+r.height*.77:h*.8;
+   const flicker=(Math.sin(time*8.7)*.35+Math.sin(time*13.1)*.18+Math.sin(time*2.9)*.47)*fx.flame/100;
+   const radius=Math.min(w,h)*(.58+flicker*.07),glow=ctx.createRadialGradient(x,y,2,x,y,radius);
+   glow.addColorStop(0,`rgba(255,175,62,${.2+flicker*.08})`);glow.addColorStop(.35,`rgba(235,135,36,${.1+flicker*.04})`);glow.addColorStop(1,'rgba(235,135,36,0)');ctx.fillStyle=glow;ctx.fillRect(0,0,w,h);
+  }
+  if(weather&&fx.fog){
+   const amount=fx.fog/100;ctx.fillStyle=`rgba(177,195,195,${amount*.08})`;ctx.fillRect(0,0,w,h);
+   for(let i=0;i<6;i++){const x=wrap(noise(i+70)+time*(.006+fx.wind*.00008))*w*1.5-w*.25,y=h*(.18+noise(i+80)*.7),radius=w*(.28+noise(i+90)*.16);ctx.save();ctx.translate(x,y);ctx.scale(1,.45);const g=ctx.createRadialGradient(0,0,0,0,0,radius);g.addColorStop(0,`rgba(191,207,207,${amount*.26})`);g.addColorStop(1,'rgba(191,207,207,0)');ctx.fillStyle=g;ctx.fillRect(-radius,-radius,radius*2,radius*2);ctx.restore();}
+  }
+  if(lit&&fx.dust){
+   for(let i=0;i<fx.dust;i++){const x=wrap(noise(i+1)+time*(.004+noise(i+2)*.008))*w,y=wrap(noise(i+9)-time*.003+Math.sin(time*.35+i)*.02)*h;ctx.fillStyle=`rgba(249,222,164,${.12+noise(i+5)*.45})`;ctx.beginPath();ctx.arc(x,y,.7+noise(i+12)*1.5,0,Math.PI*2);ctx.fill();}
+  }
+  if(weather&&fx.rain){
+   const count=Math.round(fx.rain*2.4),slant=fx.wind*.18;
+   ctx.lineWidth=.8;
+   for(let i=0;i<count;i++){const y=wrap(noise(i+200)+time*(.65+noise(i+201)*.45))*h,x=wrap(noise(i+300)+time*fx.wind*.001+slant*y/w*.015)*w,length=9+noise(i+400)*15;ctx.strokeStyle=`rgba(186,212,224,${.15+noise(i+500)*.3})`;ctx.beginPath();ctx.moveTo(x,y);ctx.lineTo(x-slant*.8,y-length);ctx.stroke();}
+   for(let i=0;i<Math.round(fx.rain/12);i++){const age=wrap(time*1.8+noise(i+600));ctx.strokeStyle=`rgba(186,212,224,${(1-age)*.24})`;ctx.beginPath();ctx.ellipse(noise(i+650)*w,h*(.9+noise(i+660)*.08),2+age*8,1+age*2,0,0,Math.PI*2);ctx.stroke();}
+  }
+  if(flash>0){
+   ctx.fillStyle=`rgba(207,227,255,${flash*.3})`;ctx.fillRect(0,0,w,h);
+   const start=w*(.08+noise(flashSeed+1000)*.25),length=h*.34;
+   ctx.save();ctx.strokeStyle=`rgba(230,244,255,${Math.min(1,flash*2)})`;ctx.lineWidth=2;ctx.shadowColor='#bce3ff';ctx.shadowBlur=12;ctx.beginPath();ctx.moveTo(start,0);
+   let x=start,y=0;for(let i=1;i<=7;i++){x=start+(noise(flashSeed*7+i)*2-1)*w*.035+i*w*.008;y=length*i/7;ctx.lineTo(x,y);}ctx.stroke();
+   ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(start+w*.02,length*.4);ctx.lineTo(start-w*.035,length*.65);ctx.lineTo(start-w*.025,length*.8);ctx.stroke();ctx.restore();
+  }
+ }
+ redrawEffects=draw;draw();
+ function frame(now){requestAnimationFrame(frame);const delta=last?Math.min((now-last)/1000,.1):0;last=now;if(document.hidden)return;if(!fx.paused&&!motion.matches)time+=delta;if(now-lastDraw<frameMs)return;lastDraw=now;draw();}
+ requestAnimationFrame(frame);
+}
+
+function setupConversation(){
+ const layout=document.querySelector('.layout'),split=$('conversationResize');
+ // 幅の調整範囲。単位: px。位置・幅は再読み込みすると初期値に戻ります。
+ const minWidth=240,maxWidth=420;
+ let width=340,drag=null;
+ function setWidth(value){width=Math.max(minWidth,Math.min(maxWidth,value));layout.style.setProperty('--conversation-width',width+'px');split.setAttribute('aria-valuenow',String(Math.round(width)));positionGM();}
+ split.onpointerdown=e=>{if(e.button!==0)return;drag={id:e.pointerId,x:e.clientX,width};split.setPointerCapture(e.pointerId);e.preventDefault();};
+ split.onpointermove=e=>{if(drag&&drag.id===e.pointerId)setWidth(drag.width+drag.x-e.clientX);};
+ split.onpointerup=split.onpointercancel=split.onlostpointercapture=()=>{drag=null;};
+ split.onkeydown=e=>{if(!['ArrowLeft','ArrowRight','Home','End'].includes(e.key))return;e.preventDefault();setWidth(e.key==='Home'?minWidth:e.key==='End'?maxWidth:width+(e.key==='ArrowLeft'?10:-10));};
+ $('conversationToggle').onclick=()=>{conversationFolded=!conversationFolded;if(!conversationFolded){conversationUnread=0;}updateConversation();if(!conversationFolded)$('log').scrollTop=$('log').scrollHeight;};
+ updateConversation();
+}
+function setupGM(){
+$('gmdrag').onpointerdown=e=>{if(conversationFolded||e.button!==0)return;gmDrag={id:e.pointerId,x:e.clientX,y:e.clientY,startX:gmX,startY:gmY};e.currentTarget.setPointerCapture(e.pointerId);};
+$('gmdrag').onpointermove=e=>{if(!gmDrag||gmDrag.id!==e.pointerId)return;gmX=gmDrag.startX+e.clientX-gmDrag.x;gmY=gmDrag.startY-e.clientY+gmDrag.y;positionGM();walkGM();};
+function stopGMDrag(){gmDrag=null;clearTimeout(gmWalkTimer);$('gmguide').classList.remove('walking');}
+$('gmdrag').onpointerup=stopGMDrag;$('gmdrag').onpointercancel=stopGMDrag;$('gmdrag').onlostpointercapture=stopGMDrag;
+$('gmdrag').onkeydown=e=>{const step=10;if(!['ArrowLeft','ArrowRight','ArrowUp','ArrowDown'].includes(e.key))return;e.preventDefault();gmX+=e.key==='ArrowLeft'?-step:e.key==='ArrowRight'?step:0;gmY+=e.key==='ArrowUp'?step:e.key==='ArrowDown'?-step:0;positionGM();walkGM();};
+new ResizeObserver(positionGM).observe($('gmstage'));
+}
+$('chat').onsubmit=e=>{e.preventDefault();const text=$('message').value.trim();if(!text||busy)return;const to=recipient,name=recipientName(to);say('イネス（あなた）→'+name,text,'you');state.shared.push('イネス→'+name+'：'+text);if(/文字|刻み|傷/.test(text)&&state.discovery.clues.ines.includes('etching'))shareClue('ines','etching');if(/収納|錠前/.test(text)&&state.discovery.clues.ines.includes('cache_lock'))shareClue('ines','cache_lock');$('message').value='';run(()=>to==='gm'?consultGM(text):companions(false,to));};
+function reset(){recipient='all';conversationUnread=0;updateConversation();generation++;state=initial();busy=false;target=null;chat=[];plan=[];$('log').replaceChildren();say('GM','坑道は真っ暗だ。足元すら見えない。仲間の持ち物を確かめ、まず灯りを用意しよう。','gm');render();}
+setupRecipients();setupConversation();setupGM();reset();setupEffects();setupSystem();setupDice();fetch('/api/model-info').then(r=>{apiReady=r.ok;render();}).catch(()=>render());
+</script></html>
