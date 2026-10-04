@@ -1,0 +1,51 @@
+{
+  "generator": "image_gen built-in",
+  "purpose": "所持品の外観の試作。用途の開示・所有・能力は変更しない。地図は既存の専用表示を使用。",
+  "assets": [
+    {
+      "key": "rope",
+      "source": "/Users/yasuda_k/.codex/generated_images/01a0fbf5-9adf-7df0-a172-c31129aee059/exec-088db7a2-c710-45d8-b923-09075b4cbee4.png",
+      "prompt": "Use case: illustration-story. Asset: a single item close-up illustration for a fantasy TRPG character-sheet inventory. A coiled worn hemp throwing rope, one simple weighted knotted end, compact adventurer's gear. Main object entirely visible, centered, breathing room all around so it remains identifiable in a small thumbnail. Landscape composition, realistic dark fantasy painted game illustration, charcoal slate background and weathered dark cloth, restrained warm lantern side lighting, muted iron, wood, leather and brass. No people, hands, typography, labels, UI, prices, diagrams, arrows or magical runes. Show only the named mundane exterior of the equipment; do not invent gameplay stats or plot clues."
+    },
+    {
+      "key": "hammer",
+      "source": "/Users/yasuda_k/.codex/generated_images/01a0fbf5-9adf-7df0-a172-c31129aee059/exec-827bef10-f572-4eef-8ed1-53e5ef45d08d.png",
+      "prompt": "Use case: illustration-story. Asset: a single item close-up illustration for a fantasy TRPG character-sheet inventory. A sturdy dwarven iron battle hammer with a heavy rectangular hammer head and worn dark wooden handle. A functional hammer, not an axe. Main object entirely visible, centered, breathing room all around so it remains identifiable in a small thumbnail. Landscape composition, realistic dark fantasy painted game illustration, charcoal slate background and weathered dark cloth, restrained warm lantern side lighting, muted iron, wood, leather and brass. No people, hands, typography, labels, UI, prices, diagrams, arrows or magical runes. Show only the named mundane exterior of the equipment; do not invent gameplay stats or plot clues."
+    },
+    {
+      "key": "shield",
+      "source": "/Users/yasuda_k/.codex/generated_images/01a0fbf5-9adf-7df0-a172-c31129aee059/exec-b2ae8c1b-7088-4e5e-814c-49a07ef6f17d.png",
+      "prompt": "Use case: illustration-story. Asset: a single item close-up illustration for a fantasy TRPG character-sheet inventory. A sturdy round wooden adventurer's shield, weathered iron rim and central iron boss. Main object entirely visible, centered, breathing room all around so it remains identifiable in a small thumbnail. Landscape composition, realistic dark fantasy painted game illustration, charcoal slate background and weathered dark cloth, restrained warm lantern side lighting, muted iron, wood, leather and brass. No people, hands, typography, labels, UI, prices, diagrams, arrows or magical runes. Show only the named mundane exterior of the equipment; do not invent gameplay stats or plot clues."
+    },
+    {
+      "key": "picks",
+      "source": "/Users/yasuda_k/.codex/generated_images/01a0fbf5-9adf-7df0-a172-c31129aee059/exec-1b6b0542-97bb-477f-ad97-04f6ceecbf27.png",
+      "prompt": "Use case: illustration-story. Asset: a single item close-up illustration for a fantasy TRPG character-sheet inventory. A small leather roll with several simple iron lockpick tools, medieval fantasy adventuring equipment. Main object entirely visible, centered, breathing room all around so it remains identifiable in a small thumbnail. Landscape composition, realistic dark fantasy painted game illustration, charcoal slate background and weathered dark cloth, restrained warm lantern side lighting, muted iron, wood, leather and brass. No people, hands, typography, labels, UI, prices, diagrams, arrows or magical runes. Show only the named mundane exterior of the equipment; do not invent gameplay stats or plot clues."
+    },
+    {
+      "key": "dagger",
+      "source": "/Users/yasuda_k/.codex/generated_images/01a0fbf5-9adf-7df0-a172-c31129aee059/exec-98f4bf71-53a2-4fd6-b70d-02e7da54b62d.png",
+      "prompt": "Use case: illustration-story. Asset: a single item close-up illustration for a fantasy TRPG character-sheet inventory. A plain short iron dagger with a dark leather grip in a worn leather sheath laid alongside it. Main object entirely visible, centered, breathing room all around so it remains identifiable in a small thumbnail. Landscape composition, realistic dark fantasy painted game illustration, charcoal slate background and weathered dark cloth, restrained warm lantern side lighting, muted iron, wood, leather and brass. No people, hands, typography, labels, UI, prices, diagrams, arrows or magical runes. Show only the named mundane exterior of the equipment; do not invent gameplay stats or plot clues."
+    },
+    {
+      "key": "lantern",
+      "source": "/Users/yasuda_k/.codex/generated_images/01a0fbf5-9adf-7df0-a172-c31129aee059/exec-49be126b-616f-4e4b-bedd-1200291ce08f.png",
+      "prompt": "Use case: illustration-story. Asset: a single item close-up illustration for a fantasy TRPG character-sheet inventory. A weathered enclosed iron and brass lantern, warm amber flame visible within glass. Main object entirely visible, centered, breathing room all around so it remains identifiable in a small thumbnail. Landscape composition, realistic dark fantasy painted game illustration, charcoal slate background and weathered dark cloth, restrained warm lantern side lighting, muted iron, wood, leather and brass. No people, hands, typography, labels, UI, prices, diagrams, arrows or magical runes. Show only the named mundane exterior of the equipment; do not invent gameplay stats or plot clues."
+    },
+    {
+      "key": "staff",
+      "source": "/Users/yasuda_k/.codex/generated_images/01a0fbf5-9adf-7df0-a172-c31129aee059/exec-523d549a-9a55-42df-bfc7-fbd4995db3b1.png",
+      "prompt": "Use case: illustration-story. Asset: a single item close-up illustration for a fantasy TRPG character-sheet inventory. A simple wooden wizard staff laid diagonally beside a small wooden writing tablet and stylus, one equipment set. Main object entirely visible, centered, breathing room all around so it remains identifiable in a small thumbnail. Landscape composition, realistic dark fantasy painted game illustration, charcoal slate background and weathered dark cloth, restrained warm lantern side lighting, muted iron, wood, leather and brass. No people, hands, typography, labels, UI, prices, diagrams, arrows or magical runes. Show only the named mundane exterior of the equipment; do not invent gameplay stats or plot clues."
+    },
+    {
+      "key": "ironbar",
+      "source": "/Users/yasuda_k/.codex/generated_images/01a0fbf5-9adf-7df0-a172-c31129aee059/exec-75c00d69-391d-458c-9824-164bf1074ccd.png",
+      "prompt": "Use case: illustration-story. Asset: a single item close-up illustration for a fantasy TRPG character-sheet inventory. A short plain weathered iron pry bar, chisel-like end, modest practical hand tool. Main object entirely visible, centered, breathing room all around so it remains identifiable in a small thumbnail. Landscape composition, realistic dark fantasy painted game illustration, charcoal slate background and weathered dark cloth, restrained warm lantern side lighting, muted iron, wood, leather and brass. No people, hands, typography, labels, UI, prices, diagrams, arrows or magical runes. Show only the named mundane exterior of the equipment; do not invent gameplay stats or plot clues."
+    },
+    {
+      "key": "lampstone",
+      "source": "/Users/yasuda_k/.codex/generated_images/01a0fbf5-9adf-7df0-a172-c31129aee059/exec-4f5a158a-e062-463a-809e-e6f6478a2b70.png",
+      "prompt": "Use case: illustration-story. Asset: a single item close-up illustration for a fantasy TRPG character-sheet inventory. One small rough pale stone giving off a faint warm light, resting on dark cloth. Simple mineral, not an ornate jewel. Main object entirely visible, centered, breathing room all around so it remains identifiable in a small thumbnail. Landscape composition, realistic dark fantasy painted game illustration, charcoal slate background and weathered dark cloth, restrained warm lantern side lighting, muted iron, wood, leather and brass. No people, hands, typography, labels, UI, prices, diagrams, arrows or magical runes. Show only the named mundane exterior of the equipment; do not invent gameplay stats or plot clues."
+    }
+  ]
+}

@@ -42,5 +42,32 @@ vm.runInContext(`(async()=>{
  fixture();ask=async()=>{throw Error('通信失敗');};let disconnected=false;try{await settleLantern(0);}catch{disconnected=true;}ok(disconnected&&!state.lit&&actionHistory.length===0,'接続失敗で実行');
  fixture();ask=async()=>{generation++;return gmSignals;};await settleLantern(0);ok(!state.lit&&actionHistory.length===0,'古い応答で実行');
  fixture();calls=0;ask=async()=>++calls===1?gmSignals:JSON.stringify({speech:'灯すわ。',action:'light'});auditProfile=async()=>({valid:false,claims:[],conflicts:[{}]});let mismatch=false;try{await settleLantern(0);}catch{mismatch=true;}ok(mismatch&&!state.lit&&actionHistory.length===0,'人物照合の失敗を無視');
+ // 実ログの会話を再現。人間が「ランタン」と言わなくても仲間の依頼を整理します。
+ fixture();auditProfile=async()=>({valid:true,claims:[],conflicts:[]});
+ chat=[{who:'イネス（あなた）→全員',kind:'you',text:'誰か明るくして'},{who:'リディア（AI）',kind:'',text:'私が持っているランタンを灯しましょう。'},{who:'ブロム（AI）',kind:'',text:'リディア、ランタン頼めるか。'},{who:'ガレス（AI）',kind:'',text:'リディア、ランタンを頼む。'}];
+ calls=0;ask=async()=>++calls===1?JSON.stringify({signals:[{index:2,action:'light',stance:'request',quote:'ランタン頼めるか'},{index:3,action:'light',stance:'request',quote:'ランタンを頼む'}]}):JSON.stringify({speech:'ええ、ランタンを灯します。',action:'light'});
+ await settleLantern(0);ok(state.lit&&actionHistory.length===1&&calls===2,'誰か明るくしてから仲間の依頼・点灯へ進まない');
+ fixture();chat[0].text='なんとかして';chat[1].text='リディア、ランタンを頼む。';calls=0;
+ ask=async()=>++calls===1?JSON.stringify({signals:[{index:1,action:'light',stance:'request',quote:'ランタンを頼む'}]}):JSON.stringify({speech:'ええ、灯します。',action:'light'});
+ await settleLantern(0);ok(state.lit&&calls===2,'灯りの単語がない人間の発言で仲間のランタン依頼も除外');
+ fixture();recipient='lydia';chat=[{who:'イネス（あなた）→リディア',kind:'you',text:'ランタン持ってる？'},{who:'リディア（AI）',kind:'',text:'ええ。ランタンを灯しましょうか？'}];
+ ask=async()=>JSON.stringify({signals:[{index:1,action:'light',stance:'request',quote:'ランタンを灯しましょうか'}]});await settleLantern(0);
+ ok(!state.lit&&Object.keys(lanternDiscussion.voices).length===1,'質問と本人の提案だけで点灯');
+ chat.push({who:'イネス（あなた）→リディア',kind:'you',text:'お願いします'},{who:'リディア（AI）',kind:'',text:'ランタンを灯しましょう。'});
+ calls=0;let approvalInput;ask=async(system,payload)=>{if(++calls===1){approvalInput=payload;return JSON.stringify({signals:[{index:2,action:'light',stance:'request',quote:'お願いします'},{index:3,action:'light',stance:'request',quote:'ランタンを灯しましょう'}]});}return JSON.stringify({speech:'ええ、灯します。',action:'light'});};
+ await settleLantern(2);ok(state.lit&&calls===2,'直前の点灯提案への短い了承から進まない');
+ ok(approvalInput.actor==='lydia'&&approvalInput.addressedTo==='lydia'&&approvalInput.voices['lydia:light'],'短い了承の所持者・宛先・直前の提案が渡されない');
+ fixture();chat=[{who:'イネス（あなた）→ブロム',kind:'you',text:'お願いします'},{who:'ブロム（AI）',kind:'',text:'任せてくれ。'}];calls=0;ask=async()=>{calls++;throw Error('灯りと無関係');};await settleLantern(0);
+ ok(calls===0&&!state.lit,'無関係な短い了承を灯りの相談にした');
+ // 実ブラウザーで出た signals=[]。一意な直前提案への人間の了承だけ補完します。
+ for(const mode of ['approve','wrong-recipient','other-offer','opposition']){
+  fixture();recipient=mode==='wrong-recipient'?'brom':'lydia';explorationOffers={};pendingTransfer=null;
+  lanternDiscussion=mergeLanternSignals(null,[{id:'lydia',action:'light',stance:'request',quote:'灯しましょうか'}]);
+  if(mode==='opposition')lanternDiscussion=mergeLanternSignals(lanternDiscussion,[{id:'gareth',action:'light',stance:'oppose',quote:'待って'}]);
+  if(mode==='other-offer')pendingTransfer={item:'lantern'};
+  chat=[{who:'イネス（あなた）→'+recipientName(recipient),kind:'you',text:'お願いします'}];calls=0;
+  ask=async()=>++calls===1?JSON.stringify({signals:[]}):JSON.stringify({speech:'ええ、灯します。',action:'light'});
+  await settleLantern(0);ok(mode==='approve'?state.lit&&calls===2:!state.lit&&calls===1,'短い了承の補完条件が不正：'+mode);
+ }
  return count;
 })()`,context).then(n=>console.log('PASS: '+n+' checks — 仲間の依頼 / 本人の了承・保留 / 反対・疑問・撤回 / 相反する案 / 点灯済み / 二重実行防止 / 発言根拠 / シーン・戦闘の制限 / 通信・形式・人物照合の失敗 / 古い応答')).catch(e=>{console.error(e);process.exitCode=1;});

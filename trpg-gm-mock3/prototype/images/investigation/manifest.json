@@ -1,0 +1,46 @@
+{
+  "generator": "image_gen built-in",
+  "purpose": "調査前の外観。答えや未取得の品は描かない。状態変化後は初見の外観として表示。",
+  "assets": [
+    {
+      "key": "etching",
+      "source": "/Users/yasuda_k/.codex/generated_images/01a0fbf5-9adf-7df0-a172-c31129aee059/exec-44f3d041-22a1-4bc1-a7dc-7858b6d3b776.png",
+      "prompt": "Use case: illustration-story. Asset: one standalone rectangular close-up illustration for a fantasy TRPG investigation popup. Close-up of a rough dark rock wall with subtle old scratches, a few faint ambiguous marks. No legible writing or visible secret mechanism. Cinematic realistic painted dark fantasy game background, charcoal grey rock, muted warm lantern illumination from outside frame, weathered iron and wood, detailed grounded material texture. Main object centered with breathing room. Landscape composition. No UI, no labels, no people, no text, no arrows, no bright markers, no puzzle answers. This is a visual of the object's surface before investigation, never a reveal of concealed information."
+    },
+    {
+      "key": "cache",
+      "source": "/Users/yasuda_k/.codex/generated_images/01a0fbf5-9adf-7df0-a172-c31129aee059/exec-abad9322-d730-4c61-a4f3-91f62d348215.png",
+      "prompt": "Use case: illustration-story. Asset: one standalone rectangular close-up illustration for a fantasy TRPG investigation popup. Close-up of a CLOSED small weathered inset wooden cabinet within a rough rock wall, simple tiny iron lock. No contents visible. Cinematic realistic painted dark fantasy game background, charcoal grey rock, muted warm lantern illumination from outside frame, weathered iron and wood, detailed grounded material texture. Main object centered with breathing room. Landscape composition. No UI, no labels, no people, no text, no arrows, no bright markers, no puzzle answers. This is a visual of the object's surface before investigation, never a reveal of concealed information."
+    },
+    {
+      "key": "cart",
+      "source": "/Users/yasuda_k/.codex/generated_images/01a0fbf5-9adf-7df0-a172-c31129aee059/exec-d8fd677b-9b5f-474b-bb5c-7f42a8c376a3.png",
+      "prompt": "Use case: illustration-story. Asset: one standalone rectangular close-up illustration for a fantasy TRPG investigation popup. Close-up of an old empty wooden mine cart with rusted iron wheel at an abandoned mine entrance. No tools, loot or highlighted clue. Cinematic realistic painted dark fantasy game background, charcoal grey rock, muted warm lantern illumination from outside frame, weathered iron and wood, detailed grounded material texture. Main object centered with breathing room. Landscape composition. No UI, no labels, no people, no text, no arrows, no bright markers, no puzzle answers. This is a visual of the object's surface before investigation, never a reveal of concealed information."
+    },
+    {
+      "key": "rails",
+      "source": "/Users/yasuda_k/.codex/generated_images/01a0fbf5-9adf-7df0-a172-c31129aee059/exec-24ba0260-6f97-41d2-aa42-51815ce22815.png",
+      "prompt": "Use case: illustration-story. Asset: one standalone rectangular close-up illustration for a fantasy TRPG investigation popup. Close-up of broken rusty mine rails ending on gravel and dark stone ground. No glowing clue. Cinematic realistic painted dark fantasy game background, charcoal grey rock, muted warm lantern illumination from outside frame, weathered iron and wood, detailed grounded material texture. Main object centered with breathing room. Landscape composition. No UI, no labels, no people, no text, no arrows, no bright markers, no puzzle answers. This is a visual of the object's surface before investigation, never a reveal of concealed information."
+    },
+    {
+      "key": "door",
+      "source": "/Users/yasuda_k/.codex/generated_images/01a0fbf5-9adf-7df0-a172-c31129aee059/exec-a259ed3c-be7a-4a4c-af69-d9f145fa3740.png",
+      "prompt": "Use case: illustration-story. Asset: one standalone rectangular close-up illustration for a fantasy TRPG investigation popup. A heavy CLOSED rough stone door inset in cavern masonry, wet lower edge. No gap revealing contents. Cinematic realistic painted dark fantasy game background, charcoal grey rock, muted warm lantern illumination from outside frame, weathered iron and wood, detailed grounded material texture. Main object centered with breathing room. Landscape composition. No UI, no labels, no people, no text, no arrows, no bright markers, no puzzle answers. This is a visual of the object's surface before investigation, never a reveal of concealed information."
+    },
+    {
+      "key": "rune",
+      "source": "/Users/yasuda_k/.codex/generated_images/01a0fbf5-9adf-7df0-a172-c31129aee059/exec-a168f17d-660c-401c-a9e6-42aecb0c25c2.png",
+      "prompt": "Use case: illustration-story. Asset: one standalone rectangular close-up illustration for a fantasy TRPG investigation popup. Close-up of weathered cryptic carvings cut into a damp cavern wall. Marks must be ambiguous and unreadable. No solution. Cinematic realistic painted dark fantasy game background, charcoal grey rock, muted warm lantern illumination from outside frame, weathered iron and wood, detailed grounded material texture. Main object centered with breathing room. Landscape composition. No UI, no labels, no people, no text, no arrows, no bright markers, no puzzle answers. This is a visual of the object's surface before investigation, never a reveal of concealed information."
+    },
+    {
+      "key": "wheel",
+      "source": "/Users/yasuda_k/.codex/generated_images/01a0fbf5-9adf-7df0-a172-c31129aee059/exec-c11402d3-f05b-4668-adec-3f2c4ac66a26.png",
+      "prompt": "Use case: illustration-story. Asset: one standalone rectangular close-up illustration for a fantasy TRPG investigation popup. Close-up of a rusty iron drainage handwheel mounted in damp mine masonry. Wheel spokes and rust visible, NO loose iron wedge or highlighted obstruction. Cinematic realistic painted dark fantasy game background, charcoal grey rock, muted warm lantern illumination from outside frame, weathered iron and wood, detailed grounded material texture. Main object centered with breathing room. Landscape composition. No UI, no labels, no people, no text, no arrows, no bright markers, no puzzle answers. This is a visual of the object's surface before investigation, never a reveal of concealed information."
+    },
+    {
+      "key": "water",
+      "source": "/Users/yasuda_k/.codex/generated_images/01a0fbf5-9adf-7df0-a172-c31129aee059/exec-97adfdc4-840c-4a2f-953b-5e7d9439cc37.png",
+      "prompt": "Use case: illustration-story. Asset: one standalone rectangular close-up illustration for a fantasy TRPG investigation popup. Close-up of a shallow dark puddle on rocky mine floor, damp stone texture, subtle reflections. No loot or secret visible. Cinematic realistic painted dark fantasy game background, charcoal grey rock, muted warm lantern illumination from outside frame, weathered iron and wood, detailed grounded material texture. Main object centered with breathing room. Landscape composition. No UI, no labels, no people, no text, no arrows, no bright markers, no puzzle answers. This is a visual of the object's surface before investigation, never a reveal of concealed information."
+    }
+  ]
+}
