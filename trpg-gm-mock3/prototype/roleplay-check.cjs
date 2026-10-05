@@ -1,8 +1,8 @@
 const fs=require('node:fs'),vm=require('node:vm');
-const source=fs.readFileSync(__dirname+'/index.html','utf8').match(/<script>([\s\S]*?)<\/script>/)[1];
+const source=fs.readFileSync(__dirname+'/game.js','utf8');
 const elements={};function el(){return {value:'',textContent:'',disabled:false,open:false,isConnected:true,classList:{add(){},remove(){}},setAttribute(){},dispatchEvent(){},focus(){},showModal(){this.open=true;},close(){this.open=false;},addEventListener(){}};}
 const context=vm.createContext({document:{getElementById:id=>elements[id]??=el()},window:{},el,Event:class{},crypto:require('node:crypto').webcrypto});
-vm.runInContext(source.split("$('chat').onsubmit")[0],context);
+vm.runInContext(source,context,{filename:__dirname+'/game.js'});
 vm.runInContext(`(async()=>{
  let checks=0;const ok=(v,m)=>{checks++;if(!v)throw Error(m)};
  state=initial();chat=[];state.knowledge.lydia.push('リディアだけの秘密');learnClue('lydia','darkness');state.knowledge.ines.push('自分だけの観察');

@@ -1,7 +1,7 @@
 const fs=require('node:fs'),vm=require('node:vm');
-const script=fs.readFileSync(__dirname+'/index.html','utf8').match(/<script>([\s\S]*?)<\/script>/)[1];
+const script=fs.readFileSync(__dirname+'/game.js','utf8');
 const context=vm.createContext({document:{getElementById(){}},crypto:require('node:crypto').webcrypto});
-vm.runInContext(script.split("$('chat').onsubmit")[0],context);
+vm.runInContext(script,context,{filename:__dirname+'/game.js'});
 vm.runInContext(`(async()=>{
  let count=0;const ok=(value,message)=>{count++;if(!value)throw Error(message);};
  render=()=>{};updateRecipients=()=>{};say=(who,text,kind='')=>chat.push({who,text,kind});

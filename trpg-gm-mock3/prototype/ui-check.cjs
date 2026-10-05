@@ -1,9 +1,9 @@
 const fs=require('node:fs'),vm=require('node:vm');
-const source=fs.readFileSync(__dirname+'/index.html','utf8').match(/<script>([\s\S]*?)<\/script>/)[1];
+const source=fs.readFileSync(__dirname+'/game.js','utf8');
 const elements={};
 const element=()=>({children:[],append(...nodes){this.children.push(...nodes)},scrollHeight:0,clientHeight:0,scrollTop:0});
 const context=vm.createContext({document:{getElementById(id){return elements[id]??=element()},createElement:element,createTextNode:text=>({textContent:text})},crypto:require('node:crypto').webcrypto});
-vm.runInContext(source.split("$('chat').onsubmit")[0],context);
+vm.runInContext(source,context,{filename:__dirname+'/game.js'});
 vm.runInContext(`(async()=>{
  let count=0;const ok=(v,m)=>{count++;if(!v)throw Error(m)};
  state=initial();chat=[];actionHistory=[];humanRequests=[];explorationOffers={};
