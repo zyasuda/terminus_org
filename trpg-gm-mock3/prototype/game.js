@@ -16,6 +16,14 @@ const ACTION_TARGET={decode:'etching',inspect_etching:'etching',inspect_cache:'c
 let redrawEffects=()=>{};
 let stageView=null;
 let aiConnection='default',aiModelInfo=null,aiLastTiming=null;
+// ゲーム状態とは別の通信計測。呼び出し順・返答・許可判断は変更しません。
+let aiTurn=null,aiTurnSerial=0,aiLastTurn=null;
+const aiFallbacks={};
+function aiClock(){return typeof performance==='undefined'?Date.now():performance.now();}
+function sendAIMetrics(record){try{const pending=fetch('/api/turn-metrics',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(record)});pending.catch(()=>{});}catch{}}
+function recordAIFallback(kind){aiFallbacks[kind]=(aiFallbacks[kind]||0)+1;if(aiTurn)aiTurn.fallbacks[kind]=(aiTurn.fallbacks[kind]||0)+1;sendAIMetrics({type:'ai-fallback',turnId:aiTurn?.turnId||null,kind});}
+function finishAITurn(turn){turn.elapsedMs=Math.round(aiClock()-turn.started);const {started,...record}=turn;aiLastTurn=record;if(aiTurn===turn)aiTurn=null;sendAIMetrics({type:'ai-turn',...record});updateAIComparison();}
+
 let state,generation=0,busy=false,target=null,chat=[],plan=[],actionHistory=[],planReview=null,apiReady=false;
 let lanternDiscussion=null;
 let pendingTransfer=null;
@@ -524,7 +532,7 @@ async function auditProfile(id,speech,question=''){
   // 試作では、不正な開示候補だけを除き、項目の欠落で会話を止めません。
   if(r?.valid===true&&!Array.isArray(r)){const facts=profileFacts(id);r.claims=(Array.isArray(r.claims)?r.claims:[]).filter(c=>c&&Object.hasOwn(facts,c.key)&&c.value===facts[c.key].value&&typeof c.quote==='string'&&c.quote.trim()&&speech.includes(c.quote));r.conflicts??=[];}
   return validateProfileAudit(id,speech,r);
- }catch{return {valid:true,claims:[],conflicts:[]};}
+ }catch{recordAIFallback('profile-format');return {valid:true,claims:[],conflicts:[]};}
 }
 // 導入で紹介する品。全所持品は公開せず、各人1〜2個だけ実所持と照合します。
 const OPENING_ITEMS={brom:['hammer','shield'],gareth:['picks','dagger'],lydia:['lantern','lydia_map']};
@@ -614,7 +622,7 @@ function refreshOpenSheet(){
  sheet(dialog.dataset.person,dialog.dataset.tab,dialog.dataset.item||null);dialog.querySelector('.sheet-content').scrollTop=scroll;
  if($('sheetMessage')){$('sheetMessage').value=draft;if(focused&&!busy)$('sheetMessage').focus();}
 }
-async function ask(system,payload,maxTokens=450){const connection=aiConnection,started=performance.now();const res=await fetch('/api/gm',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({connection,system,messages:[{role:'user',content:JSON.stringify(payload)}],max_tokens:maxTokens}),signal:AbortSignal.timeout(45000)});const data=await res.json();aiLastTiming={connection,durationMs:Math.round(performance.now()-started),ok:res.ok,usage:data.usage||{}};updateAIComparison();if(!res.ok)throw Error(data.error?.message||'AI中継からエラーが返りました。');apiReady=true;return (data.content||[]).map(c=>c.text||'').join('');}
+async function ask(system,payload,maxTokens=450){const connection=aiConnection,started=performance.now(),turn=aiTurn;if(turn)turn.calls++;try{const res=await fetch('/api/gm',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({connection,turnId:turn?.turnId||null,system,messages:[{role:'user',content:JSON.stringify(payload)}],max_tokens:maxTokens}),signal:AbortSignal.timeout(45000)});const data=await res.json();aiLastTiming={connection,durationMs:Math.round(performance.now()-started),ok:res.ok,usage:data.usage||{}};updateAIComparison();if(!res.ok)throw Error(data.error?.message||'AI中継からエラーが返りました。');apiReady=true;return (data.content||[]).map(c=>c.text||'').join('');}finally{if(turn)turn.totalMs+=Math.round(performance.now()-started);}}
 // 人物への質問では、問いに必要な設定だけを渡し、探索候補で話題を逸らさないようにします。
 function dialogueFocus(p,question){
  const keys=new Set(),add=(pattern,list)=>{if(pattern.test(question))list.forEach(k=>keys.add(k));};
@@ -902,11 +910,11 @@ async function explorationIntent(text,to){
  const epoch=generation,source=state,room=state.room,offers=currentOffers();
  const raw=await ask('あなたは会話の調査依頼を読むGM。textを現在のchoicesだけに対応させる。明確な調査・解読の依頼、または直前のoffersへの「うん、お願い」「やってみて」等の了承だけjobsへ入れる。能力・持ち物・発見の質問、仮定、否定、冗談、結果を聞く「何か見つかった？」は実行依頼ではなくjobs空。見えていない対象の場所・記号を創作しない。指定相手to以外へ割り当てない。全員宛ての「皆で協力して付近を調べましょう」なら観察を分担し、違う対象を優先、1人1行動まで。対象が2つなら2人でよい。解読decode/readはその文字が話題の場合のみ。曖昧な了承で候補が複数・提案がない場合は勝手に選ばずclarifyに短い確認文を返す。その他の相談はjobs空・clarify空。文字や傷を調べる依頼と解読依頼を区別する。kindは明示依頼request、直前提案への了承approval、周囲の分担調査survey、単なる会話conversation。surveyは観察・解読だけ。approvalはoffersにある観察・解読・操作輪/扉の支援・解錠だけ。解錠・支える・破壊などの仕掛け操作はrequestで明確に対象と行動を指定された場合だけ1人を選ぶ。quoteは依頼のtextそのままの抜粋。JSONオブジェクトのみ:{"kind":"request","jobs":[{"id":"brom","action":"inspect_cart","quote":"台車を調べて"}],"clarify":""}',{text,to,choices,offers,visible:visibleTargets().map(t=>TARGETS[t].name),conversation:chat.filter(c=>!['private','error'].includes(c.kind)).slice(-10)},700);
  if(!responseIsCurrent(epoch,source)||room!==state.room)return {jobs:[],clarify:''};
- let r;try{r=normalizeExplorationIntent(parseAI(raw),to,text);}catch{return {jobs:[],clarify:''};}
+ let r;try{r=normalizeExplorationIntent(parseAI(raw),to,text);}catch{recordAIFallback('exploration-format');return {jobs:[],clarify:''};}
  // 調査済みへの再依頼は再実行せず、本人が既知の結果を踏まえて返答します。
  if(r&&Array.isArray(r.jobs))r.jobs=r.jobs.filter(j=>!(r.kind==='request'&&(to==='all'||to===j.id)&&PEOPLE.slice(1).some(p=>p.id===j.id)&&typeof j.quote==='string'&&j.quote.trim()&&text.includes(j.quote)&&['inspect','inspect_'+ACTION_TARGET[j.action]].includes(j.action)&&state.seen[j.id]?.includes(ACTION_TARGET[j.action])));
  // 不正な候補で会話全体を止めず、実行を外して仲間の返答へ進みます。
- try{return validateExplorationIntent(r,to,text);}catch{return {jobs:[],clarify:''};}
+ try{return validateExplorationIntent(r,to,text);}catch{recordAIFallback('exploration-validation');return {jobs:[],clarify:''};}
 }
 function announceVisiblePoints(){
  if(state.phase!=='explore')return;
@@ -1120,6 +1128,7 @@ function updateAIComparison(){
  const select=$('aiConnection');if(!select)return;select.disabled=busy;
  if(aiModelInfo){select.options[0].textContent=(aiModelInfo.backend==='ollama'?'ローカル':'既存接続')+' · '+aiModelInfo.model;const c=aiModelInfo.comparison;select.options[1].textContent='クラウド · '+(c?.cloudModel||'Gemma');select.options[1].disabled=!c?.cloudConfigured||!c?.cloudModelAccepted;
  $('aiModelStatus').textContent=aiConnection==='cloud-gemma'?'Google API · '+c.cloudModel:c?.cloudConfigured?(aiModelInfo.backend==='ollama'?'ローカル':'既存接続')+'で試遊中。クラウドへ切り替えられます。':'クラウドGemmaはAPIキー未設定です。';}
+ const fallback=$('aiFallbacks');if(fallback)fallback.textContent='形式違反で読み飛ばした回数：'+Object.values(aiFallbacks).reduce((n,v)=>n+v,0)+'回'+(aiLastTurn?' · 直近の発言：'+aiLastTurn.calls+'呼出 · 合計 '+aiLastTurn.totalMs+' ms':'');
  if(aiLastTiming){const t=aiLastTiming;$('aiTiming').textContent='直近のAI通信：'+(t.connection==='cloud-gemma'?'クラウド':'既存接続')+' · '+t.durationMs+' ms · '+(t.ok?'応答あり':'通信エラー')+(t.ok?' · 入力 '+(t.usage.input_tokens||0)+' / 出力 '+(t.usage.output_tokens||0)+' トークン':'');}
 }
 function setupSystem(){
@@ -1264,6 +1273,11 @@ function wheelConversation(text,s=state){
  return {clarify:'ブロムが輪を支えています。鉄片を外す細かい作業は、工具を持つイネスが担当できます。「私が工具で鉄片を外す」と話すか、操作輪を選んで工具を使えます。'};
 }
 function submitMessage(text,to=recipient){
+ if(!text||busy)return;
+ const turn={turnId:Date.now().toString(36)+'-'+(++aiTurnSerial),started:aiClock(),calls:0,totalMs:0,fallbacks:{}};aiTurn=turn;
+ try{const result=submitMessageBody(text,to);if(result&&typeof result.then==='function')return result.finally(()=>{finishAITurn(turn);});finishAITurn(turn);return result;}catch(error){finishAITurn(turn);throw error;}
+}
+function submitMessageBody(text,to=recipient){
  if(!text||busy)return;stopVoice();recipient=to;updateRecipients();const name=recipientName(to);say('イネス（あなた）→'+name,text,'you');state.shared.push('イネス→'+name+'：'+text);
  if(/文字|刻み|傷/.test(text)&&state.discovery.clues.ines.includes('etching'))shareClue('ines','etching');if(/収納|錠前/.test(text)&&state.discovery.clues.ines.includes('cache_lock'))shareClue('ines','cache_lock');
  const own=humanMessageIntent(text,to);

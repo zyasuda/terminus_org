@@ -37,20 +37,28 @@ function start(){
  http.createServer(async(req,res)=>{
   try{
    const url=new URL(req.url,'http://localhost');
+   if(url.pathname==='/api/turn-metrics'&&req.method==='POST'){
+    let body='';for await(const chunk of req){body+=chunk;if(Buffer.byteLength(body)>10000){res.writeHead(413);res.end();return;}}
+    const input=JSON.parse(body),record={ts:new Date().toISOString(),type:input.type,turnId:input.turnId||null};
+    if(input.type==='ai-turn'){Object.assign(record,{calls:input.calls,totalMs:input.totalMs,elapsedMs:input.elapsedMs,fallbacks:input.fallbacks});}else if(input.type==='ai-fallback'){record.kind=input.kind;}else{res.writeHead(400);res.end();return;}
+    fs.appendFileSync('/tmp/mock3-llm.jsonl',JSON.stringify(record)+'\n');res.writeHead(204);res.end();return;
+   }
+   let turnId=null;
    if(url.pathname==='/api/gm'||url.pathname==='/api/model-info'){
     let body='';for await(const chunk of req){body+=chunk;if(Buffer.byteLength(body)>100000){res.writeHead(413);res.end();return;}}
     if(url.pathname==='/api/gm'&&req.method==='POST'){
-     const payload=JSON.parse(body),connection=payload.connection||'default';delete payload.connection;
+     const payload=JSON.parse(body),connection=payload.connection||'default';delete payload.connection;turnId=payload.turnId||null;delete payload.turnId;
      if(!['default','cloud-gemma'].includes(connection)){res.writeHead(400,{'Content-Type':'application/json'});res.end(JSON.stringify({error:{message:'AIの接続先を確認してください。'}}));return;}
      if(connection==='cloud-gemma'){
       const started=Date.now(),result=await callCloudGemma(payload);
-      fs.appendFileSync('/tmp/mock3-llm.jsonl',JSON.stringify({ts:new Date().toISOString(),backend:'gemini',model:CLOUD_MODEL,durationMs:Date.now()-started,system:payload.system,messages:payload.messages,status:result.status,response:result.body})+'\n');
+      fs.appendFileSync('/tmp/mock3-llm.jsonl',JSON.stringify({ts:new Date().toISOString(),backend:'gemini',model:CLOUD_MODEL,turnId,durationMs:Date.now()-started,system:payload.system,messages:payload.messages,status:result.status,response:result.body})+'\n');
       res.writeHead(result.status,{'Content-Type':'application/json'});res.end(JSON.stringify(result.body));return;
      }
      body=JSON.stringify(payload);
     }
+    const callStarted=Date.now();
     const r=await fetch('http://127.0.0.1:'+relayPort+url.pathname,{method:req.method,headers:{'Content-Type':'application/json'},body:req.method==='POST'?body:undefined,signal:AbortSignal.timeout(90000)});
-    let data=await r.text();
+    let data=await r.text();if(url.pathname==='/api/gm')fs.appendFileSync('/tmp/mock3-llm.jsonl',JSON.stringify({ts:new Date().toISOString(),type:'ai-call',turnId,durationMs:Date.now()-callStarted,status:r.status})+'\n');
     if(url.pathname==='/api/model-info'&&r.ok){const info=JSON.parse(data);info.comparison={cloudModel:CLOUD_MODEL,cloudConfigured:!!cloudKey(),cloudModelAccepted:CLOUD_MODELS.includes(CLOUD_MODEL)};data=JSON.stringify(info);}
     res.writeHead(r.status,{'Content-Type':'application/json'});res.end(data);return;
    }
