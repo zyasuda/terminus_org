@@ -1,18 +1,45 @@
 // WebGL描画の代わりに実際のThree.jsの場面・材質を調べます。見た目は実ブラウザーで別途確認します。
 const fs=require('node:fs'),vm=require('node:vm');
 (async()=>{
- const THREE=await import('./vendor/three/three.module.min.js');let time=0,frame,rendered,checks=0;
+ const THREE=await import('./vendor/three/three.module.min.js');let time=0,frame,rendered,renderCamera,checks=0;
  const ok=(v,m)=>{checks++;if(!v)throw Error(m)};
  const drawing=new Proxy({createLinearGradient:()=>({addColorStop(){}}),createRadialGradient:()=>({addColorStop(){}})},{get:(o,k)=>k in o?o[k]:()=>{},set:(o,k,v)=>(o[k]=v,true)});
  const canvas=()=>({getContext:()=>drawing,setAttribute(){},addEventListener(){}});
- class Renderer{constructor(){this.domElement=canvas();}setPixelRatio(){}setSize(){}render(s){rendered=s;}}
+ class Renderer{constructor(){this.domElement=canvas();}setPixelRatio(){}setSize(){}render(s,c){rendered=s;renderCamera=c;}}
  class Loader{load(url){const t=new THREE.Texture();t.name=url;t.image={width:200,height:400};return t;}}
- const host={clientWidth:800,clientHeight:700,dataset:{},prepend(){},classList:{add(){},remove(){}}},controls={querySelector:()=>({textContent:''}),querySelectorAll:()=>[]};
- const context=vm.createContext({THREE:{...THREE,WebGLRenderer:Renderer,TextureLoader:Loader},document:{createElement:canvas,querySelector:()=>null,hidden:false},devicePixelRatio:1,performance:{now:()=>time},ResizeObserver:class{observe(){}},requestAnimationFrame:f=>frame=f});
- const source=fs.readFileSync(__dirname+'/stage.js','utf8').replace(/^import[^\n]*\n/,'').replace('export function createStage','function createStage');vm.runInContext(source,context);
- const view=context.createStage(host,controls,()=>{}),tick=(n=60)=>{for(let i=0;i<n;i++){time+=34;frame(time);}},snapshot={room:'entry',phase:'explore',image:'mine_entrance',lit:true,end:false,battle:false,actors:[{id:'ines',x:42,z:.03},{id:'lydia',x:70,z:.1}],depth:{size:46,shrink:25}};
- view.sync(snapshot);tick();const before=JSON.stringify(snapshot),sprites=()=>rendered.children.filter(x=>x.isSprite),person=id=>sprites().find(x=>x.material.map.name.endsWith('/'+id+'.webp')),lights=()=>rendered.children.filter(x=>x.material?.blending===THREE.AdditiveBlending);
+ const lookButtons=['left','right'].map(look=>({dataset:{look},hidden:false}));
+ const host={clientWidth:800,clientHeight:700,dataset:{},prepend(){},classList:{add(){},remove(){}}},controls={querySelector:()=>({textContent:''}),querySelectorAll:()=>lookButtons};
+ const testMath=Object.create(Math);testMath.random=()=>.99;
+ const context=vm.createContext({Math:testMath,GLTFLoader:class{load(){}},THREE:{...THREE,WebGLRenderer:Renderer,TextureLoader:Loader},document:{createElement:canvas,querySelector:()=>null,hidden:false},devicePixelRatio:1,performance:{now:()=>time},ResizeObserver:class{observe(){}},requestAnimationFrame:f=>frame=f});
+ const source=fs.readFileSync(__dirname+'/stage.js','utf8').replace(/^import[^\n]*\n/gm,'').replace('export function createStage','function createStage');vm.runInContext(source,context);
+ const view=context.createStage(host,controls,()=>{}),tick=(n=60)=>{for(let i=0;i<n;i++){time+=34;frame(time);}},snapshot={room:'entry',phase:'explore',image:'mine_entrance',lit:true,end:false,battle:false,actors:[{id:'ines',heightCm:155,x:42,z:.03},{id:'lydia',heightCm:172,x:70,z:.1}],depth:{size:46,shrink:25}};
+ view.sync(snapshot);tick();const before=JSON.stringify(snapshot),sprites=()=>rendered.children.filter(x=>x.isSprite),person=id=>rendered.children.find(x=>x.userData.actorId===id),lights=()=>rendered.children.filter(x=>x.material?.blending===THREE.AdditiveBlending);
  ok(lights().every(x=>!x.visible),'発言していないのに照明が点く');
+ for(const id of ['ines','lydia']){const a=person(id),shadow=rendered.children.find(x=>x.userData.contactShadow===id);ok(a.isGroup,'仲間がスタンディー用の立体オブジェクトでない');ok(shadow.position.x===a.position.x&&shadow.position.z===a.position.z&&Math.abs(shadow.position.y-a.position.y)<.01,'接地影が足元からずれる');}
+ const ground=rendered.children.find(x=>x.material?.isMeshStandardMaterial);ok(ground.material.map&&ground.material.bumpMap&&ground.material.alphaMap,'床の質感・境界のなじみがない');
+ const size=()=>{const a=person('ines'),v=a.position.clone().applyMatrix4(renderCamera.matrixWorldInverse);return host.clientHeight*a.scale.y/(-v.z*2*Math.tan(renderCamera.fov*Math.PI/360));};
+ const currentSize=size();view.config.fov=48;view.config.depthSpan=4.5;view.config.horizon=46;view.refreshLayout();tick();const oldSize=size();
+ view.config.fov=65;view.config.depthSpan=2.6;view.config.horizon=54;view.refreshLayout();tick();
+ ok(Math.abs(currentSize-size())<.001&&size()<oldSize,'新しい視野角で人物が小さくならない');
+ const horizon=new THREE.Vector3(0,renderCamera.position.y,-100000).project(renderCamera);ok(Math.abs((1-horizon.y)/2-.54)<.00001,'消失点が上端54%にならない');
+ const rotation=renderCamera.quaternion.clone();view.setPan(-100,100);tick();ok(+host.dataset.stagePanX>=-view.config.panX&&+host.dataset.stagePanY<=view.config.panY,'平行移動が範囲を超える');ok(lookButtons[0].hidden&&!lookButtons[1].hidden,'左端で左だけ非表示にならない');ok(renderCamera.quaternion.angleTo(rotation)<.000001,'平行移動でカメラが回転する');
+ view.setPan(100,-100);tick();ok(+host.dataset.stagePanX<=view.config.panX&&+host.dataset.stagePanY>=-.8,'右・下の移動が範囲を超える');
+ ok(!lookButtons[0].hidden&&lookButtons[1].hidden,'右端で右だけ非表示にならない');
+ view.setPan(0,0);tick();ok(lookButtons.every(b=>!b.hidden),'端から戻ってもボタンが再表示されない');ok(host.dataset.stagePanX==='0.00'&&host.dataset.stagePanY==='0.00','正面へ戻らない');
+ view.setPan(0,0);lookButtons[0].onclick();tick(5);ok(+host.dataset.stagePanX<0&&+host.dataset.stagePanX>-view.config.panX,'端への移動に中間のスクロールがない');tick(20);ok(+host.dataset.stagePanX===-view.config.panX&&lookButtons[0].hidden,'左へ1クリックで端に届かない');lookButtons[1].onclick();tick(20);ok(+host.dataset.stagePanX===view.config.panX&&lookButtons[1].hidden,'右へ1クリックで端に届かない');view.setPan(0,0);lookButtons[0].onclick();tick(3);view.setPan(0,0);context.matchMedia=()=>({matches:true});lookButtons[1].onclick();ok(+host.dataset.stagePanX===view.config.panX,'動きを減らす設定で即座に端へ移動しない');context.matchMedia=()=>({matches:false});view.setPan(0,0);
+ const width=host.clientWidth;host.clientWidth=351;
+ for(const height of [320,548.59]){host.clientHeight=height;view.resize();view.setPan(-6,0);tick();ok(view.project('cart').visible,'狭い画面で左の台車に届かない：'+height);
+ view.setPan(6,0);tick();ok(view.project('etching').visible&&view.project('cache').visible,'狭い画面で右の調査・塵の位置に届かない：'+height);}
+ host.clientWidth=width;host.clientHeight=700;view.resize();view.setPan(0,0);tick();
+ const fullParty={...snapshot,actors:[{id:'ines',heightCm:155,x:35,z:.03},{id:'brom',heightCm:135,x:20,z:.2},{id:'gareth',heightCm:184,x:55,z:.5},{id:'lydia',heightCm:172,x:75,z:.8}]};view.sync(fullParty);tick();
+ const rows=fullParty.actors.map(p=>person(p.id).userData.depthRow);ok(rows.filter(r=>r==='front').length===2&&rows.filter(r=>r==='middle').length===1&&rows.filter(r=>r==='back').length===1,'探索で手前2人・中間1人・奥1人にならない');ok(person('ines').position.z>1,'人物が従来より手前へ移動しない');
+ ok(person('brom').scale.y<person('ines').scale.y&&person('ines').scale.y<person('lydia').scale.y,'イネスの身長が2人の中間でない');
+ view.setPan(0,100);tick();const busts=fullParty.actors.map(p=>{const a=person(p.id);return new THREE.Vector3(a.position.x,a.scale.y*view.config.bustLine,a.position.z).project(renderCamera).y;});ok(busts.every(y=>y>=-1.00001)&&Math.abs(Math.min(...busts)+1)<.00001,'上方向の上限で人物の胸元が画面下端に残らない');console.log(JSON.stringify({heightCm:fullParty.actors.map(p=>[p.id,p.heightCm]),upperPan:+host.dataset.stagePanY,bustEdge:Math.min(...busts)}));view.setPan(0,0);
+ view.sync({...fullParty,battle:true,phase:'battle'});tick();ok(person('brom').userData.depthRow==='front'&&person('lydia').userData.depthRow==='back'&&person('guardian_rampage').userData.depthRow==='farthest','戦闘で4段階の立ち位置にならない');
+ const stageActors=fullParty.actors.map(p=>person(p.id));ok(stageActors.every(a=>a.position.x*a.rotation.y<=0&&Math.abs(THREE.MathUtils.radToDeg(a.rotation.y))<=12.0001),'左右の人物が中央へ12度以内で向かない');ok(new Set([...stageActors,person('guardian_rampage')].map(a=>a.position.z.toFixed(3))).size===4,'戦闘の奥行きが4段階でない');ok(Math.abs(view.config.rowGap*3-3.2)<.02,'床の配置全幅が従来から広がる');console.log(JSON.stringify({battleRows:[...stageActors,person('guardian_rampage')].map(a=>({id:a.userData.actorId,row:a.userData.depthRow,z:a.position.z,angle:THREE.MathUtils.radToDeg(a.rotation.y)}))}));
+ view.sync(snapshot);tick();const positions=snapshot.actors.map(p=>person(p.id).position.clone());view.focusActor('lydia');tick(20);ok(person('lydia').rotation.y===0&&host.dataset.stageFocus==='lydia','シートの対象が正面へ向かない');ok(Math.abs(+host.dataset.stagePanX-person('lydia').position.x)<.01,'シートの対象が画面中央に来ない');ok(snapshot.actors.every((p,i)=>person(p.id).position.equals(positions[i])),'シート選択で立ち位置が変わる');
+ testMath.random=()=>.1;view.sync({...snapshot,room:'back-facing-test'});tick();const reversed=snapshot.actors.filter(p=>Math.abs(person(p.id).rotation.y)>Math.PI/2);ok(reversed.length===1,'探索の後ろ向きが1人にならない');const reversedId=reversed[0].id,angle=person(reversedId).rotation.y;view.sync({...snapshot,room:'back-facing-test'});tick();ok(person(reversedId).rotation.y===angle,'再描画で向きが再抽選される');view.focusActor(reversedId);tick(20);ok(person(reversedId).rotation.y===0,'後ろ向きの人物がシート選択で正面にならない');testMath.random=()=>.99;view.sync(snapshot);tick();
+ console.log(JSON.stringify({characterHeightAt700px:{before:+oldSize.toFixed(2),after:+currentSize.toFixed(2)},depthWidth:{before:4.5,after:view.config.depthSpan},horizonPercent:+((1-horizon.y)*50).toFixed(3)}));
  view.speak('lydia');tick();ok(host.dataset.stageSpot==='lydia'&&lights().every(x=>x.visible),'発言者を照らさない');
  ok(person('lydia').material.color.r>person('ines').material.color.r,'発言者と他の人物の明暗が同じ');
  tick(210);ok(!host.dataset.stageSpot&&lights().every(x=>!x.visible),'7秒後に消えない');
@@ -21,11 +48,11 @@ const fs=require('node:fs'),vm=require('node:vm');
  view.config.spotWidth=5;view.refreshLight();tick();ok(lights()[0].scale.x===5,'広がりが反映されない');
  view.setLight('guardian_rampage');tick();ok(!host.dataset.stageSpot&&lights().every(x=>!x.visible),'不在の番人を照らす');
  view.setLight('lydia');snapshot.lit=false;view.sync(snapshot);tick();ok(!host.dataset.stageSpot&&lights().every(x=>!x.visible),'暗闇の照明が停止しない');
- ok(sprites().every(x=>x.material.color.equals(new THREE.Color(0xffffff))),'暗闇で人物を増光する');
+ ok(rendered.children.filter(x=>x.userData.actorId).every(x=>x.material.color.equals(new THREE.Color(0xffffff))),'暗闇で人物を増光する');
  snapshot.lit=true;view.sync(snapshot);tick();ok(host.dataset.stageSpot==='lydia','再点灯で復帰しない');
  view.config.spotStrength=0;view.refreshLight();tick();ok(!host.dataset.stageSpot&&lights().every(x=>!x.visible),'明るさ0でも点く');
  view.config.spotStrength=.7;view.setLight('auto');view.speak('ines');tick();ok(host.dataset.stageSpot==='ines','自動モードに戻らない');
  snapshot.room='hall';view.sync(snapshot);tick();ok(!host.dataset.stageSpot,'移動後に前の発言を照らす');
- snapshot.room='entry';ok(JSON.stringify(snapshot)===before,'演出がゲームの入力状態を変更');
- console.log('PASS: '+checks+' checks — 発言者追従 / 7秒後の消灯 / 手動照明 / 色・広がり / 不在の人物 / 暗闇の保護 / 再点灯 / 明るさ0 / シーン移動 / 入力状態の保護');
+ const hallColor=ground.material.color.clone();snapshot.room='drain';view.sync(snapshot);tick();ok(!ground.material.color.equals(hallColor)&&ground.material.roughness<.9,'排水室の床に湿りがない');snapshot.room='entry';ok(JSON.stringify(snapshot)===before,'演出がゲームの入力状態を変更');
+ console.log('PASS: '+checks+' checks — 発言者追従 / 7秒後の消灯 / 手動照明 / 色・広がり / 不在の人物 / 暗闇の保護 / 再点灯 / 明るさ0 / シーン移動 / 入力状態の保護 / 人物縮小・消失点・平行移動・回転の固定・4段階の立ち位置・内向きの角度・狭い画面での調査 / スタンディー・足元の影・床の質感');
 })().catch(e=>{console.error(e);process.exitCode=1});

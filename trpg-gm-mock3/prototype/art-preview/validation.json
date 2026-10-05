@@ -1,0 +1,160 @@
+{
+  "images": [
+    {
+      "name": "ines/front",
+      "width": 793,
+      "height": 1251,
+      "bytes": 805823,
+      "sha256": "efbd8ab1e69d60ed8483b235e6af61ac6bcf99700c1d7051da7563d90ed926a9",
+      "transparentPercent": 60.28,
+      "solidBoundsAlpha128": [
+        261,
+        66,
+        614,
+        1176
+      ]
+    },
+    {
+      "name": "ines/back",
+      "width": 793,
+      "height": 1251,
+      "bytes": 784337,
+      "sha256": "9e431959edc9ff7bbcfb3396b64dbc3282401ff6da14fdd01a38bcc54e9a9a6d",
+      "transparentPercent": 60.3,
+      "solidBoundsAlpha128": [
+        269,
+        64,
+        605,
+        1175
+      ]
+    },
+    {
+      "name": "brom/front",
+      "width": 924,
+      "height": 1029,
+      "bytes": 907057,
+      "sha256": "2c0f8015b8121f117adacf7fdda866fe0720155ecaf8fe5b15282116b90434d7",
+      "transparentPercent": 52.57,
+      "solidBoundsAlpha128": [
+        100,
+        85,
+        824,
+        959
+      ]
+    },
+    {
+      "name": "brom/back",
+      "width": 924,
+      "height": 1029,
+      "bytes": 887232,
+      "sha256": "979b0bcb3aaf5ad90ed819c4c7b93c9e4e6d9e32029e22f94d6c7d64434455ca",
+      "transparentPercent": 52.57,
+      "solidBoundsAlpha128": [
+        101,
+        85,
+        830,
+        959
+      ]
+    },
+    {
+      "name": "gareth/front",
+      "width": 780,
+      "height": 1444,
+      "bytes": 1130865,
+      "sha256": "60b0760d398d53e61a5a0d32a2ab9640c7adff9a03d1686357c7f6beb11fa61d",
+      "transparentPercent": 43.15,
+      "solidBoundsAlpha128": [
+        93,
+        93,
+        703,
+        1354
+      ]
+    },
+    {
+      "name": "gareth/back",
+      "width": 780,
+      "height": 1444,
+      "bytes": 1119202,
+      "sha256": "a51b447c8560d4b72105216379f28ceb54adf22f1c62a3ebc865d6e77601647d",
+      "transparentPercent": 43.15,
+      "solidBoundsAlpha128": [
+        91,
+        93,
+        702,
+        1354
+      ]
+    },
+    {
+      "name": "lydia/front",
+      "width": 780,
+      "height": 1444,
+      "bytes": 896082,
+      "sha256": "e88b05e0286c32e2f312876b2ed7bbf9d71eeef3872f02cefb3bb33795a94e00",
+      "transparentPercent": 51.74,
+      "solidBoundsAlpha128": [
+        149,
+        87,
+        655,
+        1358
+      ]
+    },
+    {
+      "name": "lydia/back",
+      "width": 780,
+      "height": 1444,
+      "bytes": 896013,
+      "sha256": "3d09c043dc5f5aa23e9f2626cb60482b0aa23aa7d946c967086510d6071ccdc6",
+      "transparentPercent": 51.74,
+      "solidBoundsAlpha128": [
+        144,
+        87,
+        668,
+        1358
+      ]
+    },
+    {
+      "name": "foreground-rock",
+      "width": 1024,
+      "height": 1536,
+      "bytes": 2784997,
+      "sha256": "9026881bba24753e939095a9f607d4aa2dbe502ed49624ac2f95993f971afeb0",
+      "transparentPercent": 44.18,
+      "solidBoundsAlpha128": [
+        22,
+        19,
+        1002,
+        1517
+      ]
+    },
+    {
+      "name": "maren/front",
+      "width": 778,
+      "height": 1442,
+      "bytes": 1072242,
+      "sha256": "0af29c342128a2e999f04d0d3d4b90a14255e9296f44959db24fb40ad0059ccf",
+      "transparentPercent": 44.72,
+      "solidBoundsAlpha128": [
+        96,
+        130,
+        684,
+        1354
+      ]
+    },
+    {
+      "name": "maren/back",
+      "width": 778,
+      "height": 1442,
+      "bytes": 1043602,
+      "sha256": "f1542810e97d4ff0e9e6dfc28d0c5c0e6b2542c7fbd0bd33cc297aee09900f4b",
+      "transparentPercent": 44.72,
+      "solidBoundsAlpha128": [
+        132,
+        129,
+        685,
+        1354
+      ]
+    }
+  ],
+  "sourceMatches": 11,
+  "claim": "画像形式・透過・コピーの一致を測定。絵の採用判断は含まない。"
+}

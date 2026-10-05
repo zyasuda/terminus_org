@@ -1,0 +1,215 @@
+{
+  "purpose": "舞台素材の独立した確認用。ゲーム本編には未接続。",
+  "generator": "image_gen built-in (scenery only)",
+  "characters": [
+    {
+      "id": "ines",
+      "name": "イネス",
+      "sourceId": "ines",
+      "heightM": 1.72,
+      "sourceInputs": {
+        "front": "ines-standee-v02-front.png",
+        "back": "ines-standee-v02-back.png"
+      },
+      "sourceGlb": "/Users/yasuda_k/Desktop/Standee-wiz/public/models/ines-standee-v64.glb",
+      "frame": {
+        "width": 793,
+        "height": 1251,
+        "figure": [
+          261,
+          65,
+          615,
+          1177
+        ],
+        "plate": [
+          233,
+          33,
+          639,
+          1208
+        ]
+      },
+      "files": {
+        "front": {
+          "file": "characters/ines-v64-front.png",
+          "source": "/Users/yasuda_k/Desktop/Standee-wiz/assets/standee/ines-standee-v64-front.png",
+          "sha256": "efbd8ab1e69d60ed8483b235e6af61ac6bcf99700c1d7051da7563d90ed926a9"
+        },
+        "back": {
+          "file": "characters/ines-v64-back.png",
+          "source": "/Users/yasuda_k/Desktop/Standee-wiz/assets/standee/ines-standee-v64-back.png",
+          "sha256": "9e431959edc9ff7bbcfb3396b64dbc3282401ff6da14fdd01a38bcc54e9a9a6d"
+        }
+      },
+      "status": "既存スタンディの確認用コピー"
+    },
+    {
+      "id": "brom",
+      "name": "ブロム",
+      "sourceId": "dwarf-warrior",
+      "heightM": 1.35,
+      "sourceInputs": {
+        "front": "dwarf-warrior-standee-v03-front.png",
+        "back": "dwarf-warrior-standee-v03-back.png"
+      },
+      "sourceGlb": "/Users/yasuda_k/Desktop/Standee-wiz/public/models/dwarf-warrior-standee-v64.glb",
+      "frame": {
+        "width": 924,
+        "height": 1029,
+        "figure": [
+          100,
+          85,
+          824,
+          959
+        ],
+        "plate": [
+          77,
+          60,
+          852,
+          984
+        ]
+      },
+      "files": {
+        "front": {
+          "file": "characters/brom-v64-front.png",
+          "source": "/Users/yasuda_k/Desktop/Standee-wiz/assets/standee/dwarf-warrior-standee-v64-front.png",
+          "sha256": "2c0f8015b8121f117adacf7fdda866fe0720155ecaf8fe5b15282116b90434d7"
+        },
+        "back": {
+          "file": "characters/brom-v64-back.png",
+          "source": "/Users/yasuda_k/Desktop/Standee-wiz/assets/standee/dwarf-warrior-standee-v64-back.png",
+          "sha256": "979b0bcb3aaf5ad90ed819c4c7b93c9e4e6d9e32029e22f94d6c7d64434455ca"
+        }
+      },
+      "status": "Standee-wizでブロムに割り当てられた既存素材"
+    },
+    {
+      "id": "gareth",
+      "name": "ガレス",
+      "sourceId": "gareth",
+      "heightM": 1.84,
+      "sourceInputs": {
+        "front": "gareth-standee-v55-front.png",
+        "back": "gareth-standee-v55-back.png"
+      },
+      "sourceGlb": "/Users/yasuda_k/Desktop/Standee-wiz/public/models/gareth-standee-v64.glb",
+      "frame": {
+        "width": 780,
+        "height": 1444,
+        "figure": [
+          93,
+          93,
+          703,
+          1354
+        ],
+        "plate": [
+          55,
+          57,
+          739,
+          1389
+        ]
+      },
+      "files": {
+        "front": {
+          "file": "characters/gareth-v64-front.png",
+          "source": "/Users/yasuda_k/Desktop/Standee-wiz/assets/standee/gareth-standee-v64-front.png",
+          "sha256": "60b0760d398d53e61a5a0d32a2ab9640c7adff9a03d1686357c7f6beb11fa61d"
+        },
+        "back": {
+          "file": "characters/gareth-v64-back.png",
+          "source": "/Users/yasuda_k/Desktop/Standee-wiz/assets/standee/gareth-standee-v64-back.png",
+          "sha256": "a51b447c8560d4b72105216379f28ceb54adf22f1c62a3ebc865d6e77601647d"
+        }
+      },
+      "status": "既存スタンディの確認用コピー"
+    },
+    {
+      "id": "lydia",
+      "name": "リディア",
+      "sourceId": "lydia",
+      "heightM": 1.72,
+      "sourceInputs": {
+        "front": "lydia-standee-v29-front.png",
+        "back": "lydia-standee-v29-back.png"
+      },
+      "sourceGlb": "/Users/yasuda_k/Desktop/Standee-wiz/public/models/lydia-standee-v64.glb",
+      "frame": {
+        "width": 780,
+        "height": 1444,
+        "figure": [
+          149,
+          87,
+          655,
+          1358
+        ],
+        "plate": [
+          110,
+          51,
+          700,
+          1395
+        ]
+      },
+      "files": {
+        "front": {
+          "file": "characters/lydia-v64-front.png",
+          "source": "/Users/yasuda_k/Desktop/Standee-wiz/assets/standee/lydia-standee-v64-front.png",
+          "sha256": "e88b05e0286c32e2f312876b2ed7bbf9d71eeef3872f02cefb3bb33795a94e00"
+        },
+        "back": {
+          "file": "characters/lydia-v64-back.png",
+          "source": "/Users/yasuda_k/Desktop/Standee-wiz/assets/standee/lydia-standee-v64-back.png",
+          "sha256": "3d09c043dc5f5aa23e9f2626cb60482b0aa23aa7d946c967086510d6071ccdc6"
+        }
+      },
+      "status": "既存スタンディの確認用コピー"
+    },
+    {
+      "id": "maren",
+      "name": "マレン",
+      "sourceId": "maren",
+      "heightM": 1.73,
+      "sourceInputs": {
+        "front": "maren-standee-v01-front.png",
+        "back": "maren-standee-v01-back.png"
+      },
+      "sourceGlb": "/Users/yasuda_k/Desktop/Standee-wiz/public/models/maren-standee-v64.glb",
+      "frame": {
+        "width": 778,
+        "height": 1442,
+        "figure": [
+          95,
+          126,
+          686,
+          1355
+        ],
+        "plate": [
+          78,
+          91,
+          721,
+          1387
+        ]
+      },
+      "files": {
+        "front": {
+          "file": "characters/maren-v64-front.png",
+          "source": "/Users/yasuda_k/Desktop/Standee-wiz/assets/standee/maren-standee-v64-front.png",
+          "sha256": "0af29c342128a2e999f04d0d3d4b90a14255e9296f44959db24fb40ad0059ccf"
+        },
+        "back": {
+          "file": "characters/maren-v64-back.png",
+          "source": "/Users/yasuda_k/Desktop/Standee-wiz/assets/standee/maren-standee-v64-back.png",
+          "sha256": "f1542810e97d4ff0e9e6dfc28d0c5c0e6b2542c7fbd0bd33cc297aee09900f4b"
+        }
+      },
+      "status": "既存スタンディの確認用コピー（高さは原登録の仮値）"
+    }
+  ],
+  "scenery": [
+    {
+      "id": "foreground-rock",
+      "file": "scenery/foreground-rock-v02.png",
+      "source": "/Users/yasuda_k/.codex/generated_images/01a0fbf5-9adf-7df0-a172-c31129aee059/exec-8e43f5b8-6d76-4ef4-86e2-6d4573a065da.png",
+      "status": "作者の見た目確認待ち",
+      "origin": "地面に接する石の最下端を接地位置として扱う。画像の透明余白は実装時に補正する。"
+    }
+  ]
+}

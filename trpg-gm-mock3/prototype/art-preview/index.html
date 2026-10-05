@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="ja">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>舞台の素材室 — スタンディとカキワリ</title>
+<style>
+:root{color-scheme:dark;--bg:#101817;--panel:#192726;--line:#344947;--text:#eee9dc;--muted:#a7b8b5;--gold:#dabc79}*{box-sizing:border-box}body{margin:0;padding:24px;background:var(--bg);color:var(--text);font:14px/1.6 system-ui,sans-serif}header{max-width:1280px;margin:0 auto 20px}h1,h2{font-family:Georgia,"Yu Mincho",serif;font-weight:500;margin:0}h1{font-size:26px}h2{font-size:21px}p{margin:6px 0 0;color:var(--muted)}main{max-width:1280px;margin:auto;display:grid;grid-template-columns:1.25fr 1fr;gap:20px}section{border:1px solid var(--line);border-radius:12px;overflow:hidden;background:var(--panel)}.heading,.controls{padding:16px 20px}.heading{border-bottom:1px solid var(--line)}.viewport{height:400px;position:relative;background:radial-gradient(ellipse at 50% 70%,#2a3c39,#101817 75%)}canvas{display:block;width:100%;height:100%}.controls{display:flex;gap:12px;flex-wrap:wrap;align-items:center;border-top:1px solid var(--line)}button,select{border:1px solid var(--line);background:#13201f;color:var(--text);padding:8px 12px;border-radius:6px;font:inherit}button{cursor:pointer}button:hover,button[aria-pressed="true"]{border-color:var(--gold);color:var(--gold)}label{display:flex;gap:10px;align-items:center}input[type=range]{width:140px;accent-color:var(--gold)}output{min-width:42px;font-variant-numeric:tabular-nums;color:var(--gold)}#status{padding:0 20px 16px;font-size:12px;min-height:40px}.rock-stage{height:400px;display:flex;align-items:flex-end;justify-content:center;overflow:hidden;background:#101817}.rock-stage[data-bg=scene]{background:url('../../replay/img/mine_entrance.webp') center/cover}.rock-stage[data-bg=light]{background:#ebe6da}.rock-stage img{max-height:96%;max-width:90%;object-fit:contain;margin-bottom:4px}small{color:var(--muted)}.angle-row{flex-basis:100%;display:flex;gap:8px;flex-wrap:wrap}footer{max-width:1280px;margin:18px auto 0;color:var(--muted);font-size:12px}button:focus-visible,select:focus-visible,input:focus-visible{outline:2px solid var(--gold);outline-offset:3px}@media(max-width:800px){body{padding:16px}main{grid-template-columns:1fr}.viewport,.rock-stage{height:350px}.controls{padding:14px}.heading{padding:14px}}
+</style>
+<header><h1>舞台の素材室</h1><p>向きと質感を見比べる、ゲームとは独立したプレビューです。</p></header>
+<main>
+<section aria-labelledby="standeeTitle">
+ <div class="heading"><h2 id="standeeTitle">仲間のスタンディ</h2><p>既存の前後画像を板に貼り、足元を揃えています。</p></div>
+ <div id="standeeView" class="viewport" aria-label="スタンディの角度プレビュー"></div>
+ <div class="controls">
+  <label>人物 <select id="character"><option value="ines">イネス</option><option value="brom">ブロム</option><option value="gareth">ガレス</option><option value="lydia" selected>リディア</option><option value="maren">マレン</option></select></label>
+  <label>向き <input id="angle" type="range" min="-180" max="180" value="-30" step="1"><output id="angleValue">-30°</output></label>
+  <div class="angle-row"><button data-angle="0">正面</button><button data-angle="-35">斜め前</button><button data-angle="145">斜め後ろ</button><button data-angle="180">背面</button><button data-angle="90">真横</button></div>
+ </div>
+ <p id="status" role="status">素材を読み込み中です。</p>
+</section>
+<section aria-labelledby="rockTitle">
+ <div class="heading"><h2 id="rockTitle">前景の岩 · v02</h2><p>写実寄りの石肌。手前に置いて、奥を少し遮るカキワリです。</p></div>
+ <div id="rockStage" class="rock-stage" data-bg="scene"><img src="scenery/foreground-rock-v02.png" alt="透明背景の前景用の岩"></div>
+ <div class="controls" aria-label="岩の背景"><button data-bg="scene" aria-pressed="true">坑道</button><button data-bg="dark" aria-pressed="false">暗い背景</button><button data-bg="light" aria-pressed="false">明るい背景</button></div>
+ <p style="padding:0 20px 16px;font-size:12px">透過の輪郭と、背景との馴染み方を確認できます。</p>
+</section>
+</main>
+<footer>イネスは既存の水彩調を保持しています。ブロムは Standee-wiz の割り当てに従い dwarf-warrior を使っています。GLBの厚み・面取り・照明は、この画像板プレビューには含みません。</footer>
+<script type="module" src="viewer.js"></script>
+</html>
