@@ -20,7 +20,7 @@ const LABEL={map:'地図を広げる',retreat:'退路を確保する（撤退希
 const ACTION_TARGET={decode:'etching',inspect_etching:'etching',inspect_cache:'cache',open_cache:'cache',inspect:'door',inspect_cart:'cart',inspect_rails:'rails',inspect_rune:'rune',inspect_wheel:'wheel',inspect_water:'water',take:'cart',wedge:'door',pry:'wheel',hold:'wheel',smash:'door',crawl:'door',unlock:'door',support:'door',read:'rune'};
 let redrawEffects=()=>{};
 let stageView=null;
-let aiConnection='default',aiModelInfo=null,aiLastTiming=null;
+let aiConnection='cloud-gemma',aiModelInfo=null,aiLastTiming=null;
 // ゲーム状態とは別の通信計測。呼び出し順・返答・許可判断は変更しません。
 let aiTurn=null,aiTurnSerial=0,aiLastTurn=null;
 const aiFallbacks={};
@@ -1162,7 +1162,7 @@ async function consultGM(question){if(state.phase==='explore'&&state.room==='ent
 
 function chronicleMarkdown(entries=chat){return '# クロニクル：坑道の向こう\n\nこの卓で交わした会話とGMの記録（mock3簡易版）。\n\n'+entries.filter(e=>e.kind!=='error').map((e,i)=>'## '+(i+1)+'. '+e.who+'\n\n'+e.text).join('\n\n');}
 function updateAIComparison(){
- const select=$('aiConnection');if(!select)return;select.disabled=busy;
+ const select=$('aiConnection');if(!select)return;select.disabled=busy;select.value=aiConnection;
  if(aiModelInfo){select.options[0].textContent=(aiModelInfo.backend==='ollama'?'ローカル':'既存接続')+' · '+aiModelInfo.model;const c=aiModelInfo.comparison;select.options[1].textContent='クラウド · '+(c?.cloudModel||'Gemma');select.options[1].disabled=!c?.cloudConfigured||!c?.cloudModelAccepted;
  $('aiModelStatus').textContent=aiConnection==='cloud-gemma'?'Google API · '+c.cloudModel:c?.cloudConfigured?(aiModelInfo.backend==='ollama'?'ローカル':'既存接続')+'で試遊中。クラウドへ切り替えられます。':'クラウドGemmaはAPIキー未設定です。';}
  const fallback=$('aiFallbacks');if(fallback)fallback.textContent='形式違反で読み飛ばした回数：'+Object.values(aiFallbacks).reduce((n,v)=>n+v,0)+'回'+(aiLastTurn?' · 直近の発言：'+aiLastTurn.calls+'呼出 · 合計 '+aiLastTurn.totalMs+' ms':'');
