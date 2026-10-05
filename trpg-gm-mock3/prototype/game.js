@@ -77,7 +77,7 @@ function transferSummary(t){return personName(t.from)+' → '+personName(t.to)+'
 function transferItem(t,s=state){
  const record=validateTransfer(t,s),giveBack=t.mode==='return'&&record.owner===record.holder;record.holder=t.to;if(t.mode==='give'||giveBack)record.owner=t.to;
  const event={item:t.item,from:t.from,to:t.to,mode:t.mode,room:s.room};s.transfers.push(event);revealItem(t.to,t.item,s);
- if(s===state){for(const id of [t.from,t.to])actionHistory.push({id,action:'transfer',initiator:humanId(),room:s.room,transfer:event});plan=[];planReview=null;if(t.item==='lantern')lanternDiscussion=null;}
+ if(s===state){for(const id of [t.from,t.to])actionHistory.push({id,action:'transfer',initiator:humanId(),room:s.room,transfer:event,result:{text:transferSummary(event)}});plan=[];planReview=null;if(t.item==='lantern')lanternDiscussion=null;}
  return event;
 }
 function transferCandidates(text,to,s=state){
@@ -294,12 +294,12 @@ function inspectText(id,t,s){
  if(id==='brom')return s.drained?'水の圧力がなくなった。鍵が外れれば、この扉を持ち上げて支えられる。':'水の圧力がかかっている。先に水を引けば扉を支えられる。壊して進むなら大きな音が出る。';
  return (s.drained?'石扉の下は乾いている。':'石扉の下から水が染み出している。')+'近くの刻みも確かめたい。';
 }
-function recordAction(id,action,initiator=id,room=state.room){
- actionHistory.push({id,action,initiator,room});
+function recordAction(id,action,initiator=id,room=state.room,result=null){
+ actionHistory.push({id,action,initiator,room,result});
 }
 function apply(id,a,s=state,initiator=id){
  const room=s.room,result=applyAction(id,a,s);
- if(s===state){recordAction(id,a,initiator,room);if(['light','douse'].includes(a))lanternDiscussion=null;}
+ if(s===state){recordAction(id,a,initiator,room,result);if(['light','douse'].includes(a))lanternDiscussion=null;}
  return result;
 }
 function applyAction(id,a,s=state){
@@ -328,9 +328,10 @@ function applyAction(id,a,s=state){
 function move(to,s=state){
  if(s.phase!=='explore'||!s.lit||!ROOMS[s.room].links.includes(to))throw Error('今はその場所へ進めません。');
  const revisiting=s.visited.includes(to);
- s.room=to;if(!s.visited.includes(to))s.visited.push(to);if(!s.navigation.known.includes(to))s.navigation.known.push(to);s.navigation.offer=null;if(s===state){humanRequests=[];PEOPLE.forEach(p=>recordAction(p.id,'move',humanId(),to));}
- if(to==='hall'&&s.drained&&!s.observedDrain){s.observedDrain=true;return (revisiting?'広間へ戻ると、水の音が消えていた。':'広間に入ると、水は引いていた。')+'石扉の下は乾き、扉を押していた水の圧力がなくなっている。';}
- return ROOMS[to].name+'へ、仲間と移動した。';
+ s.room=to;if(!s.visited.includes(to))s.visited.push(to);if(!s.navigation.known.includes(to))s.navigation.known.push(to);s.navigation.offer=null;let text=ROOMS[to].name+'へ、仲間と移動した。';
+ if(to==='hall'&&s.drained&&!s.observedDrain){s.observedDrain=true;text=(revisiting?'広間へ戻ると、水の音が消えていた。':'広間に入ると、水は引いていた。')+'石扉の下は乾き、扉を押していた水の圧力がなくなっている。';}
+ if(s===state){humanRequests=[];PEOPLE.forEach(p=>recordAction(p.id,'move',humanId(),to,{text}));}
+ return text;
 }
 function publicView(){return {phase:state.phase,room:ROOMS[state.room].name,lit:state.lit,navigation:navigationView(),targets:visibleTargets().map(t=>TARGETS[t].name),inventory:PEOPLE.flatMap(p=>knownItems(p.id)).filter(item=>PEOPLE.every(p=>knowsProfile(item.holder,itemKey(item.holder,item.id),state,p.id))),holding:state.holding,water:state.room==='drain'?state.drained:undefined,drainChange:state.observedDrain,locked:state.room==='hall'?state.locked:undefined,supported:state.room==='hall'?state.supported:undefined,opened:state.room==='hall'?state.opened:undefined,round:state.round,boss:state.boss,hp:state.hp,weak:state.weak,fire:state.fire};}
 function visibleExits(s=state){return s.phase==='explore'&&s.lit?ROOMS[s.room].links.map(id=>({id,passage:PASSAGES[s.room][id],name:s.navigation.known.includes(id)||s.visited.includes(id)?ROOMS[id].name:null,visited:s.visited.includes(id)})):[];}
@@ -342,7 +343,7 @@ function readMap(holder,item,s=state){
  if(!s.lit&&!s.discovery.stoneOn)throw Error('暗くて地図を読めません。先に灯りを用意しましょう。');
  s.navigation.known=[...new Set([...s.navigation.known,...MAPS[item].rooms])];if(!s.navigation.maps.includes(item))s.navigation.maps.push(item);s.navigation.offer=null;
  revealProfile(holder,[{key:itemKey(holder,item)}],s,'地図を広げた');
- if(s===state)recordAction(holder,'map',humanId());
+ if(s===state)recordAction(holder,'map',humanId(),s.room,{text:MAPS[item].rooms.map(id=>ROOMS[id].name).join('・')+'が地図に記されている。'});
  return MAPS[item].rooms.map(id=>ROOMS[id].name);
 }
 function currentMapOffer(s=state){const r=s.navigation.offer;return r&&r.room===s.room&&s.phase==='explore'&&hasItem(r.holder,r.item,s)&&!s.navigation.maps.includes(r.item)?r:null;}
@@ -449,6 +450,14 @@ function conversationStatus(){
 function publishOwnClue(key){if(busy||!shareClue(humanId(),key))return;say(personName(humanId())+'（あなた）',CLUES[key],'you');render();return run(()=>companions(false,'all'));}
 function publishOwnKnowledge(index){const text=state.knowledge[humanId()][index];if(busy||typeof text!=='string'||sharedKnowledge(humanId(),text))return;publishReport(humanId(),text);say(personName(humanId())+'（あなた）',text,'you');render();return run(()=>companions(false,'all'));}
 // 寄り絵は調査前の外観。表示しても知識や発見状態は変えません。
+function investigationRecord(t,s=state,records=actionHistory){
+ return records.filter(c=>c.id===humanId()).findLastIndex(c=>c.room===s.room&&c.result?.text&&(safeInvestigation(c.action)||c.action==='scout')&&(ACTION_TARGET[c.action]===t||c.action==='scout'&&t==='etching'));
+}
+function showInvestigationRecord(t){
+ const index=investigationRecord(t);if(index<0)return;
+ sheet(humanId(),'notes');const row=$('sheet').querySelector('[data-history-index="'+index+'"]');
+ row?.scrollIntoView({block:'center'});row?.focus({preventScroll:true});
+}
 function targetPortrait(t){
  if(!Object.hasOwn(TARGETS,t)||!visibleTargets().includes(t))return '';
  const changed=t==='cache'&&state.discovery.opened||t==='door'&&state.opened||t==='water'&&state.drained;
@@ -477,7 +486,7 @@ function render(){
  $('points').innerHTML=!battle&&!end?visibleTargets().map(t=>`<button class="target" style="left:${TARGETS[t].x}%;top:${TARGETS[t].y}%" data-target="${t}" aria-pressed="${target===t}">${t==='cache'&&state.discovery.opened?'開いた収納':t==='door'&&state.opened?'開いた石扉':t==='water'&&state.drained?'乾いた排水口':TARGETS[t].name}</button>`).join(''):'';
  if(blueDust()&&!state.discovery.cache)$('points').innerHTML+='<button class="dust-discovery" id="dustspot" aria-label="蒼白い塵が集まる場所を調べる"></button>';
  if($('dustspot'))$('dustspot').onclick=()=>human('find_cache');
- $('points').querySelectorAll('[data-target]').forEach(b=>b.onclick=()=>{target=b.dataset.target;render();if($('actions').classList.contains('contextual'))($('actions').querySelector('[data-act]')||$('contextClose')).focus();});
+ $('points').querySelectorAll('[data-target]').forEach(b=>b.onclick=()=>{target=b.dataset.target;render();if($('actions').classList.contains('contextual'))($('actions').querySelector('[data-act]')||$('investigationResult')||$('contextClose')).focus();});
  renderPlacement();
  $('bossimg').hidden=!battle;$('tele').hidden=!battle;$('tele').innerHTML=`<strong>予告：${state.round%2?`前衛を薙ぎ払う（各${BATTLE_RULES.sweep}）`:`魔法使いへ光線（${BATTLE_RULES.beam}）`}</strong>番人の枠 ${state.boss}/${state.noisy?30:24}　ラウンド ${state.round}`;
  $('exits').innerHTML=visibleExits().map(e=>`<button data-room="${e.id}" ${busy?'disabled':''}><span aria-hidden="true">↗</span> ${esc(e.name?e.name+'へ':e.passage)}</button>`).join('');$('exits').hidden=battle||end||!state.lit;$('exits').querySelectorAll('[data-room]').forEach(b=>b.onclick=()=>{if(!busy)travel(b.dataset.room);});
@@ -487,10 +496,12 @@ function render(){
  }else if(!end){const own=actionsFor(humanId()).filter(a=>battle||ACTION_TARGET[a]===target&&canShowProposal(humanId(),a));if(!battle&&target)body=body.replace('自分でできる行動を選べます。仲間への依頼は会話で伝えます。',own.length?personName(humanId())+'ができること':'今、自分でできる操作はありません。仲間に相談できます。');body+=`<div class="choices">${own.map(a=>`<button data-act="${a}" ${busy?'disabled':''}>${LABEL[a]}</button>`).join('')}${!battle&&state.room==='hall'&&state.opened?`<button id="advance" class="primary" ${busy?'disabled':''}>石扉の奥へ進む</button>`:''}</div>`;}
  $('sceneTools').innerHTML=!battle&&!end?actionsFor(humanId()).filter(a=>['scout','use_stone','light','douse'].includes(a)).map(a=>`<button data-act="${a}" ${busy?'disabled':''}>${LABEL[a]}</button>`).join(''):'';
  $('sceneTools').querySelectorAll('[data-act]').forEach(b=>b.onclick=()=>human(b.dataset.act));
+ if(!battle&&!end&&target&&investigationRecord(target)>=0){body=body.replace('今、自分でできる操作はありません。仲間に相談できます。','調査した結果を記録から確認できます。仲間への相談もできます。');body+='<button id="investigationResult">調査結果を見る</button>';}
  const context=!battle&&!end&&!!target,panel=$('actions');panel.classList.toggle('contextual',context);panel.classList.toggle('idle',!battle&&!end&&!context);
  if(context){$('scene').append(panel);body=body.replace('</h3>','</h3>'+targetPortrait(target));body='<button type="button" id="contextClose" class="context-close" aria-label="調査地点の操作を閉じる">×</button>'+body;}
  else{document.querySelector('.world').insertBefore(panel,$('private'));panel.style.removeProperty('left');panel.style.removeProperty('top');}
  $('actions').innerHTML=body;$('actions').querySelectorAll('[data-act]').forEach(b=>b.onclick=()=>human(b.dataset.act));$('actions').querySelectorAll('[data-request]').forEach(b=>b.onclick=()=>request(...b.dataset.request.split(',')));
+ if($('investigationResult'))$('investigationResult').onclick=()=>showInvestigationRecord(target);
  if($('contextClose'))$('contextClose').onclick=()=>{const selected=target;target=null;render();$('points').querySelector('[data-target="'+selected+'"]')?.focus();};$('actions').onkeydown=e=>{if(e.key==='Escape'&&$('contextClose')){e.preventDefault();$('contextClose').click();}};
  $('actions').querySelectorAll('[data-move]').forEach(b=>b.onclick=()=>{const [i,d]=b.dataset.move.split(',').map(Number);[plan[i],plan[i+d]]=[plan[i+d],plan[i]];planReview=null;render();});
  if($('ownBattleAction'))$('ownBattleAction').onchange=e=>{plan.find(p=>p.id===humanId()).action=e.target.value;planReview=null;render();};if($('coordinate'))$('coordinate').onclick=()=>run(coordinatePlan);if($('execute'))$('execute').onclick=execute;if($('cancelplan'))$('cancelplan').onclick=()=>{plan=[];planReview=null;render();};
@@ -601,7 +612,7 @@ function sheetInformation(id,s=state,records=actionHistory){
  const own=id===humanId()?[...new Set(s.knowledge[humanId()])]:[];
  const known=new Set(s.discovery.shared.map(k=>CLUES[k]));
  const privateCount=[...new Set(s.knowledge[id])].filter(t=>!known.has(t)&&!sharedKnowledge(id,t,s)).length;
- return {own,privateCount,shared:[...s.shared],history:records.filter(c=>c.id===id).map(c=>({...c})),clues:s.discovery.shared.map(k=>CLUES[k]).filter(Boolean)};
+ return {own,privateCount,shared:[...s.shared],history:records.filter(c=>c.id===id).map(c=>({...c,result:c.result?.private&&id!==humanId()&&!known.has(c.result.text)&&!sharedKnowledge(id,c.result.text,s)?{text:'まだ本人から聞いていない調査結果です。'}:c.result})),clues:s.discovery.shared.map(k=>CLUES[k]).filter(Boolean)};
 }
 // 既に知られている現所持品・貸している品の外観だけを表示します。
 function sheetItemView(person,item,s=state){
@@ -625,7 +636,7 @@ function sheet(id,tab='person',item=null){
   const held=knownItems(id),lent=Object.entries(state.items).filter(([item,r])=>r.owner===id&&r.holder!==id&&knowsProfile(r.holder,itemKey(r.holder,item)));
   content=`${selectedItem?`<section class="sheet-item-detail" id="sheetItemDetail" aria-label="${esc(selectedItem.name)}の外観"><img src="images/items/${selectedItem.id}-v1.png" alt="${esc(selectedItem.name)}" width="240" height="160"><div><h3>${esc(selectedItem.name)}</h3><p>${esc(selectedItem.detail)}</p><p class="sheet-muted">所持：${esc(personName(selectedItem.holder))}${selectedItem.owner!==selectedItem.holder?' · '+esc(personName(selectedItem.owner))+'から借りている':''}</p></div><button type="button" id="itemDetailClose" aria-label="アイテムの画像を閉じる">×</button></section>`:''}<h3>今の持ち物</h3>${held.length?table(['持ち物','用途・貸し借り'],held.map(item=>[Object.hasOwn(MAPS,item.id)?'<button data-open-map="'+item.id+'">'+esc(item.name)+'を広げる</button>':'<button class="sheet-item-link" data-item-view="'+item.id+'" aria-expanded="'+(selectedItem?.id===item.id)+'" aria-controls="sheetItemDetail">'+esc(item.name)+' <span aria-hidden="true">↗</span></button>',`${knowsProfile(id,itemKey(id,item.id,true))?esc(ITEM_DEFS[item.id].detail):'<span class="sheet-muted">詳しい用途はまだ聞いていない</span>'}${item.owner!==id?'<br><small>'+esc(personName(item.owner))+'から借りている</small>':''}`])):'<p class="sheet-muted">知られている持ち物はありません。本人に聞いてみましょう。</p>'}${lent.length?`<div class="sheet-block"><h3>貸している品</h3>${table(['持ち物','借りている人'],lent.map(([item,r])=>[Object.hasOwn(MAPS,item)?esc(ITEM_DEFS[item].name):'<button class="sheet-item-link" data-item-view="'+item+'" aria-expanded="'+(selectedItem?.id===item)+'" aria-controls="sheetItemDetail">'+esc(ITEM_DEFS[item].name)+' <span aria-hidden="true">↗</span></button>',esc(personName(r.holder))]))}</div>`:''}<div class="sheet-block"><h3>受け渡しの記録</h3>${state.transfers.some(t=>t.from===id||t.to===id)?`<ul class="sheet-notes">${state.transfers.filter(t=>t.from===id||t.to===id).map(t=>`<li>${esc(transferSummary(t))}</li>`).join('')}</ul>`:'<p class="sheet-muted">まだありません。</p>'}</div>`;
  }
- if(tab==='notes')content=`<h3>本人について知ったこと</h3>${state.profiles.history.filter(h=>h.id===id).length?`<ul class="sheet-notes">${state.profiles.history.filter(h=>h.id===id).map(h=>`<li><small>${esc(h.label||facts[h.key]?.label||'持ち物')} · ${esc(h.source)}</small>${esc(h.value||facts[h.key]?.value||'記録')}</li>`).join('')}</ul>`:'<p class="sheet-muted">まだ聞き取った記録はありません。</p>'}<div class="sheet-block"><h3>${id===humanId()?'あなたが得た情報':'本人から聞き取る情報'}</h3>${id===humanId()?(info.own.length?`<ol class="sheet-notes">${info.own.map((t,i)=>`<li><small>発見 ${i+1} · ${sharedKnowledge(humanId(),t)||state.discovery.shared.some(k=>CLUES[k]===t)?'共有済み':'自分の記録'}</small>${esc(t)}${state.discovery.clues[humanId()].filter(k=>!state.discovery.shared.includes(k)&&CLUES[k]===t).map(k=>`<br><button class="private-note-share" data-share-clue="${k}" ${busy?'disabled':''}>この発見を皆に伝える</button>`).join('')}${!sharedKnowledge(humanId(),t)&&!Object.values(CLUES).includes(t)?`<br><button class="private-note-share" data-share-knowledge="${state.knowledge[humanId()].indexOf(t)}" ${busy?'disabled':''}>皆に伝える</button>`:''}</li>`).join('')}</ol>`:'<p class="sheet-muted">まだ発見はありません。</p>'):`<p class="sheet-muted">未共有の記録：${info.privateCount}件。内容は本人に相談して聞き取ります。</p>`}<div class="sheet-block"><h3>共有済みの手がかり</h3>${info.clues.length?`<ul class="sheet-notes">${info.clues.map(t=>`<li>${esc(t)}</li>`).join('')}</ul>`:'<p class="sheet-muted">まだありません。</p>'}</div><div class="sheet-block"><h3>行動履歴</h3><p class="sheet-muted">本人が実行した行動だけを記録します。</p>${info.history.length?`<ol class="sheet-notes">${info.history.map((c,i)=>`<li><small>${i+1} · ${esc(ROOMS[c.room].name)} · ${c.initiator===id?'自発':esc(c.initiator==='gm'?'GM':PEOPLE.find(p=>p.id===c.initiator).name)+'の依頼'}</small>${esc(c.transfer?transferSummary(c.transfer):c.action==='move'?ROOMS[c.room].name+'へ移動':LABEL[c.action])}</li>`).join('')}</ol>`:'<p class="sheet-muted">まだ行動していません。</p>'}</div></div>`;
+ if(tab==='notes')content=`<h3>本人について知ったこと</h3>${state.profiles.history.filter(h=>h.id===id).length?`<ul class="sheet-notes">${state.profiles.history.filter(h=>h.id===id).map(h=>`<li><small>${esc(h.label||facts[h.key]?.label||'持ち物')} · ${esc(h.source)}</small>${esc(h.value||facts[h.key]?.value||'記録')}</li>`).join('')}</ul>`:'<p class="sheet-muted">まだ聞き取った記録はありません。</p>'}<div class="sheet-block"><h3>${id===humanId()?'あなたが得た情報':'本人から聞き取る情報'}</h3>${id===humanId()?(info.own.length?`<ol class="sheet-notes">${info.own.map((t,i)=>`<li><small>発見 ${i+1} · ${sharedKnowledge(humanId(),t)||state.discovery.shared.some(k=>CLUES[k]===t)?'共有済み':'自分の記録'}</small>${esc(t)}${state.discovery.clues[humanId()].filter(k=>!state.discovery.shared.includes(k)&&CLUES[k]===t).map(k=>`<br><button class="private-note-share" data-share-clue="${k}" ${busy?'disabled':''}>この発見を皆に伝える</button>`).join('')}${!sharedKnowledge(humanId(),t)&&!Object.values(CLUES).includes(t)?`<br><button class="private-note-share" data-share-knowledge="${state.knowledge[humanId()].indexOf(t)}" ${busy?'disabled':''}>皆に伝える</button>`:''}</li>`).join('')}</ol>`:'<p class="sheet-muted">まだ発見はありません。</p>'):`<p class="sheet-muted">未共有の記録：${info.privateCount}件。内容は本人に相談して聞き取ります。</p>`}<div class="sheet-block"><h3>共有済みの手がかり</h3>${info.clues.length?`<ul class="sheet-notes">${info.clues.map(t=>`<li>${esc(t)}</li>`).join('')}</ul>`:'<p class="sheet-muted">まだありません。</p>'}</div><div class="sheet-block"><h3>行動履歴</h3><p class="sheet-muted">本人が実行した行動と、その結果を記録します。</p>${info.history.length?`<ol class="sheet-notes">${info.history.map((c,i)=>`<li data-history-index="${i}" tabindex="-1"><small>${i+1} · ${esc(ROOMS[c.room].name)} · ${c.initiator===id?'自発':esc(c.initiator==='gm'?'GM':PEOPLE.find(p=>p.id===c.initiator).name)+'の依頼'}</small>${esc(c.transfer?transferSummary(c.transfer):c.action==='move'?ROOMS[c.room].name+'へ移動':LABEL[c.action])}${c.result?.text?`<p class="sheet-muted">結果：${esc(c.result.text)}</p>`:''}</li>`).join('')}</ol>`:'<p class="sheet-muted">まだ行動していません。</p>'}</div></div>`;
  dialog.innerHTML=`<div class="sheet-header"><button id="sheetPrevious" class="sheet-person-switch previous" aria-label="前のキャラクター：${previous.name}" title="${previous.name}へ"><span aria-hidden="true">◀</span></button><img class="sheet-portrait" src="../replay/img/${id}.webp" alt="${p.name}"><div class="sheet-heading"><h2 id="sheetTitle">${p.name}</h2><p>${p.role}</p><div class="sheet-vitals"><div class="sheet-vital"><span>HP</span><div class="sheet-meter" role="progressbar" aria-label="HP" aria-valuemin="0" aria-valuemax="${p.hp}" aria-valuenow="${state.hp[id]}"><span style="width:${Math.max(0,Math.min(100,state.hp[id]/p.hp*100))}%"></span></div><span>${state.hp[id]} / ${p.hp}</span></div><div class="sheet-vital mp"><span>MP</span><div class="sheet-meter mp" role="img" aria-label="MP：数値未設定"></div><span>未設定</span></div></div></div><button id="closesheet" class="sheet-close">閉じる</button><button id="sheetNext" class="sheet-person-switch next" aria-label="次のキャラクター：${next.name}" title="${next.name}へ"><span aria-hidden="true">▶</span></button></div><nav class="sheet-nav" aria-label="記録の分類">${[['person','人物'],['ability','能力'],['items','持ち物'],['notes','情報・履歴']].map(([key,label])=>`<button data-sheet-tab="${key}" aria-pressed="${key===tab}">${label}</button>`).join('')}</nav><div class="sheet-content" tabindex="0" role="region" aria-label="キャラクターの記録内容">${content}</div><div class="sheet-contact"><label for="sheetMessage">${id===humanId()?'皆に話してみる':p.name+'に話しかけてみる'}</label><p role="status">${busy?'返答と人物設定を確認しています…':esc(state.profiles.feedback[id]||lanternStatus()||'全員に聞こえる会話です。選んだ相手が返答します。')}</p><form id="sheetChat"><div class="sheet-input"><input id="sheetMessage" maxlength="500" placeholder="${tab==='notes'?'調べて分かったことを教えて':tab==='ability'?'この能力で何を調べられそう？':'出身や得意なことを尋ねてみる'}" required ${busy?'disabled':''}><button type="button" class="mic-button" disabled aria-label="音声入力は準備中" aria-describedby="sheetMicNote" title="音声入力は準備中"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><rect x="9" y="2" width="6" height="12" rx="3"/><path d="M5 10v2a7 7 0 0 0 14 0v-2M12 19v3M8 22h8"/></svg></button></div><button type="submit" ${busy?'disabled':''}>${id===humanId()?'全員に話す':p.name+'に話す'}</button><button type="submit" data-gm="true" ${busy?'disabled':''}>GMに尋ねる</button></form><p id="sheetMicNote" class="sheet-mic-note" role="status">マイクを押して話し、聞き取った文を確認してから送信できます。</p></div>`;
  $('sheetPrevious').onclick=()=>{sheet(previous.id,tab);$('sheetPrevious').focus();};$('sheetNext').onclick=()=>{sheet(next.id,tab);$('sheetNext').focus();};
  dialog.querySelectorAll('[data-item-view]').forEach(b=>b.onclick=()=>{const key=b.dataset.itemView,open=dialog.dataset.item!==key;sheet(id,'items',open?key:null);(open?$('itemDetailClose'):dialog.querySelector('[data-item-view="'+key+'"]'))?.focus();});
@@ -638,7 +649,7 @@ function sheet(id,tab='person',item=null){
  dialog.querySelectorAll('[data-sheet-action]').forEach(b=>b.onclick=()=>{dialog.close();id===humanId()?human(b.dataset.sheetAction):request(id,b.dataset.sheetAction);});
  const contact=async(text,to)=>{if(busy)return;stopVoice();dialog.querySelectorAll('.sheet-contact input,.sheet-contact button').forEach(e=>e.disabled=true);const sent=await submitMessage(text,to);if(sent?.performed&&dialog.open&&dialog.dataset.person===id&&dialog.classList.contains('character-sheet')){dialog.close();return;}if(dialog.open&&dialog.dataset.person===id&&!dialog.classList.contains('map-sheet')){const scroll=dialog.querySelector('.sheet-content').scrollTop;sheet(id,dialog.dataset.tab,dialog.dataset.item||null);dialog.querySelector('.sheet-content').scrollTop=scroll;}};
  $('sheetChat').onsubmit=e=>{e.preventDefault();const text=$('sheetMessage').value.trim();if(text){sheetDrafts[id]='';$('sheetMessage').value='';contact(text,e.submitter?.dataset.gm?'gm':id===humanId()?'all':id);}};
- const help=document.createElement('button');help.type='button';help.className='role-help';help.textContent='役の言葉を手伝って';help.onclick=()=>openRoleHelp('sheetMessage',id===humanId()?'all':id);dialog.querySelector('.sheet-contact').append(help);
+ const help=document.createElement('button');help.type='button';help.className='role-help';help.textContent='セリフの生成するよ';help.onclick=()=>openRoleHelp('sheetMessage',id===humanId()?'all':id);dialog.querySelector('.sheet-contact').append(help);
  const mic=dialog.querySelector('.mic-button');if(mic){mic.disabled=busy;mic.removeAttribute('title');mic.setAttribute('aria-label','音声で話す');mic.onclick=()=>startVoice('sheetMessage',mic,dialog.querySelector('#sheetMicNote'));}
  $('sheetMessage').value=sheetDrafts[id]||'';$('sheetMessage').oninput=e=>{sheetDrafts[id]=e.target.value;};
  if(!dialog.open)dialog.showModal();
@@ -680,6 +691,7 @@ function dialogueInput(p,planning,requested,correction){
   observed:profile?[]:state.seen[p.id]||[],lanternDiscussion:profile?null:currentLanternDiscussion(),selfProfile,nextStep:profile||planning?null:cooperationAdvice(p.id),humanRequests:profile||planning?[]:currentHumanRequests(p.id).map(r=>({action:LABEL[r.action],paused:r.paused})),
   knownOthers:profile?{}:Object.fromEntries(PEOPLE.filter(x=>x.id!==p.id).map(x=>[x.name,visibleProfile(x.id,state,p.id)])),correction,
   clues:profile?{}:Object.fromEntries(state.discovery.clues[p.id].map(k=>[k,CLUES[k]])),proposalChoices:Object.fromEntries(proposalChoices.map(a=>[a,LABEL[a]])),
+  blockedActions:profile||planning||state.room!=='hall'||!progress.some(t=>t.target==='door'&&t.status!=='未共有')?[]:[...(!state.drained?[{action:'support',reason:'水の圧力が残っている間は、ブロムでも石扉を持ち上げて支えられない。先に水の流れを調べる。'}]:[]),{actor:'gareth',action:'crawl',reason:'ガレスは錠前を外せるが、隙間へ入り内側の留め具を外すのはイネスの能力。' }],
   public:profile?{phase:state.phase}:planning?{phase:'battle',boss:state.boss,hp:state.hp,weak:state.weak,fire:state.fire,round:state.round,forecast:state.round%2?'前衛への薙ぎ払い':'リディアへの光線'}:publicView(),knowledge:profile||planning?[]:state.knowledge[p.id].slice(-4),shared:profile||planning?[]:state.shared.slice(-6),
   conversation:profile?[]:chat.filter(c=>!['private','error'].includes(c.kind)).slice(-6),allowed:Object.fromEntries(allowed.map(a=>[a,LABEL[a]])),planning,requested,plan:planning?plan:[]};
 }
@@ -693,7 +705,7 @@ async function aiPlayer(p,planning=false,requested=null,correction=null){
 ${focusRule}
 selfProfileが本人の正しい設定。correctionがあれば言い直す。他者はknownOthers、結果はknowledge/shared/cluesだけを知る。未知の経歴・記号・道具を創作しない。
 ${planning?'戦闘ではallowedから自分の行動を1つ選ぶ。':requested?'依頼されたrequestedそのものをactionにする。懸念があればwaitと理由。別の行動を実行しない。':'相談はaction=wait。実行完了・調査中・受領完了と語らない。proposalは今から行う自分の行動案。反対や疑問は本人へ確認する。'}
-人間への新しい依頼はmayRequestHuman=trueの時だけhumanOptionsから1つ。humanRequestsは自分がイネスへ頼んだ未実行の作業。pausedなら本人が待ってと答えているので急かさない。済んだ調査を再度頼まず、他者の依頼を重ねない。progressの取得済み・排水済み・開通済みは終わった作業。nextStepは実結果に基づく次の相談候補で、未実行。依頼を引き受けられない場合は理由と、自分にできる協力か適任者への相談を1つ伝える。publicの今見えるものと共有済みの結果から連携する。ランタンへの提案・依頼・反対は明確に話す。
+人間への新しい依頼はmayRequestHuman=trueの時だけhumanOptionsから1つ。humanRequestsは自分がイネスへ頼んだ未実行の作業。pausedなら本人が待ってと答えているので急かさない。済んだ調査を再度頼まず、他者の依頼を重ねない。progressの取得済み・排水済み・開通済みは終わった作業。nextStepは実結果に基づく次の相談候補で、未実行。依頼を引き受けられない場合は理由と、自分にできる協力か適任者への相談を1つ伝える。blockedActionsはゲーム側で確定した実行不能の理由。支えがあれば水圧を無視できるとは語らず、その案に賛同しない。直前のconversationで行き詰まった案を繰り返さず、理由と今できる調査・地図の相談を1つ返す。publicの今見えるものと共有済みの結果から連携する。ランタンへの提案・依頼・反対は明確に話す。
 inventoryは個別所有。自分が今持つ品だけ使える。贈り物や貸し借りのhistoryを踏まえて感謝できる。地図表示・移動・受け渡しは別の処理なので完了したと語らない。固定リーダーは置かない。
 発言した実情報だけshare=true、発言で伝えたcluesのキーだけshareClues。JSONオブジェクト1つ:{"speech":"100文字以内","action":"${planning?'allowedのIDを必ず1つ。waitは禁止':'allowedのIDまたはwait'}","share":false,"proposal":"proposalChoicesのIDまたは空文字","shareClues":[]}。`;
  let r;
@@ -701,6 +713,8 @@ inventoryは個別所有。自分が今持つ品だけ使える。贈り物や�
  for(let attempt=0;attempt<(planning?2:1);attempt++){
   const text=await ask(system,attempt?{...input,formatCorrection:'前の回答は行動の形式が違います。actionはこのキーだけから選ぶ: '+allowed.join(', ')+ '。'+(r?'前のaction: '+String(r.action):'JSONオブジェクトを返してください。')}:input,550);
   try{r=parseAI(text);}catch(error){if(!planning||attempt)throw error;continue;}
+  // 相談中の行動指定は、現在できる申し出として扱い、了承前には実行しません。
+  if(!planning&&!requested&&proposalChoices.includes(r?.action)){r.proposal=r.action;r.action='wait';recordAIFallback('conversation-action-as-proposal');}
   if(planning&&r&&r.share===undefined)r.share=false;
   if(!planning||typeof r?.speech==='string'&&r.speech.length<=350&&allowed.includes(r.action)&&typeof r.share==='boolean')break;
  }
@@ -809,6 +823,14 @@ function speakCooperation(advice){
 function cooperationConversation(text,to){
  if(state.phase!=='explore'||!state.lit||to==='gm')return false;
  if(/もし|仮に|なら|たら|ないで|しない|やめ|反対/.test(text))return false;
+ if(state.room==='hall'&&!state.opened&&conversationProgress().some(t=>t.target==='door'&&t.status!=='未共有')){
+  const forcedSupport=!state.drained&&((/ブロム/.test(text)&&/支え/.test(text)&&/ガレス/.test(text)&&/留め具|隙間/.test(text))||/水(?:の)?圧力|水圧/.test(text)&&/動かない|開かない|無理|できない/.test(text));
+  if(forcedSupport){
+   say('GM','水の圧力が残っているため、ブロムでも石扉を持ち上げて支えられません。ガレスが外せるのは錠前です。隙間へ入って内側の留め具を外すのはイネスの能力です。','gm');
+   const map=mapOptions().find(m=>!isHuman(m.holder)&&!state.navigation.maps.includes(m.id));
+   const actor=PEOPLE.find(p=>p.id===(map?.holder||'brom')),speech=map?'まず水の流れを調べよう。持っている地図を広げてみようか？ 行き先を確認しよう。':'同じ手順では扉は動かない。入口へ戻って別の通路を調べ、水の流れを変える方法を探そう。';say(actor.name+'（AI）',speech);if(map)rememberMapOffer(actor,speech);return true;
+  }
+ }
  if(/^(?:じゃあ|では|さて|それで)?[、,\s]*(?:次(?:は|に)?(?:何を(?:すれば|しよう|する|調べ)|何する|何[？?]|どう(?:する|すれば|しよう))|何をすれば|どうすれば|行き詰ま|他に何をすれば|もう調べた.*次)/.test(text))return speakCooperation(cooperationAdvice(to));
  const target=visibleTargets().find(t=>[TARGETS[t].name,...({door:['石扉','扉'],wheel:['操作輪','鉄片','引っ掛かり'],etching:['壁の傷','傷の文字'],cache:['隠し収納','収納'],rune:['壁の刻み']}[t]||[])].some(name=>text.includes(name)));
  if(!target||!/(?:して|外して|取って|支えて|読んで|解読して|入って|固定して|頼む|お願い)[。！!\s]*$/.test(text))return false;
@@ -884,7 +906,7 @@ async function companions(planning=false,addressedTo='all',investigations=[]){
 // 分担調査は観察と解読。支援・解錠の了承は本人の直前の一意な申し出だけを使います。
 function spokenOffer(action,speech){
  const subject=LABEL[action]?.split('を')[0],point=TARGETS[ACTION_TARGET[action]]?.name;
- return /調べ|解読|読ん|読む|見て|見よ|確かめ|解錠|外す|支え/.test(speech)&&! /調べられない|解読できない|調べない|読めない|しません|支えない/.test(speech)&&Boolean(subject&&speech.includes(subject)||point&&speech.includes(point)||action==='decode'&&/文字|刻み|傷/.test(speech));
+ return /調べ|解読|読ん|読む|見て|見よ|確かめ|解錠|外す|外して|支え/.test(speech)&&! /調べられない|解読できない|調べない|読めない|しません|支えない|外さない|外せない/.test(speech)&&Boolean(subject&&speech.includes(subject)||point&&speech.includes(point)||action==='decode'&&/文字|刻み|傷/.test(speech)||action==='unlock'&&/鍵|錠前/.test(speech));
 }
 function safeInvestigation(a){return a==='inspect'||a.startsWith('inspect_')||['decode','read'].includes(a);}
 function usefulInvestigation(a,progress=conversationProgress()){
@@ -1145,7 +1167,7 @@ function setupDice(){
     const entry=document.createElement('div');entry.className='dice-record';entry.textContent=line;const source=document.createElement('small');source.textContent=r.source;entry.append(source);$('diceRecords').append(entry);
    }
    if(job.mode!=='demo'){
-    if(job.source!==state)return;state=draft;if(job.mode==='battle'){job.items.forEach(p=>recordAction(p.id,p.action));plan=[];planReview=null;}else if(job.mode==='cache'){recordAction('gareth','open_cache',humanId());if($('diceSupport').checked)recordAction('ines','cache_support');}
+    if(job.source!==state)return;state=draft;if(job.mode==='battle'){job.items.forEach((p,i)=>recordAction(p.id,p.action,p.id,state.room,{text:results[job.items.every(x=>x.action==='retreat')?0:i]}));plan=[];planReview=null;}else if(job.mode==='cache'){recordAction('gareth','open_cache',humanId(),state.room,{text:results[0]});if($('diceSupport').checked)recordAction('ines','cache_support',humanId(),state.room,{text:'照明と見張りで解錠を支援した。'+results[0]});}
     records.forEach(r=>say('GM',PEOPLE.find(p=>p.id===r.id).name+'の判定：'+r.n+'＋'+r.bonus+'＝'+r.total+'（'+r.source+' / 目標'+r.target+'）'+(r.outcome==='partial'?'代償つき成功':r.hit?'成功':'失敗'),'gm'));results.forEach(t=>sayResult('GM',t,'gm'));
     if(job.mode==='cache')say('ガレス',records[0].outcome==='failure'?'仕組みは掴めた。次は開けられそうだ。':records[0].outcome==='partial'?'開いたけど、音を立てたな。奥に気をつけよう。':'静かに開いた。灯石を持っていこう。');
     else if(state.phase==='battle'){const actor=records.find(r=>!isHuman(r.id));if(actor)say(PEOPLE.find(p=>p.id===actor.id).name,actor.hit?'手応えはあった。次の動きに備えよう。':'捉えきれなかった。支援や順番を考え直そう。');}
@@ -1183,7 +1205,7 @@ function setupSystem(){
  $('chronicleExport').onclick=()=>{refresh();const blob=new Blob([chronicleMarkdown()],{type:'text/markdown;charset=utf-8'}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download='mock3_chronicle_'+new Date().toISOString().slice(0,10)+'.md';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);$('chronicleStatus').textContent='Markdownファイルを出力しました。';};
 }
 function recipientName(id){return id==='all'?'全員':id==='gm'?'GM':PEOPLE.find(p=>p.id===id).name;}
-function updateRecipients(){const name=recipientName(recipient);$('messageLabel').textContent='相談・発見を'+name+'に伝える';document.querySelectorAll('input[name="recipient"]').forEach(input=>{input.checked=input.value===recipient;input.disabled=busy;});}
+function updateRecipients(){const name=recipientName(recipient);$('messageLabel').textContent=name+'に話しかける';document.querySelectorAll('input[name="recipient"]').forEach(input=>{input.checked=input.value===recipient;input.disabled=busy;});}
 function setupRecipients(){const allIcon='<svg viewBox="0 0 36 36" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="18" cy="11" r="4"/><circle cx="7" cy="15" r="3"/><circle cx="29" cy="15" r="3"/><path d="M10 29v-5q0-8 8-8t8 8v5M2 29v-5q0-5 5-5M34 29v-5q0-5-5-5"/></g></svg>';$('recipients').innerHTML='<legend>呼びかけ先</legend>'+[{id:'all',name:'全員'},...aiPeople(),{id:'gm',name:'GM'}].map(p=>`<label class="recipient-choice"><input type="radio" name="recipient" value="${p.id}"><span class="recipient-card">${p.id==='all'?allIcon:`<img src="${p.id==='gm'?'images/gm_mascot.png':'../replay/img/'+p.id+'.webp'}" alt="">`}<span>${p.name}</span></span></label>`).join('');document.querySelectorAll('input[name="recipient"]').forEach(input=>input.onchange=()=>{if(!busy){recipient=input.value;updateRecipients();}});updateRecipients();}
 function updateConversation(){const layout=document.querySelector('.layout');layout.classList.toggle('conversation-folded',conversationFolded);const toggle=$('conversationToggle');toggle.textContent=conversationFolded?'<<'+(conversationUnread?'\n未読 '+conversationUnread:''):'>>';toggle.setAttribute('aria-label',conversationFolded?'会話欄を開く'+(conversationUnread?'、未読'+conversationUnread+'件':''):'会話欄を畳む');toggle.title=conversationFolded?'会話欄を開く':'会話欄を畳む';toggle.setAttribute('aria-expanded',String(!conversationFolded));$('gmdrag').disabled=conversationFolded;(conversationFolded?$('conversation'):document.querySelector('.compose-body')).append($('gmstage'));(conversationFolded?document.querySelector('.sidehead'):document.querySelector('.compose-heading')).append($('systemOpen'));positionGM();}
 // 演出の初期値。塵は粒数、ほかは0〜100の強さです。

@@ -48,14 +48,9 @@ export function createStage(host, controls, changed) {
  const glbLoader=new GLTFLoader();
  const loader=new THREE.TextureLoader(),textures=new Map(),actors=new Map(),props=new Map();let snap=null,panX=0,panY=0,room='',dirty=true,last=0,drag=null,panSlide=null,lost=false,backFacing=null;const faceFront=new Set(),turns=new Map();
  const reducedMotion=typeof matchMedia==='function'?matchMedia('(prefers-reduced-motion: reduce)'):null;
- const point=new THREE.Vector3(),ray=new THREE.Raycaster(),ndc=new THREE.Vector2();
+ const point=new THREE.Vector3();
  function texture(url){if(!textures.has(url)){const t=loader.load(url,()=>{dirty=true;if(snap)sync(snap);},undefined,()=>{host.dataset.stageAssetError='true';});t.colorSpace=THREE.SRGBColorSpace;textures.set(url,t);}return textures.get(url);}
  function flat(map,x,y,z,w,h){const p=new THREE.Mesh(new THREE.PlaneGeometry(w,h),new THREE.MeshBasicMaterial({map,transparent:true,alphaTest:.1,side:THREE.DoubleSide}));p.position.set(x,y+h/2,z);p.userData.stageZ=z;scene.add(p);return p;}
- // 端の岩は背景を囲う控えめな袖。巨大な仮ポリゴンは使いません。
- const rock=texture('./art-preview/scenery/foreground-rock-v02.png');
- const foreground=[flat(rock,-12.8,-.06,-3,3.2,4.8),flat(rock,13.2,-.06,-4,3.5,5.2)];
- foreground[0].scale.x=-1;
- function frameRocks(){for(const [i,p] of foreground.entries()){const half=camera.aspect*Math.tan(config.fov*Math.PI/360)*(camera.position.z-p.position.z);p.position.x=(i?1:-1)*(half*.92-p.geometry.parameters.width*.3);}}
  // 岩床の色・凹凸は同じ模様を使います。再現可能なノイズで粒度を一定にします。
  function groundTexture(){const c=document.createElement('canvas');c.width=c.height=512;const x=c.getContext('2d');let seed=1729;const random=()=>{seed=(Math.imul(seed,1664525)+1013904223)>>>0;return seed/4294967296;};
   x.fillStyle='#827969';x.fillRect(0,0,512,512);
@@ -137,12 +132,12 @@ export function createStage(host, controls, changed) {
   return {x:Math.max(0,Math.min(config.panX,32-halfX-1)),up:Math.max(0,Math.min(config.panY,back.position.y+back.geometry.parameters.height*back.scale.y/2-halfY-3.8-2,...bustLimits)),down:.8};
  }
  function setPan(x,y){const limit=panLimits();panX=Math.max(-limit.x,Math.min(limit.x,x));panY=Math.max(-limit.down,Math.min(limit.up,y));orient();dirty=true;host.dataset.stagePanX=panX.toFixed(2);host.dataset.stagePanY=panY.toFixed(2);const directions=[];if(Math.abs(panX)>.05)directions.push(panX<0?'左':'右');if(Math.abs(panY)>.05)directions.push(panY>0?'上':'下');host.dataset.stageDirection=directions.join('・')||'正面';controls.querySelectorAll('[data-look]').forEach(b=>{b.hidden=b.dataset.look==='left'?panX<=-limit.x+.001:b.dataset.look==='right'?panX>=limit.x-.001:false;});changed();}
- function projectPosition(a){if(!a)return null;point.set(...a);const view=point.clone().applyMatrix4(camera.matrixWorldInverse),v=point.clone().project(camera);let visible=view.z<0&&Math.abs(v.x)<.92&&Math.abs(v.y)<.86;ndc.set(v.x,v.y);ray.setFromCamera(ndc,camera);const hit=ray.intersectObjects(foreground,false)[0];if(hit&&hit.distance<point.distanceTo(camera.position))visible=false;return {x:(v.x+1)*host.clientWidth/2,y:(1-v.y)*host.clientHeight/2,visible};}
+ function projectPosition(a){if(!a)return null;point.set(...a);const view=point.clone().applyMatrix4(camera.matrixWorldInverse),v=point.clone().project(camera);const visible=view.z<0&&Math.abs(v.x)<.92&&Math.abs(v.y)<.86;return {x:(v.x+1)*host.clientWidth/2,y:(1-v.y)*host.clientHeight/2,visible};}
  function project(id){const p=anchors[id];return p?projectPosition([p[0],p[1],stageZ(p[2])]):null;}
  function projectActor(id){const a=actors.get(id);if(!a?.sprite.visible)return null;const p=a.sprite.position;return projectPosition([p.x,p.y+a.sprite.scale.y*.77,p.z]);}
  function sync(next){snap=next;if(room!==next.room+next.phase){room=next.room+next.phase;panSlide=null;turns.clear();faceFront.clear();host.dataset.stageFocus='';backFacing=!next.battle&&next.actors.length&&Math.random()<config.backFacingRate?next.actors[Math.floor(Math.random()*next.actors.length)].id:null;speaker='';until=0;setPan(0,0);}back.material.map=texture('../replay/img/'+next.image+'.webp');back.material.needsUpdate=true;const backgroundImage=back.material.map.image;if(backgroundImage?.width&&backgroundImage?.height)back.scale.y=64*backgroundImage.height/backgroundImage.width/25; // 背景画の縦横比を保ち、横へ引き伸ばしません。
   if(!next.lit||next.end){pool.visible=beam.visible=false;for(const a of actors.values())a.sprite.material.color.set(0xffffff);}
-  for(const v of [...foreground,back,...props.values()])v.position.z=stageZ(v.userData.stageZ);
+  for(const v of [back,...props.values()])v.position.z=stageZ(v.userData.stageZ);
   for(const [id,a] of actors){a.sprite.visible=false;a.shadow.visible=false;}
   // 抽選された左右順・前後関係を保ち、印刷面同士の重なりだけを避けます。
   const depthOrder=[...next.actors].sort((a,b)=>a.z-b.z),frontCount=Math.ceil(depthOrder.length/2),depthRows=new Map(depthOrder.map((p,i)=>[p.id,i<frontCount?0:Math.min(2,i-frontCount+1)]));
@@ -155,10 +150,9 @@ export function createStage(host, controls, changed) {
   const boss=actor('guardian_rampage');boss.sprite.visible=next.battle;boss.sprite.position.set(5.5,0,config.frontRow-3*config.rowGap);boss.sprite.userData.depthRow='farthest';boss.sprite.scale.set(4.5,6,1);boss.shadow.visible=next.battle;boss.shadow.position.set(5.5,.005,boss.sprite.position.z);
   const palettes={entry:['#747166','#182027',.96],hall:['#85847a','#151b20',.94],drain:['#5b716c','#111d22',.7]};const palette=palettes[next.room]||palettes.hall;floor.material.color.set(palette[0]);floor.material.roughness=palette[2];scene.background.set(palette[1]);lantern.visible=next.lit;lantern.position.set(actors.get('lydia')?.sprite.position.x||2,3,actors.get('lydia')?.sprite.position.z||2);ambient.intensity=next.lit?1.2:.2;
   props.forEach(p=>p.visible=next.room==='entry'&&!next.battle&&!next.end);
-  for(const p of foreground)p.material.color.set(next.lit?'#aab4b4':'#263438');
-  updateFacing();host.dataset.stageRows=arranged.map(p=>p.id+':'+actors.get(p.id).sprite.userData.depthRow).join(',');frameRocks();setPan(panX,panY);dirty=true;changed();
+  updateFacing();host.dataset.stageRows=arranged.map(p=>p.id+':'+actors.get(p.id).sprite.userData.depthRow).join(',');setPan(panX,panY);dirty=true;changed();
  }
- function resize(){renderer.setSize(host.clientWidth,host.clientHeight,false);camera.aspect=host.clientWidth/host.clientHeight;camera.fov=config.fov;camera.updateProjectionMatrix();frameRocks();setPan(panX,panY);dirty=true;if(snap&&!lost){renderer.render(scene,camera);}changed();}
+ function resize(){renderer.setSize(host.clientWidth,host.clientHeight,false);camera.aspect=host.clientWidth/host.clientHeight;camera.fov=config.fov;camera.updateProjectionMatrix();setPan(panX,panY);dirty=true;if(snap&&!lost){renderer.render(scene,camera);}changed();}
  const observer=new ResizeObserver(resize);observer.observe(host);
  function updateFacing(){host.dataset.stageFacing=[...actors].filter(([,a])=>a.sprite.visible&&a.sprite.isGroup).map(([id,a])=>id+':'+THREE.MathUtils.radToDeg(a.sprite.rotation.y).toFixed(1)).join(',');}
  function slidePan(x){drag=null;const end=Math.max(-panLimits().x,Math.min(panLimits().x,x)),reduced=typeof matchMedia==='function'&&matchMedia('(prefers-reduced-motion: reduce)').matches;if(reduced||config.scrollSeconds<=0){panSlide=null;setPan(end,panY);}else panSlide={from:panX,to:end,y:panY,start:performance.now()};return reduced;}

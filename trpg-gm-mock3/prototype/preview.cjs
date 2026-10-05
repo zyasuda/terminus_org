@@ -9,14 +9,20 @@ async function callCloudGemma(payload,{key=cloudKey(),model=CLOUD_MODEL,fetcher=
  if(!CLOUD_MODELS.includes(model))return {status:400,body:{error:{message:'比較用Gemmaのモデル名を確認してください。'}}};
  const contents=[];for(const m of payload.messages||[]){const role=m.role==='assistant'?'model':'user',text=String(m.content||''),last=contents.at(-1);if(last?.role===role)last.parts[0].text+='\n\n'+text;else contents.push({role,parts:[{text}]});}
  const started=Date.now();
- const response=await fetcher(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,{method:'POST',headers:{'Content-Type':'application/json','x-goog-api-key':key},body:JSON.stringify({systemInstruction:{parts:[{text:payload.system||''}]},contents,generationConfig:{temperature:0.2,maxOutputTokens:Math.min(8192,Math.max(1024,Number(payload.max_tokens)||450)),thinkingConfig:{thinkingLevel:'minimal'},responseMimeType:'application/json'}}),signal:AbortSignal.timeout(40000)});
+ const url=`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,options={method:'POST',headers:{'Content-Type':'application/json','x-goog-api-key':key},body:JSON.stringify({systemInstruction:{parts:[{text:payload.system||''}]},contents,generationConfig:{temperature:0.2,maxOutputTokens:Math.min(8192,Math.max(1024,Number(payload.max_tokens)||450)),thinkingConfig:{thinkingLevel:'minimal'},responseMimeType:'application/json'}}),signal:AbortSignal.timeout(40000)};
+ let response,retryCount=0;
+ // 500だけ1秒後に1回再試行。同じ通信を送り、全体の40秒制限は延長しません。
+ for(let attempt=0;attempt<2;attempt++){
+  response=await fetcher(url,options);if(response.status!==500||attempt===1)break;
+  await response.body?.cancel();await new Promise(done=>setTimeout(done,1000));retryCount++;
+ }
  const data=await response.json();
- if(!response.ok)return {status:response.status,body:{error:{type:'cloud_gemma_error',message:String(data.error?.message||'クラウドGemmaが応答しませんでした。').replaceAll(key,'[redacted]')}}};
+ if(!response.ok)return {status:response.status,body:{error:{type:'cloud_gemma_error',retryCount,message:String(data.error?.message||'クラウドGemmaが応答しませんでした。').replaceAll(key,'[redacted]')}}};
  let text=(data.candidates?.[0]?.content?.parts||[]).filter(p=>!p.thought).map(p=>p.text||'').join('').trim();
  // Gemmaが会話のJSONを1要素の配列で包む場合だけ、同じ内容を取り出します。行動の内容・許可は変更しません。
  let unwrapped=false;try{const value=JSON.parse(text);if(Array.isArray(value)&&value.length===1&&['speech','response','text'].some(k=>typeof value[0]?.[k]==='string')){text=JSON.stringify(value[0]);unwrapped=true;}}catch{}
  if(!text)return {status:502,body:{error:{message:'クラウドGemmaの返答が空です。ゲーム状態は変更していません。'}}};
- return {status:200,body:{content:[{type:'text',text}],usage:{input_tokens:data.usageMetadata?.promptTokenCount||0,output_tokens:data.usageMetadata?.candidatesTokenCount||0},comparison:{connection:'cloud-gemma',model,unwrapped,durationMs:Date.now()-started}}};
+ return {status:200,body:{content:[{type:'text',text}],usage:{input_tokens:data.usageMetadata?.promptTokenCount||0,output_tokens:data.usageMetadata?.candidatesTokenCount||0},comparison:{connection:'cloud-gemma',model,unwrapped,retryCount,durationMs:Date.now()-started}}};
 }
 function replaceRequired(source,before,after){if(!source.includes(before))throw Error('mock2中継の置き換え元が見つかりません: '+before);return source.replace(before,after);}
 function prepareRelaySource(source,localLLM){

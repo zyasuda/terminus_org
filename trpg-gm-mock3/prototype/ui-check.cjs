@@ -7,6 +7,22 @@ vm.runInContext(source,context,{filename:__dirname+'/game.js'});
 vm.runInContext(`(async()=>{
  let count=0;const ok=(v,m)=>{count++;if(!v)throw Error(m)};
  state=initial();chat=[];actionHistory=[];humanRequests=[];explorationOffers={};
+ const lamp=apply('lydia','light',state,'ines');
+ ok(sheetInformation('lydia').history[0].result.text===lamp.text,'点灯の確定結果が履歴にない');
+ readMap('lydia','lydia_map');ok(sheetInformation('lydia').history.at(-1).result.text.includes('排水室'),'地図の記載が履歴にない');
+ move('hall');ok(PEOPLE.every(p=>sheetInformation(p.id).history.at(-1).result.text.includes('石扉の広間')),'移動の結果が全員の履歴にない');
+ ok(investigationRecord('door')===-1,'未調査のポイントに履歴リンクを出す');
+ const observation=apply('ines','inspect');ok(sheetInformation('ines').history.at(-1).result.text===observation.text,'本人の調査結果を隠す');
+ ok(investigationRecord('door')===sheetInformation('ines').history.length-1,'別の行動履歴へ移動');
+ const secret=apply('gareth','inspect');ok(sheetInformation('gareth').history.at(-1).result.text!==secret.text,'未共有の他者の結果を開示');
+ publishReport('gareth',secret.text);ok(sheetInformation('gareth').history.at(-1).result.text===secret.text,'共有後の結果を表示しない');
+ state.room='entry';ok(investigationRecord('door')===-1,'別の部屋の履歴へ移動');apply('ines','inspect_cart');apply('ines','take');transferItem({item:'ironbar',from:'ines',to:'brom',mode:'give'});
+ ok(['ines','brom'].every(id=>sheetInformation(id).history.at(-1).result.text.includes('鉄の工具を譲渡')),'受け渡しの結果が双方にない');
+ ok(!sheetInformation('ines',state,[{id:'ines',action:'light',room:'entry'}]).history[0].result,'古い履歴に結果を捏造');
+ state=initial();chat=[];actionHistory=[];
+ ok(investigationRecord('cart',state,[{id:'brom',room:'entry',action:'inspect_cart',result:{text:'秘密'}}])===-1,'他者の履歴を本人の結果として表示');
+ ok(investigationRecord('cart',state,[{id:'ines',room:'entry',action:'inspect_cart'}])===-1,'結果のない古い履歴へのリンクを出す');
+
  ok(!targetPortrait('etching')&&!targetPortrait('cache'),'未発見の地点の寄り絵を先に表示');
  state.lit=true;state.everLit=true;const before=JSON.stringify(state);
  ok(targetPortrait('cart').includes('cart-v1.png'),'発見済み台車の寄り絵がない');

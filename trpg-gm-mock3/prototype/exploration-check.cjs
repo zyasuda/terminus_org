@@ -7,6 +7,27 @@ vm.runInContext(`(async()=>{
  let count=0;const ok=(v,m)=>{count++;if(!v)throw Error(m);},rejects=fn=>{try{fn();return false;}catch{return true;}};
  const realRender=render;render=()=>{};say=(who,text,kind='')=>chat.push({who,text,kind});
  function fixture(){humanRequests=[];state=initial();state.lit=true;state.everLit=true;actionHistory=[];chat=[];explorationOffers={};announcedPoints=new Set();}
+ fixture();state.room='hall';reportInvestigation(PEOPLE[0],'inspect',apply('ines','inspect'));revealProfile('lydia',[{key:'item2'}]);chat=[];
+ ok(cooperationConversation('ブロムが支え、ガレスが隙間から留め具を外してみて','all'),'実行不能の複数人への分担が相談へ流れる');
+ ok(chat.some(c=>c.kind==='gm'&&c.text.includes('支えられません')&&c.text.includes('イネスの能力'))&&!state.supported&&!state.opened,'水圧と担当の不備を訂正しないか勝手に実行');
+ ok(chat.every(c=>!c.text.includes('排水室'))&&currentMapOffer()?.holder==='lydia','未知の地名を明かすか地図の相談へつながらない');
+ const blockedBefore=JSON.stringify(state);
+ ok(cooperationConversation('水の圧力で動かないね','all')&&JSON.stringify(state)===blockedBefore,'行き詰まりの報告から状態を変更');
+ const blockedInput=dialogueInput(PEOPLE[2],false,null,null);
+ ok(blockedInput.blockedActions.some(b=>b.action==='support')&&blockedInput.blockedActions.some(b=>b.actor==='gareth'&&b.action==='crawl'),'仲間の判断へ実行不能の理由を渡さない');
+ state.drained=true;ok(!dialogueInput(PEOPLE[1],false,null,null).blockedActions.some(b=>b.action==='support'),'排水後も水圧の制約を残す');
+ fixture();state.room='hall';ok(!dialogueInput(PEOPLE[2],false,null,null).blockedActions.length,'未調査の仕掛けの条件を先に暴露');
+ fixture();state.room='hall';
+ const lockBefore=JSON.stringify(state);
+ ask=async()=>JSON.stringify({speech:'水の圧力か。ブロムが支えてくれるなら、俺の出番だな。鍵を外してみるよ。',action:'unlock',share:false,proposal:'unlock',shareClues:[]});
+ const lockOffer=await aiPlayer(PEOPLE[2]);
+ ok(lockOffer.action==='wait'&&lockOffer.proposal==='unlock','相談中の解錠指定で会話が止まる');
+ acceptAI(PEOPLE[2],lockOffer,false);
+ ok(state.locked&&actionHistory.length===0&&currentOffers().gareth?.action==='unlock','了承前に解錠するか申し出を失う');
+ ok(JSON.stringify(state)===lockBefore,'申し出への補正でゲーム状態を変更');
+ ok(!spokenOffer('unlock','鍵は外さない。')&&!spokenOffer('unlock','鍵は外せない。'),'否定を解錠の申し出にする');
+ ask=async()=>JSON.stringify({speech:'俺が火球を使う',action:'fire',share:false});
+ let invalidOffer=false;try{await aiPlayer(PEOPLE[2]);}catch{invalidOffer=true;}ok(invalidOffer,'候補外の行動を補正して受理');
  fixture();const job=(id,action,quote='調べて')=>({id,action,quote}),intent=(jobs,kind='request')=>({jobs,kind,clarify:''});
  ok(validateExplorationIntent(intent([job('brom','inspect_cart')]),'brom','台車を調べて').jobs.length===1,'明示した調査を受理できない');
  ok(rejects(()=>validateExplorationIntent(intent([job('gareth','inspect_cart')]),'brom','調べて')),'指定外の仲間を実行');
