@@ -53,5 +53,9 @@ vm.runInContext(`(async()=>{
  publishOwnClue('etching');ok(!state.discovery.shared.length&&!chat.length,'処理中に秘密を二重送信');busy=false;
  await publishOwnClue('cache_lock');ok(!state.discovery.shared.length,'知らない手がかりを共有');
  await publishOwnClue('etching');ok(state.discovery.shared.includes('etching')&&chat.length===1&&chat[0].kind==='you','本人の操作による既知情報の共有ができない');
+ state=initial();chat=[];state.knowledge.ines.push('軸に鉄片');busy=true;publishOwnKnowledge(0);ok(privateSummary().count===1&&!chat.length,'処理中に発見を二重送信');busy=false;
+ await publishOwnKnowledge(5);ok(privateSummary().count===1&&!chat.length,'存在しない発見を共有');
+ await publishOwnKnowledge(0);ok(privateSummary().count===0&&chat.length===1&&chat[0].kind==='you','手がかりでない自分の発見を共有できない');
+ await publishOwnKnowledge(0);ok(chat.length===1,'共有済みの発見を二重送信');
  return count;
 })()`,context).then(n=>console.log('PASS: '+n+' checks — 発見の重複整理・本人限定 / 未共有と共有済み / 現在の申し出・保留 / 古い申し出の除外 / 実結果の表示と会話形式維持 / 本人の情報共有 / 寄り絵の発見条件・状態保護 / 持ち物の画像・用途開示・所有追従')).catch(e=>{console.error(e);process.exitCode=1});
