@@ -11,7 +11,7 @@ const fs=require('node:fs'),vm=require('node:vm');
  const host={clientWidth:800,clientHeight:700,dataset:{},prepend(){},classList:{add(){},remove(){}}},controls={querySelector:()=>({textContent:''}),querySelectorAll:()=>lookButtons};
  const testMath=Object.create(Math);testMath.random=()=>.99;
  const context=vm.createContext({Math:testMath,GLTFLoader:class{load(){}},THREE:{...THREE,WebGLRenderer:Renderer,TextureLoader:Loader},document:{createElement:canvas,querySelector:()=>null,hidden:false},devicePixelRatio:1,performance:{now:()=>time},ResizeObserver:class{observe(){}},requestAnimationFrame:f=>frame=f});
- const source=fs.readFileSync(__dirname+'/stage.js','utf8').replace(/^import[^\n]*\n/gm,'').replace('export function createStage','function createStage');vm.runInContext(source,context);
+ const source=fs.readFileSync(__dirname+'/stage.js','utf8').replace(/^import[^\n]*\n/gm,'').replace('export const STAGE_DEFAULTS','const STAGE_DEFAULTS').replace('export function createStage','function createStage');vm.runInContext(source,context);
  const view=context.createStage(host,controls,()=>{}),tick=(n=60)=>{for(let i=0;i<n;i++){time+=34;frame(time);}},snapshot={room:'entry',phase:'explore',image:'mine_entrance',lit:true,end:false,battle:false,actors:[{id:'ines',heightCm:155,x:42,z:.03},{id:'lydia',heightCm:172,x:70,z:.1}],depth:{size:46,shrink:25}};
  view.sync(snapshot);tick();const before=JSON.stringify(snapshot),sprites=()=>rendered.children.filter(x=>x.isSprite),person=id=>rendered.children.find(x=>x.userData.actorId===id),lights=()=>rendered.children.filter(x=>x.material?.blending===THREE.AdditiveBlending);
  ok(lights().every(x=>!x.visible),'発言していないのに照明が点く');

@@ -1,8 +1,7 @@
 import * as THREE from './vendor/three/three.module.min.js';
 import {GLTFLoader} from './vendor/three/loaders/GLTFLoader.js';
 // 描画だけの舞台です。ゲーム状態・発見・所有物はindex.html側が管理します。
-export function createStage(host, controls, changed) {
- const config={
+export const STAGE_DEFAULTS=Object.freeze({
   // 左右に平行移動できる最大距離（舞台座標）。背景の端でも自動的に止まります。
   panX:6,
   // 左右ボタンで端へ移動する時間（秒）。
@@ -39,7 +38,9 @@ export function createStage(host, controls, changed) {
   spotFadeSeconds:.65,
   // 暖色／寒色。背景の昼夜や発見条件とは独立した演出です。
   spotColor:'warm',
- };
+});
+export function createStage(host, controls, changed) {
+ const config={...STAGE_DEFAULTS};
  const scene=new THREE.Scene();scene.background=new THREE.Color('#101c20');
  const camera=new THREE.PerspectiveCamera(config.fov,1,.1,100);camera.position.set(0,3.8,10);
  const renderer=new THREE.WebGLRenderer({antialias:true,alpha:false,preserveDrawingBuffer:true});renderer.setPixelRatio(Math.min(devicePixelRatio,1.5));renderer.outputColorSpace=THREE.SRGBColorSpace;

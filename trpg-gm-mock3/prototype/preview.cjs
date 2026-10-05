@@ -18,6 +18,12 @@ async function callCloudGemma(payload,{key=cloudKey(),model=CLOUD_MODEL,fetcher=
  if(!text)return {status:502,body:{error:{message:'クラウドGemmaの返答が空です。ゲーム状態は変更していません。'}}};
  return {status:200,body:{content:[{type:'text',text}],usage:{input_tokens:data.usageMetadata?.promptTokenCount||0,output_tokens:data.usageMetadata?.candidatesTokenCount||0},comparison:{connection:'cloud-gemma',model,unwrapped,durationMs:Date.now()-started}}};
 }
+function replaceRequired(source,before,after){if(!source.includes(before))throw Error('mock2中継の置き換え元が見つかりません: '+before);return source.replace(before,after);}
+function prepareRelaySource(source,localLLM){
+ source=replaceRequired(source,'const LLM_LOG_PATH = path.join(__dirname, "logs", "llm.jsonl");',`const LLM_LOG_PATH = ${JSON.stringify('/tmp/mock3-llm.jsonl')};`);
+ if(localLLM){source=replaceRequired(source,'if (process.env.LLM_API_KEY) {','if (process.env.LLM_API_KEY && BACKEND !== "ollama") {');source=replaceRequired(source,'think: !OLLAMA_ALWAYS_THINKS,','think: false,');}
+ return source;
+}
 function start(){
  process.env.LLM_BACKEND=process.env.MOCK3_LLM_BACKEND||'ollama';
  const localLLM=process.env.LLM_BACKEND==='ollama';
@@ -26,8 +32,7 @@ function start(){
  const relayPort=Number(process.env.MOCK3_RELAY_PORT)||8798,previewPort=Number(process.env.MOCK3_PREVIEW_PORT)||8797;
  process.env.PORT=String(relayPort);
  const mod=new Module(sourcePath,module);mod.filename=sourcePath;mod.paths=Module._nodeModulePaths(path.dirname(sourcePath));
- let source=fs.readFileSync(sourcePath,'utf8').replace('const LLM_LOG_PATH = path.join(__dirname, "logs", "llm.jsonl");',`const LLM_LOG_PATH = ${JSON.stringify('/tmp/mock3-llm.jsonl')};`);
- if(localLLM)source=source.replace('if (process.env.LLM_API_KEY) {','if (process.env.LLM_API_KEY && BACKEND !== "ollama") {').replace('think: !OLLAMA_ALWAYS_THINKS,','think: false,');
+ let source=prepareRelaySource(fs.readFileSync(sourcePath,'utf8'),localLLM);
  mod._compile(source,sourcePath);
  http.createServer(async(req,res)=>{
   try{
@@ -57,4 +62,4 @@ function start(){
  }).listen(previewPort,'127.0.0.1',()=>console.log('試作: http://127.0.0.1:'+previewPort+'/prototype/'));
 }
 if(require.main===module)start();
-module.exports={callCloudGemma};
+module.exports={callCloudGemma,prepareRelaySource};
