@@ -35,7 +35,7 @@ let humanRequests=[];
 const CHAT_JOKE_RATE=.2;
 const CHAT_TONE={ines:'観察好きで率直',brom:'温かい豪快さ。岩や力仕事への素朴な冗談',gareth:'乾いた皮肉。状況や自分の慎重さを軽く茶化す',lydia:'落ち着いた知的なユーモア'};
 const esc=t=>String(t).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-function initial(){return {profiles:initialProfiles(),items:initialItems(),transfers:[],navigation:{known:['entry'],maps:[],offer:null},phase:'explore',room:'entry',lit:false,everLit:false,discovery:{etching:false,cache:false,opened:false,stoneOn:false,clues:Object.fromEntries(PEOPLE.map(p=>[p.id,[]])),shared:[],proposals:[],hints:0},visited:['entry'],seen:{},holding:false,drained:false,observedDrain:false,locked:true,supported:false,opened:false,noisy:false,runes:false,weak:false,boss:24,round:1,fire:2,hp:Object.fromEntries(PEOPLE.map(p=>[p.id,p.hp])),knowledge:Object.fromEntries(PEOPLE.map(p=>[p.id,[]])),shared:[]};}
+function initial(){return {profiles:initialProfiles(),items:initialItems(),transfers:[],reports:[],navigation:{known:['entry'],maps:[],offer:null},phase:'explore',room:'entry',lit:false,everLit:false,discovery:{etching:false,cache:false,opened:false,stoneOn:false,clues:Object.fromEntries(PEOPLE.map(p=>[p.id,[]])),shared:[],proposals:[],hints:0},visited:['entry'],seen:{},holding:false,drained:false,observedDrain:false,locked:true,supported:false,opened:false,noisy:false,runes:false,weak:false,boss:24,round:1,fire:2,hp:Object.fromEntries(PEOPLE.map(p=>[p.id,p.hp])),knowledge:Object.fromEntries(PEOPLE.map(p=>[p.id,[]])),shared:[]};}
 // ownerは所有者、holderは今持っている人。貸すとholderだけが変わり、返却先はownerです。
 const ITEM_DEFS={
  rope:{name:'投げ縄',detail:'投げ縄による攻撃に使います。',start:'ines',slot:0},
@@ -219,7 +219,27 @@ const CLUES={
 };
 function knowsClue(id,key,s=state){return s.discovery.clues[id].includes(key)||s.discovery.shared.includes(key);}
 function learnClue(id,key,s=state){if(!s.discovery.clues[id].includes(key)){s.discovery.clues[id].push(key);if(!s.knowledge[id].includes(CLUES[key]))s.knowledge[id].push(CLUES[key]);}}
-function shareClue(id,key,s=state){if(!s.discovery.clues[id].includes(key))return false;if(!s.discovery.shared.includes(key)){s.discovery.shared.push(key);s.shared.push(PEOPLE.find(p=>p.id===id).name+'：'+CLUES[key]);}return true;}
+// 文章は共有時にだけ対応付け、以後の報告判定は対象と観察時の状態で行います。
+function reportVersion(target,s){
+ if(target==='door'||target==='water')return s.drained;
+ if(target==='cart')return s.items.ironbar?.holder||null;
+ if(target==='cache')return s.discovery.opened?s.items.lampstone.holder:null;
+ return null;
+}
+function publishReport(id,text,s=state,deduplicate=false){
+ const line=personName(id)+'：'+text;
+ if(!deduplicate||!s.shared.some(value=>value===line))s.shared.push(line);
+ const knowledge=s.knowledge[id].indexOf(text);
+ if(knowledge>=0&&!s.reports.some(r=>r.id===id&&r.knowledge===knowledge))s.reports.push({id,target:null,room:s.room,knowledge});
+ for(const target of Object.keys(TARGETS))for(const snapshot of [s,{...s,drained:!s.drained}]){
+  if(inspectText(id,target,snapshot)!==text)continue;
+  const version=reportVersion(target,snapshot);
+  if(!s.reports.some(r=>r.id===id&&r.target===target&&r.version===version))s.reports.push({id,target,room:s.room,version});
+ }
+}
+function hasReport(id,target,s=state,anyDrain=false){return s.reports.some(r=>r.id===id&&r.target===target&&(r.version===reportVersion(target,s)||(anyDrain&&['door','water'].includes(target))));}
+function sharedKnowledge(id,text,s=state){const knowledge=s.knowledge[id].indexOf(text);return knowledge>=0&&s.reports.some(r=>r.id===id&&r.knowledge===knowledge);}
+function shareClue(id,key,s=state){if(!s.discovery.clues[id].includes(key))return false;if(!s.discovery.shared.includes(key)){s.discovery.shared.push(key);publishReport(id,CLUES[key],s);}return true;}
 function discoveryTargets(s=state){return s.room==='entry'?[...(s.discovery.etching?['etching']:[]),...(s.discovery.cache?['cache']:[])]:[];}
 function visibleTargets(s=state){return [...(s.lit?ROOMS[s.room].targets:[]),...(s.lit?discoveryTargets(s):s.room==='entry'&&s.discovery.cache?['cache']:[])];}
 function canShowProposal(id,a,s=state){return !['decode','open_cache'].includes(a)||s.discovery.proposals.some(p=>p.id===id&&p.action===a);}
@@ -249,7 +269,7 @@ function actionsFor(id,s=state){
  if(id==='lydia'&&s.room==='entry'&&s.discovery.etching&&!s.discovery.clues.lydia.includes('darkness')&&knowsClue(id,'etching',s))out.push('decode');
  if(id==='gareth'&&s.room==='entry'&&s.discovery.cache&&!s.discovery.opened&&knowsClue(id,'cache_lock',s))out.push('open_cache');
  if(hasItem(id,'lampstone',s)&&!s.discovery.stoneOn)out.push('use_stone');
- if(id==='ines'&&s.room==='entry'&&(s.seen.ines?.includes('cart')||PEOPLE.slice(1).some(p=>s.seen[p.id]?.includes('cart')&&s.shared.includes(p.name+'：'+inspectText(p.id,'cart',s))))&&!s.items.ironbar)out.push('take');
+ if(id==='ines'&&s.room==='entry'&&(s.seen.ines?.includes('cart')||PEOPLE.slice(1).some(p=>s.seen[p.id]?.includes('cart')&&hasReport(p.id,'cart',s)))&&!s.items.ironbar)out.push('take');
  if(id==='ines'&&s.room==='drain'&&s.holding&&!s.drained&&hasItem(id,'ironbar',s))out.push('pry');
  if(s.room==='hall'&&!s.opened){if(id==='ines'&&!s.locked&&s.supported){out.push('crawl');if(hasItem(id,'ironbar',s))out.push('wedge');}if(id==='gareth'&&s.locked)out.push('unlock');if(id==='brom'&&!s.locked){if(s.drained&&!s.supported)out.push('support');out.push('smash');}}
  if(id==='brom'&&s.room==='drain'&&!s.holding&&!s.drained)out.push('hold');
@@ -329,7 +349,7 @@ function rememberMapOffer(p,speech){
 // 共有された実結果と公開の取得状態だけをまとめます。本人だけの発見は含めません。
 function conversationProgress(){
  return visibleTargets().map(t=>{
-  const reports=PEOPLE.filter(p=>state.seen[p.id]?.includes(t)&&[state,{...state,drained:!state.drained}].some(s=>state.shared.includes(p.name+'：'+inspectText(p.id,t,s)))).map(p=>p.name);
+  const reports=PEOPLE.filter(p=>state.seen[p.id]?.includes(t)&&hasReport(p.id,t,state,true)).map(p=>p.name);
   const status=t==='cart'&&state.items.ironbar?'工具取得済み':t==='wheel'&&state.drained?'排水済み':t==='door'&&state.opened?'開通済み':t==='door'&&state.supported?'支え中':t==='door'&&!state.locked?'解錠済み':t==='etching'&&state.discovery.shared.includes('darkness')?'解読済み':(t==='etching'&&state.discovery.shared.includes('etching')||reports.length)?'調査結果共有済み':'未共有';
   return {target:t,name:TARGETS[t].name,status,reporters:reports};
  });
@@ -409,7 +429,7 @@ async function handleNavigation(intent){
 }
 function privateSummary(s=state){
  const all=[...new Set(s.knowledge.ines)];
- const pending=all.filter(t=>!s.shared.includes('イネス：'+t)&&!s.discovery.shared.some(k=>CLUES[k]===t));
+ const pending=all.filter(t=>!sharedKnowledge('ines',t,s)&&!s.discovery.shared.some(k=>CLUES[k]===t));
  return {count:pending.length,latest:pending.at(-1)||'',clue:s.discovery.clues.ines.findLast(k=>!s.discovery.shared.includes(k)&&CLUES[k]===pending.at(-1))};
 }
 function conversationStatus(){
@@ -573,7 +593,7 @@ function profileText(id,key){return knowsProfile(id,key)?esc(profileFacts(id)[ke
 function sheetInformation(id,s=state,records=actionHistory){
  const own=id==='ines'?[...new Set(s.knowledge.ines)]:[];
  const known=new Set(s.discovery.shared.map(k=>CLUES[k]));
- const privateCount=[...new Set(s.knowledge[id])].filter(t=>!known.has(t)&&!s.shared.some(x=>x===PEOPLE.find(p=>p.id===id).name+'：'+t)).length;
+ const privateCount=[...new Set(s.knowledge[id])].filter(t=>!known.has(t)&&!sharedKnowledge(id,t,s)).length;
  return {own,privateCount,shared:[...s.shared],history:records.filter(c=>c.id===id).map(c=>({...c})),clues:s.discovery.shared.map(k=>CLUES[k]).filter(Boolean)};
 }
 // 既に知られている現所持品・貸している品の外観だけを表示します。
@@ -598,7 +618,7 @@ function sheet(id,tab='person',item=null){
   const held=knownItems(id),lent=Object.entries(state.items).filter(([item,r])=>r.owner===id&&r.holder!==id&&knowsProfile(r.holder,itemKey(r.holder,item)));
   content=`${selectedItem?`<section class="sheet-item-detail" id="sheetItemDetail" aria-label="${esc(selectedItem.name)}の外観"><img src="images/items/${selectedItem.id}-v1.png" alt="${esc(selectedItem.name)}" width="240" height="160"><div><h3>${esc(selectedItem.name)}</h3><p>${esc(selectedItem.detail)}</p><p class="sheet-muted">所持：${esc(personName(selectedItem.holder))}${selectedItem.owner!==selectedItem.holder?' · '+esc(personName(selectedItem.owner))+'から借りている':''}</p></div><button type="button" id="itemDetailClose" aria-label="アイテムの画像を閉じる">×</button></section>`:''}<h3>今の持ち物</h3>${held.length?table(['持ち物','用途・貸し借り'],held.map(item=>[Object.hasOwn(MAPS,item.id)?'<button data-open-map="'+item.id+'">'+esc(item.name)+'を広げる</button>':'<button class="sheet-item-link" data-item-view="'+item.id+'" aria-expanded="'+(selectedItem?.id===item.id)+'" aria-controls="sheetItemDetail">'+esc(item.name)+' <span aria-hidden="true">↗</span></button>',`${knowsProfile(id,itemKey(id,item.id,true))?esc(ITEM_DEFS[item.id].detail):'<span class="sheet-muted">詳しい用途はまだ聞いていない</span>'}${item.owner!==id?'<br><small>'+esc(personName(item.owner))+'から借りている</small>':''}`])):'<p class="sheet-muted">知られている持ち物はありません。本人に聞いてみましょう。</p>'}${lent.length?`<div class="sheet-block"><h3>貸している品</h3>${table(['持ち物','借りている人'],lent.map(([item,r])=>[Object.hasOwn(MAPS,item)?esc(ITEM_DEFS[item].name):'<button class="sheet-item-link" data-item-view="'+item+'" aria-expanded="'+(selectedItem?.id===item)+'" aria-controls="sheetItemDetail">'+esc(ITEM_DEFS[item].name)+' <span aria-hidden="true">↗</span></button>',esc(personName(r.holder))]))}</div>`:''}<div class="sheet-block"><h3>受け渡しの記録</h3>${state.transfers.some(t=>t.from===id||t.to===id)?`<ul class="sheet-notes">${state.transfers.filter(t=>t.from===id||t.to===id).map(t=>`<li>${esc(transferSummary(t))}</li>`).join('')}</ul>`:'<p class="sheet-muted">まだありません。</p>'}</div>`;
  }
- if(tab==='notes')content=`<h3>本人について知ったこと</h3>${state.profiles.history.filter(h=>h.id===id).length?`<ul class="sheet-notes">${state.profiles.history.filter(h=>h.id===id).map(h=>`<li><small>${esc(h.label||facts[h.key]?.label||'持ち物')} · ${esc(h.source)}</small>${esc(h.value||facts[h.key]?.value||'記録')}</li>`).join('')}</ul>`:'<p class="sheet-muted">まだ聞き取った記録はありません。</p>'}<div class="sheet-block"><h3>${id==='ines'?'あなたが得た情報':'本人から聞き取る情報'}</h3>${id==='ines'?(info.own.length?`<ol class="sheet-notes">${info.own.map((t,i)=>`<li><small>発見 ${i+1} · ${info.shared.some(x=>x==='イネス：'+t)||state.discovery.shared.some(k=>CLUES[k]===t)?'共有済み':'自分の記録'}</small>${esc(t)}${state.discovery.clues.ines.filter(k=>!state.discovery.shared.includes(k)&&CLUES[k]===t).map(k=>`<br><button class="private-note-share" data-share-clue="${k}" ${busy?'disabled':''}>この発見を皆に伝える</button>`).join('')}</li>`).join('')}</ol>`:'<p class="sheet-muted">まだ発見はありません。</p>'):`<p class="sheet-muted">未共有の記録：${info.privateCount}件。内容は本人に相談して聞き取ります。</p>`}<div class="sheet-block"><h3>共有済みの手がかり</h3>${info.clues.length?`<ul class="sheet-notes">${info.clues.map(t=>`<li>${esc(t)}</li>`).join('')}</ul>`:'<p class="sheet-muted">まだありません。</p>'}</div><div class="sheet-block"><h3>行動履歴</h3><p class="sheet-muted">本人が実行した行動だけを記録します。</p>${info.history.length?`<ol class="sheet-notes">${info.history.map((c,i)=>`<li><small>${i+1} · ${esc(ROOMS[c.room].name)} · ${c.initiator===id?'自発':esc(c.initiator==='gm'?'GM':PEOPLE.find(p=>p.id===c.initiator).name)+'の依頼'}</small>${esc(c.transfer?transferSummary(c.transfer):c.action==='move'?ROOMS[c.room].name+'へ移動':LABEL[c.action])}</li>`).join('')}</ol>`:'<p class="sheet-muted">まだ行動していません。</p>'}</div></div>`;
+ if(tab==='notes')content=`<h3>本人について知ったこと</h3>${state.profiles.history.filter(h=>h.id===id).length?`<ul class="sheet-notes">${state.profiles.history.filter(h=>h.id===id).map(h=>`<li><small>${esc(h.label||facts[h.key]?.label||'持ち物')} · ${esc(h.source)}</small>${esc(h.value||facts[h.key]?.value||'記録')}</li>`).join('')}</ul>`:'<p class="sheet-muted">まだ聞き取った記録はありません。</p>'}<div class="sheet-block"><h3>${id==='ines'?'あなたが得た情報':'本人から聞き取る情報'}</h3>${id==='ines'?(info.own.length?`<ol class="sheet-notes">${info.own.map((t,i)=>`<li><small>発見 ${i+1} · ${sharedKnowledge('ines',t)||state.discovery.shared.some(k=>CLUES[k]===t)?'共有済み':'自分の記録'}</small>${esc(t)}${state.discovery.clues.ines.filter(k=>!state.discovery.shared.includes(k)&&CLUES[k]===t).map(k=>`<br><button class="private-note-share" data-share-clue="${k}" ${busy?'disabled':''}>この発見を皆に伝える</button>`).join('')}</li>`).join('')}</ol>`:'<p class="sheet-muted">まだ発見はありません。</p>'):`<p class="sheet-muted">未共有の記録：${info.privateCount}件。内容は本人に相談して聞き取ります。</p>`}<div class="sheet-block"><h3>共有済みの手がかり</h3>${info.clues.length?`<ul class="sheet-notes">${info.clues.map(t=>`<li>${esc(t)}</li>`).join('')}</ul>`:'<p class="sheet-muted">まだありません。</p>'}</div><div class="sheet-block"><h3>行動履歴</h3><p class="sheet-muted">本人が実行した行動だけを記録します。</p>${info.history.length?`<ol class="sheet-notes">${info.history.map((c,i)=>`<li><small>${i+1} · ${esc(ROOMS[c.room].name)} · ${c.initiator===id?'自発':esc(c.initiator==='gm'?'GM':PEOPLE.find(p=>p.id===c.initiator).name)+'の依頼'}</small>${esc(c.transfer?transferSummary(c.transfer):c.action==='move'?ROOMS[c.room].name+'へ移動':LABEL[c.action])}</li>`).join('')}</ol>`:'<p class="sheet-muted">まだ行動していません。</p>'}</div></div>`;
  dialog.innerHTML=`<div class="sheet-header"><button id="sheetPrevious" class="sheet-person-switch previous" aria-label="前のキャラクター：${previous.name}" title="${previous.name}へ"><span aria-hidden="true">◀</span></button><img class="sheet-portrait" src="../replay/img/${id}.webp" alt="${p.name}"><div class="sheet-heading"><h2 id="sheetTitle">${p.name}</h2><p>${p.role}</p><div class="sheet-vitals"><div class="sheet-vital"><span>HP</span><div class="sheet-meter" role="progressbar" aria-label="HP" aria-valuemin="0" aria-valuemax="${p.hp}" aria-valuenow="${state.hp[id]}"><span style="width:${Math.max(0,Math.min(100,state.hp[id]/p.hp*100))}%"></span></div><span>${state.hp[id]} / ${p.hp}</span></div><div class="sheet-vital mp"><span>MP</span><div class="sheet-meter mp" role="img" aria-label="MP：数値未設定"></div><span>未設定</span></div></div></div><button id="closesheet" class="sheet-close">閉じる</button><button id="sheetNext" class="sheet-person-switch next" aria-label="次のキャラクター：${next.name}" title="${next.name}へ"><span aria-hidden="true">▶</span></button></div><nav class="sheet-nav" aria-label="記録の分類">${[['person','人物'],['ability','能力'],['items','持ち物'],['notes','情報・履歴']].map(([key,label])=>`<button data-sheet-tab="${key}" aria-pressed="${key===tab}">${label}</button>`).join('')}</nav><div class="sheet-content" tabindex="0" role="region" aria-label="キャラクターの記録内容">${content}</div><div class="sheet-contact"><label for="sheetMessage">${id==='ines'?'皆に話してみる':p.name+'に話しかけてみる'}</label><p role="status">${busy?'返答と人物設定を確認しています…':esc(state.profiles.feedback[id]||lanternStatus()||'全員に聞こえる会話です。選んだ相手が返答します。')}</p><form id="sheetChat"><div class="sheet-input"><input id="sheetMessage" maxlength="500" placeholder="${tab==='notes'?'調べて分かったことを教えて':tab==='ability'?'この能力で何を調べられそう？':'出身や得意なことを尋ねてみる'}" required ${busy?'disabled':''}><button type="button" class="mic-button" disabled aria-label="音声入力は準備中" aria-describedby="sheetMicNote" title="音声入力は準備中"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><rect x="9" y="2" width="6" height="12" rx="3"/><path d="M5 10v2a7 7 0 0 0 14 0v-2M12 19v3M8 22h8"/></svg></button></div><button type="submit" ${busy?'disabled':''}>${id==='ines'?'全員に話す':p.name+'に話す'}</button><button type="submit" data-gm="true" ${busy?'disabled':''}>GMに尋ねる</button></form><p id="sheetMicNote" class="sheet-mic-note" role="status">マイクを押して話し、聞き取った文を確認してから送信できます。</p></div>`;
  $('sheetPrevious').onclick=()=>{sheet(previous.id,tab);$('sheetPrevious').focus();};$('sheetNext').onclick=()=>{sheet(next.id,tab);$('sheetNext').focus();};
  dialog.querySelectorAll('[data-item-view]').forEach(b=>b.onclick=()=>{const key=b.dataset.itemView,open=dialog.dataset.item!==key;sheet(id,'items',open?key:null);(open?$('itemDetailClose'):dialog.querySelector('[data-item-view="'+key+'"]'))?.focus();});
@@ -687,7 +707,7 @@ inventoryは個別所有。自分が今持つ品だけ使える。贈り物や�
 }
 function reportInvestigation(p,a,out){
  sayResult(p.name+'（AI）','調べた結果：'+out.text,'');
- const line=p.name+'：'+out.text;if(!state.shared.includes(line))state.shared.push(line);
+ publishReport(p.id,out.text,state,true);
  for(const key of state.discovery.clues[p.id])if(CLUES[key]===out.text)shareClue(p.id,key);
  if(a==='inspect_cart'&&actionsFor('ines').includes('take'))askHuman(p.id,'take',p.id==='lydia'?'イネス、この工具を拾ってもらえる？':'イネス、工具を拾ってくれるか？ 仲間で使えそうだ。');
  delete explorationOffers[p.id];if($('sheet')?.open)$('sheet').close();cooperationFollowup(p.id,a);
@@ -832,7 +852,7 @@ function acceptAI(p,r,planning){
   if(safeInvestigation(r.action)){propose(p.id,r.action);const out=apply(p.id,r.action,state,'ines');reportInvestigation(p,r.action,out);render();return true;}
  }
  revealProfile(p.id,r.profileClaims||[]);say(p.name+'（AI）',r.speech);if(!planning){rememberMapOffer(p,r.speech);rememberHumanRequest(p.id,r.speech);}
- if(r.share)state.shared.push(p.name+'：'+r.speech);for(const key of r.shareClues||[])shareClue(p.id,key);
+ if(r.share)publishReport(p.id,r.speech);for(const key of r.shareClues||[])shareClue(p.id,key);
  if(r.proposal&&spokenOffer(r.proposal,r.speech)){propose(p.id,r.proposal);if(safeInvestigation(r.proposal)||COOPERATION_ACTIONS.includes(r.proposal)||r.proposal==='open_cache')explorationOffers[p.id]={room:state.room,action:r.proposal};}
  if(r.action!=='wait'&&(planning||r.requested&&state.phase==='explore')){
   if(planning)plan.push({id:p.id,action:r.action});else{const out=apply(p.id,r.action,state,'ines');if(!out.private){sayResult('GM',out.text,'gm');delete explorationOffers[p.id];cooperationFollowup(p.id,r.action);}}
@@ -1271,7 +1291,7 @@ function lanternRequest(text,to){
 // イネス自身の明確な宣言だけを実行し、質問・仮定・過去形は案内に残します。
 function wheelConversation(text,s=state){
  if(s.phase!=='explore'||s.room!=='drain'||!/(?:鉄片|引っ掛かり|引っかかり)|(?:操作輪|軸).*(?:外|取|除)/.test(text))return null;
- const known=s.holding||(s.seen.ines||[]).includes('wheel')||PEOPLE.slice(1).some(p=>(s.seen[p.id]||[]).includes('wheel')&&s.shared.includes(p.name+'：'+inspectText(p.id,'wheel',s)));
+ const known=s.holding||(s.seen.ines||[]).includes('wheel')||PEOPLE.slice(1).some(p=>(s.seen[p.id]||[]).includes('wheel')&&hasReport(p.id,'wheel',s));
  if(!s.lit)return {clarify:'まず灯りを確保して、操作輪の状態を確かめましょう。'};
  if(s.drained)return {clarify:'操作輪の引っ掛かりは外れて、排水済みです。'};
  if(!known)return {clarify:'先に操作輪を調べ、調べたことを仲間に伝えると、必要な作業を相談できます。'};

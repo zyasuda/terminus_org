@@ -167,10 +167,10 @@ vm.runInContext(`(async()=>{
  ok(!cooperationAdvice().action&&cooperationAdvice().speech.includes('もう開いて'),'開通後に扉の作業を勧める');
  fixture();state.room='hall';reportInvestigation(PEOPLE[2],'inspect',apply('gareth','inspect'));state.items.picks.holder='brom';chat=[];
  ok(cooperationConversation('石扉の鍵を外して','gareth')&&chat[0].text.includes('ブロム')&&chat[0].text.includes('貸して'),'能力があっても道具がない理由を伝えない');
- fixture();apply('brom','inspect_cart');state.shared.push('ブロム：'+inspectText('brom','cart',state));apply('ines','take');
+ fixture();apply('brom','inspect_cart');publishReport('brom',inspectText('brom','cart',state));apply('ines','take');
  chat=[{kind:'you',text:'何か他に気になるものはある？'}];const updatedInput=dialogueInput(PEOPLE[2],false,null,null);
  ok(!updatedInput.proposalChoices.inspect_cart&&updatedInput.proposalChoices.inspect_rails&&updatedInput.nextStep.action==='inspect_rails','取得済みの台車を自由会話の提案候補に残す');
- apply('gareth','inspect_rails');state.shared.push('ガレス：'+inspectText('gareth','rails',state));
+ apply('gareth','inspect_rails');publishReport('gareth',inspectText('gareth','rails',state));
  ok(!dialogueInput(PEOPLE[3],false,null,null).proposalChoices.inspect_rails&&!cooperationAdvice().action,'実結果共有後に同じハズレ調査を頼む');
  fixture();state.room='drain';
  for(const text of ['もし操作輪の鉄片を外してと言ったら','操作輪の鉄片を外さないで','次は反対の道に行こう','操作輪の鉄片を外せる？'])ok(!cooperationConversation(text,'brom')&&actionHistory.length===0,'仮定・反対・能力質問を実行依頼として取り扱う');
@@ -190,7 +190,7 @@ vm.runInContext(`(async()=>{
  fixture();chat=[];const beforeSubmitUI=updateRecipients;updateRecipients=()=>{};await submitMessage('次は何をすればいい？','brom');updateRecipients=beforeSubmitUI;
  ok(currentOffers().brom?.action==='inspect_cart'&&actionHistory.length===0&&chat.at(-1).text.includes('古い台車'),'入力欄から次の相談へ接続できないか了承前に調査');
  fixture();const ownActionUI=updateRecipients;updateRecipients=()=>{};
- apply('brom','inspect_cart');state.shared.push('ブロム：'+inspectText('brom','cart',state));askHuman('brom','take','イネス、工具を拾ってくれるか？');
+ apply('brom','inspect_cart');publishReport('brom',inspectText('brom','cart',state));askHuman('brom','take','イネス、工具を拾ってくれるか？');
  ok(currentHumanRequests('brom')[0]?.action==='take'&&!state.items.ironbar,'人間への依頼がないか了承前に取得');
  ok(humanMessageIntent('うん、拾うわ','brom').action==='take'&&humanMessageIntent('はい','brom').requester==='brom','自分の短い返事を識別できない');
  ok(humanMessageIntent('はい','gareth')===null,'指定外の相手の人間依頼を了承');
@@ -201,7 +201,7 @@ vm.runInContext(`(async()=>{
  ok(acted.performed&&hasItem('ines','ironbar')&&!$('sheet').open&&actionHistory.at(-1).id==='ines'&&actionHistory.at(-1).initiator==='ines','返事から本人が取得・シート閉鎖されないか履歴が他者の行動');
  ok(!currentHumanRequests().length&&chat.some(c=>c.who==='ブロム（AI）'&&c.text.includes('拾ってくれて助かる')),'実結果の受け答えか依頼の消費がない');
  const actionCount=actionHistory.length;await submitMessage('私が工具を拾う','all');ok(actionHistory.length===actionCount,'取得を二重実行');
- fixture();apply('brom','inspect_cart');state.shared.push('ブロム：'+inspectText('brom','cart',state));askHuman('brom','take','イネス、工具を拾って');
+ fixture();apply('brom','inspect_cart');publishReport('brom',inspectText('brom','cart',state));askHuman('brom','take','イネス、工具を拾って');
  explorationOffers.brom={room:'entry',action:'inspect_rails'};
  ok(humanMessageIntent('はい','brom').clarify&&!state.items.ironbar,'本人の申し出と人間への依頼の両方を了承');
  explorationOffers={};state.navigation.offer={holder:'lydia',item:'lydia_map',room:'entry'};
@@ -214,7 +214,7 @@ vm.runInContext(`(async()=>{
  await submitMessage('やめる','brom');ok(!humanRequests.length&&!state.items.ironbar,'断った依頼を残すか実行');
  ok(humanMessageIntent('工具を拾って、隙間を固定する','all').clarify,'複数の自分の行動を同時に実行');
  fixture();ok(humanMessageIntent('私が工具を拾う','all').clarify&&!state.items.ironbar,'未調査の工具を取得');
- apply('brom','inspect_cart');state.shared.push('ブロム：'+inspectText('brom','cart',state));rememberHumanRequest('gareth','イネス、工具を拾ってくれるか？');
+ apply('brom','inspect_cart');publishReport('brom',inspectText('brom','cart',state));rememberHumanRequest('gareth','イネス、工具を拾ってくれるか？');
  ok(currentHumanRequests('gareth').length===1,'人物照合後の自由発言から依頼を記録しない');
  rememberHumanRequest('lydia','イネス、工具を拾わないで');ok(!currentHumanRequests('lydia').length,'取り止めの発言を依頼として記録');
  move('hall');move('entry');ok(!humanRequests.length&&humanMessageIntent('はい','gareth')===null,'移動と帰還で古い依頼を使う');
