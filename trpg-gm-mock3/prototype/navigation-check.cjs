@@ -10,7 +10,7 @@ vm.runInContext(`(async()=>{
  const fixture=()=>{state=initial();chat=[];actionHistory=[];introduceInventory();chat=[];lanternDiscussion=null;pendingTransfer=null;explorationOffers={};recipient='all';busy=false;$('sheet').close();};
  fixture();
  ok(!visibleExits().length&&mapRecord().length===1,'暗闇で通路・未知の部屋を明示');
- ok(!navigationView().maps.some(m=>m.item==='ines_map'),'未紹介の人間の地図をAIへ開示');
+ ok(!hasItem('ines','ines_map')&&!Object.hasOwn(MAPS,'ines_map'),'イネスに試作用の坑道図が残る');
  const lit=apply('lydia','light');ok(!/石扉の広間|排水室/.test(lit.text),'点灯のGM文で未知の行き先を公開');
  ok(visibleExits().length===2&&visibleExits().every(e=>e.name===null)&&mapRecord().length===1,'見える通路と既知の地名を混同');
  ok(navigationIntent('排水室へ行こう').kind==='clarify','未確認の地名から自動で移動');
@@ -19,7 +19,7 @@ vm.runInContext(`(async()=>{
  ok(navigationIntent('リディア、地図を見せて').item==='lydia_map','紹介された相手の地図を特定できない');
  ok(navigationIntent('地図を見せて','lydia').holder==='lydia','個別の地図依頼が宛先と一致しない');
  ok(navigationIntent('地図を見せて','brom').kind==='clarify','地図を持たない相手への依頼を付け替え');
- ok(navigationIntent('私の坑道図を広げよう').item==='ines_map','自分の地図を使用できない');
+ ok(navigationIntent('坑道図を見せて').item==='lydia_map'&&navigationIntent('私の坑道図を広げよう').kind==='clarify','唯一の地図の特定や非所持品の拒否が不正');
  ok(navigationIntent('地図は持ってる？','lydia')===null,'所持品の質問だけで地図を開く');
  for(const text of ['もし排水室へ行くなら？','排水室へ行かないで','どっちにも行かないで','後で排水室へ行こう','排水室へ行く予定でした','地図を見せてもらった','地図を広げたわ','地図を広げてくれたね','排水室に行ってよかったね','排水室に行ったよ','入口へ戻ったわ','排水室へ行って欲しくない','地図を見せてほしくない','「排水室へ行こう」と言っていた'])ok(navigationIntent(text)===null,'相談・禁止・過去の発言で実行：'+text);
  const owner=JSON.stringify(state.items),visited=JSON.stringify(state.visited);readMap('lydia','lydia_map');
@@ -39,7 +39,7 @@ vm.runInContext(`(async()=>{
  fixture();apply('lydia','light');move('hall');move('entry');
  ok(visibleExits().find(e=>e.id==='hall').name==='石扉の広間'&&visibleExits().find(e=>e.id==='drain').name===null,'地図なしで訪ねた部屋と未訪問の部屋を区別できない');
  ok(mapRecord().length===2,'訪問だけで未訪問の分岐まで開示');
- fixture();state.discovery.stoneOn=true;readMap('ines','ines_map');ok(state.navigation.maps.includes('ines_map')&&state.navigation.known.length===3,'灯石の灯りで自分の地図を読めない');
+ fixture();state.discovery.stoneOn=true;readMap('lydia','lydia_map');ok(state.navigation.maps.includes('lydia_map')&&state.navigation.known.length===3,'灯石の灯りでリディアの地図を読めない');
  fixture();apply('lydia','light');const original=JSON.stringify(state);
  ok(rejects(()=>readMap('brom','lydia_map'))&&JSON.stringify(state)===original,'持っていない地図を読む');
  ok(rejects(()=>readMap('lydia','staff'))&&JSON.stringify(state)===original,'地図でない品を地図扱い');
@@ -60,7 +60,7 @@ vm.runInContext(`(async()=>{
  ok(sheetInformation('lydia').history.some(h=>h.action==='map'&&h.initiator==='ines'),'本人の地図を広げた行動履歴がない');
  ok($('sheet').innerHTML.includes('地図を見ながら皆に話してみる')&&state.room==='entry'&&state.visited.length===1,'地図表示だけで移動／地図から話せない');
  await submitMessage('排水室へ行こう','all');ok(state.room==='drain'&&!$('sheet').open&&actionHistory.filter(h=>h.action==='move').length===4,'地図からの会話で全員が移動しない・地図が閉じない');
- fixture();apply('lydia','light');calls=0;ok((await requestMap('ines','ines_map')).performed&&calls===0&&$('sheet').innerHTML.includes('イネスが持つ地図'),'自分の地図でAIに発言を代行させる');
+ fixture();apply('lydia','light');calls=0;ok(!(await requestMap('ines','lydia_map')).performed&&calls===0&&!$('sheet').open,'イネスにない地図を本人の品として開く');
  fixture();apply('lydia','light');ask=async()=>JSON.stringify({decision:'wait',speech:'今は少し待ってもらえる？'});
  ok(!(await requestMap('lydia','lydia_map')).performed&&!state.navigation.maps.length&&!$('sheet').open,'本人が保留しても地図を共有');
  ok(state.profiles.feedback.lydia.includes('待って'),'本人の保留理由がシートに表示されない');
@@ -77,4 +77,4 @@ vm.runInContext(`(async()=>{
  move('hall');state.opened=true;await submitMessage('石扉の奥へ進もう');ok(state.phase==='battle'&&state.boss===24,'開いた扉の先への会話が既存の戦闘へつながらない');
  fixture();ok(!state.navigation.maps.length&&state.navigation.known.join(',')==='entry'&&!state.navigation.offer,'再開始で地図・行き先の記憶が残る');
  return count;
-})()`,context).then(n=>console.log('PASS: '+n+' checks — 通路と地名の区別 / 2人の地図 / 未訪問情報の保護 / 個別所有・貸与 / 会話の相談と移動 / 本人の了承と古い応答 / 地図なし探索 / 戦闘への接続')).catch(e=>{console.error(e);process.exitCode=1});
+})()`,context).then(n=>console.log('PASS: '+n+' checks — 通路と地名の区別 / リディアの地図のみ / 未訪問情報の保護 / 個別所有・貸与 / 会話の相談と移動 / 本人の了承と古い応答 / 地図なし探索 / 戦闘への接続')).catch(e=>{console.error(e);process.exitCode=1});

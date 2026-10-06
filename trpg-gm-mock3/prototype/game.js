@@ -6,21 +6,21 @@ function aiPeople(){return PEOPLE.filter(p=>CONTROL[p.id]==='ai');}
 // 全員AIの確認時も、試作画面の閲覧・入力は先頭の人物を視点にします。
 function humanId(){return PEOPLE.find(p=>isHuman(p.id))?.id||PEOPLE[0].id;}
 const PEOPLE=[
- {id:'ines',heightCm:155,name:'イネス',role:(isHuman('ines')?'あなた':'AI')+'・斥候',hp:12,skill:'痕跡や仕掛けを調べる。狭い隙間へ入る。工具を使う。戦闘では弱点を見抜く。',tool:'坑道図と投げ縄',motive:'危険を負う前に仕組みを確かめたい。'},
+ {id:'ines',heightCm:155,name:'イネス',role:(isHuman('ines')?'あなた':'AI')+'・斥候',hp:12,skill:'痕跡や仕掛けを調べる。狭い隙間へ入る。工具を使う。戦闘では弱点を見抜く。',tool:'投げ縄',motive:'危険を負う前に仕組みを確かめたい。'},
  {id:'brom',heightCm:135,name:'ブロム',role:(isHuman('brom')?'あなた':'AI')+'・盾役',hp:18,skill:'重い扉や操作輪を支える。金槌で壊す。戦闘では仲間をかばう。',tool:'金槌と盾',motive:'力仕事を引き受けるが、仲間の考えも聞きたい。'},
  {id:'gareth',heightCm:184,name:'ガレス',role:(isHuman('gareth')?'あなた':'AI')+'・盗賊',hp:15,skill:'鍵を外す。戦闘では弱点を狙う。',tool:'錠前破りと短剣',motive:'危険や無駄を避け、手早く進みたい。'},
  {id:'lydia',heightCm:172,name:'リディア',role:(isHuman('lydia')?'あなた':'AI')+'・魔法使い',hp:12,skill:'ランタンを灯す・消す。古い文字や魔法の記号を読み解く。戦闘では火球を2回使える。',tool:'ランタン、記録板と杖、古い坑道の地図',motive:'仕組みを理解してから動きたい。'}
 ];
 const ROOMS={entry:{name:'坑道入口',image:'mine_entrance',targets:['cart','rails'],links:['hall','drain']},hall:{name:'石扉の広間',image:'s2_junction',targets:['door','rune'],links:['entry']},drain:{name:'排水室',image:'s7_inner_chamber',targets:['wheel','water'],links:['entry']}};
-// 通路の見え方と地図の記載。どちらの地図も同じ3地点を記した試作用の略図です。
+// 通路の見え方とリディアの地図の記載。
 const PASSAGES={entry:{hall:'奥へ続く通路',drain:'下りの通路'},hall:{entry:'入口へ戻る通路'},drain:{entry:'上りの通路'}};
-const MAPS={ines_map:{rooms:['entry','hall','drain'],caption:'坑道の位置関係を記した図。未訪問の場所は、まだ地図上の記載です。'},lydia_map:{rooms:['entry','hall','drain'],caption:'古い地図の記載です。現在も同じ状態かどうかは、訪れて確かめます。'}};
+const MAPS={lydia_map:{rooms:['entry','hall','drain'],caption:'古い地図の記載です。現在も同じ状態かどうかは、訪れて確かめます。'}};
 const TARGETS={etching:{name:'壁の傷',x:80,y:33},cache:{name:'隠し収納',x:82,y:44},cart:{name:'古い台車',x:21,y:58},rails:{name:'途切れたレール',x:63,y:43},door:{name:'石扉',x:46,y:40},rune:{name:'壁の刻み',x:15,y:53},wheel:{name:'操作輪',x:37,y:44},water:{name:'水溜まり',x:72,y:62}};
 const LABEL={map:'地図を広げる',retreat:'退路を確保する（撤退希望）',cache_support:'収納の解錠を支援する',wait:'相談を続ける',scout:'周囲の痕跡を探す',douse:'ランタンを消す',decode:'壁の傷の文字を解読する',find_cache:'塵が集まる場所を調べる',inspect_etching:'壁の傷を調べる',inspect_cache:'隠し収納を調べる',open_cache:'隠し収納の錠前を外す',use_stone:'灯石で足元を照らす',inspect:'石扉を調べる',inspect_cart:'台車を調べる',inspect_rails:'レールを調べる',inspect_rune:'刻みを調べる',inspect_wheel:'操作輪を調べる',inspect_water:'水溜まりを調べる',take:'鉄の工具を拾う',wedge:'工具で石扉の隙間を固定する',pry:'工具で操作輪の引っ掛かりを外す',light:'ランタンを灯す',hold:'操作輪を支える',smash:'金槌で石扉を壊す',crawl:'隙間に入り、留め具を外す',unlock:'鍵を外す',support:'石扉を支える',read:'壁の文字を読む',study:'弱点を見抜く',aid:'リディアを手助けする',throw:'投げ縄で攻撃する',cover:'前衛をかばう',strike:'金槌で打つ',stab:'急所を狙う',fire:'火球',spark:'石つぶて'};
 const ACTION_TARGET={decode:'etching',inspect_etching:'etching',inspect_cache:'cache',open_cache:'cache',inspect:'door',inspect_cart:'cart',inspect_rails:'rails',inspect_rune:'rune',inspect_wheel:'wheel',inspect_water:'water',take:'cart',wedge:'door',pry:'wheel',hold:'wheel',smash:'door',crawl:'door',unlock:'door',support:'door',read:'rune'};
 let redrawEffects=()=>{};
 let stageView=null;
-let aiConnection='cloud-gemma',aiModelInfo=null,aiLastTiming=null;
+let aiConnection='default',aiModelInfo=null,aiLastTiming=null;
 // ゲーム状態とは別の通信計測。呼び出し順・返答・許可判断は変更しません。
 let aiTurn=null,aiTurnSerial=0,aiLastTurn=null;
 const aiFallbacks={};
@@ -44,7 +44,6 @@ function initial(){return {profiles:initialProfiles(),items:initialItems(),trans
 // ownerは所有者、holderは今持っている人。貸すとholderだけが変わり、返却先はownerです。
 const ITEM_DEFS={
  rope:{name:'投げ縄',detail:'投げ縄による攻撃に使います。',start:'ines',slot:0},
- ines_map:{name:'坑道図',detail:'坑道の位置関係を記した図。',start:'ines',slot:1},
  hammer:{name:'金槌',detail:'障害物の破壊、戦闘での攻撃。',start:'brom',slot:0},
  shield:{name:'盾',detail:'仲間をかばうための防具。',start:'brom',slot:1},
  picks:{name:'錠前破り',detail:'錠前を外すための道具。',start:'gareth',slot:0},
@@ -163,7 +162,7 @@ const DEPTH_DEFAULT={
  size:46
 };
 const depth={...DEPTH_DEFAULT};
-let placement=null,placementState=null,placementKey='';
+let placement=null,placementState=null,placementKey='',battlePreview=false,previewPlacement=null;
 function makePlacement(battle,random=Math.random){
  const slots=battle?[26,52,40,13]:[30,51,73];
  if(!battle)for(let i=slots.length-1;i>0;i--){const j=Math.floor(random()*(i+1));[slots[i],slots[j]]=[slots[j],slots[i]];}
@@ -171,11 +170,12 @@ function makePlacement(battle,random=Math.random){
 }
 function projectActor(p,settings=depth){const scale=1-p.z*settings.shrink/100;return {x:p.x,bottom:4+p.z*settings.rise,height:settings.size*scale*((PEOPLE.find(person=>person.id===p.id)?.heightCm||172)/172),scale,layer:Math.round((1-p.z)*100)};}
 function renderPlacement(){
- const battle=state.phase==='battle',key=state.room+':'+state.phase;
- if(placementState!==state||placementKey!==key){placement=makePlacement(battle);placementState=state;placementKey=key;}
+ const battle=state.phase==='battle'||battlePreview,key=state.room+':'+state.phase;
+ if(placementState!==state||placementKey!==key){placement=makePlacement(state.phase==='battle');placementState=state;placementKey=key;}
+ if(battlePreview&&!previewPlacement)previewPlacement=makePlacement(true);
  $('figures').classList.toggle('battle-layout',battle);$('scene').classList.toggle('battle-scene',battle);
- $('figures').innerHTML=placement.map(p=>{const q=projectActor(p),person=PEOPLE.find(a=>a.id===p.id);return `<span class="scene-actor" data-actor="${p.id}" data-depth="${p.z.toFixed(3)}" data-scale="${q.scale.toFixed(3)}" style="left:${q.x}%;bottom:${q.bottom}%;height:${q.height}%;z-index:${q.layer}"><img src="../replay/img/${p.id}.webp" alt="${person.name}"></span>`;}).join('');
- $('figures').hidden=state.phase==='end';
+ $('figures').innerHTML=(battlePreview?previewPlacement:placement).map(p=>{const q=projectActor(p),person=PEOPLE.find(a=>a.id===p.id);return `<span class="scene-actor" data-actor="${p.id}" data-depth="${p.z.toFixed(3)}" data-scale="${q.scale.toFixed(3)}" style="left:${q.x}%;bottom:${q.bottom}%;height:${q.height}%;z-index:${q.layer}"><img src="../replay/img/${p.id}.webp" alt="${person.name}"></span>`;}).join('');
+ $('figures').hidden=state.phase==='end'&&!battlePreview;
  $('figures').querySelectorAll('img').forEach(img=>img.onload=placeTargetLabels);
  const enemy=projectActor({id:'guardian',x:80,z:.8});
  Object.assign($('bossimg').style,{left:enemy.x+'%',right:'auto',bottom:(enemy.bottom+10)+'%',height:enemy.height*1.28+'%'});
@@ -410,9 +410,8 @@ function navigationIntent(text,to=recipient,s=state){
   const named=PEOPLE.filter(p=>text.includes(p.name)),own=/私の|自分の|手元の/.test(text);
   let choices=mapOptions(s).filter(m=>to==='all'||m.holder===to);
   if(named.length)choices=choices.filter(m=>named.some(p=>p.id===m.holder));else if(own)choices=choices.filter(m=>m.holder===humanId());else if(to==='all')choices=choices.filter(m=>m.holder!==humanId());
-  if(text.includes('古い坑道の地図'))choices=choices.filter(m=>m.id==='lydia_map');else if(text.includes('坑道図'))choices=choices.filter(m=>m.id==='ines_map');
   if(approval&&!mapRequest)choices=choices.filter(m=>m.id===offer.item&&m.holder===offer.holder);
-  return choices.length===1?{kind:'map',holder:choices[0].holder,item:choices[0].id}:{kind:'clarify',text:'どの人の地図を見せてもらいますか？ 自分の地図を広げることもできます。'};
+  return choices.length===1?{kind:'map',holder:choices[0].holder,item:choices[0].id}:{kind:'clarify',text:'今、地図を持っている人に頼んでみましょう。'};
  }
  if(!moveWord)return null;
  if(/[？?]|行く方法|進む方法|行く理由|進む理由/.test(text)||/(?:行こう|行きましょう|行く|進もう|進みましょう|進む|戻ろう|戻りましょう|戻る)(?:か|かな)[。！？!?\s]*$/.test(text))return {kind:'route'};
@@ -473,18 +472,31 @@ function positionContextActions(){
  const pos=freeLabelPosition(origin,size,scene,obstacles);panel.style.left=pos.x+'px';panel.style.top=pos.y+'px';
 
 }
+let sceneVisualKey=null,sceneFadeMs=600,sceneFading=false,sceneFadePending=false;
+function sceneKey(){return state.phase+':'+state.room+':'+(state.outcome||'')+':'+battlePreview;}
 function render(){
+ const key=sceneKey();
+ if(sceneFading){sceneFadePending=true;return;}
+ if(sceneVisualKey===null||sceneVisualKey===key||!sceneFadeMs||matchMedia('(prefers-reduced-motion: reduce)').matches){sceneVisualKey=key;renderNow();return;}
+ const scene=$('scene'),out=Math.round(sceneFadeMs*.42),back=sceneFadeMs-out;
+ sceneFading=true;scene.style.transition=`filter ${out}ms ease-in`;scene.style.filter='brightness(0)';
+ setTimeout(()=>{
+  sceneVisualKey=sceneKey();renderNow();scene.style.transition=`filter ${back}ms ease-out`;void scene.offsetWidth;scene.style.filter='brightness(1)';
+  setTimeout(()=>{scene.style.removeProperty('filter');scene.style.removeProperty('transition');sceneFading=false;if(sceneFadePending){sceneFadePending=false;render();}},back);
+ },out);
+}
+function renderNow(){
  const followLog=$('log').scrollHeight-$('log').clientHeight-$('log').scrollTop<=80;
  positionGM();
- const battle=state.phase==='battle',end=state.phase==='end',room=ROOMS[state.room];document.querySelector('.world').classList.toggle('battle-world',battle);
+ const battle=state.phase==='battle'||battlePreview,end=state.phase==='end'&&!battlePreview,room=ROOMS[state.room];document.querySelector('.world').classList.toggle('battle-world',battle);
  if(target&&!visibleTargets().includes(target))target=null;
  $('phase').textContent=end?'結末':battle?'連携戦':'探索';
  $('place').textContent=end?(state.outcome==='retreat'?'坑道から撤退':'灯りが戻る'):battle?'灯りの番人':room.name;
  $('objective').textContent=end?'仲間と一緒に、村へ帰ろう。':battle?'胸の枠を開き、心石を戻す。':!state.lit?(blueDust()?'蒼白い塵が、壁の一角へ流れている。':'真っ暗だ。灯りがあれば、周囲を確かめられる。'):state.room==='entry'?'ランタンの光に、古い道と道具が浮かぶ。':state.room==='drain'?(state.drained?'水が引き、排水口が見えている。':(state.navigation.known.includes('hall')?'足元の水が、広間へ流れている。':'足元の水が、奥へ流れている。')):state.opened?'石扉が開いた。先へ進める。':state.observedDrain?'水が引いた。扉を動かせそうだ。':'石扉の下から水が染み出している。';
  $('scene').style.backgroundImage=`url('../replay/img/${battle||end?'s3_chamber_v2':room.image}.webp')`;
- $('scene').classList.toggle('dark',!state.lit);$('scene').classList.toggle('drained',state.lit&&state.room==='drain'&&state.drained);
+ $('scene').classList.toggle('dark',!state.lit&&!battlePreview);$('scene').classList.toggle('drained',!battlePreview&&state.lit&&state.room==='drain'&&state.drained);
  $('points').innerHTML=!battle&&!end?visibleTargets().map(t=>`<button class="target" style="left:${TARGETS[t].x}%;top:${TARGETS[t].y}%" data-target="${t}" aria-pressed="${target===t}">${t==='cache'&&state.discovery.opened?'開いた収納':t==='door'&&state.opened?'開いた石扉':t==='water'&&state.drained?'乾いた排水口':TARGETS[t].name}</button>`).join(''):'';
- if(blueDust()&&!state.discovery.cache)$('points').innerHTML+='<button class="dust-discovery" id="dustspot" aria-label="蒼白い塵が集まる場所を調べる"></button>';
+ if(!battle&&blueDust()&&!state.discovery.cache)$('points').innerHTML+='<button class="dust-discovery" id="dustspot" aria-label="蒼白い塵が集まる場所を調べる"></button>';
  if($('dustspot'))$('dustspot').onclick=()=>human('find_cache');
  $('points').querySelectorAll('[data-target]').forEach(b=>b.onclick=()=>{target=b.dataset.target;render();if($('actions').classList.contains('contextual'))($('actions').querySelector('[data-act]')||$('investigationResult')||$('contextClose')).focus();});
  renderPlacement();
@@ -492,8 +504,9 @@ function render(){
  $('exits').innerHTML=visibleExits().map(e=>`<button data-room="${e.id}" ${busy?'disabled':''}><span aria-hidden="true">↗</span> ${esc(e.name?e.name+'へ':e.passage)}</button>`).join('');$('exits').hidden=battle||end||!state.lit;$('exits').querySelectorAll('[data-room]').forEach(b=>b.onclick=()=>{if(!busy)travel(b.dataset.room);});
  $('party').innerHTML=PEOPLE.map(p=>`<button class="person ${p.id===humanId()?'mine':''}" data-person="${p.id}"><img src="../replay/img/${p.id}.webp" alt=""><span><strong>${p.name}</strong><small>${p.role.split('・').pop()} · ${state.hp[p.id]}/${p.hp}</small><span class="party-vitals"><span class="party-meter" role="progressbar" aria-label="${p.name}のHP" aria-valuemin="0" aria-valuemax="${p.hp}" aria-valuenow="${state.hp[p.id]}"><i style="width:${Math.max(0,Math.min(100,state.hp[p.id]/p.hp*100))}%"></i></span><span class="party-meter mp" role="img" aria-label="${p.name}のMP：数値未設定"></span></span></span></button>`).join('');$('party').querySelectorAll('button').forEach(b=>b.onclick=()=>sheet(b.dataset.person));
  let body=end?`<div class="end">${state.outcome==='retreat'?'仲間を連れて坑道から撤退した。作戦を変えて、もう一度挑もう。':'胸の枠が外れた。心石を戻すと、番人はランタンを掲げ、坑道の灯りが戻った。'}</div>`:battle?`<h3>${plan.length?'作戦の順番':'あなたの行動'}</h3><p>${plan.length?'各自が自分の行動を選び、順番を提案します。実行前に本人たちが連携を確認します。':'敵の予告を見て、自分の行動を選べます。固定のリーダーはいません。'}</p>`:`<h3>${!state.lit?(blueDust()?'暗闇の中を探る':'灯りを用意する'):target?TARGETS[target].name:'周囲を見渡す'}</h3><p>${!state.lit?(blueDust()?'塵の流れを目で追い、気になる場所を調べられます。':hasItem(humanId(),'lantern')?'手元のランタンを灯して、周囲を確かめましょう。':'灯りを持つ仲間に話しかけてみましょう。'):target?'自分でできる行動を選べます。仲間への依頼は会話で伝えます。':'調べたい場所を選ぶか、仲間に行き先を話して進めます。'}</p>`;
- if(plan.length){const approved=planReview?.key===planKey(plan)?planReview.approved:{};body+=`<div class="queue">${plan.map((p,i)=>`<div><b>${i+1}</b><span>${PEOPLE.find(x=>x.id===p.id).name}：${LABEL[p.action]}<small class="plan-vote">${p.id===humanId()?'あなたが選んだ行動':approved[p.id]===true?'本人が了承':approved[p.id]===false?'本人が再相談を希望':'本人の確認待ち'}</small></span>${p.id===humanId()?`<select id="ownBattleAction" aria-label="${personName(humanId())}自身の行動" ${busy?'disabled':''}>${actionsFor(humanId()).map(a=>`<option value="${a}" ${a===p.action?'selected':''}>${LABEL[a]}</option>`).join('')}</select>`:''}<button data-move="${i},-1" aria-label="${i+1}番の行動を上へ" ${busy||i===0?'disabled':''}>↑</button><button data-move="${i},1" aria-label="${i+1}番の行動を下へ" ${busy||i===plan.length-1?'disabled':''}>↓</button></div>`).join('')}</div><div class="plan-coordination"><strong>GM：連携の確認</strong>${planIssues(plan).map(x=>`<p>${esc(x.text)}</p>`).join('')||'<p>現在の行動と順番に、ルール上の食い違いはありません。</p>'}<p>順番や行動を変えると、本人の確認を取り直します。1回の調整で各AIが1回ずつ返答します。</p></div><div class="choices"><button id="coordinate" ${busy||plan.length!==4?'disabled':''}>仲間と連携を調整</button><button id="execute" class="primary" ${busy||!planReady()?'disabled':''}>この行動で進める</button><button id="cancelplan" ${busy?'disabled':''}>選び直す</button></div>`;
- }else if(!end){const own=actionsFor(humanId()).filter(a=>battle||ACTION_TARGET[a]===target&&canShowProposal(humanId(),a));if(!battle&&target)body=body.replace('自分でできる行動を選べます。仲間への依頼は会話で伝えます。',own.length?personName(humanId())+'ができること':'今、自分でできる操作はありません。仲間に相談できます。');body+=`<div class="choices">${own.map(a=>`<button data-act="${a}" ${busy?'disabled':''}>${LABEL[a]}</button>`).join('')}${!battle&&state.room==='hall'&&state.opened?`<button id="advance" class="primary" ${busy?'disabled':''}>石扉の奥へ進む</button>`:''}</div>`;}
+ if(battlePreview)body=`<h3>あなたの行動 · 表示確認</h3><p>戦闘画面のプレビューです。進行状態や持ち物は変わりません。</p><div class="choices">${ownedActions(humanId(),['study','aid','throw','retreat'],state).map(a=>`<button disabled>${LABEL[a]}</button>`).join('')}</div>`;
+ if(!battlePreview&&plan.length){const approved=planReview?.key===planKey(plan)?planReview.approved:{};body+=`<div class="queue">${plan.map((p,i)=>`<div><b>${i+1}</b><span>${PEOPLE.find(x=>x.id===p.id).name}：${LABEL[p.action]}<small class="plan-vote">${p.id===humanId()?'あなたが選んだ行動':approved[p.id]===true?'本人が了承':approved[p.id]===false?'本人が再相談を希望':'本人の確認待ち'}</small></span>${p.id===humanId()?`<select id="ownBattleAction" aria-label="${personName(humanId())}自身の行動" ${busy?'disabled':''}>${actionsFor(humanId()).map(a=>`<option value="${a}" ${a===p.action?'selected':''}>${LABEL[a]}</option>`).join('')}</select>`:''}<button data-move="${i},-1" aria-label="${i+1}番の行動を上へ" ${busy||i===0?'disabled':''}>↑</button><button data-move="${i},1" aria-label="${i+1}番の行動を下へ" ${busy||i===plan.length-1?'disabled':''}>↓</button></div>`).join('')}</div><div class="plan-coordination"><strong>GM：連携の確認</strong>${planIssues(plan).map(x=>`<p>${esc(x.text)}</p>`).join('')||'<p>現在の行動と順番に、ルール上の食い違いはありません。</p>'}<p>順番や行動を変えると、本人の確認を取り直します。1回の調整で各AIが1回ずつ返答します。</p></div><div class="choices"><button id="coordinate" ${busy||plan.length!==4?'disabled':''}>仲間と連携を調整</button><button id="execute" class="primary" ${busy||!planReady()?'disabled':''}>この行動で進める</button><button id="cancelplan" ${busy?'disabled':''}>選び直す</button></div>`;
+ }else if(!end&&!battlePreview){const own=actionsFor(humanId()).filter(a=>battle||ACTION_TARGET[a]===target&&canShowProposal(humanId(),a));if(!battle&&target)body=body.replace('自分でできる行動を選べます。仲間への依頼は会話で伝えます。',own.length?personName(humanId())+'ができること':'今、自分でできる操作はありません。仲間に相談できます。');body+=`<div class="choices">${own.map(a=>`<button data-act="${a}" ${busy?'disabled':''}>${LABEL[a]}</button>`).join('')}${!battle&&state.room==='hall'&&state.opened?`<button id="advance" class="primary" ${busy?'disabled':''}>石扉の奥へ進む</button>`:''}</div>`;}
  $('sceneTools').innerHTML=!battle&&!end?actionsFor(humanId()).filter(a=>['scout','use_stone','light','douse'].includes(a)).map(a=>`<button data-act="${a}" ${busy?'disabled':''}>${LABEL[a]}</button>`).join(''):'';
  $('sceneTools').querySelectorAll('[data-act]').forEach(b=>b.onclick=()=>human(b.dataset.act));
  if(!battle&&!end&&target&&investigationRecord(target)>=0){body=body.replace('今、自分でできる操作はありません。仲間に相談できます。','調査した結果を記録から確認できます。仲間への相談もできます。');body+='<button id="investigationResult">調査結果を見る</button>';}
@@ -511,9 +524,9 @@ function render(){
  if($('privateDetails'))$('privateDetails').onclick=()=>sheet(humanId(),'notes');
  $('private').querySelectorAll('[data-share-clue]').forEach(b=>b.onclick=()=>publishOwnClue(b.dataset.shareClue));
  $('private').querySelectorAll('[data-share-knowledge]').forEach(b=>b.onclick=()=>publishOwnKnowledge(Number(b.dataset.shareKnowledge)));
- const discussions=conversationStatus();$('conversationState').hidden=!discussions.length;$('conversationState').innerHTML=discussions.map(text=>'<div>'+esc(text)+'</div>').join('');
+ const discussions=battlePreview?[]:conversationStatus();$('conversationState').hidden=!discussions.length;$('conversationState').innerHTML=discussions.map(text=>'<div>'+esc(text)+'</div>').join('');
  if(stageView)stageView.sync(stageSnapshot());
- updateAIComparison();placeTargetLabels();positionContextActions();updateRecipients();$('message').disabled=busy;$('chat').querySelector('[type=submit]').disabled=busy;$('status').textContent=busy?(diceJob&&$('dicePanel').open?'GMが判定しています…':'AIの仲間が考えています…'):apiReady?'AI接続済み。仲間に話しかけてみてください。':'AI未接続。GMを選んで相談すると再試行できます。';redrawEffects();refreshOpenSheet();if(followLog&&!conversationFolded)$('log').scrollTop=$('log').scrollHeight;
+ updateAIComparison();placeTargetLabels();positionContextActions();updateRecipients();$('message').disabled=busy||battlePreview;$('chat').querySelector('[type=submit]').disabled=busy||battlePreview;$('mainMic').disabled=battlePreview;$('roleOpen').disabled=battlePreview;$('battlePreview').disabled=busy||state.phase==='battle';$('status').textContent=battlePreview?'戦闘画面のプレビュー中。設定のスイッチを切ると元の場面に戻ります。':busy?(diceJob&&$('dicePanel').open?'GMが判定しています…':'AIの仲間が考えています…'):apiReady?'AI接続済み。仲間に話しかけてみてください。':'AI未接続。GMを選んで相談すると再試行できます。';redrawEffects();refreshOpenSheet();if(followLog&&!conversationFolded)$('log').scrollTop=$('log').scrollHeight;
 }
 // 表示用の能力値の試案。ゲームの判定・HP・保存データには使いません。
 const SHEET_STATS={ines:[10,11,16,15,13,12],brom:[17,16,10,9,10,13],gareth:[11,12,17,16,12,10],lydia:[8,10,12,11,17,16]};
@@ -1185,10 +1198,10 @@ async function consultGM(question){if(state.phase==='explore'&&state.room==='ent
 function chronicleMarkdown(entries=chat){return '# クロニクル：坑道の向こう\n\nこの卓で交わした会話とGMの記録（mock3簡易版）。\n\n'+entries.filter(e=>e.kind!=='error').map((e,i)=>'## '+(i+1)+'. '+e.who+'\n\n'+e.text).join('\n\n');}
 function updateAIComparison(){
  const select=$('aiConnection');if(!select)return;select.disabled=busy;select.value=aiConnection;
- if(aiModelInfo){select.options[0].textContent=(aiModelInfo.backend==='ollama'?'ローカル':'既存接続')+' · '+aiModelInfo.model;const c=aiModelInfo.comparison;select.options[1].textContent='クラウド · '+(c?.cloudModel||'Gemma');select.options[1].disabled=!c?.cloudConfigured||!c?.cloudModelAccepted;
- $('aiModelStatus').textContent=aiConnection==='cloud-gemma'?'Google API · '+c.cloudModel:c?.cloudConfigured?(aiModelInfo.backend==='ollama'?'ローカル':'既存接続')+'で試遊中。クラウドへ切り替えられます。':'クラウドGemmaはAPIキー未設定です。';}
+ if(aiModelInfo){const primary=aiModelInfo.backend==='anthropic'?'Claude':aiModelInfo.backend==='ollama'?'ローカル':'既存接続';select.options[0].textContent=primary+' · '+aiModelInfo.model;const c=aiModelInfo.comparison;select.options[1].textContent='クラウド · '+(c?.cloudModel||'Gemma');select.options[1].disabled=!c?.cloudConfigured||!c?.cloudModelAccepted;
+ $('aiModelStatus').textContent=aiConnection==='cloud-gemma'?'Google API · '+c.cloudModel:primary+' · '+aiModelInfo.model+'で試遊中。'+(c?.cloudConfigured?'Gemmaへ切り替えられます。':'GemmaはAPIキー未設定です。');}
  const fallback=$('aiFallbacks');if(fallback)fallback.textContent='形式違反で読み飛ばした回数：'+Object.values(aiFallbacks).reduce((n,v)=>n+v,0)+'回'+(aiLastTurn?' · 直近の発言：'+aiLastTurn.calls+'呼出 · 合計 '+aiLastTurn.totalMs+' ms':'');
- if(aiLastTiming){const t=aiLastTiming;$('aiTiming').textContent='直近のAI通信：'+(t.connection==='cloud-gemma'?'クラウド':'既存接続')+' · '+t.durationMs+' ms · '+(t.ok?'応答あり':'通信エラー')+(t.ok?' · 入力 '+(t.usage.input_tokens||0)+' / 出力 '+(t.usage.output_tokens||0)+' トークン':'');}
+ if(aiLastTiming){const t=aiLastTiming;$('aiTiming').textContent='直近のAI通信：'+(t.connection==='cloud-gemma'?'Gemma':aiModelInfo?.backend==='anthropic'?'Claude':'既存接続')+' · '+t.durationMs+' ms · '+(t.ok?'応答あり':'通信エラー')+(t.ok?' · 入力 '+(t.usage.input_tokens||0)+' / 出力 '+(t.usage.output_tokens||0)+' トークン':'');}
 }
 function setupSystem(){
  const panel=$('systemPanel');
@@ -1201,11 +1214,13 @@ function setupSystem(){
  $('resetCancel').onclick=()=>{$('resetConfirm').hidden=true;$('reset').focus();};
  $('resetAccept').onclick=()=>{reset();$('resetConfirm').hidden=true;panel.close();};
  $('chronicleControls').ontoggle=()=>{if($('chronicleControls').open)refresh();};
- $('debugEnabled').onchange=e=>{$('effectControls').hidden=!e.target.checked;$('diceDemo').hidden=!e.target.checked;$('stageTuning').hidden=!e.target.checked;$('stageLightTuning').hidden=!e.target.checked;};
+ $('debugEnabled').onchange=e=>{$('effectControls').hidden=!e.target.checked;$('diceDemo').hidden=!e.target.checked;$('stageTuning').hidden=!e.target.checked;$('stageLightTuning').hidden=!e.target.checked;$('battlePreviewRow').hidden=!e.target.checked;$('battlePreviewNote').hidden=!e.target.checked;if(!e.target.checked&&battlePreview){battlePreview=false;previewPlacement=null;$('battlePreview').checked=false;render();}};
+ $('battlePreview').onchange=e=>{if(busy||state.phase==='battle'){e.target.checked=false;return;}battlePreview=e.target.checked;previewPlacement=null;panel.close();render();};
+ $('sceneFade').oninput=e=>{sceneFadeMs=Number(e.target.value);$('sceneFadeValue').textContent=(sceneFadeMs/1000).toFixed(1)+'秒';};
  $('chronicleExport').onclick=()=>{refresh();const blob=new Blob([chronicleMarkdown()],{type:'text/markdown;charset=utf-8'}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download='mock3_chronicle_'+new Date().toISOString().slice(0,10)+'.md';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);$('chronicleStatus').textContent='Markdownファイルを出力しました。';};
 }
 function recipientName(id){return id==='all'?'全員':id==='gm'?'GM':PEOPLE.find(p=>p.id===id).name;}
-function updateRecipients(){const name=recipientName(recipient);$('messageLabel').textContent=name+'に話しかける';document.querySelectorAll('input[name="recipient"]').forEach(input=>{input.checked=input.value===recipient;input.disabled=busy;});}
+function updateRecipients(){const name=recipientName(recipient);$('messageLabel').textContent=name+'に話しかける';document.querySelectorAll('input[name="recipient"]').forEach(input=>{input.checked=input.value===recipient;input.disabled=busy||battlePreview;});}
 function setupRecipients(){const allIcon='<svg viewBox="0 0 36 36" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="18" cy="11" r="4"/><circle cx="7" cy="15" r="3"/><circle cx="29" cy="15" r="3"/><path d="M10 29v-5q0-8 8-8t8 8v5M2 29v-5q0-5 5-5M34 29v-5q0-5-5-5"/></g></svg>';$('recipients').innerHTML='<legend>呼びかけ先</legend>'+[{id:'all',name:'全員'},...aiPeople(),{id:'gm',name:'GM'}].map(p=>`<label class="recipient-choice"><input type="radio" name="recipient" value="${p.id}"><span class="recipient-card">${p.id==='all'?allIcon:`<img src="${p.id==='gm'?'images/gm_mascot.png':'../replay/img/'+p.id+'.webp'}" alt="">`}<span>${p.name}</span></span></label>`).join('');document.querySelectorAll('input[name="recipient"]').forEach(input=>input.onchange=()=>{if(!busy){recipient=input.value;updateRecipients();}});updateRecipients();}
 function updateConversation(){const layout=document.querySelector('.layout');layout.classList.toggle('conversation-folded',conversationFolded);const toggle=$('conversationToggle');toggle.textContent=conversationFolded?'<<'+(conversationUnread?'\n未読 '+conversationUnread:''):'>>';toggle.setAttribute('aria-label',conversationFolded?'会話欄を開く'+(conversationUnread?'、未読'+conversationUnread+'件':''):'会話欄を畳む');toggle.title=conversationFolded?'会話欄を開く':'会話欄を畳む';toggle.setAttribute('aria-expanded',String(!conversationFolded));$('gmdrag').disabled=conversationFolded;(conversationFolded?$('conversation'):document.querySelector('.compose-body')).append($('gmstage'));(conversationFolded?document.querySelector('.sidehead'):document.querySelector('.compose-heading')).append($('systemOpen'));positionGM();}
 // 演出の初期値。塵は粒数、ほかは0〜100の強さです。
@@ -1332,7 +1347,7 @@ function wheelConversation(text,s=state){
  return {clarify:'ブロムが輪を支えています。鉄片を外す細かい作業は、工具を持つイネスが担当できます。「私が工具で鉄片を外す」と話すか、操作輪を選んで工具を使えます。'};
 }
 function submitMessage(text,to=recipient){
- if(!text||busy)return;
+ if(!text||busy||battlePreview)return;
  const turn={turnId:Date.now().toString(36)+'-'+(++aiTurnSerial),started:aiClock(),calls:0,totalMs:0,fallbacks:{}};aiTurn=turn;
  try{const result=submitMessageBody(text,to);if(result&&typeof result.then==='function')return result.finally(()=>{finishAITurn(turn);});finishAITurn(turn);return result;}catch(error){finishAITurn(turn);throw error;}
 }
@@ -1356,7 +1371,7 @@ function submitMessageBody(text,to=recipient){
  return run(async()=>{const epoch=generation;const transfer=await transferIntent(text,to);if(epoch!==generation||transfer?.stale)return;if(transfer?.cancelled){say('GM','保留していた受け渡しを取り消しました。','gm');return {performed:false};}if(transfer?.clarify){say('GM',transfer.clarify,'gm');return {performed:false};}if(transfer?.transfer)return handleTransfer(transfer.transfer,text);if(mentionsOwnProfile(text)){const audit=await auditProfile(humanId(),text);if(epoch!==generation)return;if(!audit.valid){state.profiles.feedback[humanId()]='GM：'+audit.conflicts.map(c=>profileFacts(humanId())[c.key].label+'は'+profileFacts(humanId())[c.key].value).join('／')+'。シートを確認して言い直してみましょう。';say('GM','イネスの自己紹介に設定との食い違いがあります。'+audit.conflicts.map(c=>profileFacts(humanId())[c.key].label+'：'+profileFacts(humanId())[c.key].value).join('／')+'。自分のシートを確認して言い直してみましょう。','gm');const at=state.shared.indexOf(personName(humanId())+'→'+name+'：'+text);if(at>=0)state.shared.splice(at,1);render();return;}delete state.profiles.feedback[humanId()];revealProfile(humanId(),audit.claims,state,'イネスの自己紹介');}if(to==='gm')return consultGM(text);const intent=await explorationIntent(text,to);if(epoch!==generation)return;if(intent.clarify){say('GM',intent.clarify,'gm');return;}return companions(false,to,intent.jobs);});
 }
 // 視線は端末内の表示状態。首を振るだけでは発見・共有・行動は変更しません。
-function stageSnapshot(){return {room:state.room,phase:state.phase,image:state.phase==='explore'?ROOMS[state.room].image:'s3_chamber_v2',lit:state.lit,end:state.phase==='end',battle:state.phase==='battle',actors:(state.phase==='explore'?[{id:humanId(),x:42,z:.03},...(placement||[])]:placement||[]).map(p=>({...p,heightCm:PEOPLE.find(person=>person.id===p.id).heightCm})),depth:{...depth},blueDust:blueDust(),cache:state.discovery.cache};}
+function stageSnapshot(){return {room:state.room,phase:battlePreview?'battle':state.phase,image:state.phase==='explore'&&!battlePreview?ROOMS[state.room].image:'s3_chamber_v2',lit:state.lit||battlePreview,end:state.phase==='end'&&!battlePreview,battle:state.phase==='battle'||battlePreview,actors:(battlePreview?(previewPlacement||makePlacement(true)):state.phase==='explore'?[{id:humanId(),x:42,z:.03},...(placement||[])]:placement||[]).map(p=>({...p,heightCm:PEOPLE.find(person=>person.id===p.id).heightCm})),depth:{...depth},blueDust:!battlePreview&&blueDust(),cache:state.discovery.cache};}
 function placeStagePoints(){
  if(!stageView)return;
  if(!$('scene').classList.contains('stage-ready')){$('points').querySelectorAll('[data-target]').forEach(b=>b.hidden=false);if($('dustspot'))$('dustspot').hidden=false;$('actions').hidden=false;placeTargetLabels();return;}
@@ -1397,7 +1412,7 @@ function startVoice(inputId,button,status){
 }
 function setupVoice(){$('sheet').addEventListener('close',()=>{if(voiceSession?.inputId==='sheetMessage')stopVoice();});$('mainMic').onclick=()=>startVoice('message',$('mainMic'),$('mainVoiceStatus'));document.addEventListener('visibilitychange',()=>{if(document.hidden)stopVoice();});}
 
-function reset(){if(stageView){stageView.setLight('auto');$('stageLightMode').value='auto';}stopVoice();roleRequest++;if($('rolePanel')?.open)$('rolePanel').close();humanRequests=[];sheetDrafts={};pendingTransfer=null;explorationOffers={};announcedPoints=new Set();lanternDiscussion=null;recipient='all';conversationUnread=0;updateConversation();generation++;state=initial();busy=false;target=null;chat=[];plan=[];actionHistory=[];planReview=null;$('log').replaceChildren();introduceInventory();render();}
+function reset(){battlePreview=false;previewPlacement=null;$('battlePreview').checked=false;if(stageView){stageView.setLight('auto');$('stageLightMode').value='auto';}stopVoice();roleRequest++;if($('rolePanel')?.open)$('rolePanel').close();humanRequests=[];sheetDrafts={};pendingTransfer=null;explorationOffers={};announcedPoints=new Set();lanternDiscussion=null;recipient='all';conversationUnread=0;updateConversation();generation++;state=initial();busy=false;target=null;chat=[];plan=[];actionHistory=[];planReview=null;$('log').replaceChildren();introduceInventory();render();}
 
 // DOMへの接続と起動はここだけ。検査はこの関数を呼ばずに同じファイルを読みます。
 function bootGame(){

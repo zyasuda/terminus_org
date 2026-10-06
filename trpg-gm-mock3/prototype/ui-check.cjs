@@ -37,7 +37,7 @@ vm.runInContext(`(async()=>{
  ok(sheetItemView('brom','hammer').detail==='詳しい用途はまだ聞いていない','品名だけ既知なのに用途を開示');
  ok(sheetItemView('ines','rope').detail===ITEM_DEFS.rope.detail,'自分の品の用途を隠す');
  ok(JSON.stringify(state)===inventoryBefore,'画像閲覧で所有・知識を変更');
- ok(!sheetItemView('gareth','hammer')&&!sheetItemView('ines','ines_map')&&!sheetItemView('ines','../secret'),'別人の品や地図・未知の画像を開く');
+ ok(!sheetItemView('gareth','hammer')&&!sheetItemView('lydia','lydia_map')&&!sheetItemView('ines','../secret'),'別人の品や地図・未知の画像を開く');
  transferItem({item:'hammer',from:'brom',to:'ines',mode:'lend'});
  ok(sheetItemView('ines','hammer').holder==='ines'&&sheetItemView('brom','hammer').owner==='brom','貸与後の所持・所有の表示が不正');
  transferItem({item:'hammer',from:'ines',to:'brom',mode:'return'});
@@ -65,6 +65,18 @@ vm.runInContext(`(async()=>{
  ok(chat[0].kind===''&&chat[1].kind==='gm'&&Object.keys(chat[1]).join()==='who,text,kind','UIタグがAIの会話記録の形式を変更');
  const log=$('log');ok(!log.children[0].className.includes('result')&&log.children[1].className.includes('result'),'申し出と実結果に同じタグを表示');
  ok(log.children[1].children[0].children[0].textContent==='実行結果','実結果の表示タグがない');
+ const beforePreview=JSON.stringify(state),beforeChat=chat.length,exploreKey=sceneKey();previewPlacement=makePlacement(true,()=>.5);battlePreview=true;
+ const preview=stageSnapshot();ok(preview.battle&&preview.phase==='battle'&&preview.lit&&preview.actors.length===4&&preview.image==='s3_chamber_v2','戦闘プレビューの舞台と人物が揃わない');
+ ok(sceneKey()!==exploreKey&&JSON.stringify(state)===beforePreview,'プレビューがゲーム進行を変更');
+ submitMessage('試験中');ok(chat.length===beforeChat,'プレビュー中の会話が進行へ混入');
+ battlePreview=false;previewPlacement=null;ok(sceneKey()===exploreKey&&JSON.stringify(state)===beforePreview,'プレビューを閉じても元の進行に戻らない');
+ const timers=[],scene={offsetWidth:1,style:{filter:'',transition:'',removeProperty(key){delete this[key]}}},getElement=document.getElementById.bind(document);
+ document.getElementById=id=>id==='scene'?scene:getElement(id);setTimeout=fn=>timers.push(fn);matchMedia=()=>({matches:false});
+ let painted=0;renderNow=()=>{painted++;};sceneVisualKey=sceneKey();state.room='hall';render();
+ ok(scene.style.filter==='brightness(0)'&&painted===0,'前の場面が暗くなる前に次を描く');
+ timers.shift()();ok(painted===1&&scene.style.filter==='brightness(1)'&&sceneVisualKey===sceneKey(),'暗転中の場面更新と明転がない');
+ timers.shift()();ok(!sceneFading&&!scene.style.filter,'場面転換後の暗さが残る');
+ matchMedia=()=>({matches:true});state.room='entry';render();ok(painted===2&&!sceneFading,'動きを減らす設定で転換を待たせる');
  render=()=>{};companions=async()=>{};run=async fn=>fn();state=initial();learnClue('ines','etching');chat=[];busy=true;
  publishOwnClue('etching');ok(!state.discovery.shared.length&&!chat.length,'処理中に秘密を二重送信');busy=false;
  await publishOwnClue('cache_lock');ok(!state.discovery.shared.length,'知らない手がかりを共有');
@@ -74,4 +86,4 @@ vm.runInContext(`(async()=>{
  await publishOwnKnowledge(0);ok(privateSummary().count===0&&chat.length===1&&chat[0].kind==='you','手がかりでない自分の発見を共有できない');
  await publishOwnKnowledge(0);ok(chat.length===1,'共有済みの発見を二重送信');
  return count;
-})()`,context).then(n=>console.log('PASS: '+n+' checks — 発見の重複整理・本人限定 / 未共有と共有済み / 現在の申し出・保留 / 古い申し出の除外 / 実結果の表示と会話形式維持 / 本人の情報共有 / 寄り絵の発見条件・状態保護 / 持ち物の画像・用途開示・所有追従')).catch(e=>{console.error(e);process.exitCode=1});
+})()`,context).then(n=>console.log('PASS: '+n+' checks — 戦闘プレビューの表示・進行保護・復帰 / 場面転換の暗転・更新・明転・動き低減 / 発見の重複整理・本人限定 / 未共有と共有済み / 現在の申し出・保留 / 古い申し出の除外 / 実結果の表示と会話形式維持 / 本人の情報共有 / 寄り絵の発見条件・状態保護 / 持ち物の画像・用途開示・所有追従')).catch(e=>{console.error(e);process.exitCode=1});

@@ -20,7 +20,7 @@ vm.runInContext(`(async()=>{
   ok(!knowsProfile(r.id,'origin')&&!knowsProfile(r.id,'skill0')&&!knowsProfile(r.id,'stat0'),'持ち物紹介から経歴・技能・数値まで漏れた');
  }
  ok(!knowsProfile('lydia','item1')&&knowsProfile('lydia','item2'),'紹介していない杖まで公開／紹介した地図が非公開');
- ok(!knowsProfile('ines','item0',state,'brom')&&!knowsProfile('ines','item1',state,'lydia'),'人間の未発言の所持品を公開');
+ ok(!knowsProfile('ines','item0',state,'brom')&&!hasItem('ines','ines_map'),'人間の未発言の所持品を公開／坑道図を残す');
  ok(state.profiles.history.length===6&&state.profiles.history.every(h=>h.source==='持ち物の紹介'),'紹介の履歴が欠ける');
  ok(lanternDiscussion.voices['lydia:light']&&lanternCandidate(lanternDiscussion)===null,'本人の提案だけで点灯を確定');
  // 紹介直後の短い了承も、灯りの提案と宛先を照合する既存経路へ送ります。
@@ -44,7 +44,7 @@ vm.runInContext(`(async()=>{
  const key=itemKey('ines','rope');auditProfile=async(id,speech)=>({valid:true,claims:[{key,value:ITEM_DEFS.rope.name,quote:'投げ縄'}],conflicts:[]});
  await submitMessage('投げ縄があるよ','all');
  ok(PEOPLE.every(p=>knowsProfile('ines',key,state,p.id))&&replies===1,'一人称のない人間の持ち物紹介が更新されない');
- ok(!knowsProfile('ines','item1',state,'brom'),'人間が紹介していない地図まで公開');
+ ok(!hasItem('ines','ines_map')&&!knowsProfile('ines','item1',state,'brom'),'イネスの地図が復活する');
  state=initial();chat=[];auditProfile=async()=>({valid:true,claims:[],conflicts:[]});await submitMessage('投げ縄を使える人は？','all');
  ok(!knowsProfile('ines',key,state,'brom'),'品名の質問だけで人間の所持品を公開');
  state=initial();chat=[];auditProfile=async()=>({valid:false,claims:[],conflicts:[{key:'item0'}]});const previousReplies=replies;await submitMessage('私は金槌を持っています','all');

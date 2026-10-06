@@ -8,13 +8,13 @@ vm.runInContext(`(async()=>{
  render=()=>{};say=(who,text,kind='')=>chat.push({who,text,kind});
  const fixture=()=>{state=initial();actionHistory=[];chat=[];plan=[];lanternDiscussion=null;pendingTransfer=null;};fixture();
  const give=(item,from,to,mode='give')=>({item,from,to,mode});
- ok(Object.keys(state.items).length===9&&Object.values(state.items).every(r=>r.owner===r.holder),'初期装備の所有者が不正');
+ ok(Object.keys(state.items).length===8&&Object.values(state.items).every(r=>r.owner===r.holder),'初期装備の所有者が不正');
  ok(inventoryView('brom').items.length===2&&!inventoryView('brom').others.some(i=>i.id==='rope'),'他人の未開示の持ち物をAIに漏らす');
  ok(actionsFor('lydia').includes('light')&&!actionsFor('ines').includes('light'),'初期のランタン所持者が不正');
  ok(!publicView().inventory.some(i=>i.id==='rope')&&publicView().inventory.some(i=>i.id==='lantern'),'公開の持ち物の境界が不正');
  apply('lydia','light');apply('ines','inspect_cart');apply('ines','take');
  ok(hasItem('ines','ironbar')&&!hasItem('brom','ironbar'),'拾った工具が共有');
- ok(rejects(()=>acquireItem('brom','ironbar'))&&Object.keys(state.items).length===10,'同じ品を二重取得');
+ ok(rejects(()=>acquireItem('brom','ironbar'))&&Object.keys(state.items).length===9,'同じ品を二重取得');
  const gift=transferItem(give('ironbar','ines','brom'));
  ok(state.items.ironbar.owner==='brom'&&hasItem('brom','ironbar')&&!hasItem('ines','ironbar'),'譲渡で所有者・所持者が変わらない');
  ok(knownItems('brom').some(i=>i.id==='ironbar')&&!profileFacts('ines').item_ironbar&&profileFacts('brom').item_ironbar.value==='鉄の工具','シートと正本の持ち物が古い');
@@ -27,7 +27,7 @@ vm.runInContext(`(async()=>{
  ok(rejects(()=>transferItem(give('ironbar','ines','lydia','return'))),'貸主以外へ返却できる');
  apply('ines','pry');ok(state.drained,'借りた工具で排水できない');
  transferItem(give('ironbar','ines','brom','return'));ok(state.items.ironbar.owner==='brom'&&hasItem('brom','ironbar')&&!hasItem('ines','ironbar'),'返却で所持者が戻らない');
- ok(Object.keys(state.items).length===10&&state.transfers.length===3,'受け渡しで品が増える');
+ ok(Object.keys(state.items).length===9&&state.transfers.length===3,'受け渡しで品が増える');
  transferItem(give('ironbar','brom','ines','return'));ok(hasItem('ines','ironbar')&&state.items.ironbar.owner==='ines','譲った品を本人の了承で返してもらえない');
  fixture();transferItem(give('lantern','lydia','ines','lend'));ok(!actionsFor('lydia').includes('light')&&actionsFor('ines').includes('light'),'ランタンの所持者と操作権が一致しない');
  ok(lanternRequest('ランタンを灯して','lydia')==='light'&&lanternRequest('ランタンを灯して','brom')===null,'持っていない仲間の依頼を勝手に変更');
@@ -36,6 +36,7 @@ vm.runInContext(`(async()=>{
  transferItem(give('staff','lydia','ines'));ok(!actionsFor('lydia').includes('fire')&&!actionsFor('lydia').includes('spark')&&actionsFor('lydia').includes('retreat'),'杖なしで魔法か撤退まで消える');
  plan=[{id:'lydia',action:'fire'}];planReview={};transferItem(give('staff','ines','lydia'));ok(!plan.length&&!planReview,'装備変更で古い戦闘計画が残る');
  fixture();acquireItem('ines','ironbar');
+ ok((await transferIntent('これを渡すわ','lydia')).clarify,'複数アイテムから勝手に選択');
  ok(transferCandidates('この工具、ブロムに渡すわ','all').length===1,'自然な工具譲渡が特定できない');
  ok(!transferCandidates('この工具、ガレスに渡すわ','brom').length,'宛先と発言の相手が違う');
  transferItem(give('ironbar','ines','brom'));ok(!transferCandidates('工具をブロムに渡すわ','brom').length,'持っていない品の受け渡しを逆向きに実行');
@@ -45,7 +46,6 @@ vm.runInContext(`(async()=>{
  ask=async()=>{calls++;return JSON.stringify({kind:'request',index:0,quote:'工具を貸して'})};
  const borrowed=await transferIntent('工具を貸して','brom');ok(borrowed.transfer.from==='brom'&&borrowed.transfer.to==='ines','借りる人と貸す人を逆転');
  ok((await transferIntent('もし工具を借りたら？','brom'))===null&&(await transferIntent('工具を貸さないで','brom'))===null&&calls===0,'仮定・禁止で受け渡し');
- ok((await transferIntent('これを渡すわ','lydia')).clarify,'複数アイテムから勝手に選択');
  ok((await transferIntent('工具を貸して','all')).clarify,'相手なしで勝手に借りる');
  ask=async()=>JSON.stringify({kind:'request',index:0,quote:'偽の依頼'});let bad=false;try{await transferIntent('工具を借りたい','brom')}catch{bad=true}ok(bad,'未発言の引用で受け渡し');
  ask=async()=>{generation++;return JSON.stringify({kind:'request',index:0,quote:'工具を貸して'})};ok((await transferIntent('工具を借りたい','brom')).stale,'リセット前の意思を受理');
@@ -62,6 +62,6 @@ vm.runInContext(`(async()=>{
  ok(state.shared.some(x=>x.includes('譲渡'))&&chat.some(c=>c.kind==='gm'&&c.text.includes('持ち物を更新')),'確定した受け渡しが会話とクロニクルにない');
  fixture();acquireItem('ines','ironbar');ask=async()=>{generation++;return JSON.stringify({decision:'accept',speech:'ありがとう。'})};ok(!(await handleTransfer(t,'工具を渡す')).performed&&hasItem('ines','ironbar'),'古い了承で所有者を変更');
  fixture();acquireItem('ines','ironbar');ask=async()=>{transferItem(t);return JSON.stringify({decision:'accept',speech:'ありがとう。'})};failed=false;try{await handleTransfer(t,'工具を渡す')}catch{failed=true}ok(failed&&state.transfers.length===1,'並行の所有変更後に二重実行');
- fixture();ok(!state.transfers.length&&hasItem('lydia','lantern')&&Object.keys(state.items).length===9,'最初からで所有状態が残る');
+ fixture();ok(!state.transfers.length&&hasItem('lydia','lantern')&&Object.keys(state.items).length===8,'最初からで所有状態が残る');
  return count;
 })()`,context).then(n=>console.log('PASS: '+n+' checks — 個別所有 / 入手 / 譲渡・貸与・返却 / 装備と能力 / シートと記憶 / 宛先・曖昧な品 / 拒否と保留 / 通信・設定照合・古い応答 / 二重移動防止')).catch(e=>{console.error(e);process.exitCode=1});

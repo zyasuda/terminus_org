@@ -1,7 +1,12 @@
 const assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('node:vm');
-const {callCloudGemma}=require('./preview.cjs');
+const {callCloudGemma,cleanFencedJsonReply}=require('./preview.cjs');
 (async()=>{
  let count=0;const ok=(v,m)=>{count++;assert.ok(v,m)};let requests=[];
+ const claudeReply='```json\n{"speech":"ランタンを灯そう","action":"wait"}\n```\n\n補足の説明';
+ ok(JSON.parse(cleanFencedJsonReply(claudeReply)).speech==='ランタンを灯そう','ClaudeのJSON後の説明で会話が止まる');
+ ok(cleanFencedJsonReply('普通の返事')==='普通の返事','通常の文章を変更する');
+ ok(cleanFencedJsonReply('```json\n{"action":\n```\n補足')==='```json\n{"action":\n```\n補足','壊れたJSONを修復したことにする');
+ ok(cleanFencedJsonReply('```json\n{"action":"wait"}\n```\n```json\n{"action":"light"}\n```').includes('"light"'),'複数のJSONから恣意的に一つを選ぶ');
  const payload={system:'人物設定を守る',messages:[{role:'user',content:'質問1'},{role:'user',content:'質問2'},{role:'assistant',content:'返答'}],max_tokens:450};
  const fetcher=async(url,options)=>{requests.push({url,...options});return {ok:true,status:200,json:async()=>({candidates:[{content:{parts:[{thought:true,text:'内部の思考'},{text:'{"speech":"任せて"}'}]}}],usageMetadata:{promptTokenCount:34,candidatesTokenCount:8}})}};
  const result=await callCloudGemma(payload,{key:'test-secret',fetcher});const body=JSON.parse(requests[0].body);
@@ -29,9 +34,9 @@ const {callCloudGemma}=require('./preview.cjs');
  const ctx=vm.createContext({performance:{now:()=>100},fetch:async(url,options)=>{posted.push(JSON.parse(options.body));return {ok:true,json:async()=>result.body}},document:{getElementById:()=>null},crypto:require('node:crypto').webcrypto,AbortSignal});
  vm.runInContext(script,ctx,{filename:__dirname+'/game.js'});vm.runInContext('updateAIComparison=()=>{};state=initial();',ctx);
  const before=vm.runInContext('JSON.stringify(state)',ctx);await vm.runInContext("ask('人物設定',{question:'得意なことは？'})",ctx);
- vm.runInContext("aiConnection='default'",ctx);await vm.runInContext("ask('人物設定',{question:'得意なことは？'})",ctx);
- ok(posted[0].connection==='cloud-gemma'&&posted[1].connection==='default','既定クラウドか手動の接続切り替えが反映されない');
+ vm.runInContext("aiConnection='cloud-gemma'",ctx);await vm.runInContext("ask('人物設定',{question:'得意なことは？'})",ctx);
+ ok(posted[0].connection==='default'&&posted[1].connection==='cloud-gemma','既定Claudeか手動の接続切り替えが反映されない');
  delete posted[0].connection;delete posted[1].connection;ok(JSON.stringify(posted[0])===JSON.stringify(posted[1]),'比較時に人物・質問の入力を変える');
  ok(vm.runInContext('JSON.stringify(state)',ctx)===before,'接続切り替えでゲーム状態を変更');
- console.log('PASS: '+count+' checks — クラウドGemmaの送信形式・会話順・思考除外・キー非公開 / 未設定・制限・空応答・通信失敗 / 接続先別送信・同じ入力・状態維持 / 500だけ1秒後に1回再試行・同一入力・再試行上限');
+ console.log('PASS: '+count+' checks — ClaudeのJSON後の説明除外・通常文と不正JSONの保護 / クラウドGemmaの送信形式・会話順・思考除外・キー非公開 / 未設定・制限・空応答・通信失敗 / 接続先別送信・同じ入力・状態維持 / 500だけ1秒後に1回再試行・同一入力・再試行上限');
 })().catch(e=>{console.error(e);process.exitCode=1});

@@ -30,10 +30,17 @@ function prepareRelaySource(source,localLLM){
  if(localLLM){source=replaceRequired(source,'if (process.env.LLM_API_KEY) {','if (process.env.LLM_API_KEY && BACKEND !== "ollama") {');source=replaceRequired(source,'think: !OLLAMA_ALWAYS_THINKS,','think: false,');}
  return source;
 }
+function cleanFencedJsonReply(text){
+ if(typeof text!=='string')return text;
+ const match=/^```(?:json)?[ \t]*\r?\n([\s\S]*?)\r?\n```([\s\S]*)$/.exec(text.trim());
+ if(!match||match[2].includes('```')||match[2].includes('{')||match[2].includes('['))return text;
+ try{JSON.parse(match[1]);return match[1];}catch{return text;}
+}
 function start(){
- process.env.LLM_BACKEND=process.env.MOCK3_LLM_BACKEND||'ollama';
+ process.env.LLM_BACKEND=process.env.MOCK3_LLM_BACKEND||'anthropic';
  const localLLM=process.env.LLM_BACKEND==='ollama';
  if(localLLM){process.env.LLM_MODEL=process.env.MOCK3_LLM_MODEL||'gemma4:e4b';process.env.OLLAMA_NUM_CTX=process.env.MOCK3_OLLAMA_NUM_CTX||'8192';process.env.OLLAMA_HOST='http://127.0.0.1:11434';}
+ else if(process.env.LLM_BACKEND==='anthropic')process.env.LLM_MODEL=process.env.MOCK3_LLM_MODEL||'claude-haiku-4-5-20251001';
  const sourcePath=path.resolve(root,'../trpg-gm-mock2/server.cjs');
  const relayPort=Number(process.env.MOCK3_RELAY_PORT)||8798,previewPort=Number(process.env.MOCK3_PREVIEW_PORT)||8797;
  process.env.PORT=String(relayPort);
@@ -65,6 +72,10 @@ function start(){
     const callStarted=Date.now();
     const r=await fetch('http://127.0.0.1:'+relayPort+url.pathname,{method:req.method,headers:{'Content-Type':'application/json'},body:req.method==='POST'?body:undefined,signal:AbortSignal.timeout(90000)});
     let data=await r.text();if(url.pathname==='/api/gm')fs.appendFileSync('/tmp/mock3-llm.jsonl',JSON.stringify({ts:new Date().toISOString(),type:'ai-call',turnId,durationMs:Date.now()-callStarted,status:r.status})+'\n');
+    if(url.pathname==='/api/gm'&&r.ok&&process.env.LLM_BACKEND==='anthropic'){
+     const reply=JSON.parse(data);for(const part of reply.content||[])if(part.type==='text')part.text=cleanFencedJsonReply(part.text);
+     data=JSON.stringify(reply);
+    }
     if(url.pathname==='/api/model-info'&&r.ok){const info=JSON.parse(data);info.comparison={cloudModel:CLOUD_MODEL,cloudConfigured:!!cloudKey(),cloudModelAccepted:CLOUD_MODELS.includes(CLOUD_MODEL)};data=JSON.stringify(info);}
     res.writeHead(r.status,{'Content-Type':'application/json'});res.end(data);return;
    }
@@ -76,4 +87,4 @@ function start(){
  }).listen(previewPort,'127.0.0.1',()=>console.log('試作: http://127.0.0.1:'+previewPort+'/prototype/'));
 }
 if(require.main===module)start();
-module.exports={callCloudGemma,prepareRelaySource};
+module.exports={callCloudGemma,prepareRelaySource,cleanFencedJsonReply};
