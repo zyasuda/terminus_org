@@ -1106,6 +1106,18 @@ async function coordinatePlan(){
 }
 function execute(){if(busy||!planReady())return;openDice('battle');}
 
+// 戦闘のラウンドごとの番人の横移動。左右の幅は舞台座標で調整します。
+const BATTLE_ENEMY_ROUTE=[5.5,2,-2,-5.5,-2,2];
+function moveEnemyForRound(round){
+ const side=stageView?.config.battlePartySide==='right'?-1:1,target=BATTLE_ENEMY_ROUTE[(round-1)%BATTLE_ENEMY_ROUTE.length]*side;
+ if(!stageView)return target;
+ const from=stageView.config.battleEnemyX,start=performance.now(),source=state,epoch=generation,duration=450;
+ const place=x=>{stageView.config.battleEnemyX=x;$('battleEnemyX').value=x;$('battleEnemyXValue').textContent=x.toFixed(1);stageView.refreshLayout();};
+ if(matchMedia('(prefers-reduced-motion: reduce)').matches||from===target){place(target);return target;}
+ const step=now=>{if(state!==source||generation!==epoch||state.phase!=='battle')return;const t=Math.min(1,(now-start)/duration),ease=t*t*(3-2*t);place(from+(target-from)*ease);if(t<1)requestAnimationFrame(step);};
+ requestAnimationFrame(step);return target;
+}
+
 // 判定の演出時間（ms）。ゲーム用の乱数は1判定に1回だけ使用します。
 const DICE_CONFIG={
  // ダイスが転がる演出時間。単位ms。判定結果は変えません。
@@ -1180,7 +1192,7 @@ function setupDice(){
     const entry=document.createElement('div');entry.className='dice-record';entry.textContent=line;const source=document.createElement('small');source.textContent=r.source;entry.append(source);$('diceRecords').append(entry);
    }
    if(job.mode!=='demo'){
-    if(job.source!==state)return;state=draft;if(job.mode==='battle'){job.items.forEach((p,i)=>recordAction(p.id,p.action,p.id,state.room,{text:results[job.items.every(x=>x.action==='retreat')?0:i]}));plan=[];planReview=null;}else if(job.mode==='cache'){recordAction('gareth','open_cache',humanId(),state.room,{text:results[0]});if($('diceSupport').checked)recordAction('ines','cache_support',humanId(),state.room,{text:'照明と見張りで解錠を支援した。'+results[0]});}
+    if(job.source!==state)return;state=draft;if(job.mode==='battle'){job.items.forEach((p,i)=>recordAction(p.id,p.action,p.id,state.room,{text:results[job.items.every(x=>x.action==='retreat')?0:i]}));plan=[];planReview=null;if(state.phase==='battle'&&stageView&&records.some(r=>!r.hit&&r.action!=='study')){const previous=stageView.config.battleEnemyX,next=moveEnemyForRound(state.round);if(next!==previous)results.push('番人が'+(next<previous?'左':'右')+'へ身をかわした。');}}else if(job.mode==='cache'){recordAction('gareth','open_cache',humanId(),state.room,{text:results[0]});if($('diceSupport').checked)recordAction('ines','cache_support',humanId(),state.room,{text:'照明と見張りで解錠を支援した。'+results[0]});}
     records.forEach(r=>say('GM',PEOPLE.find(p=>p.id===r.id).name+'の判定：'+r.n+'＋'+r.bonus+'＝'+r.total+'（'+r.source+' / 目標'+r.target+'）'+(r.outcome==='partial'?'代償つき成功':r.hit?'成功':'失敗'),'gm'));results.forEach(t=>sayResult('GM',t,'gm'));
     if(job.mode==='cache')say('ガレス',records[0].outcome==='failure'?'仕組みは掴めた。次は開けられそうだ。':records[0].outcome==='partial'?'開いたけど、音を立てたな。奥に気をつけよう。':'静かに開いた。灯石を持っていこう。');
     else if(state.phase==='battle'){const actor=records.find(r=>!isHuman(r.id));if(actor)say(PEOPLE.find(p=>p.id===actor.id).name,actor.hit?'手応えはあった。次の動きに備えよう。':'捉えきれなかった。支援や順番を考え直そう。');}
@@ -1214,7 +1226,7 @@ function setupSystem(){
  $('resetCancel').onclick=()=>{$('resetConfirm').hidden=true;$('reset').focus();};
  $('resetAccept').onclick=()=>{reset();$('resetConfirm').hidden=true;panel.close();};
  $('chronicleControls').ontoggle=()=>{if($('chronicleControls').open)refresh();};
- $('debugEnabled').onchange=e=>{$('effectControls').hidden=!e.target.checked;$('diceDemo').hidden=!e.target.checked;$('stageTuning').hidden=!e.target.checked;$('stageLightTuning').hidden=!e.target.checked;$('battlePreviewRow').hidden=!e.target.checked;$('battlePreviewNote').hidden=!e.target.checked;if(!e.target.checked&&battlePreview){battlePreview=false;previewPlacement=null;$('battlePreview').checked=false;render();}};
+ $('debugEnabled').onchange=e=>{$('effectControls').hidden=!e.target.checked;$('diceDemo').hidden=!e.target.checked;$('stageTuning').hidden=!e.target.checked;$('battleTuning').hidden=!e.target.checked;$('stageLightTuning').hidden=!e.target.checked;$('battlePreviewRow').hidden=!e.target.checked;$('battlePreviewNote').hidden=!e.target.checked;if(!e.target.checked&&battlePreview){battlePreview=false;previewPlacement=null;$('battlePreview').checked=false;render();}};
  $('battlePreview').onchange=e=>{if(busy||state.phase==='battle'){e.target.checked=false;return;}battlePreview=e.target.checked;previewPlacement=null;panel.close();render();};
  $('sceneFade').oninput=e=>{sceneFadeMs=Number(e.target.value);$('sceneFadeValue').textContent=(sceneFadeMs/1000).toFixed(1)+'秒';};
  $('chronicleExport').onclick=()=>{refresh();const blob=new Blob([chronicleMarkdown()],{type:'text/markdown;charset=utf-8'}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download='mock3_chronicle_'+new Date().toISOString().slice(0,10)+'.md';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);$('chronicleStatus').textContent='Markdownファイルを出力しました。';};
@@ -1231,9 +1243,10 @@ const LIGHTNING_CONFIG={firstDelay:3.5,minInterval:7,maxInterval:15,
  duration:.75};
 function lightningLevel(age,duration=LIGHTNING_CONFIG.duration){return age<0||age>=duration?0:(1-age/duration)**2;}
 const fx={...FX_DEFAULT};
+function isOutsideScene(){return state.room==='entry'&&state.phase==='explore'&&!battlePreview;}
 function setupEffects(){
  const panel=$('effectControls');
- panel.innerHTML=`<summary>演出テスト・調整</summary><div class="effect-fields">${[['dust','漂う塵',60],['flame','ランタンの揺らぎ',100],['fog','霧の濃さ',100],['rain','雨の量',100],['wind','風の向き・強さ',100],['lightning','雷光の強さ',100]].map(([id,label,max])=>`<label>${label}<input id="fx-${id}" type="range" min="${id==='wind'?-100:0}" max="${max}" value="${fx[id]}" aria-label="${label}"><output id="fx-value-${id}" for="fx-${id}">${fx[id]}</output></label>`).join('')}${[['shrink','奥の縮小率',0,60],['rise','奥の足元の高さ',0,28],['size','人物の基準サイズ',30,60]].map(([id,label,min,max])=>`<label>${label}<input id="depth-${id}" type="range" min="${min}" max="${max}" value="${depth[id]}" aria-label="${label}"><output id="depth-value-${id}">${depth[id]}%</output></label>`).join('')}<button id="fx-lightning-test" type="button">雷光を試す</button><button id="depth-shuffle" type="button">立ち位置を配置し直す</button><label class="effect-check"><input type="checkbox" id="fx-outside" checked>霧と雨は入口（屋外）のみ</label><label class="effect-check"><input type="checkbox" id="fx-pause">動きを停止して比較</label><button id="fx-reset" type="button">演出を初期値へ</button><p>塵とランタンの光は点灯後に表示。雨のある入口では雷光が時折走ります。雷光を試すボタンはどのシーンでも使えます。天候はゲーム進行を変えません。値は再読み込みで戻ります。</p></div>`;
+ panel.innerHTML=`<summary>演出テスト・調整</summary><div class="effect-fields">${[['dust','漂う塵',60],['flame','ランタンの揺らぎ',100],['fog','霧の濃さ',100],['rain','雨の量',100],['wind','風の向き・強さ',100],['lightning','雷光の強さ',100]].map(([id,label,max])=>`<label>${label}<input id="fx-${id}" type="range" min="${id==='wind'?-100:0}" max="${max}" value="${fx[id]}" aria-label="${label}"><output id="fx-value-${id}" for="fx-${id}">${fx[id]}</output></label>`).join('')}${[['shrink','奥の縮小率',0,60],['rise','奥の足元の高さ',0,28],['size','人物の基準サイズ',30,60]].map(([id,label,min,max])=>`<label>${label}<input id="depth-${id}" type="range" min="${min}" max="${max}" value="${depth[id]}" aria-label="${label}"><output id="depth-value-${id}">${depth[id]}%</output></label>`).join('')}<button id="fx-lightning-test" type="button">雷光を試す</button><button id="depth-shuffle" type="button">立ち位置を配置し直す</button><label class="effect-check"><input type="checkbox" id="fx-outside" checked>霧は入口（屋外）のみ</label><label class="effect-check"><input type="checkbox" id="fx-pause">動きを停止して比較</label><button id="fx-reset" type="button">演出を初期値へ</button><p>塵とランタンの光は点灯後に表示。雨のある入口では雷光が時折走ります。坑道内では雷光を表示しません。天候はゲーム進行を変えません。値は再読み込みで戻ります。</p></div>`;
  for(const id of ['dust','flame','fog','rain','wind','lightning'])$('fx-'+id).oninput=e=>{fx[id]=Number(e.target.value);$('fx-value-'+id).value=fx[id];};
  for(const id of ['shrink','rise','size'])$('depth-'+id).oninput=e=>{depth[id]=Number(e.target.value);$('depth-value-'+id).value=depth[id]+'%';renderPlacement();};
  $('depth-shuffle').onclick=()=>{placementKey='';renderPlacement();};
@@ -1241,7 +1254,7 @@ function setupEffects(){
  $('fx-pause').onchange=e=>fx.paused=e.target.checked;
  $('fx-reset').onclick=()=>{Object.assign(depth,DEPTH_DEFAULT);for(const id of ['shrink','rise','size']){$('depth-'+id).value=depth[id];$('depth-value-'+id).value=depth[id]+'%';}renderPlacement();Object.assign(fx,FX_DEFAULT);for(const id of ['dust','flame','fog','rain','wind','lightning']){$('fx-'+id).value=fx[id];$('fx-value-'+id).value=fx[id];}$('fx-outside').checked=fx.outdoorsOnly;$('fx-pause').checked=fx.paused;};
  const canvas=$('sceneEffects'),ctx=canvas.getContext('2d'),motion=matchMedia('(prefers-reduced-motion: reduce)');
- let w=0,h=0,time=0,last=0,lastDraw=0,flashStart=-100,nextFlash=LIGHTNING_CONFIG.firstDelay,flashSeed=1,flashState=null,flashRoom=null;
+ let w=0,h=0,time=0,last=0,lastDraw=0,flashStart=-100,nextFlash=LIGHTNING_CONFIG.firstDelay,flashSeed=1,flashState=null,flashRoom=null,flashOutside=null;
  function strike(){flashStart=time;flashSeed++;flashRoom=state.room;canvas.dataset.lightningStrikes=String(flashSeed-1);nextFlash=time+LIGHTNING_CONFIG.minInterval+Math.random()*(LIGHTNING_CONFIG.maxInterval-LIGHTNING_CONFIG.minInterval);}
  $('fx-lightning-test').onclick=()=>{strike();draw();if(motion.matches&&!fx.paused)setTimeout(()=>{flashStart=-100;draw();},LIGHTNING_CONFIG.duration*1000);};
  // 描画解像度を1.5倍までに制限し、演出は30fpsを上限とします。
@@ -1253,10 +1266,10 @@ function setupEffects(){
  const wrap=n=>((n%1)+1)%1;
  function draw(){
   ctx.clearRect(0,0,w,h);if(!state||!w||!h)return;
-  const lit=state.lit,weather=!fx.outdoorsOnly||state.room==='entry';
-  if(flashState!==state||flashRoom!==state.room){flashState=state;flashRoom=state.room;flashStart=-100;nextFlash=time+LIGHTNING_CONFIG.firstDelay;}
-  if(weather&&fx.rain>0&&fx.lightning>0&&!fx.paused&&!motion.matches&&time>=nextFlash)strike();
-  const flash=lightningLevel(time-flashStart)*fx.lightning/100*(motion.matches ? .35 : 1);
+  const lit=state.lit,outside=isOutsideScene(),weather=!fx.outdoorsOnly||outside;
+  if(flashState!==state||flashRoom!==state.room||flashOutside!==outside){flashState=state;flashRoom=state.room;flashOutside=outside;flashStart=-100;nextFlash=time+LIGHTNING_CONFIG.firstDelay;}
+  if(outside&&fx.rain>0&&fx.lightning>0&&!fx.paused&&!motion.matches&&time>=nextFlash)strike();
+  const flash=outside?lightningLevel(time-flashStart)*fx.lightning/100*(motion.matches ? .35 : 1):0;
   $('scene').style.setProperty('--lightning-flash',flash);
   $('scene').classList.toggle('lightning-flash',flash>0);
 
@@ -1280,7 +1293,7 @@ function setupEffects(){
   if(lit&&fx.dust){
    for(let i=0;i<fx.dust;i++){const x=wrap(noise(i+1)+time*(.004+noise(i+2)*.008))*w,y=wrap(noise(i+9)-time*.003+Math.sin(time*.35+i)*.02)*h;ctx.fillStyle=`rgba(249,222,164,${.12+noise(i+5)*.45})`;ctx.beginPath();ctx.arc(x,y,.7+noise(i+12)*1.5,0,Math.PI*2);ctx.fill();}
   }
-  if(weather&&fx.rain){
+  if(outside&&fx.rain){
    const count=Math.round(fx.rain*2.4),slant=fx.wind*.18;
    ctx.lineWidth=.8;
    for(let i=0;i<count;i++){const y=wrap(noise(i+200)+time*(.65+noise(i+201)*.45))*h,x=wrap(noise(i+300)+time*fx.wind*.001+slant*y/w*.015)*w,length=9+noise(i+400)*15;ctx.strokeStyle=`rgba(186,212,224,${.15+noise(i+500)*.3})`;ctx.beginPath();ctx.moveTo(x,y);ctx.lineTo(x-slant*.8,y-length);ctx.stroke();}

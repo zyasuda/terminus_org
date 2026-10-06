@@ -54,7 +54,10 @@ vm.runInContext(`(async()=>{
  state=initial();state.lit=true;state.everLit=true;explorationOffers.brom={room:'entry',action:'inspect_cart'};
  ok(conversationStatus().some(t=>t.includes('ブロムの申し出')&&t.includes('台車')),'申し出を実行結果と区別できない');
  ok(!state.seen.brom&&actionHistory.length===0,'申し出を表示しただけで実行');
- state.room='hall';ok(!conversationStatus().some(t=>t.includes('台車')),'前の場所の申し出を表示');
+ state.room='hall';ok(!isOutsideScene()&&!conversationStatus().some(t=>t.includes('台車')),'坑道内で雨が降るか前の場所の申し出を表示');
+ state.room='drain';ok(!isOutsideScene(),'排水室を屋外と判定');
+ state.room='entry';state.phase='battle';ok(!isOutsideScene(),'入口IDの戦闘を屋外と判定');
+ state.phase='end';ok(!isOutsideScene(),'探索終了後を屋外と判定');state.phase='explore';
  state.room='entry';state.seen.brom=['cart'];publishReport('brom',inspectText('brom','cart',state));ok(!conversationStatus().some(t=>t.includes('台車')),'済んだ一般調査を返事待ちとして表示');
  state=initial();state.lit=true;state.everLit=true;explorationOffers={};apply('brom','inspect_cart');publishReport('brom',inspectText('brom','cart',state));askHuman=()=>{};
  humanRequests=[{id:'brom',action:'take',room:'entry',epoch:generation,paused:true}];ok(conversationStatus().some(t=>t.includes('保留中')),'人間が保留した依頼の表示が異なる');
@@ -66,10 +69,11 @@ vm.runInContext(`(async()=>{
  const log=$('log');ok(!log.children[0].className.includes('result')&&log.children[1].className.includes('result'),'申し出と実結果に同じタグを表示');
  ok(log.children[1].children[0].children[0].textContent==='実行結果','実結果の表示タグがない');
  const beforePreview=JSON.stringify(state),beforeChat=chat.length,exploreKey=sceneKey();previewPlacement=makePlacement(true,()=>.5);battlePreview=true;
+ ok(!isOutsideScene(),'坑道内の戦闘プレビューを屋外と判定');
  const preview=stageSnapshot();ok(preview.battle&&preview.phase==='battle'&&preview.lit&&preview.actors.length===4&&preview.image==='s3_chamber_v2','戦闘プレビューの舞台と人物が揃わない');
  ok(sceneKey()!==exploreKey&&JSON.stringify(state)===beforePreview,'プレビューがゲーム進行を変更');
  submitMessage('試験中');ok(chat.length===beforeChat,'プレビュー中の会話が進行へ混入');
- battlePreview=false;previewPlacement=null;ok(sceneKey()===exploreKey&&JSON.stringify(state)===beforePreview,'プレビューを閉じても元の進行に戻らない');
+ battlePreview=false;previewPlacement=null;ok(isOutsideScene()&&sceneKey()===exploreKey&&JSON.stringify(state)===beforePreview,'プレビューを閉じても屋外の演出と進行に戻らない');
  const timers=[],scene={offsetWidth:1,style:{filter:'',transition:'',removeProperty(key){delete this[key]}}},getElement=document.getElementById.bind(document);
  document.getElementById=id=>id==='scene'?scene:getElement(id);setTimeout=fn=>timers.push(fn);matchMedia=()=>({matches:false});
  let painted=0;renderNow=()=>{painted++;};sceneVisualKey=sceneKey();state.room='hall';render();
