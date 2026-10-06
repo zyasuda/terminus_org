@@ -1,7 +1,7 @@
 const fs=require('node:fs'),vm=require('node:vm');
-const script=fs.readFileSync(__dirname+'/game.js','utf8');
+const loadPrototype=require('./load-prototype.cjs').load;
 const context=vm.createContext({document:{getElementById(){}},crypto:require('node:crypto').webcrypto});
-vm.runInContext(script,context,{filename:__dirname+'/game.js'});
+loadPrototype(context);
 vm.runInContext(`
 const ok=(v,m)=>{if(!v)throw Error(m);};
 state=initial();state.discovery.clues.lydia.push('未共有の秘密');const record=chronicleMarkdown([{who:'GM',text:'公開の記録',kind:'gm'},{who:'接続',text:'エラーの内部記録',kind:'error'}]);ok(record.includes('公開の記録')&&!record.includes('未共有の秘密')&&!record.includes('エラーの内部記録'),'クロニクルに非公開情報が混入');

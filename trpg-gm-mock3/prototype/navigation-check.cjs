@@ -1,9 +1,9 @@
 const fs=require('node:fs'),vm=require('node:vm');
-const script=fs.readFileSync(__dirname+'/game.js','utf8');
+const loadPrototype=require('./load-prototype.cjs').load;
 const elements={};
 function element(){const classes=new Set();return {innerHTML:'',textContent:'',dataset:{},style:{},open:false,classList:{add(c){classes.add(c)},remove(c){classes.delete(c)},contains(c){return classes.has(c)},toggle(){}},setAttribute(){},removeAttribute(){},querySelectorAll(){return []},close(){this.open=false},showModal(){this.open=true}};}
 const context=vm.createContext({document:{getElementById(id){return elements[id]??=element()}},crypto:require('node:crypto').webcrypto});
-vm.runInContext(script,context,{filename:__dirname+'/game.js'});
+loadPrototype(context);
 vm.runInContext(`(async()=>{
  let count=0;const ok=(value,message)=>{count++;if(!value)throw Error(message)},rejects=fn=>{try{fn();return false}catch{return true}};
  render=()=>{};updateRecipients=()=>{};announceVisiblePoints=()=>{};say=(who,text,kind='')=>chat.push({who,text,kind});

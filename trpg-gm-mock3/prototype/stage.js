@@ -1,64 +1,10 @@
 import * as THREE from './vendor/three/three.module.min.js';
 import {GLTFLoader} from './vendor/three/loaders/GLTFLoader.js';
-// 描画だけの舞台です。ゲーム状態・発見・所有物はindex.html側が管理します。
+// 描画だけの舞台です。進行はgame.js、章の条件と描画指定はscenario.jsが管理します。
+// index.htmlがgame.js→scenario.js→bootGame()の順で読み込んだ後、このモジュールを読みます。
 export const STAGE_FACINGS=Object.freeze(['front','front-left','front-right','back','back-left','back-right']);
 function facingAngle(direction,angle){const turn=THREE.MathUtils.degToRad(angle);return {front:0,'front-left':-turn,'front-right':turn,back:Math.PI,'back-left':Math.PI+turn,'back-right':Math.PI-turn}[direction];}
-export const STAGE_DEFAULTS=Object.freeze({
-  // 左右に平行移動できる最大距離（舞台座標）。背景の端でも自動的に止まります。
-  panX:6,
-  // 左右ボタンで端へ移動する時間（秒）。
-  scrollSeconds:.45,
-  // 探索シーンで1人だけ後ろを向かせる確率。戦闘では使いません。
-  backFacingRate:.35,
-  // 上への最大移動距離。さらに人物の胸元が画面下端に残る位置で止めます。
-  panY:5,
-  // 上限で残す身体の位置（足裏0、頭頂1）。胸元は0.64。
-  bustLine:.64,
-  // 手前の立ち位置（z）。大きいほどカメラへ近づきます。
-  frontRow:2.2,
-  // 手前・中間・奥・最奥の間隔。全幅は従来と同じ約3.2です。
-  rowGap:1.07,
-  // 両端の人物を中央へ向ける最大角度（度）。中央ほど正面へ戻します。
-  inwardAngle:12,
-  // 戦闘時、仲間全員を左右へ寄せる距離。
-  battlePartyX:0,
-  // 戦闘開始時に決める仲間の配置側。敵の移動では変えません。
-  battlePartySide:'left',
-  // 戦闘時、仲間全員をカメラへ近づける距離。足元が見切れる構図です。
-  battlePartyForward:2.5,
-  // 戦闘時の仲間のスタンディー倍率。探索時の倍率は変えません。
-  battlePartyScale:.85,
-  // カメラから見て背面を敵のいる右側へ向ける角度（度）。
-  battleFacing:25,
-  // 戦闘時の番人の左右位置。
-  battleEnemyX:5.5,
-  // 戦闘時の番人の表示倍率。
-  battleEnemyScale:1.7,
-  // 番人が仲間と同じ側へ来たとき、奥へ逃がす距離。大きいほど重なりを減らします。
-  battleEnemyOverlapDepth:1.6,
-  // 同じ側へ来た番人の縮小率。1なら大きさを変えません。
-  battleEnemyOverlapScale:.84,
-  // 縦の視野角（度）。大きいほど広く、小さく見えます。
-  fov:65,
-  // 前後の配置幅（舞台座標）。小さくすると人物・小道具・背景の奥行きを圧縮します。
-  depthSpan:2.6,
-  // 舞台側の消失点の高さ（画面上端から%）。50で中央、大きいほど下がります。
-  horizon:54,
-  // ドラッグで舞台をつかむ移動倍率。1で画面上の移動量にほぼ一致します。
-  sensitivity:1,
-  // 人物同士の輪郭を離す最小の間隔（舞台座標）。
-  actorGap:.35,
-  // 人物を照らす強さ（0〜1）。0で舞台照明を消します。
-  spotStrength:.7,
-  // 足元の光の直径（舞台座標）。大きいほど広く照らします。
-  spotWidth:3.4,
-  // 発言後に照明を保つ秒数。次の発言があれば対象を切り替えます。
-  spotHoldSeconds:7,
-  // 光の移動と明暗の切り替えにかける秒数。
-  spotFadeSeconds:.65,
-  // 暖色／寒色。背景の昼夜や発見条件とは独立した演出です。
-  spotColor:'warm',
-});
+export const STAGE_DEFAULTS=SCENARIO_STAGE_DEFAULTS;
 export function createStage(host, controls, changed) {
  const config={...STAGE_DEFAULTS};
  const scene=new THREE.Scene();scene.background=new THREE.Color('#101c20');
@@ -72,14 +18,8 @@ export function createStage(host, controls, changed) {
  function texture(url){if(!textures.has(url)){const t=loader.load(url,()=>{dirty=true;if(snap)sync(snap);},undefined,()=>{host.dataset.stageAssetError='true';});t.colorSpace=THREE.SRGBColorSpace;textures.set(url,t);}return textures.get(url);}
  function flat(map,x,y,z,w,h){const p=new THREE.Mesh(new THREE.PlaneGeometry(w,h),new THREE.MeshBasicMaterial({map,transparent:true,alphaTest:.1,side:THREE.DoubleSide}));p.position.set(x,y+h/2,z);p.userData.stageZ=z;scene.add(p);return p;}
  // 岩床の色・凹凸は同じ模様を使います。再現可能なノイズで粒度を一定にします。
- function groundTexture(){const c=document.createElement('canvas');c.width=c.height=512;const x=c.getContext('2d');let seed=1729;const random=()=>{seed=(Math.imul(seed,1664525)+1013904223)>>>0;return seed/4294967296;};
-  x.fillStyle='#827969';x.fillRect(0,0,512,512);
-  for(let i=0;i<26000;i++){const v=Math.floor(85+random()*95);x.fillStyle=`rgb(${v},${v-5},${v-13})`;x.globalAlpha=.28+random()*.4;x.fillRect(random()*512,random()*512,1+random()*3,1+random()*3);}
-  x.globalAlpha=1;
-  for(let i=0;i<420;i++){const px=random()*512,py=random()*512,r=1+random()*7;x.beginPath();x.ellipse(px,py,r,r*.65,random()*Math.PI,0,Math.PI*2);x.fillStyle=i%3?'#645e54':'#a29a87';x.fill();x.strokeStyle='#403e37';x.lineWidth=.6;x.stroke();}
-  const t=new THREE.CanvasTexture(c);t.colorSpace=THREE.SRGBColorSpace;t.wrapS=t.wrapT=THREE.RepeatWrapping;t.repeat.set(16,16);t.anisotropy=4;return t;
- }
- const ground=groundTexture();
+
+ const ground=scenarioGroundTexture(THREE);
  // 奥の床を背景画へなじませます。遠端ほど透明にし、直線状の継ぎ目を消します。
  const fadeCanvas=document.createElement('canvas');fadeCanvas.width=4;fadeCanvas.height=512;const fadeContext=fadeCanvas.getContext('2d'),fade=fadeContext.createLinearGradient(0,185,0,265);fade.addColorStop(0,'#000000');fade.addColorStop(1,'#ffffff');fadeContext.fillStyle=fade;fadeContext.fillRect(0,0,4,512);const groundFade=new THREE.CanvasTexture(fadeCanvas);
  const floor=new THREE.Mesh(new THREE.PlaneGeometry(70,70),new THREE.MeshStandardMaterial({map:ground,bumpMap:ground,bumpScale:.045,alphaMap:groundFade,transparent:true,depthWrite:false,roughness:.96,metalness:0,color:'#747166'}));floor.rotation.x=-Math.PI/2;floor.position.y=-.04;floor.renderOrder=-2;scene.add(floor);
@@ -98,8 +38,8 @@ export function createStage(host, controls, changed) {
  const pool=new THREE.Mesh(new THREE.PlaneGeometry(1,1),lightMaterial(lightTexture()));pool.rotation.x=-Math.PI/2;pool.position.y=-.015;scene.add(pool);
  const beam=new THREE.Mesh(new THREE.PlaneGeometry(1,1),lightMaterial(lightTexture(true)));scene.add(beam);pool.visible=beam.visible=false;
  let lightMode='auto',speaker='',until=0,level=0,focus='',lightLast=0;const lightPosition=new THREE.Vector3();const weights=new Map();
- function speak(id){if(!['ines','brom','gareth','lydia','guardian_rampage'].includes(id))return;speaker=id;until=performance.now()+config.spotHoldSeconds*1000;dirty=true;}
- function setLight(mode){if(!['auto','off','ines','brom','gareth','lydia','guardian_rampage'].includes(mode))return;lightMode=mode;if(mode==='auto'){speaker='';until=0;}dirty=true;}
+ function speak(id){if(!scenarioStageActors().includes(id))return;speaker=id;until=performance.now()+config.spotHoldSeconds*1000;dirty=true;}
+ function setLight(mode){if(!['auto','off',...scenarioStageActors()].includes(mode))return;lightMode=mode;if(mode==='auto'){speaker='';until=0;}dirty=true;}
  function updateLight(now){const dt=Math.min(.1,Math.max(0,(now-lightLast)/1000));lightLast=now;
   const id=lightMode==='auto'?(now<until?speaker:''):lightMode==='off'?'':lightMode,a=actors.get(id);
   // 消灯中は光芒も人物の増光も止め、蒼い塵を探す条件を保ちます。
@@ -117,14 +57,13 @@ export function createStage(host, controls, changed) {
   host.dataset.stageSpot=enabled?id:'';
   return moving;
  }
- const anchors={cart:[-11.3,1.7,-10],rails:[1,1.3,-4],etching:[11.5,4.5,-12],cache:[11.5,3,-12],door:[0,4,-7],rune:[-8,3.8,-6],wheel:[-4,2.8,-6],water:[5,1,-4]};
+ const anchors=SCENARIO_ANCHORS;
  // 刻みは読める情報を先出ししない、薄い傷だけの模様です。
- function etchingTexture(){const c=document.createElement('canvas');c.width=512;c.height=384;const x=c.getContext('2d');x.strokeStyle='#a3a697';x.lineWidth=3;x.shadowColor='#050a0b';x.shadowBlur=6;for(let i=0;i<7;i++){x.beginPath();x.moveTo(130+i*30,110+(i%3)*12);x.lineTo(138+i*30,176);x.lineTo(120+i*30,212);x.stroke();}const t=new THREE.CanvasTexture(c);t.colorSpace=THREE.SRGBColorSpace;return t;}
+
  function prop(id,map,pos,w,h){const v=new THREE.Sprite(new THREE.SpriteMaterial({map,alphaTest:.1}));v.position.set(...pos);v.userData.stageZ=pos[2];v.scale.set(w,h,1);scene.add(v);props.set(id,v);}
- prop('cart',texture('./assets/scenery/mine-cart-v1.png'),[-11.3,-3*66/1024,-10],4.5,3);props.get('cart').center.set(.5,0);
- prop('etching',etchingTexture(),[11.5,4.5,-12],3,2.2);
+ setupScenarioProps(prop,texture,props,THREE);
  // スタンディーの印刷範囲。透明余白ではなく実際の足裏を床へ揃えます。
- const sheets={ines:{width:793,height:1251,figure:[261,65,615,1177],plate:[233,33,639,1208]},brom:{width:924,height:1029,figure:[100,85,824,959],plate:[77,60,852,984]},gareth:{width:780,height:1444,figure:[93,93,703,1354],plate:[55,57,739,1389]},lydia:{width:780,height:1444,figure:[149,87,655,1358],plate:[110,51,700,1395]}};
+ const sheets=SCENARIO_SHEETS;
  function shadowTexture(){const c=document.createElement('canvas');c.width=c.height=128;const x=c.getContext('2d'),g=x.createRadialGradient(64,64,5,64,64,64);g.addColorStop(0,'#000000cc');g.addColorStop(.35,'#00000066');g.addColorStop(1,'#00000000');x.fillStyle=g;x.fillRect(0,0,128,128);return new THREE.CanvasTexture(c);}
  const contactMap=shadowTexture();
  function actor(id){if(!actors.has(id)){
@@ -132,8 +71,8 @@ export function createStage(host, controls, changed) {
   sprite.userData.actorId=id;
   if(info){sprite.material={color:new THREE.Color(0xffffff)};sprite.rotation.y=0;
    const body=info.figure[3]-info.figure[1],w=info.width/body,h=info.height/body;
-   for(const [i,side] of ['front','back'].entries()){const mesh=new THREE.Mesh(new THREE.PlaneGeometry(w,h),new THREE.MeshBasicMaterial({map:texture('./art-preview/characters/'+id+'-v64-'+side+'.png'),transparent:true,alphaTest:.04,depthWrite:true,side:THREE.FrontSide}));mesh.position.set((info.width/2-(info.figure[0]+info.figure[2])/2)/body,(info.figure[3]-info.height/2)/body,i?-.008:.008);mesh.rotation.y=i?Math.PI:0;sprite.add(mesh);}
-   glbLoader.load('./assets/standees/'+id+'-v64.glb',gltf=>{
+   for(const [i,side] of ['front','back'].entries()){const mesh=new THREE.Mesh(new THREE.PlaneGeometry(w,h),new THREE.MeshBasicMaterial({map:texture(scenarioStandeeImage(id,side)),transparent:true,alphaTest:.04,depthWrite:true,side:THREE.FrontSide}));mesh.position.set((info.width/2-(info.figure[0]+info.figure[2])/2)/body,(info.figure[3]-info.height/2)/body,i?-.008:.008);mesh.rotation.y=i?Math.PI:0;sprite.add(mesh);}
+   glbLoader.load(scenarioStandeeModel(id),gltf=>{
     const model=gltf.scene,bounds=new THREE.Box3().setFromObject(model),bodyFraction=body/(info.plate[3]-info.plate[1]),unit=1/((bounds.max.y-bounds.min.y)*bodyFraction),foot=(info.plate[3]-info.figure[3])/(info.plate[3]-info.plate[1])*(bounds.max.y-bounds.min.y);
     model.scale.setScalar(unit);model.position.set(-(bounds.min.x+bounds.max.x)/2*unit,-(bounds.min.y+foot)*unit,0);
     model.traverse(m=>{if(!m.isMesh)return;const old=m.material;const mat=new THREE.MeshBasicMaterial({map:old.map||null,color:old.color,opacity:old.opacity,transparent:true,alphaTest:old.map?.04:0,depthWrite:true,side:old.side});if(!old.map)mat.opacity=.2;m.material=mat;m.userData.baseColor=mat.color.clone();old.dispose();});
@@ -148,7 +87,7 @@ export function createStage(host, controls, changed) {
  function orient(){camera.position.set(panX,3.8+panY,10);const y=camera.position.y+20*2*(config.horizon/100-.5)*Math.tan(config.fov*Math.PI/360);camera.lookAt(panX,y,-10);camera.updateMatrixWorld();}
  function panLimits(){const distance=camera.position.z-back.position.z,tangent=Math.tan(config.fov*Math.PI/360),halfX=distance*tangent*camera.aspect,halfY=distance*tangent;
   const tilt=Math.atan(2*(config.horizon/100-.5)*tangent),bottomSlope=Math.tan(tilt-config.fov*Math.PI/360);
-  const bustLimits=[...actors.values()].filter(a=>a.sprite.visible&&a.sprite.userData.actorId!=='guardian_rampage').map(a=>a.sprite.position.y+a.sprite.scale.y*config.bustLine-3.8-(10-a.sprite.position.z)*bottomSlope);
+  const bustLimits=[...actors.values()].filter(a=>a.sprite.visible&&a.sprite.userData.actorId!==SCENARIO_ENEMY).map(a=>a.sprite.position.y+a.sprite.scale.y*config.bustLine-3.8-(10-a.sprite.position.z)*bottomSlope);
   return {x:Math.max(0,Math.min(config.panX,32-halfX-1)),up:Math.max(0,Math.min(config.panY,back.position.y+back.geometry.parameters.height*back.scale.y/2-halfY-3.8-2,...bustLimits)),down:.8};
  }
  function setPan(x,y){const limit=panLimits();panX=Math.max(-limit.x,Math.min(limit.x,x));panY=Math.max(-limit.down,Math.min(limit.up,y));orient();dirty=true;host.dataset.stagePanX=panX.toFixed(2);host.dataset.stagePanY=panY.toFixed(2);const directions=[];if(Math.abs(panX)>.05)directions.push(panX<0?'左':'右');if(Math.abs(panY)>.05)directions.push(panY>0?'上':'下');host.dataset.stageDirection=directions.join('・')||'正面';controls.querySelectorAll('[data-look]').forEach(b=>{b.hidden=b.dataset.look==='left'?panX<=-limit.x+.001:b.dataset.look==='right'?panX>=limit.x-.001:false;});changed();}
@@ -163,18 +102,18 @@ export function createStage(host, controls, changed) {
   const depthOrder=[...next.actors].sort((a,b)=>a.z-b.z),frontCount=Math.ceil(depthOrder.length/2),depthRows=new Map(depthOrder.map((p,i)=>[p.id,i<frontCount?0:Math.min(2,i-frontCount+1)]));
   const compact=next.battle&&host.clientWidth<600;
   const actorHeight=p=>4.8*(next.battle?config.battlePartyScale:1)*(p.heightCm||172)/172*next.depth.size/46;
-  const battleX={ines:-5.5,brom:.2,gareth:-1.8,lydia:-3.2};
+  const battleX=SCENARIO_BATTLE_X;
   const arranged=next.actors.map(p=>{const info=sheets[p.id],height=actorHeight(p);return {...p,stageX:next.battle?battleX[p.id]*(config.battlePartySide==='right'?-1:1)*(compact?.75:1)+config.battlePartyX:(p.x-50)*.22,halfWidth:info?(info.figure[2]-info.figure[0])/(info.figure[3]-info.figure[1])*height/2:height*.25};}).sort((a,b)=>a.stageX-b.stageX);
   if(!next.battle)for(let i=1;i<arranged.length;i++)arranged[i].stageX=Math.max(arranged[i].stageX,arranged[i-1].stageX+arranged[i-1].halfWidth+arranged[i].halfWidth+config.actorGap);
   const center=next.battle?0:arranged.length?(arranged[0].stageX-arranged[0].halfWidth+arranged.at(-1).stageX+arranged.at(-1).halfWidth)/2:0;
   // rowはカメラからの奥行き。戦闘の前衛（ガレス・ブロム）は敵側の奥列です。
   // 左の仲間ほどカメラの視線が斜めなので、向きを補正して印刷面が細くならないようにします。
-  for(const p of arranged){const a=actor(p.id),info=sheets[p.id],height=actorHeight(p),t=a.sprite.material.map,ratio=t?.image?.width/t?.image?.height||.5;if(info)a.sprite.scale.setScalar(height);else a.sprite.scale.set(height*ratio,height,1);const row=next.battle?(p.id==='brom'||p.id==='gareth'?2:p.id==='lydia'?0:1):depthRows.get(p.id);a.sprite.userData.depthRow=['front','middle','back','farthest'][row];a.sprite.position.set(p.stageX-center,0,config.frontRow+(next.battle?config.battlePartyForward:0)-row*config.rowGap);const dx=config.battleEnemyX-a.sprite.position.x,facing=faceFront.has(p.id)?'front':next.battle?(dx>1?'back-right':dx< -1?'back-left':'back'):backFacing===p.id?'back':p.stageX-center<-.25?'front-right':p.stageX-center>.25?'front-left':'front';a.sprite.userData.facing=facing;if(info&&!turns.has(p.id))a.sprite.rotation.y=facingAngle(facing,next.battle?config.battleFacing:config.inwardAngle)+(next.battle&&facing!=='front'?Math.atan2(camera.position.x-a.sprite.position.x,camera.position.z-a.sprite.position.z):0);a.sprite.visible=!next.end;a.shadow.position.set(a.sprite.position.x,.005,a.sprite.position.z);a.shadow.scale.set(p.id==='brom'?1.8:1.25,.65,1);a.shadow.visible=!next.end;}
-  const boss=actor('guardian_rampage'),overlap=Math.max(0,Math.min(1,config.battleEnemyX*(config.battlePartySide==='right'?1:-1)/5.5));boss.sprite.visible=next.battle;boss.sprite.position.set(config.battleEnemyX,0,config.frontRow-3*config.rowGap-overlap*config.battleEnemyOverlapDepth);boss.sprite.userData.depthRow='farthest';boss.sprite.scale.set(4.5*config.battleEnemyScale,6*config.battleEnemyScale,1).multiplyScalar(1-overlap*(1-config.battleEnemyOverlapScale));boss.shadow.visible=next.battle;boss.shadow.position.set(config.battleEnemyX,.005,boss.sprite.position.z);
+  for(const p of arranged){const a=actor(p.id),info=sheets[p.id],height=actorHeight(p),t=a.sprite.material.map,ratio=t?.image?.width/t?.image?.height||.5;if(info)a.sprite.scale.setScalar(height);else a.sprite.scale.set(height*ratio,height,1);const row=next.battle?(scenarioBattleRow(p.id)):depthRows.get(p.id);a.sprite.userData.depthRow=['front','middle','back','farthest'][row];a.sprite.position.set(p.stageX-center,0,config.frontRow+(next.battle?config.battlePartyForward:0)-row*config.rowGap);const dx=config.battleEnemyX-a.sprite.position.x,facing=faceFront.has(p.id)?'front':next.battle?(dx>1?'back-right':dx< -1?'back-left':'back'):backFacing===p.id?'back':p.stageX-center<-.25?'front-right':p.stageX-center>.25?'front-left':'front';a.sprite.userData.facing=facing;if(info&&!turns.has(p.id))a.sprite.rotation.y=facingAngle(facing,next.battle?config.battleFacing:config.inwardAngle)+(next.battle&&facing!=='front'?Math.atan2(camera.position.x-a.sprite.position.x,camera.position.z-a.sprite.position.z):0);a.sprite.visible=!next.end;a.shadow.position.set(a.sprite.position.x,.005,a.sprite.position.z);a.shadow.scale.set(scenarioShadowWidth(p.id),.65,1);a.shadow.visible=!next.end;}
+  const boss=actor(SCENARIO_ENEMY),overlap=Math.max(0,Math.min(1,config.battleEnemyX*(config.battlePartySide==='right'?1:-1)/5.5));boss.sprite.visible=next.battle;boss.sprite.position.set(config.battleEnemyX,0,config.frontRow-3*config.rowGap-overlap*config.battleEnemyOverlapDepth);boss.sprite.userData.depthRow='farthest';boss.sprite.scale.set(SCENARIO_ENEMY_WIDTH*config.battleEnemyScale,SCENARIO_ENEMY_HEIGHT*config.battleEnemyScale,1).multiplyScalar(1-overlap*(1-config.battleEnemyOverlapScale));boss.shadow.visible=next.battle;boss.shadow.position.set(config.battleEnemyX,.005,boss.sprite.position.z);
   // ponytail: 左向き専用絵ができるまでは舞台中央を境にUV反転します。
   boss.sprite.material.map.repeat.x=config.battleEnemyX<0?-1:1;boss.sprite.material.map.offset.x=config.battleEnemyX<0?1:0;
-  const palettes={entry:['#747166','#182027',.96],hall:['#85847a','#151b20',.94],drain:['#5b716c','#111d22',.7]};const palette=palettes[next.room]||palettes.hall;floor.material.color.set(palette[0]);floor.material.roughness=palette[2];scene.background.set(palette[1]);lantern.visible=next.lit;lantern.position.set(actors.get('lydia')?.sprite.position.x||2,3,actors.get('lydia')?.sprite.position.z||2);ambient.intensity=next.lit?1.2:.2;
-  props.forEach(p=>p.visible=next.room==='entry'&&!next.battle&&!next.end);
+  const palettes=SCENARIO_PALETTES;const palette=palettes[next.room]||palettes[SCENARIO_PALETTE_FALLBACK];floor.material.color.set(palette[0]);floor.material.roughness=palette[2];scene.background.set(palette[1]);lantern.visible=next.lit;lantern.position.set(actors.get(SCENARIO_LANTERN_ACTOR)?.sprite.position.x||2,3,actors.get(SCENARIO_LANTERN_ACTOR)?.sprite.position.z||2);ambient.intensity=next.lit?1.2:.2;
+  props.forEach(p=>p.visible=scenarioPropsVisible(next));
   updateFacing();host.dataset.stageRows=arranged.map(p=>p.id+':'+actors.get(p.id).sprite.userData.depthRow).join(',');setPan(panX,panY);dirty=true;changed();
  }
  function resize(){renderer.setSize(host.clientWidth,host.clientHeight,false);camera.aspect=host.clientWidth/host.clientHeight;camera.fov=config.fov;camera.updateProjectionMatrix();if(snap?.battle)sync(snap);else setPan(panX,panY);dirty=true;if(snap&&!lost){renderer.render(scene,camera);}changed();}

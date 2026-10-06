@@ -1,8 +1,8 @@
 const fs=require('node:fs'),vm=require('node:vm');
-const script=fs.readFileSync(__dirname+'/game.js','utf8');
+const loadPrototype=require('./load-prototype.cjs').load;
 const elements={},element=()=>({innerHTML:'',style:{},classList:{toggle(){}},querySelectorAll(){return []},open:false,close(){this.open=false;}});
 const context=vm.createContext({document:{getElementById(id){return elements[id]??=element();}},crypto:require('node:crypto').webcrypto});
-vm.runInContext(script,context,{filename:__dirname+'/game.js'});
+loadPrototype(context);
 vm.runInContext(`(async()=>{
  let count=0;const ok=(v,m)=>{count++;if(!v)throw Error(m)},rejects=fn=>{try{fn();return false}catch{return true}};
  render=()=>{};say=(who,text,kind='')=>chat.push({who,text,kind});

@@ -30,9 +30,9 @@ const {callCloudGemma,cleanFencedJsonReply}=require('./preview.cjs');
  let failures=0;const stopped=await callCloudGemma(payload,{key:'test-secret',fetcher:async()=>{failures++;return {ok:false,status:500,json:async()=>({error:{message:'Internal error test-secret'}})};}});
  ok(failures===2&&stopped.status===500&&stopped.body.error.retryCount===1&&!JSON.stringify(stopped).includes('test-secret'),'再試行を続けるか最後のエラー・キー保護がない');
  for(const status of [400,401,403,429,502,503]){let calls=0;const error=await callCloudGemma(payload,{key:'test',fetcher:async()=>{calls++;return {ok:false,status,json:async()=>({error:{message:'error'}})};}});ok(calls===1&&error.status===status,'500以外を再試行');}
- const script=fs.readFileSync(__dirname+'/game.js','utf8');let posted=[];
+ const loadPrototype=require('./load-prototype.cjs').load;let posted=[];
  const ctx=vm.createContext({performance:{now:()=>100},fetch:async(url,options)=>{posted.push(JSON.parse(options.body));return {ok:true,json:async()=>result.body}},document:{getElementById:()=>null},crypto:require('node:crypto').webcrypto,AbortSignal});
- vm.runInContext(script,ctx,{filename:__dirname+'/game.js'});vm.runInContext('updateAIComparison=()=>{};state=initial();',ctx);
+ loadPrototype(ctx);vm.runInContext('updateAIComparison=()=>{};state=initial();',ctx);
  const before=vm.runInContext('JSON.stringify(state)',ctx);await vm.runInContext("ask('人物設定',{question:'得意なことは？'})",ctx);
  vm.runInContext("aiConnection='cloud-gemma'",ctx);await vm.runInContext("ask('人物設定',{question:'得意なことは？'})",ctx);
  ok(posted[0].connection==='default'&&posted[1].connection==='cloud-gemma','既定Claudeか手動の接続切り替えが反映されない');

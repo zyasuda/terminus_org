@@ -1,8 +1,8 @@
 const fs=require('node:fs'),vm=require('node:vm');
-const script=fs.readFileSync(__dirname+'/game.js','utf8');
+const loadPrototype=require('./load-prototype.cjs').load;
 const elements={};const element=()=>({innerHTML:'',style:{removeProperty(){}},classList:{toggle(){},contains(){return false}},append(){},insertBefore(){},querySelectorAll(){return []},querySelector(){return element()},open:false,close(){this.open=false;}});
 const context=vm.createContext({document:{getElementById(id){return elements[id]??=element();},querySelector(){return element()}},crypto:require('node:crypto').webcrypto});
-vm.runInContext(script,context,{filename:__dirname+'/game.js'});
+loadPrototype(context);
 vm.runInContext(`(async()=>{
  let count=0;const ok=(v,m)=>{count++;if(!v)throw Error(m);},rejects=fn=>{try{fn();return false;}catch{return true;}};
  const realRender=render;render=()=>{};say=(who,text,kind='')=>chat.push({who,text,kind});

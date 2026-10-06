@@ -1,7 +1,7 @@
 const fs=require('node:fs'),vm=require('node:vm');
-const script=fs.readFileSync(__dirname+'/game.js','utf8');
+const loadPrototype=require('./load-prototype.cjs').load;
 const context=vm.createContext({document:{getElementById(){}},crypto:require('node:crypto').webcrypto});
-vm.runInContext(script,context,{filename:__dirname+'/game.js'});
+loadPrototype(context);
 vm.runInContext(`(async()=>{
  let checks=0;const ok=(value,message)=>{checks++;if(!value)throw Error(message);};
  const rejects=fn=>{try{fn();return false;}catch{return true;}};
