@@ -562,10 +562,11 @@ function normalizeExplorationIntent(r,to,text){
 function validateExplorationIntent(r,to,text){
  if(Array.isArray(r)&&r.length===1)r=r[0];
  if(!r||!Array.isArray(r.jobs)||r.jobs.length>3||!['request','approval','survey','conversation'].includes(r.kind)||typeof r.clarify!=='string'||r.clarify.length>150)throw Error('調査の依頼を確認できませんでした。実行は保留しています。');
- const actors=to==='all'?aiPeople().map(p=>p.id):[to],seen=new Set();
+ const actors=to==='all'?aiPeople().map(p=>p.id):[to],seen=new Set(),named=to==='all'?aiPeople().filter(p=>mentionsActor(p,text)).map(p=>p.id):[],offers=currentOffers();
+ if(r.kind==='approval'&&r.jobs.length===1&&(to===r.jobs[0].id||to==='all'&&named.length===1&&named[0]===r.jobs[0].id)&&!offers[r.jobs[0].id])r.kind='request';
  for(const j of r.jobs)if(!actors.includes(j.id)||seen.has(j.id)||!conversationChoices(j.id).includes(j.action)||typeof j.quote!=='string'||!j.quote.trim()||!text.includes(j.quote)||r.kind!=='request'&&!safeInvestigation(j.action)&&!(r.kind==='approval'&&(COOPERATION_ACTIONS.includes(j.action)||j.action==='open_cache')&&currentOffers()[j.id]?.action===j.action))throw Error('現在できない調査や指定外の仲間への依頼は実行しません。');else seen.add(j.id);
  if(r.kind==='conversation'&&r.jobs.length)throw Error('相談だけで調査を実行しません。');
- if(r.kind==='approval'){const offers=currentOffers(),eligible=Object.entries(offers).filter(([id])=>actors.includes(id));if(eligible.length!==1)return {jobs:[],clarify:'どの仲間の、どの調査を頼みますか？'};if(r.jobs.some(j=>j.id!==eligible[0][0]||j.action!==eligible[0][1].action))throw Error('了承と直前の提案が一致しません。');}
+ if(r.kind==='approval'){const eligible=Object.entries(offers).filter(([id])=>actors.includes(id)&&(named.length!==1||id===named[0]));if(eligible.length!==1)return {jobs:[],clarify:'どの仲間の、どの調査を頼みますか？'};if(r.jobs.some(j=>j.id!==eligible[0][0]||j.action!==eligible[0][1].action))throw Error('了承と直前の提案が一致しません。');}
  if(r.jobs.some(j=>!safeInvestigation(j.action))&&r.jobs.length>1)return {jobs:[],clarify:'仕掛けを動かす依頼は、一人ずつ相談しましょう。'};
  if(r.clarify&&r.jobs.length)throw Error('確認が必要な調査はまだ実行しません。');
  return r;
@@ -645,7 +646,7 @@ async function settleConsent(topic,start){
  const epoch=generation,source=state,scope=CONSENT_TOPICS[topic].scope(state);
  const text=await ask(CONSENT_TOPICS[topic].signalsPrompt, {public:publicView(),actor,addressedTo:recipient,voices:pending?.voices||{},lines},1400);
  if(!responseIsCurrent(epoch,source)||scope!==CONSENT_TOPICS[topic].scope(state))return;
- const signals=validateConsentSignals(topic,parseAI(text),lines);
+ const signals=validateConsentSignals(topic,parseAI(text),lines).filter(v=>!(v.id===actor&&v.stance==='request'&&!actionsFor(actor).includes(v.action)));
  // 明確な短い了承を分類モデルが落としても、直前の一意な提案と宛先から補います。
  const human=lines.find(v=>v.id===humanId()),prior=[...new Set(Object.values(pending?.voices||{}).filter(v=>v.stance==='request').map(v=>v.action))];
  const otherOffers=Object.keys(currentOffers()).some(id=>recipient==='all'||recipient===id)||currentMapOffer()||pendingTransfer;

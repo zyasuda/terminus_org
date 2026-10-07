@@ -72,5 +72,12 @@ vm.runInContext(`(async()=>{
  // 仲間役のLLMへ渡す相談は、分離前と同じ {room,lit,voices} の形のまま渡します。
  fixture();consents.lantern=mergeConsentSignals('lantern',null,[signal('brom','light','request')]);
  ok(JSON.stringify(dialogueInput(PEOPLE[1],false,null,null).lanternDiscussion)===JSON.stringify({room:state.room,lit:state.lit,voices:consents.lantern.voices}),'仲間役への相談の入力形式が変わった');
+ // 2026-10-07：本人が今できない操作（点灯中の点灯）を口にしても依頼として残しません。他の仲間の依頼には「すでに灯っている」と答えます。
+ fixture();apply('lydia','light');chat=[{who:'イネス（あなた）→全員',kind:'you',text:'壁の傷を見て'},{who:'リディア（AI）',kind:'',text:'ランタンの光を当てて見てみましょう。'}];
+ ask=async()=>JSON.stringify({signals:[{index:1,action:'light',stance:'request',quote:'ランタンの光を当てて'}]});await settleConsent('lantern',0);
+ ok(!currentConsent('lantern')?.voices['lydia:light'],'点灯中の本人の「光を当てて」を点灯の依頼として残す');
+ fixture();apply('lydia','light');chat=[{who:'イネス（あなた）→全員',kind:'you',text:'リディア、ランタンを灯して'}];
+ ask=async()=>JSON.stringify({signals:[{index:0,action:'light',stance:'request',quote:'ランタンを灯して'}]});await settleConsent('lantern',0);
+ ok(chat.at(-1).text==='ランタンはすでに灯っているよ。'&&!currentConsent('lantern'),'仲間の点灯依頼に「すでに灯っている」と答えない');
  return count;
 })()`,context).then(n=>console.log('PASS: '+n+' checks — 仲間の依頼 / 本人の了承・保留 / 反対・疑問・撤回 / 相反する案 / 点灯済み / 二重実行防止 / 発言根拠 / シーン・戦闘の制限 / 通信・形式・人物照合の失敗 / 古い応答')).catch(e=>{console.error(e);process.exitCode=1;});

@@ -258,5 +258,13 @@ vm.runInContext(`(async()=>{
  ok(humanMessageIntent('はい','brom')===null,'世代が変わった依頼を了承');updateRecipients=ownActionUI;
  fixture();positionGM=()=>{};renderPlacement=()=>{};placeTargetLabels=()=>{};updateRecipients=()=>{};redrawEffects=()=>{};refreshOpenSheet=()=>{};target='cart';realRender();
  ok(!$('actions').innerHTML.includes('data-request')&&$('actions').innerHTML.includes('data-act="inspect_cart"'),'調査ポイントに他者の選択肢が残る');
+ // 2026-10-07：了承と判定されても、宛先・名指しで相手が一人に決まる時だけ依頼として扱います。決まらなければ実行しません。
+ const hold=(text,to)=>{try{return validateExplorationIntent({kind:'approval',jobs:[{id:'brom',action:'hold',quote:text}],clarify:''},to,text);}catch(e){return {error:e.message};}};
+ fixture();state.room='drain';
+ ok(hold('操作輪を支えて','brom').jobs?.[0]?.action==='hold','宛先のブロムへの支えの依頼を、申し出が無いからと却下');
+ ok(!hold('操作輪を支えて','all').jobs?.length,'宛先も名指しも無い了承で、申し出の無い支えを実行');
+ explorationOffers={brom:{room:'drain',action:'hold'},gareth:{room:'drain',action:'inspect_water'},lydia:{room:'drain',action:'inspect_water'}};
+ ok(hold('ブロム、操作輪を支えて','all').jobs?.[0]?.id==='brom','名指しされたブロムの申し出を選べない');
+ ok(!hold('ブロムとガレス、操作輪を支えて','all').jobs?.length,'二人を名指しした了承で一人の申し出を実行');
  return count;
 })()`,context).then(n=>console.log('PASS: '+n+' checks — 明示依頼と短い了承 / 曖昧な提案の確認 / 指定相手・発言根拠 / 調査と実結果の共有 / 個人情報の保護 / 解読 / 候補の自発共有 / 二重実行・古い応答 / 会話から解錠判定 / 自分だけの選択肢 / 人間への依頼・保留・了承・自分の実行')).catch(e=>{console.error(e);process.exitCode=1;});
