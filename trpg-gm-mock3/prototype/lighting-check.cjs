@@ -19,7 +19,7 @@ const fs=require('node:fs'),vm=require('node:vm');
  ok(JSON.stringify([...vm.runInContext('STAGE_FACINGS.map(d=>Math.round(THREE.MathUtils.radToDeg(facingAngle(d,25))))',context)])===JSON.stringify([0,-25,25,180,205,155]),'6方向の角度が定義どおりにならない');
  ok(lights().every(x=>!x.visible),'発言していないのに照明が点く');
  for(const id of ['ines','lydia']){const a=person(id),shadow=rendered.children.find(x=>x.userData.contactShadow===id);ok(a.isGroup,'仲間がスタンディー用の立体オブジェクトでない');ok(shadow.position.x===a.position.x&&shadow.position.z===a.position.z&&Math.abs(shadow.position.y-a.position.y)<.01,'接地影が足元からずれる');}
- const ground=rendered.children.find(x=>x.material?.isMeshStandardMaterial);ok(ground.material.map&&ground.material.bumpMap&&ground.material.alphaMap,'床の質感・境界のなじみがない');
+ const ground=rendered.children.find(x=>x.material?.isMeshStandardMaterial);ok(ground.material.map&&ground.material.normalMap&&ground.material.alphaMap,'床の質感・境界のなじみがない');
  const size=()=>{const a=person('ines'),v=a.position.clone().applyMatrix4(renderCamera.matrixWorldInverse);return host.clientHeight*a.scale.y/(-v.z*2*Math.tan(renderCamera.fov*Math.PI/360));};
  const currentSize=size();view.config.fov=48;view.config.depthSpan=4.5;view.config.horizon=46;view.refreshLayout();tick();const oldSize=size();
  view.config.fov=65;view.config.depthSpan=2.6;view.config.horizon=54;view.refreshLayout();tick();

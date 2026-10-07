@@ -17,12 +17,11 @@ export function createStage(host, controls, changed) {
  const point=new THREE.Vector3();
  function texture(url){if(!textures.has(url)){const t=loader.load(url,()=>{dirty=true;if(snap)sync(snap);},undefined,()=>{host.dataset.stageAssetError='true';});t.colorSpace=THREE.SRGBColorSpace;textures.set(url,t);}return textures.get(url);}
  function flat(map,x,y,z,w,h){const p=new THREE.Mesh(new THREE.PlaneGeometry(w,h),new THREE.MeshBasicMaterial({map,transparent:true,alphaTest:.1,side:THREE.DoubleSide}));p.position.set(x,y+h/2,z);p.userData.stageZ=z;scene.add(p);return p;}
- // 岩床の色・凹凸は同じ模様を使います。再現可能なノイズで粒度を一定にします。
-
- const ground=scenarioGroundTexture(THREE);
+ // 床の絵とノーマルマップは章が指定します。
+ const ground=scenarioGroundTexture(THREE,texture);
  // 奥の床を背景画へなじませます。遠端ほど透明にし、直線状の継ぎ目を消します。
  const fadeCanvas=document.createElement('canvas');fadeCanvas.width=4;fadeCanvas.height=512;const fadeContext=fadeCanvas.getContext('2d'),fade=fadeContext.createLinearGradient(0,185,0,265);fade.addColorStop(0,'#000000');fade.addColorStop(1,'#ffffff');fadeContext.fillStyle=fade;fadeContext.fillRect(0,0,4,512);const groundFade=new THREE.CanvasTexture(fadeCanvas);
- const floor=new THREE.Mesh(new THREE.PlaneGeometry(70,70),new THREE.MeshStandardMaterial({map:ground,bumpMap:ground,bumpScale:.045,alphaMap:groundFade,transparent:true,depthWrite:false,roughness:.96,metalness:0,color:'#747166'}));floor.rotation.x=-Math.PI/2;floor.position.y=-.04;floor.renderOrder=-2;scene.add(floor);
+ const floor=new THREE.Mesh(new THREE.PlaneGeometry(70,70),new THREE.MeshStandardMaterial({map:ground.map,normalMap:ground.normalMap,alphaMap:groundFade,transparent:true,depthWrite:false,roughness:.96,metalness:0,color:'#747166'}));floor.rotation.x=-Math.PI/2;floor.position.y=-.04;floor.renderOrder=-2;scene.add(floor);
  const ambient=new THREE.HemisphereLight('#a9bac6','#51412e',1.2);scene.add(ambient);
  const lantern=new THREE.PointLight('#ffcc86',8,22,1);lantern.position.set(2,3,2);scene.add(lantern);
  // 背景は上下の絵を保ったまま左右にも届く幅にし、平面の端を見せません。

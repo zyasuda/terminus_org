@@ -492,12 +492,9 @@ const SCENARIO_STAGE_DEFAULTS=Object.freeze({
   // 暖色／寒色。背景の昼夜や発見条件とは独立した演出です。
   spotColor:'warm',
 });
- function scenarioGroundTexture(THREE){const c=document.createElement('canvas');c.width=c.height=512;const x=c.getContext('2d');let seed=1729;const random=()=>{seed=(Math.imul(seed,1664525)+1013904223)>>>0;return seed/4294967296;};
-  x.fillStyle='#827969';x.fillRect(0,0,512,512);
-  for(let i=0;i<26000;i++){const v=Math.floor(85+random()*95);x.fillStyle=`rgb(${v},${v-5},${v-13})`;x.globalAlpha=.28+random()*.4;x.fillRect(random()*512,random()*512,1+random()*3,1+random()*3);}
-  x.globalAlpha=1;
-  for(let i=0;i<420;i++){const px=random()*512,py=random()*512,r=1+random()*7;x.beginPath();x.ellipse(px,py,r,r*.65,random()*Math.PI,0,Math.PI*2);x.fillStyle=i%3?'#645e54':'#a29a87';x.fill();x.strokeStyle='#403e37';x.lineWidth=.6;x.stroke();}
-  const t=new THREE.CanvasTexture(c);t.colorSpace=THREE.SRGBColorSpace;t.wrapS=t.wrapT=THREE.RepeatWrapping;t.repeat.set(16,16);t.anisotropy=4;return t;
+ // 床は描いた地面の絵（石炭くずと砂利）。1枚が約70cm＝舞台1.94なので、70四方の床へ36回繰り返します。凹凸は絵の明るさから作ったノーマルマップです。
+ function scenarioGroundTexture(THREE,texture){const map=texture('./assets/scenery/ground-coal-gravel-v1.png'),normalMap=texture('./assets/scenery/ground-coal-gravel-v1-normal.png');normalMap.colorSpace=THREE.NoColorSpace;
+  for(const t of [map,normalMap]){t.wrapS=t.wrapT=THREE.RepeatWrapping;t.repeat.set(36,36);t.anisotropy=4;}return {map,normalMap};
  }
  function scenarioEtchingTexture(THREE){const c=document.createElement('canvas');c.width=512;c.height=384;const x=c.getContext('2d');x.strokeStyle='#a3a697';x.lineWidth=3;x.shadowColor='#050a0b';x.shadowBlur=6;for(let i=0;i<7;i++){x.beginPath();x.moveTo(130+i*30,110+(i%3)*12);x.lineTo(138+i*30,176);x.lineTo(120+i*30,212);x.stroke();}const t=new THREE.CanvasTexture(c);t.colorSpace=THREE.SRGBColorSpace;return t;}
 function setupScenarioProps(prop,texture,props,THREE){
@@ -507,7 +504,8 @@ function setupScenarioProps(prop,texture,props,THREE){
 const SCENARIO_ANCHORS={cart:[-11.3,1.7,-10],rails:[1,1.3,-4],etching:[11.5,4.5,-12],cache:[11.5,3,-12],door:[0,4,-7],rune:[-8,3.8,-6],wheel:[-4,2.8,-6],water:[5,1,-4]};
 const SCENARIO_SHEETS={ines:{width:793,height:1251,figure:[261,65,615,1177],plate:[233,33,639,1208]},brom:{width:924,height:1029,figure:[100,85,824,959],plate:[77,60,852,984]},gareth:{width:780,height:1444,figure:[93,93,703,1354],plate:[55,57,739,1389]},lydia:{width:780,height:1444,figure:[149,87,655,1358],plate:[110,51,700,1395]}};
 const SCENARIO_BATTLE_X={ines:-5.5,brom:.2,gareth:-1.8,lydia:-3.2};
-const SCENARIO_PALETTES={entry:['#747166','#182027',.96],hall:['#85847a','#151b20',.94],drain:['#5b716c','#111d22',.7]};
+// 床の色は描いた地面の絵に掛ける倍率です。点灯時に、手前の床の平均が背景に描かれた地面の平均と同じ明るさ・色味になる値を画面で測って決めました（2026-10-07）。
+const SCENARIO_PALETTES={entry:['#b6c0dc','#182027',.96],hall:['#8793a7','#151b20',.94],drain:['#4c7197','#111d22',.7]};
 const SCENARIO_ENEMY='guardian_rampage',SCENARIO_ENEMY_WIDTH=4.5,SCENARIO_ENEMY_HEIGHT=6,SCENARIO_PALETTE_FALLBACK='hall',SCENARIO_LANTERN_ACTOR='lydia';
 function scenarioStageActors(){return ['ines','brom','gareth','lydia',SCENARIO_ENEMY];}
 function scenarioBattleRow(id){return id==='brom'||id==='gareth'?2:id==='lydia'?0:1;}
