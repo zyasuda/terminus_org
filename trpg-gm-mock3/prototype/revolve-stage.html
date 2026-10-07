@@ -73,7 +73,7 @@ function step(now){if(!anim)return;const a=anim,el=(now-a.t0)/1000;
  const r=smooth(clamp((el-PULL)/TURN));
  const face=smooth(clamp((el-PULL)/FACE_SECONDS));for(const s of party)s.rotation.y=Math.max(s.rotation.y,Math.PI*face);
  if(r>=.5&&!a.swapped){a.swapped=true;setScene(a.next);}
- pivot.rotation.y=r<.5?Math.PI*r:Math.PI*(r-1);
+ pivot.rotation.y=-(r<.5?Math.PI*r:Math.PI*(r-1));// 上から見て時計回り（右端が手前へ出る）
  if(el>=a.total){pivot.rotation.y=0;place(0);anim=null;go.disabled=false;}}
 go.onclick=start;
 function frame(now){requestAnimationFrame(frame);step(now);renderer.render(scene,camera);}
