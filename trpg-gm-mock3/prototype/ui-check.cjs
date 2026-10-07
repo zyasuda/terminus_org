@@ -74,13 +74,20 @@ vm.runInContext(`(async()=>{
  ok(sceneKey()!==exploreKey&&JSON.stringify(state)===beforePreview,'プレビューがゲーム進行を変更');
  submitMessage('試験中');ok(chat.length===beforeChat,'プレビュー中の会話が進行へ混入');
  battlePreview=false;previewPlacement=null;ok(isOutsideScene()&&sceneKey()===exploreKey&&JSON.stringify(state)===beforePreview,'プレビューを閉じても屋外の演出と進行に戻らない');
- const timers=[],scene={offsetWidth:1,style:{filter:'',transition:'',removeProperty(key){delete this[key]}}},getElement=document.getElementById.bind(document);
+ const timers=[],scene={offsetWidth:1,classes:new Set(),classList:{add:c=>scene.classes.add(c),remove:c=>scene.classes.delete(c)},style:{filter:'',transition:'',removeProperty(key){delete this[key]}}},getElement=document.getElementById.bind(document);
  document.getElementById=id=>id==='scene'?scene:getElement(id);setTimeout=fn=>timers.push(fn);matchMedia=()=>({matches:false});
  let painted=0;renderNow=()=>{painted++;};sceneVisualKey=sceneKey();state.room='hall';render();
  ok(scene.style.filter==='brightness(0)'&&painted===0,'前の場面が暗くなる前に次を描く');
  timers.shift()();ok(painted===1&&scene.style.filter==='brightness(1)'&&sceneVisualKey===sceneKey(),'暗転中の場面更新と明転がない');
  timers.shift()();ok(!sceneFading&&!scene.style.filter,'場面転換後の暗さが残る');
  matchMedia=()=>({matches:true});state.room='entry';render();ok(painted===2&&!sceneFading,'動きを減らす設定で転換を待たせる');
+ // 探索中の部屋の移動は、暗転の代わりに背景を回す。舞台が回せないときは暗転へ戻る
+ matchMedia=()=>({matches:false});const turnsAsked=[];stageView={revolve:(apply,done)=>{turnsAsked.push({apply,done});return true;}};state.room='hall';render();
+ ok(turnsAsked.length===1&&sceneFading&&painted===2&&!scene.style.filter,'部屋の移動で背景を回さない、または回す前に次の場面を描く');ok(scene.classes.has('revolving'),'背景が回る間に前の場面の札と出口が残る');
+ turnsAsked[0].apply();ok(painted===3&&sceneVisualKey===sceneKey(),'背景が真横を向いても次の場面を描かない');
+ turnsAsked[0].done();ok(!sceneFading&&!scene.classes.has('revolving'),'背景を回し終えても転換中のまま、または札と出口が隠れたまま');
+ stageView={revolve:()=>false};state.room='entry';render();ok(scene.style.filter==='brightness(0)'&&sceneFading,'背景を回せないときに暗転へ戻らない');timers.shift()();timers.shift()();ok(painted===4&&!sceneFading,'暗転へ戻った転換が終わらない');
+ stageView={revolve:()=>{throw Error('戦闘の転換で背景を回した');}};state.phase='battle';render();ok(scene.style.filter==='brightness(0)','戦闘の始まりが暗転にならない');timers.shift()();timers.shift()();state.phase='explore';sceneVisualKey=sceneKey();stageView=null;
  render=()=>{};companions=async()=>{};run=async fn=>fn();state=initial();learnClue('ines','etching');chat=[];busy=true;
  publishOwnClue('etching');ok(!state.discovery.shared.length&&!chat.length,'処理中に秘密を二重送信');busy=false;
  await publishOwnClue('cache_lock');ok(!state.discovery.shared.length,'知らない手がかりを共有');

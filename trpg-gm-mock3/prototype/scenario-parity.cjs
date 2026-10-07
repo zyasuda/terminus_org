@@ -68,6 +68,8 @@ function unchangedBodies(){
  const before=await trace([reference]),after=await trace(require('./load-prototype.cjs').sources().map(s=>s.source.replace("image:'mine_entrance_unlit'","image:'mine_entrance'")));assert.deepEqual(after,before);
  console.log(JSON.stringify({reference:'c36fc01',...after}));
  console.log('PASS: 同じ状態・入力・出目で状態全体・結果文・行動履歴・会話入力・プロンプトが一致 / DOM参照 / 工具・潜入・破壊の3経路から結末まで');
- const lighting=execFileSync(process.execPath,[root+'/lighting-check.cjs'],{encoding:'utf8',cwd:root});assert.equal(lighting,referenceLighting());
- console.log('PASS: 分離前後の舞台検査70件と座標・角度・サイズの生出力が一致');
+ // 舞台の検査は分離後に件数が増えるので（2026-10-07 背景を回す転換）、最後の合格行を除いた生出力を比べ、件数は分離前以上であることを確かめます。
+ const lighting=execFileSync(process.execPath,[root+'/lighting-check.cjs'],{encoding:'utf8',cwd:root}),ref=referenceLighting(),passLine=/^PASS: (\d+) checks — .*$/m,count=s=>+s.match(passLine)[1];
+ assert.equal(lighting.replace(passLine,''),ref.replace(passLine,''));assert.ok(count(lighting)>=count(ref),'舞台検査の件数が分離前より減った');
+ console.log(`PASS: 分離前後の舞台検査${count(ref)}件と座標・角度・サイズの生出力が一致（今は${count(lighting)}件）`);
 })().catch(e=>{console.error(e);process.exitCode=1;});
