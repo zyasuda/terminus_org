@@ -22,14 +22,14 @@ vm.runInContext(`(async()=>{
  const battle=initial();battle.phase='battle';ok(consentCandidate('lantern',d,battle)===null,'戦闘で探索の灯りを操作');
  const other=initial();other.room='hall';ok(consentCandidate('lantern',d,other)===null,'別シーンの相談を流用');
  consents.lantern=d;state.room='hall';ok(currentConsent('lantern')===null,'移動で保留が破棄されない');state=initial();
- const lines=[{index:2,id:'ines',text:'点灯は反対。'},{index:3,id:'brom',text:'リディア、灯してくれ。'}];
+ const lines=[{index:2,id:'ines',text:'点灯は反対。'},{index:3,id:'brom',text:'マレン、灯してくれ。'}];
  const compound=validateConsentSignals('lantern',{signals:[{index:3,action:'light',stance:'request',quote:'灯して'},{index:3,action:'light',stance:'withdraw',quote:'灯して'}]},lines);ok(compound[0].stance==='withdraw'&&compound[1].stance==='request','撤回と賛成の複合発言で賛成が消える');
  const validated=validateConsentSignals('lantern',{signals:[{index:2,action:'light',stance:'oppose',quote:'点灯は反対'}]},lines);ok(validated[0].id==='ines','発言者が不正');ok(validateConsentSignals('lantern',[{index:3,action:'light',stance:'request',quote:'灯して'}],lines)[0].id==='brom','実GMの配列形式を扱えない');
  ok(rejects(()=>validateConsentSignals('lantern',{signals:[{index:3,action:'light',stance:'request',quote:'消して'}]},lines)),'未発言の根拠を受理');
  ok(rejects(()=>validateConsentSignals('lantern',{signals:[{index:9,action:'light',stance:'request',quote:'灯して'}]},lines)),'未知の発言を受理');
  ok(rejects(()=>validateConsentSignals('lantern',{signals:[{index:3,action:'smash',stance:'request',quote:'灯して'}]},lines)),'対象外の行動を受理');
  ok(rejects(()=>validateConsentSignals('lantern',{signals:[{index:3,action:'light',stance:'request',quote:'灯して'},{index:3,action:'light',stance:'oppose',quote:'灯して'}]},lines)),'同じ発言の重複を受理');
- function fixture(){state=initial();consents={};actionHistory=[];chat=[{who:'イネス（あなた）→全員',kind:'you',text:'誰か灯りを持ってる？'},{who:'ブロム（AI）',kind:'',text:'リディア、灯してくれ。'}];}
+ function fixture(){state=initial();consents={};actionHistory=[];chat=[{who:'イネス（あなた）→全員',kind:'you',text:'誰か灯りを持ってる？'},{who:'ブロム（AI）',kind:'',text:'マレン、灯してくれ。'}];}
  const gmSignals=JSON.stringify({signals:[{index:1,action:'light',stance:'request',quote:'灯してくれ'}]});
  auditProfile=async()=>({valid:true,claims:[],conflicts:[]});
  fixture();let calls=0;ask=async()=>++calls===1?gmSignals:JSON.stringify({speech:'うん、灯すわ。',action:'light'});await settleConsent('lantern',0);
@@ -44,16 +44,16 @@ vm.runInContext(`(async()=>{
  fixture();calls=0;ask=async()=>++calls===1?gmSignals:JSON.stringify({speech:'灯すわ。',action:'light'});auditProfile=async()=>({valid:false,claims:[],conflicts:[{}]});let mismatch=false;try{await settleConsent('lantern',0);}catch{mismatch=true;}ok(mismatch&&!state.lit&&actionHistory.length===0,'人物照合の失敗を無視');
  // 実ログの会話を再現。人間が「ランタン」と言わなくても仲間の依頼を整理します。
  fixture();auditProfile=async()=>({valid:true,claims:[],conflicts:[]});
- chat=[{who:'イネス（あなた）→全員',kind:'you',text:'誰か明るくして'},{who:'リディア（AI）',kind:'',text:'私が持っているランタンを灯しましょう。'},{who:'ブロム（AI）',kind:'',text:'リディア、ランタン頼めるか。'},{who:'ガレス（AI）',kind:'',text:'リディア、ランタンを頼む。'}];
+ chat=[{who:'イネス（あなた）→全員',kind:'you',text:'誰か明るくして'},{who:'マレン（AI）',kind:'',text:'私が持っているランタンを灯しましょう。'},{who:'ブロム（AI）',kind:'',text:'マレン、ランタン頼めるか。'},{who:'ガレス（AI）',kind:'',text:'マレン、ランタンを頼む。'}];
  calls=0;ask=async()=>++calls===1?JSON.stringify({signals:[{index:2,action:'light',stance:'request',quote:'ランタン頼めるか'},{index:3,action:'light',stance:'request',quote:'ランタンを頼む'}]}):JSON.stringify({speech:'ええ、ランタンを灯します。',action:'light'});
  await settleConsent('lantern',0);ok(state.lit&&actionHistory.length===1&&calls===2,'誰か明るくしてから仲間の依頼・点灯へ進まない');
- fixture();chat[0].text='なんとかして';chat[1].text='リディア、ランタンを頼む。';calls=0;
+ fixture();chat[0].text='なんとかして';chat[1].text='マレン、ランタンを頼む。';calls=0;
  ask=async()=>++calls===1?JSON.stringify({signals:[{index:1,action:'light',stance:'request',quote:'ランタンを頼む'}]}):JSON.stringify({speech:'ええ、灯します。',action:'light'});
  await settleConsent('lantern',0);ok(state.lit&&calls===2,'灯りの単語がない人間の発言で仲間のランタン依頼も除外');
- fixture();recipient='lydia';chat=[{who:'イネス（あなた）→リディア',kind:'you',text:'ランタン持ってる？'},{who:'リディア（AI）',kind:'',text:'ええ。ランタンを灯しましょうか？'}];
+ fixture();recipient='lydia';chat=[{who:'イネス（あなた）→マレン',kind:'you',text:'ランタン持ってる？'},{who:'マレン（AI）',kind:'',text:'ええ。ランタンを灯しましょうか？'}];
  ask=async()=>JSON.stringify({signals:[{index:1,action:'light',stance:'request',quote:'ランタンを灯しましょうか'}]});await settleConsent('lantern',0);
  ok(!state.lit&&Object.keys(consents.lantern.voices).length===1,'質問と本人の提案だけで点灯');
- chat.push({who:'イネス（あなた）→リディア',kind:'you',text:'お願いします'},{who:'リディア（AI）',kind:'',text:'ランタンを灯しましょう。'});
+ chat.push({who:'イネス（あなた）→マレン',kind:'you',text:'お願いします'},{who:'マレン（AI）',kind:'',text:'ランタンを灯しましょう。'});
  calls=0;let approvalInput;ask=async(system,payload)=>{if(++calls===1){approvalInput=payload;return JSON.stringify({signals:[{index:2,action:'light',stance:'request',quote:'お願いします'},{index:3,action:'light',stance:'request',quote:'ランタンを灯しましょう'}]});}return JSON.stringify({speech:'ええ、灯します。',action:'light'});};
  await settleConsent('lantern',2);ok(state.lit&&calls===2,'直前の点灯提案への短い了承から進まない');
  ok(approvalInput.actor==='lydia'&&approvalInput.addressedTo==='lydia'&&approvalInput.voices['lydia:light'],'短い了承の所持者・宛先・直前の提案が渡されない');
@@ -73,10 +73,10 @@ vm.runInContext(`(async()=>{
  fixture();consents.lantern=mergeConsentSignals('lantern',null,[signal('brom','light','request')]);
  ok(JSON.stringify(dialogueInput(PEOPLE[1],false,null,null).lanternDiscussion)===JSON.stringify({room:state.room,lit:state.lit,voices:consents.lantern.voices}),'仲間役への相談の入力形式が変わった');
  // 2026-10-07：本人が今できない操作（点灯中の点灯）を口にしても依頼として残しません。他の仲間の依頼には「すでに灯っている」と答えます。
- fixture();apply('lydia','light');chat=[{who:'イネス（あなた）→全員',kind:'you',text:'壁の傷を見て'},{who:'リディア（AI）',kind:'',text:'ランタンの光を当てて見てみましょう。'}];
+ fixture();apply('lydia','light');chat=[{who:'イネス（あなた）→全員',kind:'you',text:'壁の傷を見て'},{who:'マレン（AI）',kind:'',text:'ランタンの光を当てて見てみましょう。'}];
  ask=async()=>JSON.stringify({signals:[{index:1,action:'light',stance:'request',quote:'ランタンの光を当てて'}]});await settleConsent('lantern',0);
  ok(!currentConsent('lantern')?.voices['lydia:light'],'点灯中の本人の「光を当てて」を点灯の依頼として残す');
- fixture();apply('lydia','light');chat=[{who:'イネス（あなた）→全員',kind:'you',text:'リディア、ランタンを灯して'}];
+ fixture();apply('lydia','light');chat=[{who:'イネス（あなた）→全員',kind:'you',text:'マレン、ランタンを灯して'}];
  ask=async()=>JSON.stringify({signals:[{index:0,action:'light',stance:'request',quote:'ランタンを灯して'}]});await settleConsent('lantern',0);
  ok(chat.at(-1).text==='ランタンはすでに灯っているよ。'&&!currentConsent('lantern'),'仲間の点灯依頼に「すでに灯っている」と答えない');
  // 2026-10-07：持ち主本人の提案に人間が短く了承したら、本人に聞き直さず実行します。反対や疑問が残っていれば実行しません。

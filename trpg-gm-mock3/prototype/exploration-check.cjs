@@ -175,7 +175,7 @@ vm.runInContext(`(async()=>{
  ok(chat[0].text.includes('もう済んで')&&chat.at(-1).text.includes('入口')&&!chat.some(c=>c.text.includes('石扉の広間')),'排水済みを繰り返すか未訪問地名を暴露');
  fixture();state.discovery.etching=true;learnClue('ines','etching');
  ok(cooperationAdvice().action!=='decode','本人だけの傷の情報を相談へ漏らす');shareClue('ines','etching');chat=[];
- ok(cooperationConversation('壁の傷の文字を解読して','brom')&&chat[0].text.includes('リディア')&&currentOffers().lydia?.action==='decode'&&!knowsClue('lydia','darkness'),'不得意な解読依頼から適任者への申し出につながらないか先に解読');
+ ok(cooperationConversation('壁の傷の文字を解読して','brom')&&chat[0].text.includes('マレン')&&currentOffers().lydia?.action==='decode'&&!knowsClue('lydia','darkness'),'不得意な解読依頼から適任者への申し出につながらないか先に解読');
  fixture();state.room='hall';reportInvestigation(PEOPLE[1],'inspect',apply('brom','inspect'));
  ok(currentOffers().gareth?.action==='unlock','ブロムの扉の実結果から適任者が申し出ない');
  apply('gareth','unlock');chat=[];cooperationConversation('次は何をすればいい？','all');
@@ -285,7 +285,7 @@ vm.runInContext(`(async()=>{
  ok(rejects(()=>parseAI('石扉の広間か、いい判断だな。')),'JSONの無い返答を受理');
  // 2026-10-07：暗くて誰も調べられない時の調べる依頼には、GMが先に理由と灯りの頼み先を返します。依頼でない発言や明るい時は止めません。
  fixture();apply('lydia','douse');state.discovery.cache=true;ask=async()=>{throw Error('LLMを呼ばない');};
- const darkAsk=await explorationIntent('隠し収納を調べてくれる？','gareth');ok(darkAsk.clarify.startsWith('暗くて')&&darkAsk.clarify.includes('リディア')&&!darkAsk.jobs.length,'暗闇の調査依頼にGMが理由と灯りの持ち主を返さない');
+ const darkAsk=await explorationIntent('隠し収納を調べてくれる？','gareth');ok(darkAsk.clarify.startsWith('暗くて')&&darkAsk.clarify.includes('マレン')&&!darkAsk.jobs.length,'暗闇の調査依頼にGMが理由と灯りの持ち主を返さない');
  ok((await explorationIntent('隠し収納の開け方が分からない','all')).clarify==='','暗闇の相談まで依頼として止める');
  fixture();ok(!explorationBlockedReason(),'明るい時に調査を止める理由を返す');
  // 2026-10-07：暗くて調べられない間は「〜が見えるよ。調べてみよう」と告知せず、灯した時に告知します。GM相談には調べられない理由を渡します。

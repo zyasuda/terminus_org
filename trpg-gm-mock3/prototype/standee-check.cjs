@@ -7,7 +7,7 @@ const fs=require('node:fs');
  const {GLTFLoader}=await import('./vendor/three/loaders/GLTFLoader.js');
  let checks=0;const ok=(v,m)=>{checks++;if(!v)throw Error(m);};
  for(const id of ['ines','brom','gareth','lydia']){
-  const bytes=fs.readFileSync(__dirname+'/assets/standees/'+id+(id==='brom'?'-hammer-shield':id==='gareth'?'-sheathed':'-v64')+'.glb');
+  const bytes=fs.readFileSync(__dirname+'/assets/standees/'+(id==='lydia'?'maren':id)+(id==='brom'?'-hammer-shield':id==='gareth'?'-sheathed':'-v64')+'.glb');
   const result=await new GLTFLoader().parseAsync(bytes.buffer.slice(bytes.byteOffset,bytes.byteOffset+bytes.byteLength),'');
   const bounds=new THREE.Box3().setFromObject(result.scene),size=bounds.getSize(new THREE.Vector3());let meshes=0,maps=0;
   result.scene.traverse(o=>{if(o.isMesh){meshes++;if(o.material.map)maps++;ok(o.geometry.attributes.position.count>0,id+'の頂点がない');}});

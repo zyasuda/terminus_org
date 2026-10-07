@@ -1,6 +1,7 @@
 const vm=require('node:vm'),assert=require('node:assert/strict'),{execFileSync}=require('node:child_process'),{createHash}=require('node:crypto');
 const root=__dirname;
-const reference=execFileSync('git',['show','c36fc01:trpg-gm-mock3/prototype/game.js'],{encoding:'utf8',cwd:root});
+const reference=execFileSync('git',['show','c36fc01:trpg-gm-mock3/prototype/game.js'],{encoding:'utf8',cwd:root}).replaceAll('リディア','マレン').replace("fullName:'マレン・セレス・アーヴェン',age:'29歳',species:'人間'","fullName:'マレン',age:'未設定',species:'エルフ'");
+// 2026-10-08：作者指定のマレンへの交代（表示名・人物設定）だけを比較元へ反映します。能力・状態・ルールは比較を維持します。
 async function trace(sources){
  const hash=createHash('sha256');let cases=0;
  const math=Object.create(Math);math.random=()=>.5;

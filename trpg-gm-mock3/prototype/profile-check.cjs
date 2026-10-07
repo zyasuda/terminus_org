@@ -7,7 +7,7 @@ vm.runInContext(`(async()=>{
  const rejects=fn=>{try{fn();return false;}catch{return true;}};
  state=initial();render=()=>{};
  for(const p of PEOPLE){const own=visibleProfile(p.id,state,p.id);ok(Object.keys(own).length===Object.keys(profileFacts(p.id)).length,p.name+'の本人設定が欠ける');if(p.id!=='ines')ok(!visibleProfile(p.id).past&&!visibleProfile(p.id).fullName&&!visibleProfile(p.id).skill1,p.name+'の未開示情報が見える');}
- ok(Object.keys(visibleProfile('lydia')).join(',')==='name,role,height,item0','初期のリディアに呼び名・役割・身長・公開装備以外が漏れた');const detailed=initial();revealProfile('lydia',[{key:'skillDetail1'}],detailed);ok(knowsProfile('lydia','skill1',detailed)&&knowsProfile('lydia','skillDetail1',detailed)&&!knowsProfile('lydia','skill0',detailed),'詳細を聞いた技能の名称が表示されない');
+ ok(Object.keys(visibleProfile('lydia')).join(',')==='name,role,height,item0','初期のマレンに呼び名・役割・身長・公開装備以外が漏れた');const detailed=initial();revealProfile('lydia',[{key:'skillDetail1'}],detailed);ok(knowsProfile('lydia','skill1',detailed)&&knowsProfile('lydia','skillDetail1',detailed)&&!knowsProfile('lydia','skill0',detailed),'詳細を聞いた技能の名称が表示されない');
  const speech='古い文字を読むことができるわ。';
  const accepted=validateProfileAudit('lydia',speech,{valid:true,claims:[{key:'skill1',value:profileFacts('lydia').skill1.value,quote:'古い文字を読むことができる'}],conflicts:[]});
  revealProfile('lydia',accepted.claims);ok(knowsProfile('lydia','skill1')&&!knowsProfile('lydia','past')&&!knowsProfile('lydia','experience')&&!knowsProfile('lydia','skillDetail1'),'技能だけの開示で背景まで開いた');

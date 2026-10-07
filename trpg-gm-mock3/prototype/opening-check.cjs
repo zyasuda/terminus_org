@@ -24,7 +24,7 @@ vm.runInContext(`(async()=>{
  ok(state.profiles.history.length===6&&state.profiles.history.every(h=>h.source==='持ち物の紹介'),'紹介の履歴が欠ける');
  ok(consents.lantern.voices['lydia:light']&&consentCandidate('lantern',consents.lantern)===null,'本人の提案だけで点灯を確定');
  // 紹介直後の短い了承も、灯りの提案と宛先を照合する既存経路へ送ります。
- const start=chat.length;recipient='lydia';chat.push({who:'イネス（あなた）→リディア',text:'お願いします',kind:'you'});
+ const start=chat.length;recipient='lydia';chat.push({who:'イネス（あなた）→マレン',text:'お願いします',kind:'you'});
  let calls=0,payload;ask=async(system,input)=>{if(++calls===1){payload=input;return JSON.stringify({signals:[{index:start,action:'light',stance:'request',quote:'お願いします'}]});}return JSON.stringify({speech:'ええ、灯します。',action:'light'});};
  auditProfile=async()=>({valid:true,claims:[],conflicts:[]});await settleConsent('lantern',start);
  ok(payload.voices['lydia:light']&&payload.addressedTo==='lydia','導入の提案が短い了承へ引き継がれない');

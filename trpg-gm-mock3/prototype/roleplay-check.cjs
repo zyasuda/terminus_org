@@ -5,17 +5,17 @@ const context=vm.createContext({document:{getElementById:id=>elements[id]??=el()
 loadPrototype(context);
 vm.runInContext(`(async()=>{
  let checks=0;const ok=(v,m)=>{checks++;if(!v)throw Error(m)};
- state=initial();chat=[];state.knowledge.lydia.push('リディアだけの秘密');learnClue('lydia','darkness');state.knowledge.ines.push('自分だけの観察');
+ state=initial();chat=[];state.knowledge.lydia.push('マレンだけの秘密');learnClue('lydia','darkness');state.knowledge.ines.push('自分だけの観察');
  const data=roleContext('ブロムに頼む','brom'),encoded=JSON.stringify(data);
  ok(data.actor.profile.origin.value===PROFILE_DRAFT.ines.origin,'自分の設定が欠ける');
  ok(data.recipient==='ブロム'&&encoded.includes('自分だけの観察'),'宛先や本人の観察が欠ける');
- ok(!encoded.includes('リディアだけの秘密')&&!encoded.includes(CLUES.darkness),'仲間の秘密が下書きへ漏れる');
+ ok(!encoded.includes('マレンだけの秘密')&&!encoded.includes(CLUES.darkness),'仲間の秘密が下書きへ漏れる');
  ok(!encoded.includes(PROFILE_DRAFT.brom.origin),'未開示の人物設定を渡す');
  ok(data.actor.inventory.every(r=>r.holder==='ines'),'他人の道具を自分の持ち物として渡す');
  ok(roleText('{"speech":"頼むわ。","action":"smash"}')==='頼むわ。','下書きの文章が読めない');
  ok(stageSpeaker('イネス（あなた）→全員','you')==='ines','話し手ではなく宛先を照らす');
- ok(stageSpeaker('ブロム（AI）','')==='brom'&&stageSpeaker('リディア','')==='lydia','仲間の発言を照らさない');
- ok(stageSpeaker('GM','gm')===null&&stageSpeaker('リディア','private')===null&&stageSpeaker('接続・応答の確認','error')===null,'GMや個人だけの記録を発言者として扱う');
+ ok(stageSpeaker('ブロム（AI）','')==='brom'&&stageSpeaker('マレン','')==='lydia','仲間の発言を照らさない');
+ ok(stageSpeaker('GM','gm')===null&&stageSpeaker('マレン','private')===null&&stageSpeaker('接続・応答の確認','error')===null,'GMや個人だけの記録を発言者として扱う');
  const before=JSON.stringify(state),logBefore=JSON.stringify(chat);setupRoleHelp();$('message').value='元の文';openRoleHelp();$('roleIntent').value='灯りを頼む';
  ask=async()=>'{"speech":"足元を照らしてくれる？"}';await generateRoleDraft();
  ok($('roleDraft').value==='足元を照らしてくれる？','生成した下書きが表示されない');
@@ -34,7 +34,7 @@ vm.runInContext(`(async()=>{
  openRoleHelp();$('roleIntent').value='頼む';ask=async()=>{throw Error('通信失敗')};await generateRoleDraft();
  ok(!$('roleGenerate').disabled&&$('roleStatus').textContent.includes('自分で書いて'),'通信失敗で手入力を止める');
  $('roleDraft').value='自分の言葉';$('roleUse').onclick();ok($('message').value==='自分の言葉','通信なしの自由な下書きを使えない');
- openRoleHelp('sheetMessage','lydia');$('roleDraft').value='リディア、ありがとう';$('roleUse').onclick();ok($('sheetMessage').value==='リディア、ありがとう','シートの入力へ写せない');
+ openRoleHelp('sheetMessage','lydia');$('roleDraft').value='マレン、ありがとう';$('roleUse').onclick();ok($('sheetMessage').value==='マレン、ありがとう','シートの入力へ写せない');
  const status=el(),button=el();startVoice('message',button,status);ok(status.textContent.includes('未対応')&&!voiceSession,'未対応で録音状態になる');
  let recorder;window.SpeechRecognition=class {constructor(){recorder=this;}start(){}stop(){this.stopped=true;}};
  $('message').value='こんにちは';startVoice('message',button,status);

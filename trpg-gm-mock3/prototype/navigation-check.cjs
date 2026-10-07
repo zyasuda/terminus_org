@@ -16,7 +16,7 @@ vm.runInContext(`(async()=>{
  ok(navigationIntent('排水室へ行こう').kind==='clarify','未確認の地名から自動で移動');
  ok(navigationIntent('下りの通路へ進もう').to==='drain','未知の通路を選んで入れない');
  ok(navigationIntent('奥へ進もう').kind==='route'&&navigationIntent('どっちに行く？').kind==='route','曖昧な進行を勝手に確定');
- ok(navigationIntent('リディア、地図を見せて').item==='lydia_map','紹介された相手の地図を特定できない');
+ ok(navigationIntent('マレン、地図を見せて').item==='lydia_map','紹介された相手の地図を特定できない');
  ok(navigationIntent('地図を見せて','lydia').holder==='lydia','個別の地図依頼が宛先と一致しない');
  ok(navigationIntent('地図を見せて','brom').kind==='clarify','地図を持たない相手への依頼を付け替え');
  ok(navigationIntent('坑道図を見せて').item==='lydia_map'&&navigationIntent('私の坑道図を広げよう').kind==='clarify','唯一の地図の特定や非所持品の拒否が不正');
@@ -39,7 +39,7 @@ vm.runInContext(`(async()=>{
  fixture();apply('lydia','light');move('hall');move('entry');
  ok(visibleExits().find(e=>e.id==='hall').name==='石扉の広間'&&visibleExits().find(e=>e.id==='drain').name===null,'地図なしで訪ねた部屋と未訪問の部屋を区別できない');
  ok(mapRecord().length===2,'訪問だけで未訪問の分岐まで開示');
- fixture();state.discovery.stoneOn=true;readMap('lydia','lydia_map');ok(state.navigation.maps.includes('lydia_map')&&state.navigation.known.length===3,'灯石の灯りでリディアの地図を読めない');
+ fixture();state.discovery.stoneOn=true;readMap('lydia','lydia_map');ok(state.navigation.maps.includes('lydia_map')&&state.navigation.known.length===3,'灯石の灯りでマレンの地図を読めない');
  fixture();apply('lydia','light');const original=JSON.stringify(state);
  ok(rejects(()=>readMap('brom','lydia_map'))&&JSON.stringify(state)===original,'持っていない地図を読む');
  ok(rejects(()=>readMap('lydia','staff'))&&JSON.stringify(state)===original,'地図でない品を地図扱い');
@@ -77,4 +77,4 @@ vm.runInContext(`(async()=>{
  move('hall');state.opened=true;await submitMessage('石扉の奥へ進もう');ok(state.phase==='battle'&&state.boss===24,'開いた扉の先への会話が既存の戦闘へつながらない');
  fixture();ok(!state.navigation.maps.length&&state.navigation.known.join(',')==='entry'&&!state.navigation.offer,'再開始で地図・行き先の記憶が残る');
  return count;
-})()`,context).then(n=>console.log('PASS: '+n+' checks — 通路と地名の区別 / リディアの地図のみ / 未訪問情報の保護 / 個別所有・貸与 / 会話の相談と移動 / 本人の了承と古い応答 / 地図なし探索 / 戦闘への接続')).catch(e=>{console.error(e);process.exitCode=1});
+})()`,context).then(n=>console.log('PASS: '+n+' checks — 通路と地名の区別 / マレンの地図のみ / 未訪問情報の保護 / 個別所有・貸与 / 会話の相談と移動 / 本人の了承と古い応答 / 地図なし探索 / 戦闘への接続')).catch(e=>{console.error(e);process.exitCode=1});
