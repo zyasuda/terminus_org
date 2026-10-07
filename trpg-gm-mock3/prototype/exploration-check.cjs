@@ -266,5 +266,16 @@ vm.runInContext(`(async()=>{
  explorationOffers={brom:{room:'drain',action:'hold'},gareth:{room:'drain',action:'inspect_water'},lydia:{room:'drain',action:'inspect_water'}};
  ok(hold('ブロム、操作輪を支えて','all').jobs?.[0]?.id==='brom','名指しされたブロムの申し出を選べない');
  ok(!hold('ブロムとガレス、操作輪を支えて','all').jobs?.length,'二人を名指しした了承で一人の申し出を実行');
+ // 2026-10-07：短い了承は、一番新しい申し出に応えたとみなします。了承の言葉が無ければ実行しません。
+ updateRecipients=()=>{};finishAITurn=()=>{};const noLLM=async()=>{throw Error('LLMを呼ばない');};
+ const did=(id,action)=>actionHistory.some(h=>h.id===id&&h.action===action);
+ fixture();busy=false;ask=noLLM;offerCooperation('lydia','inspect_rails','私がレールを調べてみましょうか？');offerCooperation('brom','inspect_rails','俺がレールを調べてみようか？');
+ await submitMessage('お願い','all');ok(did('brom','inspect_rails')&&!did('lydia','inspect_rails'),'2つの申し出のうち一番新しいブロムの申し出に応えない');
+ fixture();busy=false;ask=noLLM;offerCooperation('brom','inspect_rails','俺がレールを調べてみようか？');
+ await submitMessage('そうだね。やってみて','all');ok(did('brom','inspect_rails'),'「そうだね。やってみて」を了承と読まない');
+ fixture();busy=false;ask=noLLM;offerCooperation('brom','inspect_rails','俺がレールを調べてみようか？');
+ await submitMessage('そうだね','all');ok(!did('brom','inspect_rails'),'了承の言葉が無い相づちで実行');
+ fixture();busy=false;ask=noLLM;offerCooperation('brom','inspect_rails','俺がレールを調べてみようか？');
+ await submitMessage('お願い','gareth');ok(!did('brom','inspect_rails'),'別の相手への「お願い」でブロムの申し出を実行');
  return count;
 })()`,context).then(n=>console.log('PASS: '+n+' checks — 明示依頼と短い了承 / 曖昧な提案の確認 / 指定相手・発言根拠 / 調査と実結果の共有 / 個人情報の保護 / 解読 / 候補の自発共有 / 二重実行・古い応答 / 会話から解錠判定 / 自分だけの選択肢 / 人間への依頼・保留・了承・自分の実行')).catch(e=>{console.error(e);process.exitCode=1;});

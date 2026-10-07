@@ -208,7 +208,7 @@ function introduceInventory(){
   const claims=r.items.map(item=>({key:itemKey(r.id,item),value:ITEM_DEFS[item].name,quote:ITEM_DEFS[item].name}));
   const audit=validateProfileAudit(r.id,r.speech,{valid:true,claims,conflicts:[]});
   say(personName(r.id)+'（AI）',r.speech);revealProfile(r.id,audit.claims,state,'持ち物の紹介');
-  if(r.offer)consents.lantern=mergeConsentSignals('lantern',null,[{id:r.id,action:'light',stance:'request',quote:r.offer}]);
+  if(r.offer)proposeConsent('lantern',r.id,'light',r.offer);
  }
 }
 function dialogueFocus(p,question){

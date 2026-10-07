@@ -79,5 +79,13 @@ vm.runInContext(`(async()=>{
  fixture();apply('lydia','light');chat=[{who:'イネス（あなた）→全員',kind:'you',text:'リディア、ランタンを灯して'}];
  ask=async()=>JSON.stringify({signals:[{index:0,action:'light',stance:'request',quote:'ランタンを灯して'}]});await settleConsent('lantern',0);
  ok(chat.at(-1).text==='ランタンはすでに灯っているよ。'&&!currentConsent('lantern'),'仲間の点灯依頼に「すでに灯っている」と答えない');
+ // 2026-10-07：持ち主本人の提案に人間が短く了承したら、本人に聞き直さず実行します。反対や疑問が残っていれば実行しません。
+ updateRecipients=()=>{};finishAITurn=()=>{};
+ fixture();busy=false;apply('lydia','light');actionHistory=[];calls=0;ask=async()=>{calls++;throw Error('LLMを呼ばない');};
+ proposeConsent('lantern','lydia','douse','ランタンを消して見え方を確かめてみましょうか？');
+ await submitMessage('そうだね。やってみて','lydia');ok(!state.lit&&actionHistory.at(-1)?.action==='douse'&&calls===0,'本人の消灯提案への短い了承で消灯しない、またはLLMに聞き直す');
+ fixture();busy=false;apply('lydia','light');actionHistory=[];ask=async()=>{throw Error('LLMを呼ばない');};
+ proposeConsent('lantern','lydia','douse','ランタンを消してみましょうか？');consents.lantern=mergeConsentSignals('lantern',consents.lantern,[signal('gareth','douse','oppose')]);
+ await submitMessage('お願い','lydia');ok(state.lit,'反対が残っているのに短い了承で消灯');
  return count;
 })()`,context).then(n=>console.log('PASS: '+n+' checks — 仲間の依頼 / 本人の了承・保留 / 反対・疑問・撤回 / 相反する案 / 点灯済み / 二重実行防止 / 発言根拠 / シーン・戦闘の制限 / 通信・形式・人物照合の失敗 / 古い応答')).catch(e=>{console.error(e);process.exitCode=1;});

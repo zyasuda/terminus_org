@@ -1,5 +1,5 @@
 {
- "source": "/tmp/mock3-llm.jsonl (2026-10-04〜06の試遊で中継サーバーが記録した実際のLLM応答)",
+ "source": "/tmp/mock3-llm.jsonl (2026-10-04〜06の試遊で中継サーバーが記録した実際のLLM応答) / 2026-10-07以降は logs/llm.jsonl",
  "cases": [
   {
    "id": "hold-to-brom-request-quote",
@@ -168,6 +168,37 @@
      "ts": "2026-10-06T02:31:05.951Z",
      "system": "あなたはTRPGのリディア。口調",
      "reply": "```json\n{\n  \"speech\": \"了解。では灯を消してみます。「蒼き塵は、隠された場所へ帰る」—光が無くなった時、何かが見えるかもしれません。\",\n  \"action\": \"douse\",\n  \"share\": true,\n  \"proposal\": \"\",\n  \"shareClues\": [\"darkness\"]\n}\n```\n\nランタンを消します。刻みの指示を文字通り実行して、暗闇での変化を観察するのが次のステップです。"
+    }
+   ]
+  },
+  {
+   "id": "douse-short-approval",
+   "note": "リディアの消灯提案に「そうだね。やってみて」。頭に「そうだね。」が付くと了承と読まれず、LLMの経路でリディアの行動の形式が崩れて消灯されなかった（2026-10-07の試遊 #19）",
+   "text": "そうだね。やってみて",
+   "to": "lydia",
+   "setup": "entry-decoded",
+   "settle": {
+    "chat": "{\"public\":{\"phase\":\"explore\",\"room\":\"坑道入口\",\"lit\":true,\"navigation\":{\"exits\":[{\"id\":\"hall\",\"passage\":\"奥へ続く通路\",\"name\":null,\"visited\":false},{\"id\":\"drain\",\"passage\":\"下りの通路\",\"name\":null,\"visited\":false}],\"maps\":[{\"item\":\"lydia_map\",\"name\":\"古い坑道の地図\",\"holder\":\"lydia\",\"shared\":false}],\"known\":[{\"id\":\"entry\",\"name\":\"坑道入口\",\"visited\":true,\"current\":true,\"note\":\"\"}]},\"targets\":[\"古い台車\",\"途切れたレール\",\"壁の傷\"],\"inventory\":[{\"id\":\"hammer\",\"name\":\"金槌\",\"owner\":\"brom\",\"holder\":\"brom\"},{\"id\":\"shield\",\"name\":\"盾\",\"owner\":\"brom\",\"holder\":\"brom\"},{\"id\":\"picks\",\"name\":\"錠前破り\",\"owner\":\"gareth\",\"holder\":\"gareth\"},{\"id\":\"dagger\",\"name\":\"短剣\",\"owner\":\"gareth\",\"holder\":\"gareth\"},{\"id\":\"lantern\",\"name\":\"ランタン\",\"owner\":\"lydia\",\"holder\":\"lydia\"},{\"id\":\"lydia_map\",\"name\":\"古い坑道の地図\",\"owner\":\"lydia\",\"holder\":\"lydia\"}],\"holding\":false,\"drainChange\":false,\"round\":1,\"boss\":24,\"hp\":{\"ines\":12,\"brom\":18,\"gareth\":15,\"lydia\":12},\"weak\":false,\"fire\":2},\"actor\":\"lydia\",\"addressedTo\":\"all\",\"voices\":{},\"lines\":[{\"index\":7,\"id\":\"ines\",\"text\":\"壁の傷の中に、古い文字らしい刻みがある。\"},{\"index\":8,\"id\":\"brom\",\"text\":\"古い文字か。石工の目から見ても、刻みは相当な年月が経ってるな。リディア、その文字、読めそうか？それとも、まずは傷全体をしっかり見てから判断する方が良さそうだ。\"},{\"index\":9,\"id\":\"gareth\",\"text\":\"古い刻みか。文字なら読み手が要るな。リディア、その傷を詳しく見てもらえるか？あるいは地図と照らし合わせて、この場所に何か記されてないか確認してもらいたい。\"},{\"index\":10,\"id\":\"lydia\",\"text\":\"傷の中の刻みですね。ランタンの光を当てて、文字の形をはっきり見てみましょう。古い碑文の記号なら、輪郭がわかれば読み解けるかもしれません。\"}]}",
+    "reply": {
+     "log": 1493,
+     "ts": "2026-10-06T02:30:17.619Z",
+     "system": "灯りの相談を整理するGMです。l",
+     "reply": "```json\n{\n  \"signals\": [\n    {\n      \"index\": 10,\n      \"action\": \"light\",\n      \"stance\": \"request\",\n      \"addressedTo\": \"self\",\n      \"actor\": \"lydia\",\n      \"quote\": \"ランタンの光を当てて、文字の形をはっきり見てみましょう\"\n    }\n  ]\n}\n```"
+    }
+   },
+   "expect": "doused",
+   "replies": [
+    {
+     "log": 1575,
+     "ts": "2026-10-07T03:21:26.715Z",
+     "system": "あなたは会話の調査依頼を読むGM",
+     "reply": "```json\n{\n  \"kind\": \"approval\",\n  \"jobs\": [\n    {\n      \"id\": \"lydia\",\n      \"action\": \"test_darkness\",\n      \"quote\": \"そうだね。やってみて\"\n    }\n  ],\n  \"clarify\": \"\"\n}\n```"
+    },
+    {
+     "log": 1578,
+     "ts": "2026-10-07T03:21:27.943Z",
+     "system": "あなたはTRPGのリディア。口調",
+     "reply": "```json\n{\n  \"speech\": \"ではランタンを消して、刻みの見え方を確かめてみます。\",\n  \"action\": \"lydia:douse\",\n  \"share\": false,\n  \"proposal\": \"\",\n  \"shareClues\": []\n}\n```"
     }
    ]
   }

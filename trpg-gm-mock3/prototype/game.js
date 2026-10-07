@@ -21,6 +21,7 @@ let consents={};
 let pendingTransfer=null;
 let sheetDrafts={};
 let explorationOffers={},announcedPoints=new Set();
+let latestProposal=null;
 // 仲間からイネスへの依頼。再開始・移動で破棄する会話中だけの記録です。
 let humanRequests=[];
 // 軽い冗談を許す返答の割合。0なら落ち着いた返答だけ、1なら毎回許可します。
@@ -503,7 +504,7 @@ async function actFromConversation(intent){
 function offerCooperation(id,action,speech){
  if(!actionsFor(id).includes(action))return;
  say(personName(id)+'（AI）',speech);propose(id,action);
- if(safeInvestigation(action)||COOPERATION_ACTIONS.includes(action)||action==='open_cache')explorationOffers[id]={room:state.room,action};
+ if(safeInvestigation(action)||COOPERATION_ACTIONS.includes(action)||action==='open_cache'){explorationOffers[id]={room:state.room,action};latestProposal={kind:'offer',id,action,room:state.room,epoch:generation};}
 }
 // 次の相談は現在地の公開結果から選ぶだけ。提案の時点では行動も所有も変えません。
 function speakCooperation(advice){
@@ -520,7 +521,7 @@ function acceptAI(p,r,planning){
  }
  revealProfile(p.id,r.profileClaims||[]);say(p.name+'（AI）',r.speech);if(!planning){rememberMapOffer(p,r.speech);rememberHumanRequest(p.id,r.speech);}
  if(r.share)publishReport(p.id,r.speech);for(const key of r.shareClues||[])shareClue(p.id,key);
- if(r.proposal&&spokenOffer(r.proposal,r.speech)){propose(p.id,r.proposal);if(safeInvestigation(r.proposal)||COOPERATION_ACTIONS.includes(r.proposal)||r.proposal==='open_cache')explorationOffers[p.id]={room:state.room,action:r.proposal};}
+ if(r.proposal&&spokenOffer(r.proposal,r.speech)){propose(p.id,r.proposal);if(safeInvestigation(r.proposal)||COOPERATION_ACTIONS.includes(r.proposal)||r.proposal==='open_cache'){explorationOffers[p.id]={room:state.room,action:r.proposal};latestProposal={kind:'offer',id:p.id,action:r.proposal,room:state.room,epoch:generation};}}
  if(r.action!=='wait'&&(planning||r.requested&&state.phase==='explore')){
   if(planning)plan.push({id:p.id,action:r.action});else{const out=apply(p.id,r.action,state,humanId());if(!out.private){sayResult('GM',out.text,'gm');delete explorationOffers[p.id];cooperationFollowup(p.id,r.action);}}
  }
@@ -651,7 +652,9 @@ async function settleConsent(topic,start){
  const human=lines.find(v=>v.id===humanId()),prior=[...new Set(Object.values(pending?.voices||{}).filter(v=>v.stance==='request').map(v=>v.action))];
  const otherOffers=Object.keys(currentOffers()).some(id=>recipient==='all'||recipient===id)||currentMapOffer()||pendingTransfer;
  if(human&&prior.length===1&&!otherOffers&&(recipient==='all'||recipient===actor)&&/^(?:うん[、,\s]*)?(?:はい|お願い(?:します)?|いいよ)[。！!\s]*$/.test(human.text)&&!signals.some(v=>v.id===humanId()))signals.push({index:human.index,id:humanId(),action:prior[0],stance:'request',quote:human.text});
- consents[topic]=mergeConsentSignals(topic,pending,signals);const action=consentCandidate(topic,consents[topic]);
+ consents[topic]=mergeConsentSignals(topic,pending,signals);
+ for(const v of signals)if(!isHuman(v.id)&&v.stance==='request')latestProposal={kind:'consent',id:v.id,action:v.action,topic,room:state.room,epoch:generation};
+ const action=consentCandidate(topic,consents[topic]);
  if(!action){
   const voices=Object.values(consents[topic].voices);
   if(!voices.length){delete consents[topic];return;}
@@ -672,7 +675,7 @@ async function settleConsent(topic,start){
  const out=apply(actor,action,state,actor);sayResult('GM',out.text,'gm');
  if($('sheet')?.open)$('sheet').close();render();
 }
-function proposeConsent(topic,id,action,quote){consents[topic]=mergeConsentSignals(topic,currentConsent(topic),[{id,action,stance:'request',quote}]);}
+function proposeConsent(topic,id,action,quote){consents[topic]=mergeConsentSignals(topic,currentConsent(topic),[{id,action,stance:'request',quote}]);latestProposal={kind:'consent',id,action,topic,room:state.room,epoch:generation};}
 function consentTopicOf(action){return Object.keys(CONSENT_TOPICS).find(topic=>CONSENT_TOPICS[topic].actions.includes(action))||null;}
 function consentVoiced(stances){return Object.keys(CONSENT_TOPICS).some(topic=>Object.values(currentConsent(topic)?.voices||{}).some(v=>stances.includes(v.stance)));}
 function anyConsentBlocked(){return Object.keys(CONSENT_TOPICS).some(topic=>consentBlocked(topic));}
@@ -884,6 +887,19 @@ function submitMessage(text,to=recipient){
  const turn={turnId:Date.now().toString(36)+'-'+(++aiTurnSerial),started:aiClock(),calls:0,totalMs:0,fallbacks:{}};aiTurn=turn;
  try{const result=submitMessageBody(text,to);if(result&&typeof result.then==='function')return result.finally(()=>{finishAITurn(turn);});finishAITurn(turn);return result;}catch(error){finishAITurn(turn);throw error;}
 }
+function isShortApproval(text){return /^(?:(?:うん|そうだね|そうだな|そうしよう|いいね|了解|オーケー|OK)[、,。！!\s]+)?(?:はい|お願い(?:します|ね)?|いいよ|やってみて|頼む|頼んだ|よろしく)[。！!\s]*$/.test(text);}
+function shortApproval(text,to){
+ if(!isShortApproval(text)||!latestProposal||latestProposal.epoch!==generation||latestProposal.room!==state.room||state.phase!=='explore'||to!=='all'&&to!==latestProposal.id||pendingTransfer||currentMapOffer())return null;
+ const {kind,id,action,topic}=latestProposal;
+ if(kind==='offer'){
+  if(currentOffers()[id]?.action!==action)return null;
+  return run(()=>companions(false,to,[{id,action,quote:text}]));
+ }
+ if(currentConsent(topic)?.voices[id+':'+action]?.stance!=='request')return null;
+ if(consentBlocked(topic)){say('GM',consentStatus(topic),'gm');render();return {performed:false};}
+ if(CONSENT_TOPICS[topic].actor(state)!==id||!actionsFor(id).includes(action))return null;
+ const out=apply(id,action,state,humanId());sayResult(personName(id),out.text,'');render();announceVisiblePoints();return {performed:true};
+}
 function submitMessageBody(text,to=recipient){
  if(!text||busy)return;stopVoice();recipient=to;updateRecipients();const name=recipientName(to);say(personName(humanId())+'（あなた）→'+name,text,'you');state.shared.push(personName(humanId())+'→'+name+'：'+text);
  shareMentionedClues(text);
@@ -896,6 +912,7 @@ function submitMessageBody(text,to=recipient){
  const navigation=navigationIntent(text,to);if(navigation)return run(()=>handleNavigation(navigation));
  if(cooperationConversation(text,to)){render();return {performed:false};}
  const wheel=wheelConversation(text);if(wheel){if(wheel.selfAction)return human(wheel.selfAction).then(result=>{if($('sheet')?.open)$('sheet').close();return result;});say('GM',wheel.clarify,'gm');render();return {performed:false};}
+ const approval=shortApproval(text,to);if(approval!==null)return approval;
  for(const topic of Object.keys(CONSENT_TOPICS)){
   const direct=CONSENT_TOPICS[topic].direct(text,to);
   if(direct&&!consentBlocked(topic)){
@@ -947,7 +964,7 @@ function startVoice(inputId,button,status){
 }
 function setupVoice(){$('sheet').addEventListener('close',()=>{if(voiceSession?.inputId==='sheetMessage')stopVoice();});$('mainMic').onclick=()=>startVoice('message',$('mainMic'),$('mainVoiceStatus'));document.addEventListener('visibilitychange',()=>{if(document.hidden)stopVoice();});}
 
-function reset(){battlePreview=false;previewPlacement=null;$('battlePreview').checked=false;if(stageView){stageView.setLight('auto');$('stageLightMode').value='auto';}stopVoice();roleRequest++;if($('rolePanel')?.open)$('rolePanel').close();humanRequests=[];sheetDrafts={};pendingTransfer=null;explorationOffers={};announcedPoints=new Set();consents={};recipient='all';conversationUnread=0;updateConversation();generation++;state=initial();busy=false;target=null;chat=[];plan=[];actionHistory=[];planReview=null;$('log').replaceChildren();introduceInventory();render();}
+function reset(){battlePreview=false;previewPlacement=null;$('battlePreview').checked=false;if(stageView){stageView.setLight('auto');$('stageLightMode').value='auto';}stopVoice();roleRequest++;if($('rolePanel')?.open)$('rolePanel').close();humanRequests=[];sheetDrafts={};pendingTransfer=null;explorationOffers={};latestProposal=null;announcedPoints=new Set();consents={};recipient='all';conversationUnread=0;updateConversation();generation++;state=initial();busy=false;target=null;chat=[];plan=[];actionHistory=[];planReview=null;$('log').replaceChildren();introduceInventory();render();}
 
 // DOMへの接続と起動はここだけ。検査はこの関数を呼ばずに同じファイルを読みます。
 function bootGame(){
