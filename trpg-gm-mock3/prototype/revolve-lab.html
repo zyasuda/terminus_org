@@ -1,0 +1,143 @@
+<!doctype html>
+<html lang="ja">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>廻り舞台の試作</title>
+<style>
+:root{color-scheme:dark;--bg:#101817;--panel:#192726;--line:#344947;--text:#eee9dc;--muted:#a7b8b5;--gold:#dabc79}
+*{box-sizing:border-box}html,body{height:100%}body{margin:0;background:var(--bg);color:var(--text);font:13px/1.5 system-ui,sans-serif;display:grid;grid-template-columns:1fr 300px}
+#stage{position:relative;min-height:60vh;overflow:hidden}#stage canvas{position:absolute;inset:0;width:100%;height:100%;display:block}
+#fade{position:absolute;inset:0;background:#000;opacity:0;pointer-events:none}
+#place{position:absolute;left:16px;top:12px;font-family:Georgia,"Yu Mincho",serif;font-size:22px;text-shadow:0 1px 4px #000}
+aside{background:var(--panel);border-left:1px solid var(--line);padding:14px 16px;overflow:auto;max-height:100vh}
+h1{font-family:Georgia,"Yu Mincho",serif;font-weight:500;font-size:19px;margin:0 0 4px}p{margin:0 0 10px;color:var(--muted)}
+fieldset{border:1px solid var(--line);border-radius:6px;margin:0 0 12px;padding:8px 10px 10px}legend{color:var(--gold);padding:0 4px}
+label{display:block;margin:6px 0 0}label span{display:flex;justify-content:space-between;color:var(--muted)}label output{color:var(--text);font-variant-numeric:tabular-nums}
+input[type=range]{width:100%;accent-color:var(--gold)}.row{display:flex;gap:8px;flex-wrap:wrap}.row label{display:inline-flex;gap:4px;margin:0;align-items:center}
+button{background:transparent;color:var(--text);border:1px solid var(--line);border-radius:5px;padding:6px 10px;cursor:pointer;font:inherit}button:hover{border-color:var(--gold)}
+#go{width:100%;margin-bottom:10px;border-color:var(--gold);color:var(--gold);padding:9px}#go:disabled{opacity:.5;cursor:default}
+#note{white-space:pre-line;font-variant-numeric:tabular-nums}
+@media (max-width:760px){body{grid-template-columns:1fr}aside{border-left:0;border-top:1px solid var(--line);max-height:none}}
+</style>
+<div id="stage"><div id="fade"></div><div id="place"></div></div>
+<aside>
+ <h1>廻り舞台の試作</h1>
+ <p>手前の床を円盤にして人物と小道具ごと回し、背景は上へ飛ばして次の背景を下ろします。舞台・カメラ・照明はゲームの点灯時と同じです。</p>
+ <button id="go">場面を変える</button>
+ <fieldset><legend>回し方</legend>
+  <div class="row"><label><input type="radio" name="turn" value="full" checked>一周（仲間を乗せたまま）</label><label><input type="radio" name="turn" value="half">半周（裏で次の場面が待つ）</label></div>
+  <label><span>回転の秒数<output data-for="secs"></output></span><input type="range" id="secs" min="1" max="8" step=".1" value="3.5"></label>
+  <label><span>円盤の半径<output data-for="radius"></output></span><input type="range" id="radius" min="4" max="12" step=".1" value="7"></label>
+  <label><span>円盤の中心の奥行き（大きいほど手前）<output data-for="cz"></output></span><input type="range" id="cz" min="-3" max="3" step=".1" value=".6"></label>
+  <div class="row" style="margin-top:6px"><label><input type="checkbox" id="ccw">反時計回り</label></div>
+ </fieldset>
+ <fieldset><legend>吊り替え（背景）</legend>
+  <label><span>回転のどこで始めるか（0〜1）<output data-for="flyAt"></output></span><input type="range" id="flyAt" min="0" max=".9" step=".01" value=".1"></label>
+  <label><span>吊り替えの秒数（上げ＋下ろし）<output data-for="flySecs"></output></span><input type="range" id="flySecs" min=".6" max="6" step=".1" value="2.6"></label>
+  <label><span>上げと下ろしの重なり（0＝間が空く、1＝同時）<output data-for="overlap"></output></span><input type="range" id="overlap" min="0" max="1" step=".05" value=".25"></label>
+ </fieldset>
+ <fieldset><legend>照明と手触り</legend>
+  <label><span>転換中に照明を落とす量<output data-for="dim"></output></span><input type="range" id="dim" min="0" max="1" step=".05" value=".45"></label>
+  <label><span>コマ落とし（0＝なめらか、毎秒のコマ数）<output data-for="fps"></output></span><input type="range" id="fps" min="0" max="24" step="1" value="0"></label>
+  <label><span>見渡し 左右<output data-for="px"></output></span><input type="range" id="px" min="-6" max="6" step=".1" value="0"></label>
+  <div class="row" style="margin-top:6px"><label><input type="checkbox" id="reduced">動きを減らす設定（今の暗転で代える）</label></div>
+ </fieldset>
+ <fieldset><legend>残す</legend>
+  <button id="copy">設定を写す</button>
+  <div id="note"></div>
+ </fieldset>
+</aside>
+<script type="module">
+import * as THREE from './vendor/three/three.module.min.js';
+// 値はゲーム（stage.js・scenario.js、2026-10-07時点）と同じ。
+const stageZ=z=>1+(z-1)*2.6/4.5,FOV=65,HORIZON=54,TILE=70/36;
+const SCENES=[
+ {name:'坑道入口',bg:'../replay/img/mine_entrance_unlit.webp',aspect:614/1100,floor:'#b6c0dc',sky:'#182027',prop:{img:'./assets/scenery/mine-cart-v1.png',w:3,h:2,x:-5,z:.15}},
+ {name:'石扉の広間',bg:'../replay/img/s2_junction.webp',aspect:619/1100,floor:'#8793a7',sky:'#151b20',prop:{img:'./art-preview/scenery/foreground-rock-v02.png',w:1.9,h:2.85,x:5.1,z:.15}},
+];
+// スタンディーの印刷範囲（scenario.js の SCENARIO_SHEETS）と身長。並びは探索時の手前2列
+const PARTY=[
+ {id:'ines',cm:155,x:-4.5,z:2.2,sheet:{width:793,height:1251,figure:[261,65,615,1177]}},
+ {id:'brom',cm:135,x:-1.5,z:1.13,sheet:{width:924,height:1029,figure:[100,85,824,959]}},
+ {id:'gareth',cm:184,x:1.5,z:1.13,sheet:{width:780,height:1444,figure:[93,93,703,1354]}},
+ {id:'lydia',cm:172,x:4.5,z:2.2,sheet:{width:780,height:1444,figure:[149,87,655,1358]}},
+];
+const host=document.getElementById('stage'),$=id=>document.getElementById(id),fadeEl=$('fade'),placeEl=$('place');
+const renderer=new THREE.WebGLRenderer({antialias:true,preserveDrawingBuffer:true});renderer.setPixelRatio(Math.min(devicePixelRatio,1.5));renderer.outputColorSpace=THREE.SRGBColorSpace;host.prepend(renderer.domElement);
+const scene=new THREE.Scene();scene.background=new THREE.Color(SCENES[0].sky);
+const camera=new THREE.PerspectiveCamera(FOV,1,.1,100);
+const loader=new THREE.TextureLoader(),cache=new Map(),tex=(u,srgb=true)=>{if(!cache.has(u)){const t=loader.load(u);if(srgb)t.colorSpace=THREE.SRGBColorSpace;cache.set(u,t);}return cache.get(u);};
+const ambient=new THREE.HemisphereLight('#a9bac6','#51412e',1.2);scene.add(ambient);
+const lantern=new THREE.PointLight('#ffcc86',8,22,1);scene.add(lantern);
+// 外の床（動かない）。絵・ノーマルマップ・奥の透明化はゲームと同じ
+const fc=document.createElement('canvas');fc.width=4;fc.height=512;const fx=fc.getContext('2d'),fg=fx.createLinearGradient(0,185,0,265);fg.addColorStop(0,'#000');fg.addColorStop(1,'#fff');fx.fillStyle=fg;fx.fillRect(0,0,4,512);
+// clone は画像を共有するので、読み込みが終われば両方に反映される
+const groundTex=rep=>{const m=tex('./assets/scenery/ground-coal-gravel-v1.png').clone(),n=tex('./assets/scenery/ground-coal-gravel-v1-normal.png',false).clone();for(const t of [m,n]){t.wrapS=t.wrapT=THREE.RepeatWrapping;t.repeat.set(rep,rep);t.anisotropy=4;}return [m,n];};
+const [om,on]=groundTex(36);
+const floorMat=new THREE.MeshStandardMaterial({map:om,normalMap:on,alphaMap:new THREE.CanvasTexture(fc),transparent:true,depthWrite:false,roughness:.96,metalness:0,color:SCENES[0].floor});
+const floor=new THREE.Mesh(new THREE.PlaneGeometry(70,70),floorMat);floor.rotation.x=-Math.PI/2;floor.position.y=-.04;floor.renderOrder=-2;scene.add(floor);
+// 円盤（盆）。絵は外の床と同じ。縁の木枠と真ん中の継ぎ目で、回っていることを見せる
+const turntable=new THREE.Group();scene.add(turntable);
+const discMat=new THREE.MeshStandardMaterial({roughness:.96,metalness:0,color:SCENES[0].floor});
+const disc=new THREE.Mesh(new THREE.CircleGeometry(1,128),discMat);disc.rotation.x=-Math.PI/2;turntable.add(disc);
+const rim=new THREE.Mesh(new THREE.RingGeometry(.985,1,128),new THREE.MeshStandardMaterial({color:'#3a2a1a',roughness:.8}));rim.rotation.x=-Math.PI/2;rim.position.y=.004;turntable.add(rim);
+const seam=new THREE.Mesh(new THREE.PlaneGeometry(2,.02),new THREE.MeshStandardMaterial({color:'#2a1f14',roughness:.9}));seam.rotation.x=-Math.PI/2;seam.position.y=.003;turntable.add(seam);
+let builtRadius=-1;
+function shapeDisc(){const r=+$('radius').value;if(r===builtRadius)return;builtRadius=r;for(const m of [disc,rim])m.scale.set(r,r,1);seam.scale.set(r,1,1);
+ const [dm,dn]=groundTex(2*r/TILE);discMat.map=dm;discMat.normalMap=dn;discMat.needsUpdate=true;}
+// 円盤の上の2つの面：表（今の場面）と裏（次の場面。180°回して置く）
+function standee(p){const g=new THREE.Group(),s=p.sheet,body=s.figure[3]-s.figure[1],w=s.width/body,h=s.height/body;
+ for(const [i,side] of ['front','back'].entries()){const m=new THREE.Mesh(new THREE.PlaneGeometry(w,h),new THREE.MeshBasicMaterial({map:tex(`./art-preview/characters/${p.id}-v64-${side}.png`),transparent:true,alphaTest:.04}));
+  m.position.set((s.width/2-(s.figure[0]+s.figure[2])/2)/body,(s.figure[3]-s.height/2)/body,i?-.008:.008);m.rotation.y=i?Math.PI:0;g.add(m);}
+ g.scale.setScalar(4.8*p.cm/172);return g;}
+function makeSide(){const g=new THREE.Group();g.userData.party=PARTY.map(p=>{const s=standee(p);g.add(s);return s;});
+ const prop=new THREE.Mesh(new THREE.PlaneGeometry(1,1),new THREE.MeshBasicMaterial({transparent:true,alphaTest:.1,side:THREE.DoubleSide}));g.add(prop);g.userData.prop=prop;turntable.add(g);return g;}
+const front=makeSide(),back=makeSide();back.rotation.y=Math.PI;
+function dress(side,sc){const cz=+$('cz').value;
+ side.userData.party.forEach((s,i)=>s.position.set(PARTY[i].x,0,PARTY[i].z-cz));
+ const p=sc.prop,m=side.userData.prop;m.material.map=tex(p.img);m.material.needsUpdate=true;m.scale.set(p.w,p.h,1);m.position.set(p.x,p.h/2,p.z);}
+// 背景の板（吊り物）。幅64、縦は絵の比、中心の高さ10.5、奥行きはゲームと同じ
+function backdrop(sc){const m=new THREE.Mesh(new THREE.PlaneGeometry(64,64*sc.aspect),new THREE.MeshBasicMaterial({map:tex(sc.bg),transparent:true,alphaTest:.1}));m.position.set(0,10.5,stageZ(-15));m.renderOrder=-3;scene.add(m);return m;}
+let cur=0;const drops=SCENES.map(backdrop);
+const FLY=32;// 画面の上端より上へ抜ける高さ
+function setScene(i){cur=i;const sc=SCENES[i];dress(front,sc);back.visible=false;turntable.rotation.y=0;
+ drops.forEach((d,k)=>{d.visible=k===i;d.position.y=10.5;});floorMat.color.set(sc.floor);discMat.color.set(sc.floor);scene.background.set(sc.sky);
+ ambient.intensity=1.2;lantern.intensity=8;placeEl.textContent=sc.name;}
+const smooth=t=>t<=0?0:t>=1?1:t*t*t*(t*(t*6-15)+10),clamp=t=>Math.max(0,Math.min(1,t));
+let anim=null;
+function start(){if(anim)return;const next=(cur+1)%SCENES.length,mode=document.querySelector('[name=turn]:checked').value;
+ const turnS=+$('secs').value,flyAt=+$('flyAt').value*turnS,flyS=+$('flySecs').value,reduced=$('reduced').checked;
+ anim={next,mode,reduced,t0:performance.now(),turnS,flyAt,flyS,total:reduced?.9:Math.max(turnS,flyAt+flyS),swapped:false,dir:$('ccw').checked?1:-1};
+ if(mode==='half'&&!reduced){dress(back,SCENES[next]);back.visible=true;}
+ $('go').disabled=true;}
+function finish(){setScene(anim.next);anim=null;fadeEl.style.opacity='0';$('go').disabled=false;}
+function step(now){if(!anim)return;const a=anim;let el=(now-a.t0)/1000;const fps=+$('fps').value;if(fps>0&&!a.reduced)el=Math.floor(el*fps)/fps;
+ if(a.reduced){// 今のゲームと同じ考え方：暗転→差し替え→明転
+  const t=clamp(el/a.total);fadeEl.style.opacity=String(1-Math.abs(t*2-1));if(t>=.5&&!a.swapped){a.swapped=true;setScene(a.next);anim=a;}
+  if(t>=1)finish();return;}
+ const sa=SCENES[cur],sb=SCENES[a.next],tt=smooth(clamp(el/a.turnS));turntable.rotation.y=a.dir*tt*(a.mode==='full'?2*Math.PI:Math.PI);
+ // 一周：小道具は後ろを向いている間（半周の時点）に次の場面のものへ替える
+ if(a.mode==='full'&&tt>=.5&&!a.swapped){a.swapped=true;dress(front,sb);}
+ // 吊り替え：今の背景を上げ、次の背景を下ろす。重なり0なら間に何も無い時間ができる
+ const up=a.flyS/(2-+$('overlap').value),f=el-a.flyAt,u=smooth(clamp(f/up)),d=smooth(clamp((f-(a.flyS-up))/up));
+ drops[cur].position.y=10.5+FLY*u;drops[a.next].visible=f>a.flyS-up;drops[a.next].position.y=10.5+FLY*(1-d);
+ // 床と空の色は、背景が入れ替わる中ほどで移す
+ const mix=smooth(clamp((f-a.flyS*.3)/(a.flyS*.4))),c=new THREE.Color(sa.floor).lerp(new THREE.Color(sb.floor),mix);floorMat.color.copy(c);discMat.color.copy(c);scene.background.copy(new THREE.Color(sa.sky).lerp(new THREE.Color(sb.sky),mix));
+ const k=1-+$('dim').value*Math.sin(Math.PI*clamp(el/a.total));ambient.intensity=1.2*k;lantern.intensity=8*k;
+ if(el>=a.total)finish();}
+// ランタンはリディアに付いて動く（ゲームと同じ）。半周では、裏から来たリディアへ持ち替える
+function lydiaWorld(){const side=anim&&anim.mode==='half'&&Math.abs(turntable.rotation.y)>Math.PI/2?back:front,v=new THREE.Vector3();side.userData.party[3].getWorldPosition(v);return v;}
+function orient(){const px=+$('px').value;camera.position.set(px,3.8,10);camera.lookAt(px,3.8+20*2*(HORIZON/100-.5)*Math.tan(FOV*Math.PI/360),-10);}
+function resize(){const w=host.clientWidth,h=host.clientHeight;renderer.setSize(w,h,false);camera.aspect=w/h;camera.updateProjectionMatrix();}
+new ResizeObserver(resize).observe(host);
+for(const el of document.querySelectorAll('aside input'))el.addEventListener('input',()=>{for(const o of document.querySelectorAll(`output[data-for="${el.id}"]`))o.value=el.value;if(!anim&&el.id==='cz')dress(front,SCENES[cur]);});
+for(const o of document.querySelectorAll('output[data-for]'))o.value=$(o.dataset.for).value;
+$('go').onclick=start;
+$('copy').onclick=async()=>{const s={turn:document.querySelector('[name=turn]:checked').value,ccw:$('ccw').checked};for(const el of document.querySelectorAll('aside input[type=range]'))s[el.id]=+el.value;const txt=JSON.stringify(s);try{await navigator.clipboard.writeText(txt);$('note').textContent='写しました：'+txt;}catch{$('note').textContent=txt;}};
+function frame(now){requestAnimationFrame(frame);shapeDisc();turntable.position.z=+$('cz').value;step(now);
+ const l=lydiaWorld();lantern.position.set(l.x,3,l.z);orient();renderer.render(scene,camera);}
+setScene(0);requestAnimationFrame(frame);
+// 確認用：転換の途中の指定した秒数へ進める
+window.__lab={start,seek(sec){if(anim)anim.t0=performance.now()-sec*1000;},get total(){return anim?.total},get busy(){return !!anim},turntable,drops};
+</script>
+</html>
