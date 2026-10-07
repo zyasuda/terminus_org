@@ -1,2 +1,3 @@
 .DS_Store
 assets/_staging/**/codex.log
+logs/
