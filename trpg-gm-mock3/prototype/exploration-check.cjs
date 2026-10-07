@@ -277,5 +277,11 @@ vm.runInContext(`(async()=>{
  await submitMessage('そうだね','all');ok(!did('brom','inspect_rails'),'了承の言葉が無い相づちで実行');
  fixture();busy=false;ask=noLLM;offerCooperation('brom','inspect_rails','俺がレールを調べてみようか？');
  await submitMessage('お願い','gareth');ok(!did('brom','inspect_rails'),'別の相手への「お願い」でブロムの申し出を実行');
+ // 2026-10-07：説明の文の後ろにJSONの囲み（バッククォート3つ＋json）が1つだけある返答は、その中身を読みます。囲みが2つ・文だけは今どおり拒否します。
+ const fence=body=>'\\x60\\x60\\x60json\\n'+body+'\\n\\x60\\x60\\x60';
+ ok(parseAI('石扉の広間か、いい判断だな。\\n\\n'+fence('{"speech":"行こう","action":"wait"}')).speech==='行こう','説明の文の後ろのJSONを読めない');
+ ok(parseAI(fence('{"speech":"行こう"}')).speech==='行こう'&&parseAI('{"speech":"行こう"}').speech==='行こう','これまで読めた形が読めない');
+ ok(rejects(()=>parseAI('前置き\\n'+fence('{"action":"wait"}')+'\\n'+fence('{"action":"smash"}'))),'JSONの囲みが2つある返答から恣意的に1つを選ぶ');
+ ok(rejects(()=>parseAI('石扉の広間か、いい判断だな。')),'JSONの無い返答を受理');
  return count;
 })()`,context).then(n=>console.log('PASS: '+n+' checks — 明示依頼と短い了承 / 曖昧な提案の確認 / 指定相手・発言根拠 / 調査と実結果の共有 / 個人情報の保護 / 解読 / 候補の自発共有 / 二重実行・古い応答 / 会話から解錠判定 / 自分だけの選択肢 / 人間への依頼・保留・了承・自分の実行')).catch(e=>{console.error(e);process.exitCode=1;});

@@ -9,10 +9,11 @@ vm.runInContext(`(async()=>{
  render=()=>{};updateRecipients=()=>{};finishAITurn=()=>{};say=(who,text,kind='')=>chat.push({who,text,kind});
  let fallbacks=[],unrecorded=[];recordAIFallback=kind=>fallbacks.push(kind);
  const replay=replies=>{const queue=[...replies];return async system=>{const i=queue.findIndex(r=>system.startsWith(r.system));if(i<0){unrecorded.push(system.slice(0,20));throw Error('記録に無い呼び出し');}return cleanFencedJsonReply(queue.splice(i,1)[0].reply);};};
- const results=[];
+ const results=[],realAudit=auditProfile;
  for(const c of cases){
   state=initial();chat=[];actionHistory=[];consents={};explorationOffers={};humanRequests=[];pendingTransfer=null;plan=[];fallbacks=[];unrecorded=[];busy=false;recipient=c.to;
   let setup='';
+  if(c.setup==='entry-lit'){state.lit=true;state.everLit=true;}
   if(c.setup==='drain'){state.room='drain';state.lit=true;state.everLit=true;}
   if(c.setup==='entry-decoded'){
    // 点灯中の会話（記録では「光を当てて」が点灯の依頼として残った）と、その後の解読からの消灯の提案を、記録どおりに再生します。
@@ -24,9 +25,10 @@ vm.runInContext(`(async()=>{
    setup=voices.includes('lydia:douse')?'':'前提の相談が再現できない: '+voices.join(',');
   }
   Object.assign(explorationOffers,c.offers||{});
+  auditProfile=realAudit;if(c.auditPass)auditProfile=async()=>({valid:true,claims:[],conflicts:[]});
   ask=replay(c.replies);const before=chat.length;
   if(!setup)await submitMessage(c.text,c.to);
-  const ok=!setup&&(c.expect==='holding'?state.holding===true:c.expect==='doused'?state.lit===false:false);
+  const ok=!setup&&(c.expect==='holding'?state.holding===true:c.expect==='doused'?state.lit===false:c.expect==='said'?chat.slice(before).some(x=>x.who===c.said.who&&x.text.startsWith(c.said.text)):false);
   results.push({id:c.id,ok,pending:c.pending||"",setup,fallbacks:[...fallbacks],unrecorded:[...unrecorded],said:chat.slice(before).map(x=>x.who+'：'+x.text.slice(0,60))});
  }
  return results;

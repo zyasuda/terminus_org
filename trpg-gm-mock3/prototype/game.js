@@ -366,7 +366,14 @@ function revealProfile(id,claims,s=state,source='本人の返答'){
 }
 // 呼び出し側でroom・lit・plan等の追加条件を保持します。
 function responseIsCurrent(epoch,source){return epoch===generation&&source===state;}
-function parseAI(text){return JSON.parse(text.trim().replace(/^```(?:json)?\s*/,'').replace(/\s*```$/,''));}
+function parseAI(text){
+ try{return JSON.parse(text.trim().replace(/^```(?:json)?\s*/,'').replace(/\s*```$/,''));}
+ catch(error){
+  const fences=[...text.matchAll(/```(?:json)?\s*([\s\S]*?)```/g)];
+  if(fences.length===1)try{return JSON.parse(fences[0][1]);}catch{}
+  throw error;
+ }
+}
 function validateProfileAudit(id,speech,r){
  const facts=profileFacts(id);
  if(!r||typeof r!=='object'||Array.isArray(r)||typeof r.valid!=='boolean'||!Array.isArray(r.claims)||!Array.isArray(r.conflicts)||r.claims.length>Object.keys(facts).length||r.conflicts.length>10)throw Error('GMの人物設定確認を読み取れませんでした。情報は記録していません。');
