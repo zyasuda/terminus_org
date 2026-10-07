@@ -6,7 +6,7 @@ loadPrototype(context);
 vm.runInContext(`(async()=>{
  let count=0;const ok=(v,m)=>{count++;if(!v)throw Error(m)},rejects=fn=>{try{fn();return false}catch{return true}};
  render=()=>{};say=(who,text,kind='')=>chat.push({who,text,kind});
- const fixture=()=>{state=initial();actionHistory=[];chat=[];plan=[];lanternDiscussion=null;pendingTransfer=null;};fixture();
+ const fixture=()=>{state=initial();actionHistory=[];chat=[];plan=[];consents={};pendingTransfer=null;};fixture();
  const give=(item,from,to,mode='give')=>({item,from,to,mode});
  ok(Object.keys(state.items).length===8&&Object.values(state.items).every(r=>r.owner===r.holder),'初期装備の所有者が不正');
  ok(inventoryView('brom').items.length===2&&!inventoryView('brom').others.some(i=>i.id==='rope'),'他人の未開示の持ち物をAIに漏らす');

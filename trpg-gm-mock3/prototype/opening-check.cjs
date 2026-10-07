@@ -5,7 +5,7 @@ loadPrototype(context);
 vm.runInContext(`(async()=>{
  let count=0;const ok=(value,message)=>{count++;if(!value)throw Error(message);};
  render=()=>{};updateRecipients=()=>{};say=(who,text,kind='')=>chat.push({who,text,kind});
- state=initial();chat=[];lanternDiscussion=null;actionHistory=[];
+ state=initial();chat=[];consents={};actionHistory=[];
  const before=JSON.stringify(state.items);
  ok(!knowsProfile('lydia','item2'),'紹介前から地図が公開される');
  introduceInventory();
@@ -22,11 +22,11 @@ vm.runInContext(`(async()=>{
  ok(!knowsProfile('lydia','item1')&&knowsProfile('lydia','item2'),'紹介していない杖まで公開／紹介した地図が非公開');
  ok(!knowsProfile('ines','item0',state,'brom')&&!hasItem('ines','ines_map'),'人間の未発言の所持品を公開／坑道図を残す');
  ok(state.profiles.history.length===6&&state.profiles.history.every(h=>h.source==='持ち物の紹介'),'紹介の履歴が欠ける');
- ok(lanternDiscussion.voices['lydia:light']&&lanternCandidate(lanternDiscussion)===null,'本人の提案だけで点灯を確定');
+ ok(consents.lantern.voices['lydia:light']&&consentCandidate('lantern',consents.lantern)===null,'本人の提案だけで点灯を確定');
  // 紹介直後の短い了承も、灯りの提案と宛先を照合する既存経路へ送ります。
  const start=chat.length;recipient='lydia';chat.push({who:'イネス（あなた）→リディア',text:'お願いします',kind:'you'});
  let calls=0,payload;ask=async(system,input)=>{if(++calls===1){payload=input;return JSON.stringify({signals:[{index:start,action:'light',stance:'request',quote:'お願いします'}]});}return JSON.stringify({speech:'ええ、灯します。',action:'light'});};
- auditProfile=async()=>({valid:true,claims:[],conflicts:[]});await settleLantern(start);
+ auditProfile=async()=>({valid:true,claims:[],conflicts:[]});await settleConsent('lantern',start);
  ok(payload.voices['lydia:light']&&payload.addressedTo==='lydia','導入の提案が短い了承へ引き継がれない');
  ok(state.lit&&actionHistory.length===1&&calls===2,'紹介後の了承から実際に点灯しない');
  // 紹介候補に入っていても、他人が持つ品・存在しない品は名乗りません。
@@ -34,12 +34,12 @@ vm.runInContext(`(async()=>{
  const rows=inventoryIntroductions(moved),lydia=rows.find(r=>r.id==='lydia'),brom=rows.find(r=>r.id==='brom');
  ok(lydia.items.join(',')==='lydia_map'&&!lydia.offer&&!lydia.speech.includes('ランタン'),'持っていないランタンを紹介・操作提案');
  ok(brom.items.join(',')==='hammer'&&!brom.speech.includes('盾'),'存在しない品を紹介');
- state=initial();chat=[];lanternDiscussion=null;actionHistory=[];introduceInventory();
+ state=initial();chat=[];consents={};actionHistory=[];introduceInventory();
  ok(chat.length===4&&state.profiles.history.length===6&&!state.lit,'新しい開始で紹介や点灯が残る');
  ok(mentionsOwnProfile('投げ縄があるよ')&&!mentionsOwnProfile('ランタンを持ってる人は？'),'本人の品名による自己申告を見落とす／他者の質問を自己申告にする');
  acquireItem('ines','ironbar');ok(mentionsOwnProfile('工具を持ってるよ'),'入手品の別名を見落とす');
  // 人間は自分で発言した品だけ公開。質問や虚偽はGM照合で公開しません。
- state=initial();chat=[];lanternDiscussion=null;
+ state=initial();chat=[];consents={};
  transferIntent=async()=>null;explorationIntent=async()=>({jobs:[]});let replies=0;companions=async()=>{replies++;};
  const key=itemKey('ines','rope');auditProfile=async(id,speech)=>({valid:true,claims:[{key,value:ITEM_DEFS.rope.name,quote:'投げ縄'}],conflicts:[]});
  await submitMessage('投げ縄があるよ','all');

@@ -17,7 +17,7 @@ function recordAIFallback(kind){aiFallbacks[kind]=(aiFallbacks[kind]||0)+1;if(ai
 function finishAITurn(turn){turn.elapsedMs=Math.round(aiClock()-turn.started);const {started,...record}=turn;aiLastTurn=record;if(aiTurn===turn)aiTurn=null;sendAIMetrics({type:'ai-turn',...record});updateAIComparison();}
 
 let state,generation=0,busy=false,target=null,chat=[],plan=[],actionHistory=[],planReview=null,apiReady=false;
-let lanternDiscussion=null;
+let consents={};
 let pendingTransfer=null;
 let sheetDrafts={};
 let explorationOffers={},announcedPoints=new Set();
@@ -47,7 +47,7 @@ function transferSummary(t){return personName(t.from)+' → '+personName(t.to)+'
 function transferItem(t,s=state){
  const record=validateTransfer(t,s),giveBack=t.mode==='return'&&record.owner===record.holder;record.holder=t.to;if(t.mode==='give'||giveBack)record.owner=t.to;
  const event={item:t.item,from:t.from,to:t.to,mode:t.mode,room:s.room};s.transfers.push(event);revealItem(t.to,t.item,s);
- if(s===state){for(const id of [t.from,t.to])actionHistory.push({id,action:'transfer',initiator:humanId(),room:s.room,transfer:event,result:{text:transferSummary(event)}});plan=[];planReview=null;if(t.item==='lantern')lanternDiscussion=null;}
+ if(s===state){for(const id of [t.from,t.to])actionHistory.push({id,action:'transfer',initiator:humanId(),room:s.room,transfer:event,result:{text:transferSummary(event)}});plan=[];planReview=null;for(const topic of Object.keys(CONSENT_TOPICS))if(t.item===CONSENT_TOPICS[topic].item)delete consents[topic];}
  return event;
 }
 function transferCandidates(text,to,s=state){
@@ -195,7 +195,7 @@ function recordAction(id,action,initiator=id,room=state.room,result=null){
 }
 function apply(id,a,s=state,initiator=id){
  const room=s.room,result=applyAction(id,a,s);
- if(s===state){recordAction(id,a,initiator,room,result);if(['light','douse'].includes(a))lanternDiscussion=null;}
+ if(s===state){recordAction(id,a,initiator,room,result);const topic=consentTopicOf(a);if(topic)delete consents[topic];}
  return result;
 }
 function visibleExits(s=state){return s.phase==='explore'&&s.lit?ROOMS[s.room].links.map(id=>({id,passage:PASSAGES[s.room][id],name:s.navigation.known.includes(id)||s.visited.includes(id)?ROOMS[id].name:null,visited:s.visited.includes(id)})):[];}
@@ -264,7 +264,7 @@ function conversationStatus(){
  rows.push(...currentHumanRequests().map(r=>personName(r.id)+'からあなたへ：'+LABEL[r.action]+(r.paused?'（保留中）':'')));
  const map=currentMapOffer();if(map)rows.push(personName(map.holder)+'の申し出：地図を広げる');
  if(pendingTransfer?.epoch===generation)rows.push('受け渡しの確認待ち');
- const lamp=lanternStatus();if(lamp)rows.push(lamp);
+ for(const topic of Object.keys(CONSENT_TOPICS)){const status=consentStatus(topic);if(status)rows.push(status);}
  return [...new Set(rows)];
 }
 function publishOwnClue(key){if(busy||!shareClue(humanId(),key))return;say(personName(humanId())+'（あなた）',CLUES[key],'you');render();return run(()=>companions(false,'all'));}
@@ -428,7 +428,7 @@ function sheet(id,tab='person',item=null){
   content=`${selectedItem?`<section class="sheet-item-detail" id="sheetItemDetail" aria-label="${esc(selectedItem.name)}の外観"><img src="images/items/${selectedItem.id}-v1.png" alt="${esc(selectedItem.name)}" width="240" height="160"><div><h3>${esc(selectedItem.name)}</h3><p>${esc(selectedItem.detail)}</p><p class="sheet-muted">所持：${esc(personName(selectedItem.holder))}${selectedItem.owner!==selectedItem.holder?' · '+esc(personName(selectedItem.owner))+'から借りている':''}</p></div><button type="button" id="itemDetailClose" aria-label="アイテムの画像を閉じる">×</button></section>`:''}<h3>今の持ち物</h3>${held.length?table(['持ち物','用途・貸し借り'],held.map(item=>[Object.hasOwn(MAPS,item.id)?'<button data-open-map="'+item.id+'">'+esc(item.name)+'を広げる</button>':'<button class="sheet-item-link" data-item-view="'+item.id+'" aria-expanded="'+(selectedItem?.id===item.id)+'" aria-controls="sheetItemDetail">'+esc(item.name)+' <span aria-hidden="true">↗</span></button>',`${knowsProfile(id,itemKey(id,item.id,true))?esc(ITEM_DEFS[item.id].detail):'<span class="sheet-muted">詳しい用途はまだ聞いていない</span>'}${item.owner!==id?'<br><small>'+esc(personName(item.owner))+'から借りている</small>':''}`])):'<p class="sheet-muted">知られている持ち物はありません。本人に聞いてみましょう。</p>'}${lent.length?`<div class="sheet-block"><h3>貸している品</h3>${table(['持ち物','借りている人'],lent.map(([item,r])=>[Object.hasOwn(MAPS,item)?esc(ITEM_DEFS[item].name):'<button class="sheet-item-link" data-item-view="'+item+'" aria-expanded="'+(selectedItem?.id===item)+'" aria-controls="sheetItemDetail">'+esc(ITEM_DEFS[item].name)+' <span aria-hidden="true">↗</span></button>',esc(personName(r.holder))]))}</div>`:''}<div class="sheet-block"><h3>受け渡しの記録</h3>${state.transfers.some(t=>t.from===id||t.to===id)?`<ul class="sheet-notes">${state.transfers.filter(t=>t.from===id||t.to===id).map(t=>`<li>${esc(transferSummary(t))}</li>`).join('')}</ul>`:'<p class="sheet-muted">まだありません。</p>'}</div>`;
  }
  if(tab==='notes')content=`<h3>本人について知ったこと</h3>${state.profiles.history.filter(h=>h.id===id).length?`<ul class="sheet-notes">${state.profiles.history.filter(h=>h.id===id).map(h=>`<li><small>${esc(h.label||facts[h.key]?.label||'持ち物')} · ${esc(h.source)}</small>${esc(h.value||facts[h.key]?.value||'記録')}</li>`).join('')}</ul>`:'<p class="sheet-muted">まだ聞き取った記録はありません。</p>'}<div class="sheet-block"><h3>${id===humanId()?'あなたが得た情報':'本人から聞き取る情報'}</h3>${id===humanId()?(info.own.length?`<ol class="sheet-notes">${info.own.map((t,i)=>`<li><small>発見 ${i+1} · ${sharedKnowledge(humanId(),t)||state.discovery.shared.some(k=>CLUES[k]===t)?'共有済み':'自分の記録'}</small>${esc(t)}${state.discovery.clues[humanId()].filter(k=>!state.discovery.shared.includes(k)&&CLUES[k]===t).map(k=>`<br><button class="private-note-share" data-share-clue="${k}" ${busy?'disabled':''}>この発見を皆に伝える</button>`).join('')}${!sharedKnowledge(humanId(),t)&&!Object.values(CLUES).includes(t)?`<br><button class="private-note-share" data-share-knowledge="${state.knowledge[humanId()].indexOf(t)}" ${busy?'disabled':''}>皆に伝える</button>`:''}</li>`).join('')}</ol>`:'<p class="sheet-muted">まだ発見はありません。</p>'):`<p class="sheet-muted">未共有の記録：${info.privateCount}件。内容は本人に相談して聞き取ります。</p>`}<div class="sheet-block"><h3>共有済みの手がかり</h3>${info.clues.length?`<ul class="sheet-notes">${info.clues.map(t=>`<li>${esc(t)}</li>`).join('')}</ul>`:'<p class="sheet-muted">まだありません。</p>'}</div><div class="sheet-block"><h3>行動履歴</h3><p class="sheet-muted">本人が実行した行動と、その結果を記録します。</p>${info.history.length?`<ol class="sheet-notes">${info.history.map((c,i)=>`<li data-history-index="${i}" tabindex="-1"><small>${i+1} · ${esc(ROOMS[c.room].name)} · ${c.initiator===id?'自発':esc(c.initiator==='gm'?'GM':PEOPLE.find(p=>p.id===c.initiator).name)+'の依頼'}</small>${esc(c.transfer?transferSummary(c.transfer):c.action==='move'?ROOMS[c.room].name+'へ移動':LABEL[c.action])}${c.result?.text?`<p class="sheet-muted">結果：${esc(c.result.text)}</p>`:''}</li>`).join('')}</ol>`:'<p class="sheet-muted">まだ行動していません。</p>'}</div></div>`;
- dialog.innerHTML=`<div class="sheet-header"><button id="sheetPrevious" class="sheet-person-switch previous" aria-label="前のキャラクター：${previous.name}" title="${previous.name}へ"><span aria-hidden="true">◀</span></button><img class="sheet-portrait" src="../replay/img/${id}.webp" alt="${p.name}"><div class="sheet-heading"><h2 id="sheetTitle">${p.name}</h2><p>${p.role}</p><div class="sheet-vitals"><div class="sheet-vital"><span>HP</span><div class="sheet-meter" role="progressbar" aria-label="HP" aria-valuemin="0" aria-valuemax="${p.hp}" aria-valuenow="${state.hp[id]}"><span style="width:${Math.max(0,Math.min(100,state.hp[id]/p.hp*100))}%"></span></div><span>${state.hp[id]} / ${p.hp}</span></div><div class="sheet-vital mp"><span>MP</span><div class="sheet-meter mp" role="img" aria-label="MP：数値未設定"></div><span>未設定</span></div></div></div><button id="closesheet" class="sheet-close">閉じる</button><button id="sheetNext" class="sheet-person-switch next" aria-label="次のキャラクター：${next.name}" title="${next.name}へ"><span aria-hidden="true">▶</span></button></div><nav class="sheet-nav" aria-label="記録の分類">${[['person','人物'],['ability','能力'],['items','持ち物'],['notes','情報・履歴']].map(([key,label])=>`<button data-sheet-tab="${key}" aria-pressed="${key===tab}">${label}</button>`).join('')}</nav><div class="sheet-content" tabindex="0" role="region" aria-label="キャラクターの記録内容">${content}</div><div class="sheet-contact"><label for="sheetMessage">${id===humanId()?'皆に話してみる':p.name+'に話しかけてみる'}</label><p role="status">${busy?'返答と人物設定を確認しています…':esc(state.profiles.feedback[id]||lanternStatus()||'全員に聞こえる会話です。選んだ相手が返答します。')}</p><form id="sheetChat"><div class="sheet-input"><input id="sheetMessage" maxlength="500" placeholder="${tab==='notes'?'調べて分かったことを教えて':tab==='ability'?'この能力で何を調べられそう？':'出身や得意なことを尋ねてみる'}" required ${busy?'disabled':''}><button type="button" class="mic-button" disabled aria-label="音声入力は準備中" aria-describedby="sheetMicNote" title="音声入力は準備中"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><rect x="9" y="2" width="6" height="12" rx="3"/><path d="M5 10v2a7 7 0 0 0 14 0v-2M12 19v3M8 22h8"/></svg></button></div><button type="submit" ${busy?'disabled':''}>${id===humanId()?'全員に話す':p.name+'に話す'}</button><button type="submit" data-gm="true" ${busy?'disabled':''}>GMに尋ねる</button></form><p id="sheetMicNote" class="sheet-mic-note" role="status">マイクを押して話し、聞き取った文を確認してから送信できます。</p></div>`;
+ dialog.innerHTML=`<div class="sheet-header"><button id="sheetPrevious" class="sheet-person-switch previous" aria-label="前のキャラクター：${previous.name}" title="${previous.name}へ"><span aria-hidden="true">◀</span></button><img class="sheet-portrait" src="../replay/img/${id}.webp" alt="${p.name}"><div class="sheet-heading"><h2 id="sheetTitle">${p.name}</h2><p>${p.role}</p><div class="sheet-vitals"><div class="sheet-vital"><span>HP</span><div class="sheet-meter" role="progressbar" aria-label="HP" aria-valuemin="0" aria-valuemax="${p.hp}" aria-valuenow="${state.hp[id]}"><span style="width:${Math.max(0,Math.min(100,state.hp[id]/p.hp*100))}%"></span></div><span>${state.hp[id]} / ${p.hp}</span></div><div class="sheet-vital mp"><span>MP</span><div class="sheet-meter mp" role="img" aria-label="MP：数値未設定"></div><span>未設定</span></div></div></div><button id="closesheet" class="sheet-close">閉じる</button><button id="sheetNext" class="sheet-person-switch next" aria-label="次のキャラクター：${next.name}" title="${next.name}へ"><span aria-hidden="true">▶</span></button></div><nav class="sheet-nav" aria-label="記録の分類">${[['person','人物'],['ability','能力'],['items','持ち物'],['notes','情報・履歴']].map(([key,label])=>`<button data-sheet-tab="${key}" aria-pressed="${key===tab}">${label}</button>`).join('')}</nav><div class="sheet-content" tabindex="0" role="region" aria-label="キャラクターの記録内容">${content}</div><div class="sheet-contact"><label for="sheetMessage">${id===humanId()?'皆に話してみる':p.name+'に話しかけてみる'}</label><p role="status">${busy?'返答と人物設定を確認しています…':esc(state.profiles.feedback[id]||Object.keys(CONSENT_TOPICS).map(consentStatus).filter(Boolean).join('')||'全員に聞こえる会話です。選んだ相手が返答します。')}</p><form id="sheetChat"><div class="sheet-input"><input id="sheetMessage" maxlength="500" placeholder="${tab==='notes'?'調べて分かったことを教えて':tab==='ability'?'この能力で何を調べられそう？':'出身や得意なことを尋ねてみる'}" required ${busy?'disabled':''}><button type="button" class="mic-button" disabled aria-label="音声入力は準備中" aria-describedby="sheetMicNote" title="音声入力は準備中"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><rect x="9" y="2" width="6" height="12" rx="3"/><path d="M5 10v2a7 7 0 0 0 14 0v-2M12 19v3M8 22h8"/></svg></button></div><button type="submit" ${busy?'disabled':''}>${id===humanId()?'全員に話す':p.name+'に話す'}</button><button type="submit" data-gm="true" ${busy?'disabled':''}>GMに尋ねる</button></form><p id="sheetMicNote" class="sheet-mic-note" role="status">マイクを押して話し、聞き取った文を確認してから送信できます。</p></div>`;
  $('sheetPrevious').onclick=()=>{sheet(previous.id,tab);$('sheetPrevious').focus();};$('sheetNext').onclick=()=>{sheet(next.id,tab);$('sheetNext').focus();};
  dialog.querySelectorAll('[data-item-view]').forEach(b=>b.onclick=()=>{const key=b.dataset.itemView,open=dialog.dataset.item!==key;sheet(id,'items',open?key:null);(open?$('itemDetailClose'):dialog.querySelector('[data-item-view="'+key+'"]'))?.focus();});
  const closeItem=()=>{const key=dialog.dataset.item;sheet(id,'items');dialog.querySelector('[data-item-view="'+key+'"]')?.focus();};
@@ -536,12 +536,12 @@ async function companions(planning=false,addressedTo='all',investigations=[]){
   if(requested==='open_cache'){propose(p.id,requested);if($('sheet')?.open)$('sheet').close();openDice('cache',true);return;}
   if(!confirmScenarioAction(requested))continue;
   const r=await checkedReply(p,planning,requested);if(epoch!==generation||!r)return;acceptAI(p,r,planning);}
- if(!planning&&epoch===generation){const question=chat[start]?.text||'',profileQuestion=order.length===1&&dialogueFocus(order[0],question).type==='profile';if(!profileQuestion&&!investigations.length)await settleLantern(start);if(epoch===generation)announceVisiblePoints();}
+ if(!planning&&epoch===generation){const question=chat[start]?.text||'',profileQuestion=order.length===1&&dialogueFocus(order[0],question).type==='profile';if(!profileQuestion&&!investigations.length)for(const topic of Object.keys(CONSENT_TOPICS)){await settleConsent(topic,start);if(epoch!==generation)return;}if(epoch===generation)announceVisiblePoints();}
 }
 
 // 分担調査は観察と解読。支援・解錠の了承は本人の直前の一意な申し出だけを使います。
 function investigationChoices(id){return state.phase==='explore'?actionsFor(id).filter(safeInvestigation):[];}
-function conversationChoices(id){return state.phase==='explore'?actionsFor(id).filter(a=>!['light','douse'].includes(a)):[];}
+function conversationChoices(id){return state.phase==='explore'?actionsFor(id).filter(a=>!consentTopicOf(a)):[];}
 function currentOffers(){
  return Object.fromEntries(Object.entries(explorationOffers).filter(([id,v])=>v.room===state.room&&conversationChoices(id).includes(v.action)&&usefulInvestigation(v.action)));
 }
@@ -574,9 +574,9 @@ async function explorationIntent(text,to){
  if(state.phase!=='explore'||/^(?:何か|なにか).*(?:見つかった|分かった|わかった)|調べた結果を|何が見つかった|(?:提案して|提案を聞かせて|案を出して)[。？！!?]*$/.test(text))return {jobs:[],clarify:''};
  // 本人の直前の一意な申し出への短い了承。別の保留や反対があれば補いません。
  const offersNow=Object.entries(currentOffers()).filter(([id])=>to==='all'||to===id);
- if(!lanternBlocked()&&!currentMapOffer()&&!pendingTransfer&&/^(?:うん[、,\s]*)?(?:はい|お願い(?:します)?|いいよ|やってみて)[。！!\s]*$/.test(text)){
-  const lanternOffers=Object.values(currentLanternDiscussion()?.voices||{}).some(v=>v.stance==='request');
-  if(!lanternOffers&&offersNow.length===1)return validateExplorationIntent({kind:'approval',jobs:[{id:offersNow[0][0],action:offersNow[0][1].action,quote:text}],clarify:''},to,text);
+ if(!anyConsentBlocked()&&!currentMapOffer()&&!pendingTransfer&&/^(?:うん[、,\s]*)?(?:はい|お願い(?:します)?|いいよ|やってみて)[。！!\s]*$/.test(text)){
+  const consentOffers=consentVoiced(['request']);
+  if(!consentOffers&&offersNow.length===1)return validateExplorationIntent({kind:'approval',jobs:[{id:offersNow[0][0],action:offersNow[0][1].action,quote:text}],clarify:''},to,text);
   if(offersNow.length>1)return {jobs:[],clarify:'どの仲間の、どの申し出をお願いしますか？'};
  }
  if(to!=='all'&&PEOPLE.some(p=>p.id===to)&&dialogueFocus(PEOPLE.find(p=>p.id===to),text).type==='profile')return {jobs:[],clarify:''};
@@ -598,82 +598,86 @@ function announceVisiblePoints(){
  fresh.forEach(t=>announcedPoints.add(state.room+':'+t));
  const p=aiPeople()[announcedPoints.size%aiPeople().length];if(!p)return;say(p.name+'（AI）',fresh.map(t=>'「'+TARGETS[t].name+'」').join('と')+'が見えるよ。気になる場所を調べてみよう。');
 }
-// 灯りの相談だけを扱う実行状態。保存・戦闘計画とは分け、シーンや点灯状態が変われば破棄します。
-function currentLanternDiscussion(){
- if(lanternDiscussion&&(lanternDiscussion.room!==state.room||lanternDiscussion.lit!==state.lit||state.phase!=='explore'))lanternDiscussion=null;
- return lanternDiscussion;
+// 議題ごとの相談。保存・戦闘計画とは分け、範囲が変われば破棄します。
+function currentConsent(topic){
+ if(consents[topic]&&(consents[topic].scope!==CONSENT_TOPICS[topic].scope(state)||state.phase!=='explore'))delete consents[topic];
+ return consents[topic]||null;
 }
-function lanternBlocked(){const voices=Object.values(currentLanternDiscussion()?.voices||{});return voices.some(v=>['oppose','question'].includes(v.stance))||new Set(voices.filter(v=>v.stance==='request').map(v=>v.action)).size>1;}
-function lanternStatus(){
- const voices=Object.values(currentLanternDiscussion()?.voices||{}),blocked=voices.filter(v=>['oppose','question'].includes(v.stance));
- if(blocked.length)return '灯りの操作は保留です。'+[...new Set(blocked.map(v=>PEOPLE.find(p=>p.id===v.id).name))].join('・')+'の反対や疑問を確認しましょう。';
- if(new Set(voices.filter(v=>v.stance==='request').map(v=>v.action)).size>1)return '点灯と消灯の案が食い違っています。どちらを試すか相談しましょう。';
+function consentBlocked(topic){const voices=Object.values(currentConsent(topic)?.voices||{});return voices.some(v=>['oppose','question'].includes(v.stance))||new Set(voices.filter(v=>v.stance==='request').map(v=>v.action)).size>1;}
+function consentStatus(topic){
+ const voices=Object.values(currentConsent(topic)?.voices||{}),blocked=voices.filter(v=>['oppose','question'].includes(v.stance));
+ if(blocked.length)return CONSENT_TOPICS[topic].label+'の操作は保留です。'+[...new Set(blocked.map(v=>PEOPLE.find(p=>p.id===v.id).name))].join('・')+'の反対や疑問を確認しましょう。';
+ if(new Set(voices.filter(v=>v.stance==='request').map(v=>v.action)).size>1)return CONSENT_TOPICS[topic].conflict;
  return '';
 }
-function validateLanternSignals(r,lines){
+function validateConsentSignals(topic,r,lines){
  // 中継モデルが一覧を外側の配列として返す場合も、各発言の検査は同じです。
  if(Array.isArray(r))r=r.length===1&&r[0]?.signals?r[0]:{signals:r};
- if(!r||!Array.isArray(r.signals)||r.signals.length>20)throw Error('灯りの相談を確認できませんでした。実行は保留しています。');
+ if(!r||!Array.isArray(r.signals)||r.signals.length>20)throw Error(CONSENT_TOPICS[topic].label+'の相談を確認できませんでした。実行は保留しています。');
  const seen=new Set();
  for(const v of r.signals){
   const line=lines.find(x=>x.index===v.index);
-  if(!line||!['light','douse'].includes(v.action)||!['request','oppose','question','withdraw'].includes(v.stance)||typeof v.quote!=='string'||!v.quote.trim()||!line.text.includes(v.quote)||seen.has(v.index+':'+v.action+':'+v.stance))throw Error('灯りの相談に発言根拠がありません。実行は保留しています。');
+  if(!line||!CONSENT_TOPICS[topic].actions.includes(v.action)||!['request','oppose','question','withdraw'].includes(v.stance)||typeof v.quote!=='string'||!v.quote.trim()||!line.text.includes(v.quote)||seen.has(v.index+':'+v.action+':'+v.stance))throw Error(CONSENT_TOPICS[topic].label+'の相談に発言根拠がありません。実行は保留しています。');
   seen.add(v.index+':'+v.action+':'+v.stance);
-  const same=r.signals.filter(x=>x.index===v.index&&x.action===v.action);if(same.length>1&&(same.length!==2||!same.some(x=>x.stance==='withdraw')||!same.some(x=>x.stance==='request')))throw Error('同じ発言の灯りの意見が食い違っています。実行は保留しています。');
+  const same=r.signals.filter(x=>x.index===v.index&&x.action===v.action);if(same.length>1&&(same.length!==2||!same.some(x=>x.stance==='withdraw')||!same.some(x=>x.stance==='request')))throw Error('同じ発言の'+CONSENT_TOPICS[topic].label+'の意見が食い違っています。実行は保留しています。');
  }
  return r.signals.map(v=>({...v,id:lines.find(x=>x.index===v.index).id})).sort((a,b)=>a.index-b.index||(a.stance==='withdraw'?-1:b.stance==='withdraw'?1:0));
 }
-function mergeLanternSignals(previous,signals,s=state){
- const result={room:s.room,lit:s.lit,voices:{...(previous?.voices||{})}};
+function mergeConsentSignals(topic,previous,signals,s=state){
+ const result={scope:CONSENT_TOPICS[topic].scope(s),voices:{...(previous?.voices||{})}};
  for(const v of signals){const key=v.id+':'+v.action;if(v.stance==='withdraw')delete result.voices[key];else result.voices[key]={id:v.id,action:v.action,stance:v.stance,quote:v.quote};}
  return result;
 }
-function lanternCandidate(d,s=state){
- if(s.phase!=='explore'||!d||d.room!==s.room||d.lit!==s.lit)return null;
+function consentCandidate(topic,d,s=state){
+ if(s.phase!=='explore'||!d||d.scope!==CONSENT_TOPICS[topic].scope(s))return null;
  const voices=Object.values(d.voices),requested=[...new Set(voices.filter(v=>v.stance==='request').map(v=>v.action))];
  if(requested.length!==1||voices.some(v=>['oppose','question'].includes(v.stance)))return null;
  const action=requested[0];
  // 本人の提案だけで持ち物の質問を実行に変えません。仲間の依頼・賛成が必要です。
- return voices.some(v=>v.stance==='request'&&v.id!==s.items.lantern.holder&&v.action===action)&&actionsFor(s.items.lantern.holder,s).includes(action)?action:null;
+ return voices.some(v=>v.stance==='request'&&v.id!==CONSENT_TOPICS[topic].actor(s)&&v.action===action)&&actionsFor(CONSENT_TOPICS[topic].actor(s),s).includes(action)?action:null;
 }
-async function settleLantern(start){
- if(state.phase!=='explore')return;const actor=state.items.lantern.holder,name=personName(actor);
- const pending=currentLanternDiscussion(),round=chat.slice(start);
+async function settleConsent(topic,start){
+ if(state.phase!=='explore')return;const actor=CONSENT_TOPICS[topic].actor(state),name=personName(actor);
+ const pending=currentConsent(topic),round=chat.slice(start);
  const lines=round.flatMap((c,i)=>{const p=c.kind==='you'?PEOPLE.find(p=>p.id===humanId()):PEOPLE.find(p=>c.who===p.name+'（AI）');return p?[{index:start+i,id:p.id,text:c.text}]:[];});
- // 人間の言い方だけで除外しません。仲間の点灯提案・依頼も相談の入口です。
- if(!pending&&!lines.some(c=>/ランタン|灯り|明かり|あかり|明る|暗|点灯|消灯/.test(c.text)))return;
- const epoch=generation,source=state,room=state.room,lit=state.lit;
- const text=await ask(LANTERN_SIGNALS_PROMPT, {public:publicView(),actor,addressedTo:recipient,voices:pending?.voices||{},lines},1400);
- if(!responseIsCurrent(epoch,source)||room!==state.room||lit!==state.lit)return;
- const signals=validateLanternSignals(parseAI(text),lines);
+ // 人間の言い方だけで除外しません。仲間の提案・依頼も相談の入口です。
+ if(!pending&&!lines.some(c=>CONSENT_TOPICS[topic].mentions.test(c.text)))return;
+ const epoch=generation,source=state,scope=CONSENT_TOPICS[topic].scope(state);
+ const text=await ask(CONSENT_TOPICS[topic].signalsPrompt, {public:publicView(),actor,addressedTo:recipient,voices:pending?.voices||{},lines},1400);
+ if(!responseIsCurrent(epoch,source)||scope!==CONSENT_TOPICS[topic].scope(state))return;
+ const signals=validateConsentSignals(topic,parseAI(text),lines);
  // 明確な短い了承を分類モデルが落としても、直前の一意な提案と宛先から補います。
  const human=lines.find(v=>v.id===humanId()),prior=[...new Set(Object.values(pending?.voices||{}).filter(v=>v.stance==='request').map(v=>v.action))];
  const otherOffers=Object.keys(currentOffers()).some(id=>recipient==='all'||recipient===id)||currentMapOffer()||pendingTransfer;
  if(human&&prior.length===1&&!otherOffers&&(recipient==='all'||recipient===actor)&&/^(?:うん[、,\s]*)?(?:はい|お願い(?:します)?|いいよ)[。！!\s]*$/.test(human.text)&&!signals.some(v=>v.id===humanId()))signals.push({index:human.index,id:humanId(),action:prior[0],stance:'request',quote:human.text});
- lanternDiscussion=mergeLanternSignals(pending,signals);const action=lanternCandidate(lanternDiscussion);
+ consents[topic]=mergeConsentSignals(topic,pending,signals);const action=consentCandidate(topic,consents[topic]);
  if(!action){
-  const voices=Object.values(lanternDiscussion.voices);
-  if(!voices.length){lanternDiscussion=null;return;}
+  const voices=Object.values(consents[topic].voices);
+  if(!voices.length){delete consents[topic];return;}
   const blocked=voices.filter(v=>['oppose','question'].includes(v.stance));
-  if(blocked.length||new Set(voices.filter(v=>v.stance==='request').map(v=>v.action)).size>1)say('GM',lanternStatus(),'gm');
-  else if(voices.some(v=>v.stance==='request'&&v.id!==actor)&&!actionsFor(actor).includes(voices.find(v=>v.stance==='request').action)){say(name,state.lit?'ランタンはすでに灯っているよ。':'ランタンはすでに消えているよ。');lanternDiscussion=null;}
+  if(blocked.length||new Set(voices.filter(v=>v.stance==='request').map(v=>v.action)).size>1)say('GM',consentStatus(topic),'gm');
+  else if(voices.some(v=>v.stance==='request'&&v.id!==actor)&&!actionsFor(actor).includes(voices.find(v=>v.stance==='request').action)){say(name,CONSENT_TOPICS[topic].already(state));delete consents[topic];}
   render();return;
  }
- const answer=parseAI(await ask(lanternDecisionPrompt(name),{selfProfile:profileFacts(actor),public:publicView(),proposal:action,voices:lanternDiscussion.voices,conversation:lines},500));
- if(!responseIsCurrent(epoch,source)||room!==state.room||lit!==state.lit)return;
- if(typeof answer.speech!=='string'||!answer.speech.trim()||answer.speech.length>350||!['wait',action].includes(answer.action))throw Error('リディアの判断を確認できませんでした。灯りの操作は保留しています。');
+ const answer=parseAI(await ask(CONSENT_TOPICS[topic].decisionPrompt(name),{selfProfile:profileFacts(actor),public:publicView(),proposal:action,voices:consents[topic].voices,conversation:lines},500));
+ if(!responseIsCurrent(epoch,source)||scope!==CONSENT_TOPICS[topic].scope(state))return;
+ if(typeof answer.speech!=='string'||!answer.speech.trim()||answer.speech.length>350||!['wait',action].includes(answer.action))throw Error(name+'の判断を確認できませんでした。'+CONSENT_TOPICS[topic].label+'の操作は保留しています。');
  const audit=await auditProfile(actor,answer.speech);
- if(!responseIsCurrent(epoch,source)||room!==state.room||lit!==state.lit)return;
- if(!audit.valid)throw Error('リディアの判断が人物設定と食い違うため、灯りの操作を保留しています。');
+ if(!responseIsCurrent(epoch,source)||scope!==CONSENT_TOPICS[topic].scope(state))return;
+ if(!audit.valid)throw Error(name+'の判断が人物設定と食い違うため、'+CONSENT_TOPICS[topic].label+'の操作を保留しています。');
  revealProfile(actor,audit.claims);say(name+'（AI）',answer.speech);
- if(answer.action==='wait'){lanternDiscussion.voices[actor+':'+action]={id:actor,action,stance:'question',quote:answer.speech};render();return;}
- if(lanternCandidate(lanternDiscussion)!==action)return;
+ if(answer.action==='wait'){consents[topic].voices[actor+':'+action]={id:actor,action,stance:'question',quote:answer.speech};render();return;}
+ if(consentCandidate(topic,consents[topic])!==action)return;
  const out=apply(actor,action,state,actor);sayResult('GM',out.text,'gm');
  if($('sheet')?.open)$('sheet').close();render();
 }
+function proposeConsent(topic,id,action,quote){consents[topic]=mergeConsentSignals(topic,currentConsent(topic),[{id,action,stance:'request',quote}]);}
+function consentTopicOf(action){return Object.keys(CONSENT_TOPICS).find(topic=>CONSENT_TOPICS[topic].actions.includes(action))||null;}
+function consentVoiced(stances){return Object.keys(CONSENT_TOPICS).some(topic=>Object.values(currentConsent(topic)?.voices||{}).some(v=>stances.includes(v.stance)));}
+function anyConsentBlocked(){return Object.keys(CONSENT_TOPICS).some(topic=>consentBlocked(topic));}
 async function run(task){if(busy)return;const epoch=generation;busy=true;render();try{return await task();}catch(e){if(epoch===generation)say('接続・応答の確認',e.message+' ゲームの状態は保持しています。','error');}finally{if(epoch===generation){busy=false;render();}}}
-function request(id,a){if(busy||!actionsFor(id).includes(a))return;if(id==='lydia'&&['light','douse'].includes(a)&&lanternBlocked()){submitMessage('リディア、'+LABEL[a]+'をお願い。','lydia');return;}if(!confirmScenarioAction(a))return;const p=PEOPLE.find(p=>p.id===id);if(a==='open_cache'){if(!canShowProposal(id,a))return;if($('sheet').open)$('sheet').close();openDice('cache');return;}if(['light','douse','decode'].includes(a)){say(personName(humanId())+'（あなた）',p.name+'、'+LABEL[a]+'をお願い。','you');const out=apply(id,a,state,humanId());if(out.private)say(p.name,'調べました。分かったことを相談で伝えます。');else sayResult(p.name,out.text,'');render();return;}say(personName(humanId())+'（あなた）',`${p.name}、「${LABEL[a]}」をお願い。`,'you');run(async()=>{const epoch=generation;const r=await checkedReply(p,false,a);if(epoch!==generation||!r)return;acceptAI(p,r,false);});}
-async function human(a,requester=null){if(busy)return;if(['light','douse'].includes(a)&&lanternBlocked()){say('GM',lanternStatus(),'gm');render();return;}if(state.phase==='battle'){planReview=null;plan=[{id:humanId(),action:a}];say(personName(humanId())+'（あなた）',LABEL[a]+'でいこう。','you');const epoch=generation;await run(()=>companions(true));if(epoch!==generation)return;if(plan.length!==4){plan=[];render();}return;}const out=apply(humanId(),a);humanRequests=humanRequests.filter(r=>r.action!==a&&actionsFor(humanId()).includes(r.action));if(!out.private){sayResult('GM',out.text,'gm');const responder=requester||(HUMAN_CONVERSATION_ACTIONS.includes(a)?'brom':null);if(responder)say(personName(responder)+'（AI）',humanActionReply(a,responder));cooperationFollowup(humanId(),a);}render();return {performed:true};}
+function request(id,a){if(busy||!actionsFor(id).includes(a))return;const topic=consentTopicOf(a);if(topic&&CONSENT_TOPICS[topic].actor(state)===id&&consentBlocked(topic)){submitMessage(personName(id)+'、'+LABEL[a]+'をお願い。',id);return;}if(!confirmScenarioAction(a))return;const p=PEOPLE.find(p=>p.id===id);if(a==='open_cache'){if(!canShowProposal(id,a))return;if($('sheet').open)$('sheet').close();openDice('cache');return;}if(topic||a==='decode'){say(personName(humanId())+'（あなた）',p.name+'、'+LABEL[a]+'をお願い。','you');const out=apply(id,a,state,humanId());if(out.private)say(p.name,'調べました。分かったことを相談で伝えます。');else sayResult(p.name,out.text,'');render();return;}say(personName(humanId())+'（あなた）',`${p.name}、「${LABEL[a]}」をお願い。`,'you');run(async()=>{const epoch=generation;const r=await checkedReply(p,false,a);if(epoch!==generation||!r)return;acceptAI(p,r,false);});}
+async function human(a,requester=null){if(busy)return;const topic=consentTopicOf(a);if(topic&&consentBlocked(topic)){say('GM',consentStatus(topic),'gm');render();return;}if(state.phase==='battle'){planReview=null;plan=[{id:humanId(),action:a}];say(personName(humanId())+'（あなた）',LABEL[a]+'でいこう。','you');const epoch=generation;await run(()=>companions(true));if(epoch!==generation)return;if(plan.length!==4){plan=[];render();}return;}const out=apply(humanId(),a);humanRequests=humanRequests.filter(r=>r.action!==a&&actionsFor(humanId()).includes(r.action));if(!out.private){sayResult('GM',out.text,'gm');const responder=requester||(HUMAN_CONVERSATION_ACTIONS.includes(a)?'brom':null);if(responder)say(personName(responder)+'（AI）',humanActionReply(a,responder));cooperationFollowup(humanId(),a);}render();return {performed:true};}
 function d20(){const n=new Uint32Array(1);do{crypto.getRandomValues(n);}while(n[0]>=4294967280);return n[0]%20+1;}
 // 戦闘の判定・威力・反撃を表示とAI指示でも共有します。値は従来どおりです。
 function planKey(items){return JSON.stringify(items.map(p=>[p.id,p.action]));}
@@ -891,10 +895,13 @@ function submitMessageBody(text,to=recipient){
  const navigation=navigationIntent(text,to);if(navigation)return run(()=>handleNavigation(navigation));
  if(cooperationConversation(text,to)){render();return {performed:false};}
  const wheel=wheelConversation(text);if(wheel){if(wheel.selfAction)return human(wheel.selfAction).then(result=>{if($('sheet')?.open)$('sheet').close();return result;});say('GM',wheel.clarify,'gm');render();return {performed:false};}
- const lantern=lanternRequest(text,to),lampActor=lanternActor(text,to);
- if(lantern&&!lanternBlocked()){
-  if(!actionsFor(lampActor).includes(lantern)){say(personName(lampActor),!hasItem(lampActor,'lantern')?'ランタンは'+personName(state.items.lantern.holder)+'が持っています。先に受け渡しを相談しましょう。':state.phase!=='explore'?'今は灯りを操作できません。':lantern==='light'?'ランタンはすでに灯っています。':'ランタンはすでに消えています。');render();return {performed:false};}
-  const out=apply(lampActor,lantern,state,humanId());sayResult(personName(lampActor),out.text,'');render();announceVisiblePoints();return {performed:true};
+ for(const topic of Object.keys(CONSENT_TOPICS)){
+  const direct=CONSENT_TOPICS[topic].direct(text,to);
+  if(direct&&!consentBlocked(topic)){
+   const {actor,action}=direct;
+   if(!actionsFor(actor).includes(action)){say(personName(actor),CONSENT_TOPICS[topic].unavailable(actor,action,state));render();return {performed:false};}
+   const out=apply(actor,action,state,humanId());sayResult(personName(actor),out.text,'');render();announceVisiblePoints();return {performed:true};
+  }
  }
  return run(async()=>{const epoch=generation;const transfer=await transferIntent(text,to);if(epoch!==generation||transfer?.stale)return;if(transfer?.cancelled){say('GM','保留していた受け渡しを取り消しました。','gm');return {performed:false};}if(transfer?.clarify){say('GM',transfer.clarify,'gm');return {performed:false};}if(transfer?.transfer)return handleTransfer(transfer.transfer,text);if(mentionsOwnProfile(text)){const audit=await auditProfile(humanId(),text);if(epoch!==generation)return;if(!audit.valid){state.profiles.feedback[humanId()]='GM：'+audit.conflicts.map(c=>profileFacts(humanId())[c.key].label+'は'+profileFacts(humanId())[c.key].value).join('／')+'。シートを確認して言い直してみましょう。';say('GM','イネスの自己紹介に設定との食い違いがあります。'+audit.conflicts.map(c=>profileFacts(humanId())[c.key].label+'：'+profileFacts(humanId())[c.key].value).join('／')+'。自分のシートを確認して言い直してみましょう。','gm');const at=state.shared.indexOf(personName(humanId())+'→'+name+'：'+text);if(at>=0)state.shared.splice(at,1);render();return;}delete state.profiles.feedback[humanId()];revealProfile(humanId(),audit.claims,state,'イネスの自己紹介');}if(to==='gm')return consultGM(text);const intent=await explorationIntent(text,to);if(epoch!==generation)return;if(intent.clarify){say('GM',intent.clarify,'gm');return;}return companions(false,to,intent.jobs);});
 }
@@ -939,7 +946,7 @@ function startVoice(inputId,button,status){
 }
 function setupVoice(){$('sheet').addEventListener('close',()=>{if(voiceSession?.inputId==='sheetMessage')stopVoice();});$('mainMic').onclick=()=>startVoice('message',$('mainMic'),$('mainVoiceStatus'));document.addEventListener('visibilitychange',()=>{if(document.hidden)stopVoice();});}
 
-function reset(){battlePreview=false;previewPlacement=null;$('battlePreview').checked=false;if(stageView){stageView.setLight('auto');$('stageLightMode').value='auto';}stopVoice();roleRequest++;if($('rolePanel')?.open)$('rolePanel').close();humanRequests=[];sheetDrafts={};pendingTransfer=null;explorationOffers={};announcedPoints=new Set();lanternDiscussion=null;recipient='all';conversationUnread=0;updateConversation();generation++;state=initial();busy=false;target=null;chat=[];plan=[];actionHistory=[];planReview=null;$('log').replaceChildren();introduceInventory();render();}
+function reset(){battlePreview=false;previewPlacement=null;$('battlePreview').checked=false;if(stageView){stageView.setLight('auto');$('stageLightMode').value='auto';}stopVoice();roleRequest++;if($('rolePanel')?.open)$('rolePanel').close();humanRequests=[];sheetDrafts={};pendingTransfer=null;explorationOffers={};announcedPoints=new Set();consents={};recipient='all';conversationUnread=0;updateConversation();generation++;state=initial();busy=false;target=null;chat=[];plan=[];actionHistory=[];planReview=null;$('log').replaceChildren();introduceInventory();render();}
 
 // DOMへの接続と起動はここだけ。検査はこの関数を呼ばずに同じファイルを読みます。
 function bootGame(){

@@ -99,11 +99,11 @@ vm.runInContext(`(async()=>{
  fixture();announceVisiblePoints();const n=chat.length;announceVisiblePoints();ok(n===1&&chat.length===1,'見える候補を繰り返し報告');
  ok(chat[0].text.includes('台車')&&!chat[0].text.includes('工具')&&!chat[0].text.includes('刻み'),'未調査の結果や隠し対象を開示');
  fixture();state.lit=false;announceVisiblePoints();ok(chat.length===0,'暗闇で見えていない対象を開示');
- fixture();const savedSettle=settleLantern,savedChecked=checkedReply;settleLantern=async()=>{};checkedReply=async()=>{throw Error('観察に追加のAI照合をしない');};
+ fixture();const savedSettle=settleConsent,savedChecked=checkedReply;settleConsent=async()=>{};checkedReply=async()=>{throw Error('観察に追加のAI照合をしない');};
  state.room='drain';await companions(false,'brom',[job('brom','inspect_wheel')]);
  ok(state.seen.brom.includes('wheel')&&chat.some(c=>c.text.startsWith('調べた結果：')&&c.text.includes('操作輪')),'明示した観察がその場で実行・報告されない');
  ok(actionHistory.at(-1).action==='inspect_wheel'&&actionHistory.at(-1).initiator==='ines','観察の履歴と依頼元が欠ける');
- settleLantern=savedSettle;checkedReply=savedChecked;
+ settleConsent=savedSettle;checkedReply=savedChecked;
  fixture();chat=[{kind:'you',text:'力仕事は得意？'}];recipient='brom';state.knowledge.brom.push('未共有の調査結果');
  const focused=dialogueInput(PEOPLE[1],false,null,null);
  ok(focused.focus.type==='profile'&&focused.selfProfile.skill0&&!focused.selfProfile.skill1&&!focused.selfProfile.origin,'能力質問へ別の技能や経歴を渡す');
@@ -144,9 +144,9 @@ vm.runInContext(`(async()=>{
  state.phase='battle';ok(wheelConversation('鉄片を取って')===null,'戦闘へ探索の案内を混ぜる');fixture();ok(wheelConversation('鉄片を取って')===null&&wheelConversation('工具をブロムに渡す')===null,'別の場面・受け渡しを鉄片の作業へ取り違える');
  fixture();state.discovery.etching=true;reportInvestigation(PEOPLE[1],'inspect_etching',apply('brom','inspect_etching'));
  ok(currentOffers().lydia?.action==='decode'&&!knowsClue('lydia','darkness')&&chat.at(-1).text.includes('解読'),'共有後の解読提案か未解読の保護が不正');
- reportInvestigation(PEOPLE[3],'decode',apply('lydia','decode'));ok(state.lit&&lanternCandidate(currentLanternDiscussion())===null&&chat.at(-1).text.includes('ランタンを消して'),'解読だけで消灯したか次の提案がない');
- fixture();state.discovery.etching=true;learnClue('lydia','etching');let lanternSettles=0;const savedLantern=settleLantern;settleLantern=async()=>{lanternSettles++;};
- await companions(false,'lydia',[job('lydia','decode')]);ok(lanternSettles===0&&state.lit&&currentLanternDiscussion()?.voices['lydia:douse'],'解読への了承を、その後に提案した消灯へ流用');settleLantern=savedLantern;
+ reportInvestigation(PEOPLE[3],'decode',apply('lydia','decode'));ok(state.lit&&consentCandidate('lantern',currentConsent('lantern'))===null&&chat.at(-1).text.includes('ランタンを消して'),'解読だけで消灯したか次の提案がない');
+ fixture();state.discovery.etching=true;learnClue('lydia','etching');let lanternSettles=0;const savedLantern=settleConsent;settleConsent=async()=>{lanternSettles++;};
+ await companions(false,'lydia',[job('lydia','decode')]);ok(lanternSettles===0&&state.lit&&currentConsent('lantern')?.voices['lydia:douse'],'解読への了承を、その後に提案した消灯へ流用');settleConsent=savedLantern;
  fixture();state.room='hall';state.drained=true;state.observedDrain=true;reportInvestigation(PEOPLE[2],'inspect',apply('gareth','inspect'));
  ok(!inspectText('gareth','door',state).includes('圧力は残る')&&!inspectText('ines','door',state).includes('かかっている')&&!inspectText('lydia','door',state).includes('染み出して'),'排水済みなのに調査結果へ水圧を残す');
  ok(currentOffers().gareth?.action==='unlock'&&state.locked,'調査後に本人へ解錠を申し出ないか先に実行');
@@ -228,8 +228,8 @@ vm.runInContext(`(async()=>{
  explorationOffers={};state.navigation.offer={holder:'lydia',item:'lydia_map',room:'entry'};
  ok(humanMessageIntent('うん','all').clarify,'地図の申し出と人間の作業を同時に了承');state.navigation.offer=null;
  pendingTransfer={};ok(humanMessageIntent('はい','brom').clarify,'受け渡しの保留へ了承を流用');pendingTransfer=null;
- lanternDiscussion={room:'entry',lit:true,voices:{'lydia:douse':{id:'lydia',action:'douse',stance:'question'}}};
- ok(humanMessageIntent('はい','all').clarify,'灯りの保留と人間の作業を了承');lanternDiscussion=null;
+ consents.lantern=mergeConsentSignals('lantern',null,[{id:'lydia',action:'douse',stance:'question',quote:'待って'}]);
+ ok(humanMessageIntent('はい','all').clarify,'灯りの保留と人間の作業を了承');consents={};
  for(const text of ['工具を拾える？','もし私が工具を拾う','私が工具を拾った','工具を拾うつもり','工具を拾うのはやめる','ブロムが工具を拾う','「工具を拾う」と言う','後で工具を拾う','工具を拾わない'])ok(humanMessageIntent(text,'brom')===null&&!state.items.ironbar,'質問・仮定・過去・予定・否定・他人の発言から取得');
  ok(humanMessageIntent('私が工具を拾う','gm')===null,'GMへの相談で人間の行動を実行');
  await submitMessage('やめる','brom');ok(!humanRequests.length&&!state.items.ironbar,'断った依頼を残すか実行');

@@ -58,7 +58,7 @@ function referenceLighting(){
 }
 function unchangedBodies(){
  const original=vm.createContext({}),current=vm.createContext({});vm.runInContext(reference,original);require('./load-prototype.cjs').load(current);
- const names='initial actionsFor inspectText applyAction move publicView discoveryTargets visibleTargets blueDust discoveryHint canShowProposal propose suggestedAction reportVersion conversationProgress mapRecord drawMap advance targetPortrait initialProfiles inventoryIntroductions introduceInventory dialogueFocus dialogueInput cooperationAdvice cooperationConversation cooperationFollowup spokenOffer safeInvestigation usefulInvestigation retaliationDamage resolve planIssues arrangePlan cacheBonus cacheOdds resolveCache isOutsideScene lanternActor lanternRequest wheelConversation stageSnapshot makePlacement'.split(' ');
+ const names='initial actionsFor inspectText applyAction move publicView discoveryTargets visibleTargets blueDust discoveryHint canShowProposal propose suggestedAction reportVersion conversationProgress mapRecord drawMap advance targetPortrait initialProfiles inventoryIntroductions dialogueFocus cooperationAdvice cooperationConversation spokenOffer safeInvestigation usefulInvestigation retaliationDamage resolve planIssues arrangePlan cacheBonus cacheOdds resolveCache isOutsideScene lanternActor lanternRequest wheelConversation stageSnapshot makePlacement'.split(' ');
  for(const name of names)assert.equal(vm.runInContext(name+'.toString()',current),vm.runInContext(name+'.toString()',original),name+'の中身が変わった');
  return names.length;
 }

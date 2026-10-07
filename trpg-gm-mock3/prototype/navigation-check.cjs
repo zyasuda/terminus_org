@@ -7,7 +7,7 @@ loadPrototype(context);
 vm.runInContext(`(async()=>{
  let count=0;const ok=(value,message)=>{count++;if(!value)throw Error(message)},rejects=fn=>{try{fn();return false}catch{return true}};
  render=()=>{};updateRecipients=()=>{};announceVisiblePoints=()=>{};say=(who,text,kind='')=>chat.push({who,text,kind});
- const fixture=()=>{state=initial();chat=[];actionHistory=[];introduceInventory();chat=[];lanternDiscussion=null;pendingTransfer=null;explorationOffers={};recipient='all';busy=false;$('sheet').close();};
+ const fixture=()=>{state=initial();chat=[];actionHistory=[];introduceInventory();chat=[];consents={};pendingTransfer=null;explorationOffers={};recipient='all';busy=false;$('sheet').close();};
  fixture();
  ok(!visibleExits().length&&mapRecord().length===1,'暗闇で通路・未知の部屋を明示');
  ok(!hasItem('ines','ines_map')&&!Object.hasOwn(MAPS,'ines_map'),'イネスに試作用の坑道図が残る');
