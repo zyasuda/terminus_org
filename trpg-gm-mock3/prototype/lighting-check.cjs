@@ -68,11 +68,12 @@ const fs=require('node:fs'),vm=require('node:vm');
  // 背景を回す転換：真横で次の場面を描き、正面へ戻す。回り始めに全員が後ろを向き、次の場面では話した人だけ正面へ向き直る
  testMath.random=()=>.99;view.sync(snapshot);tick();const backdrop=rendered.children.find(x=>x.renderOrder===-3),facesBack=id=>Math.abs(Math.abs(person(id).rotation.y)-Math.PI)<.001;
  let applied=0,finished=0;ok(view.revolve(()=>{applied++;view.sync({...snapshot,room:'hall'});},()=>finished++),'探索中に背景を回せない');
- tick(10);ok(applied===0&&backdrop.rotation.y<0&&backdrop.rotation.y>-Math.PI/2,'回り始めの背景が右の端を手前へ回さない、または早く差し替わる');
+ tick(10);ok(applied===0&&backdrop.rotation.y===0,'仲間が後ろを向き終える前に背景が回り始める');
  ok(!view.revolve(()=>{},()=>{}),'回っている途中に二重に回す');
- tick(10);ok(snapshot.actors.every(p=>facesBack(p.id)),'回り始めに全員が後ろを向かない');
- tick(20);ok(applied===1&&finished===0,'真横を向いたときに次の場面へ差し替わらない');
- tick(30);ok(finished===1&&backdrop.rotation.y===0,'回し終えた背景が正面に戻らない');
+ tick(10);ok(snapshot.actors.every(p=>facesBack(p.id)),'背景が回る前に全員が後ろを向かない');
+ tick(10);ok(applied===0&&backdrop.rotation.y<0&&backdrop.rotation.y>-Math.PI/2,'回り始めの背景が右の端を手前へ回さない、または早く差し替わる');
+ tick(30);ok(applied===1&&finished===0,'真横を向いたときに次の場面へ差し替わらない');
+ tick(50);ok(finished===1&&backdrop.rotation.y===0,'回し終えた背景が正面に戻らない');
  ok(snapshot.actors.every(p=>facesBack(p.id)&&person(p.id).userData.facing==='back'),'次の場面で後ろ向きが解ける');
  view.speak('lydia');tick(20);ok(Math.abs(person('lydia').rotation.y)<.001&&facesBack('ines'),'話した人だけが正面を向かない');
  view.sync({...snapshot,room:'drain'});tick();ok(snapshot.actors.every(p=>!facesBack(p.id)),'暗転で移った場面にも後ろ向きが残る');
@@ -80,7 +81,7 @@ const fs=require('node:fs'),vm=require('node:vm');
  // もともと後ろ寄り（−173°）を向いていた人は、180°へ近い方の7°だけ回る（遠回りの353°はクルクル回って見える。2026-10-07 試遊で発見）。−180°と+180°は同じ向きなので、差は一周の範囲で測る
  person('ines').rotation.y=THREE.MathUtils.degToRad(-173);let travel=0,prev=person('ines').rotation.y;
  ok(view.revolve(()=>view.sync({...snapshot,room:'hall'}),()=>{}),'2回目の転換で背景を回せない');
- for(let i=0;i<70;i++){tick(1);travel+=Math.abs(THREE.MathUtils.euclideanModulo(person('ines').rotation.y-prev+Math.PI,2*Math.PI)-Math.PI);prev=person('ines').rotation.y;}
+ for(let i=0;i<110;i++){tick(1);travel+=Math.abs(THREE.MathUtils.euclideanModulo(person('ines').rotation.y-prev+Math.PI,2*Math.PI)-Math.PI);prev=person('ines').rotation.y;}
  ok(travel<THREE.MathUtils.degToRad(10)&&facesBack('ines'),'後ろ寄りの人が遠回りして1周近く回る');
  view.sync(snapshot);tick();
  ok(JSON.stringify(snapshot)===before,'背景を回す転換がゲームの入力状態を変更');

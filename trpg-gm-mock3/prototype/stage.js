@@ -123,12 +123,12 @@ export function createStage(host, controls, changed) {
  function slidePan(x){drag=null;const end=Math.max(-panLimits().x,Math.min(panLimits().x,x)),reduced=typeof matchMedia==='function'&&matchMedia('(prefers-reduced-motion: reduce)').matches;if(reduced||config.scrollSeconds<=0){panSlide=null;setPan(end,panY);}else panSlide={from:panX,to:end,y:panY,start:performance.now()};return reduced;}
  function turn(id,to){const a=actors.get(id),from=THREE.MathUtils.euclideanModulo(a.sprite.rotation.y+Math.PI,2*Math.PI)-Math.PI;if(config.scrollSeconds<=0){a.sprite.rotation.y=to;turns.delete(id);updateFacing();dirty=true;}else{const delta=THREE.MathUtils.euclideanModulo(to-from+Math.PI,2*Math.PI)-Math.PI;turns.set(id,{from,to:from+delta,final:to,start:performance.now()});}}// 近い方へ回します（後ろ向き−173°から180°へは7°）。回り終えたら目標の角度にそろえます。
  // 場面転換：背景の板を縦の中心線で半回転させ、真横を向いた瞬間に apply（次の場面の描画）を呼び、正面へ戻ったら done を呼びます。
- // 回り始めに仲間は全員後ろを向き、次の場面でも話すまでそのままです。回せない状態なら false を返し、呼び出し側が暗転にします。
+ // 先に仲間が全員後ろを向き、それから背景が回り始めます。次の場面でも話すまで後ろ向きのままです。回せない状態なら false を返し、呼び出し側が暗転にします。
  function revolve(apply,done){if(lost||revolving||!snap||snap.battle||snap.end||!(config.revolveSeconds>0))return false;
-  revolving={start:performance.now(),apply,done,swapped:false};allBack=true;host.dataset.stageFocus='';
+  revolving={start:performance.now()+Math.max(0,config.scrollSeconds)*1000,apply,done,swapped:false};allBack=true;host.dataset.stageFocus='';
   for(const [id,a] of actors)if(a.sprite.visible&&a.sprite.isGroup){faceFront.delete(id);a.sprite.userData.facing='back';turn(id,Math.PI);}
   // 画面が隠れていると描画の更新が止まるため、時間で必ず終わらせます。
-  if(typeof setTimeout==='function'){const r=revolving,ms=config.revolveSeconds*1000;setTimeout(()=>{if(revolving===r)stepRevolve(r.start+ms/2);},ms/2+50);setTimeout(()=>{if(revolving===r)stepRevolve(r.start+ms);},ms+50);}
+  if(typeof setTimeout==='function'){const r=revolving,ms=config.revolveSeconds*1000;const wait=r.start-performance.now();setTimeout(()=>{if(revolving===r)stepRevolve(r.start+ms/2);},wait+ms/2+50);setTimeout(()=>{if(revolving===r)stepRevolve(r.start+ms);},wait+ms+50);}
   dirty=true;return true;}
  function stepRevolve(now){const r=revolving;if(!r)return false;const t=Math.min(1,Math.max(0,(now-r.start)/(config.revolveSeconds*1000))),e=t*t*t*(t*(t*6-15)+10);
   if(e>=.5&&!r.swapped){r.swapped=true;r.apply();}
