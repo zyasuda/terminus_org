@@ -1,0 +1,178 @@
+{
+  "model": "embeddinggemma-2:270m",
+  "syntheticFixture": true,
+  "backend": "local Ollama",
+  "initialLoadMs": 508.4,
+  "dimensions": 768,
+  "medianQueryMs": 18.2,
+  "hitAt3": 1.0,
+  "recent6HitRate": 0.0,
+  "tokenCountNote": "Embeddingモデルのprefix込み入力トークン合計。Claudeの課金トークンではありません。",
+  "cases": [
+    {
+      "actor": "gareth",
+      "query": "さっきの鍵を開ける役、誰だった？",
+      "expected": "lock",
+      "recentIds": [
+        "recent-0",
+        "recent-1",
+        "recent-2",
+        "recent-3",
+        "recent-4",
+        "recent-5"
+      ],
+      "retrievedIds": [
+        "lock",
+        "loan",
+        "recent-3"
+      ],
+      "recentHit": false,
+      "retrievedHit": true,
+      "secretLeak": false,
+      "embeddingPromptTokens": {
+        "full": 195,
+        "recent6": 110,
+        "retrieved3": 78
+      },
+      "historyChars": {
+        "full": 181,
+        "recent6": 87,
+        "retrieved3": 84
+      },
+      "newDocumentsEncodingMs": 2485.5,
+      "queryAndRankingMs": 17.6
+    },
+    {
+      "actor": "brom",
+      "query": "貸した道具を返してもらった後はどうする？",
+      "expected": "loan",
+      "recentIds": [
+        "recent-0",
+        "recent-1",
+        "recent-2",
+        "recent-3",
+        "recent-4",
+        "recent-5"
+      ],
+      "retrievedIds": [
+        "loan",
+        "lock",
+        "map"
+      ],
+      "recentHit": false,
+      "retrievedHit": true,
+      "secretLeak": false,
+      "embeddingPromptTokens": {
+        "full": 195,
+        "recent6": 110,
+        "retrieved3": 85
+      },
+      "historyChars": {
+        "full": 181,
+        "recent6": 87,
+        "retrieved3": 94
+      },
+      "newDocumentsEncodingMs": 0.0,
+      "queryAndRankingMs": 18.2
+    },
+    {
+      "actor": "ines",
+      "query": "地図を見せてもらうと持ち主が変わるの？",
+      "expected": "map",
+      "recentIds": [
+        "recent-0",
+        "recent-1",
+        "recent-2",
+        "recent-3",
+        "recent-4",
+        "recent-5"
+      ],
+      "retrievedIds": [
+        "map",
+        "recent-5",
+        "recent-1"
+      ],
+      "recentHit": false,
+      "retrievedHit": true,
+      "secretLeak": false,
+      "embeddingPromptTokens": {
+        "full": 195,
+        "recent6": 110,
+        "retrieved3": 64
+      },
+      "historyChars": {
+        "full": 181,
+        "recent6": 87,
+        "retrieved3": 56
+      },
+      "newDocumentsEncodingMs": 0.0,
+      "queryAndRankingMs": 18.3
+    },
+    {
+      "actor": "lydia",
+      "query": "青い粉の見つけ方を覚えている？",
+      "expected": "secret",
+      "recentIds": [
+        "recent-0",
+        "recent-1",
+        "recent-2",
+        "recent-3",
+        "recent-4",
+        "recent-5"
+      ],
+      "retrievedIds": [
+        "secret",
+        "map",
+        "recent-4"
+      ],
+      "recentHit": false,
+      "retrievedHit": true,
+      "secretLeak": false,
+      "embeddingPromptTokens": {
+        "full": 221,
+        "recent6": 110,
+        "retrieved3": 67
+      },
+      "historyChars": {
+        "full": 208,
+        "recent6": 87,
+        "retrieved3": 66
+      },
+      "newDocumentsEncodingMs": 18.7,
+      "queryAndRankingMs": 17.9
+    },
+    {
+      "actor": "gareth",
+      "query": "青い粉の見つけ方を覚えている？",
+      "expected": null,
+      "recentIds": [
+        "recent-0",
+        "recent-1",
+        "recent-2",
+        "recent-3",
+        "recent-4",
+        "recent-5"
+      ],
+      "retrievedIds": [
+        "map",
+        "recent-4",
+        "lock"
+      ],
+      "recentHit": null,
+      "retrievedHit": null,
+      "secretLeak": false,
+      "embeddingPromptTokens": {
+        "full": 195,
+        "recent6": 110,
+        "retrieved3": 72
+      },
+      "historyChars": {
+        "full": 181,
+        "recent6": 87,
+        "retrieved3": 75
+      },
+      "newDocumentsEncodingMs": 0.0,
+      "queryAndRankingMs": 18.2
+    }
+  ]
+}
