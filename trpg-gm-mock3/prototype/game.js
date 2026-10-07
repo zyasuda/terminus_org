@@ -297,7 +297,7 @@ function render(){
  if(sceneFading){sceneFadePending=true;return;}
  if(sceneVisualKey===null||sceneVisualKey===key||!sceneFadeMs||matchMedia('(prefers-reduced-motion: reduce)').matches){sceneVisualKey=key;renderNow();return;}
  // 探索中に部屋を移るときは、暗転の代わりに背景の板を回します。人物の配置が変わる戦闘などの転換は暗転のままです。
- if(revolvingSceneChange(sceneVisualKey,key)){sceneFading=true;if(stageView?.revolve?.(()=>{sceneVisualKey=sceneKey();renderNow();},()=>{$('scene').classList.remove('revolving');sceneFading=false;if(sceneFadePending){sceneFadePending=false;render();}})){$('scene').classList.add('revolving');return;}sceneFading=false;}
+ if(revolvingSceneChange(sceneVisualKey,key)){sceneFading=true;if(stageView?.revolve?.(()=>{sceneVisualKey=sceneKey();renderNow();$('scene').classList.add('revolve-swapped');},()=>{$('scene').classList.remove('revolving');$('scene').classList.remove('revolve-swapped');sceneFading=false;if(sceneFadePending){sceneFadePending=false;render();}})){$('scene').classList.add('revolving');return;}sceneFading=false;}
  const scene=$('scene'),out=Math.round(sceneFadeMs*.42),back=sceneFadeMs-out;
  sceneFading=true;scene.style.transition=`filter ${out}ms ease-in`;scene.style.filter='brightness(0)';
  setTimeout(()=>{

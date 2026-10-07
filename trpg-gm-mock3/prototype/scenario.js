@@ -500,8 +500,8 @@ const SCENARIO_STAGE_DEFAULTS=Object.freeze({
  }
  function scenarioEtchingTexture(THREE){const c=document.createElement('canvas');c.width=512;c.height=384;const x=c.getContext('2d');x.strokeStyle='#a3a697';x.lineWidth=3;x.shadowColor='#050a0b';x.shadowBlur=6;for(let i=0;i<7;i++){x.beginPath();x.moveTo(130+i*30,110+(i%3)*12);x.lineTo(138+i*30,176);x.lineTo(120+i*30,212);x.stroke();}const t=new THREE.CanvasTexture(c);t.colorSpace=THREE.SRGBColorSpace;return t;}
 function setupScenarioProps(prop,texture,props,THREE){
- prop('cart',texture('./assets/scenery/mine-cart-v1.png'),[-11.3,-3*66/1024,-10],4.5,3);props.get('cart').center.set(.5,0);
- prop('etching',scenarioEtchingTexture(THREE),[11.5,4.5,-12],3,2.2);
+ prop('cart',texture('./assets/scenery/mine-cart-v1.png'),[-11.3,-3*66/1024,-10],4.5,3);
+ prop('etching',scenarioEtchingTexture(THREE),[11.5,3.4,-12],3,2.2);
 }
 const SCENARIO_ANCHORS={cart:[-11.3,1.7,-10],rails:[1,1.3,-4],etching:[11.5,4.5,-12],cache:[11.5,3,-12],door:[0,4,-7],rune:[-8,3.8,-6],wheel:[-4,2.8,-6],water:[5,1,-4]};
 const SCENARIO_SHEETS={ines:{width:793,height:1251,figure:[261,65,615,1177],plate:[233,33,639,1208]},brom:{width:924,height:1029,figure:[100,85,824,959],plate:[77,60,852,984]},gareth:{width:780,height:1444,figure:[93,93,703,1354],plate:[55,57,739,1389]},lydia:{width:780,height:1444,figure:[149,87,655,1358],plate:[110,51,700,1395]}};

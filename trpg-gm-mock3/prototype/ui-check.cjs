@@ -84,8 +84,8 @@ vm.runInContext(`(async()=>{
  // 探索中の部屋の移動は、暗転の代わりに背景を回す。舞台が回せないときは暗転へ戻る
  matchMedia=()=>({matches:false});const turnsAsked=[];stageView={revolve:(apply,done)=>{turnsAsked.push({apply,done});return true;}};state.room='hall';render();
  ok(turnsAsked.length===1&&sceneFading&&painted===2&&!scene.style.filter,'部屋の移動で背景を回さない、または回す前に次の場面を描く');ok(scene.classes.has('revolving'),'背景が回る間に前の場面の札と出口が残る');
- turnsAsked[0].apply();ok(painted===3&&sceneVisualKey===sceneKey(),'背景が真横を向いても次の場面を描かない');
- turnsAsked[0].done();ok(!sceneFading&&!scene.classes.has('revolving'),'背景を回し終えても転換中のまま、または札と出口が隠れたまま');
+ turnsAsked[0].apply();ok(scene.classes.has('revolve-swapped'),'次の背景が出ても札を表示しない');ok(painted===3&&sceneVisualKey===sceneKey(),'背景が真横を向いても次の場面を描かない');
+ turnsAsked[0].done();ok(!sceneFading&&!scene.classes.has('revolve-swapped')&&!scene.classes.has('revolving'),'背景を回し終えても転換中のまま、または札と出口が隠れたまま');
  stageView={revolve:()=>false};state.room='entry';render();ok(scene.style.filter==='brightness(0)'&&sceneFading,'背景を回せないときに暗転へ戻らない');timers.shift()();timers.shift()();ok(painted===4&&!sceneFading,'暗転へ戻った転換が終わらない');
  stageView={revolve:()=>{throw Error('戦闘の転換で背景を回した');}};state.phase='battle';render();ok(scene.style.filter==='brightness(0)','戦闘の始まりが暗転にならない');timers.shift()();timers.shift()();state.phase='explore';sceneVisualKey=sceneKey();stageView=null;
  render=()=>{};companions=async()=>{};run=async fn=>fn();state=initial();learnClue('ines','etching');chat=[];busy=true;

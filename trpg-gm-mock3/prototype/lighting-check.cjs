@@ -67,13 +67,16 @@ const fs=require('node:fs'),vm=require('node:vm');
  const hallColor=ground.material.color.clone();snapshot.room='drain';view.sync(snapshot);tick();ok(!ground.material.color.equals(hallColor)&&ground.material.roughness<.9,'排水室の床に湿りがない');snapshot.room='entry';ok(JSON.stringify(snapshot)===before,'演出がゲームの入力状態を変更');
  // 背景を回す転換：真横で次の場面を描き、正面へ戻す。回り始めに全員が後ろを向き、次の場面では話した人だけ正面へ向き直る
  testMath.random=()=>.99;view.sync(snapshot);tick();const backdrop=rendered.children.find(x=>x.renderOrder===-3),facesBack=id=>Math.abs(Math.abs(person(id).rotation.y)-Math.PI)<.001;
+ const cart=rendered.children.find(x=>x.material?.map?.name.includes('mine-cart')),cartStart=cart.position.clone();
  let applied=0,finished=0;ok(view.revolve(()=>{applied++;view.sync({...snapshot,room:'hall'});},()=>finished++),'探索中に背景を回せない');
  tick(10);ok(applied===0&&backdrop.rotation.y===0,'仲間が後ろを向き終える前に背景が回り始める');
  ok(!view.revolve(()=>{},()=>{}),'回っている途中に二重に回す');
  tick(10);ok(snapshot.actors.every(p=>facesBack(p.id)),'背景が回る前に全員が後ろを向かない');
  tick(10);ok(applied===0&&backdrop.rotation.y<0&&backdrop.rotation.y>-Math.PI/2,'回り始めの背景が右の端を手前へ回さない、または早く差し替わる');
+ ok(cart.rotation.y===backdrop.rotation.y&&cart.position.distanceTo(cartStart)>1,'小道具が背景と一緒に回らない');
  tick(30);ok(applied===1&&finished===0,'真横を向いたときに次の場面へ差し替わらない');
  tick(50);ok(finished===1&&backdrop.rotation.y===0,'回し終えた背景が正面に戻らない');
+ ok(cart.rotation.y===0&&cart.position.distanceTo(cartStart)<.000001,'転換後に小道具の位置と向きが戻らない');
  ok(snapshot.actors.every(p=>facesBack(p.id)&&person(p.id).userData.facing==='back'),'次の場面で後ろ向きが解ける');
  view.speak('lydia');tick(20);ok(Math.abs(person('lydia').rotation.y)<.001&&facesBack('ines'),'話した人だけが正面を向かない');
  view.sync({...snapshot,room:'drain'});tick();ok(snapshot.actors.every(p=>!facesBack(p.id)),'暗転で移った場面にも後ろ向きが残る');

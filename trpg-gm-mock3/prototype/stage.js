@@ -61,7 +61,7 @@ export function createStage(host, controls, changed) {
  const anchors=SCENARIO_ANCHORS;
  // 刻みは読める情報を先出ししない、薄い傷だけの模様です。
 
- function prop(id,map,pos,w,h){const v=new THREE.Sprite(new THREE.SpriteMaterial({map,alphaTest:.1}));v.position.set(...pos);v.userData.stageZ=pos[2];v.scale.set(w,h,1);scene.add(v);props.set(id,v);}
+ function prop(id,map,pos,w,h){const v=new THREE.Mesh(new THREE.PlaneGeometry(w,h),new THREE.MeshBasicMaterial({map,transparent:true,alphaTest:.1,side:THREE.DoubleSide}));v.position.set(pos[0],pos[1]+h/2,pos[2]);v.userData.stageZ=pos[2];v.userData.stageX=pos[0];scene.add(v);props.set(id,v);}
  setupScenarioProps(prop,texture,props,THREE);
  // スタンディーの印刷範囲。透明余白ではなく実際の足裏を床へ揃えます。
  const sheets=SCENARIO_SHEETS;
@@ -134,6 +134,8 @@ export function createStage(host, controls, changed) {
   if(e>=.5&&!r.swapped){r.swapped=true;r.apply();}
   // 上から見て時計回り（右の端が客席側へ出る）。後半は差し替えた絵を逆側から正面へ戻すので、裏返った絵を見せません。
   back.rotation.y=-(e<.5?Math.PI*e:Math.PI*(e-1));
+  // 小道具も背景の中心線を軸に回し、差し替え後の舞台美術が後から飛び出すのを防ぎます。
+  for(const p of props.values()){const x=p.userData.stageX,z=stageZ(p.userData.stageZ)-back.position.z,a=back.rotation.y;p.position.x=x*Math.cos(a)+z*Math.sin(a);p.position.z=back.position.z-x*Math.sin(a)+z*Math.cos(a);p.rotation.y=a;}
   if(t>=1){if(!r.swapped){r.swapped=true;r.apply();}back.rotation.y=0;revolving=null;r.done();}
   return true;}
  function focusActor(id){const a=actors.get(id);if(snap?.battle||!a?.sprite.visible||!a.sprite.isGroup)return;host.dataset.stageFocus=id;faceFront.add(id);a.sprite.userData.facing='front';const reduced=slidePan(a.sprite.position.x);if(reduced||config.scrollSeconds<=0){a.sprite.rotation.y=0;turns.delete(id);updateFacing();dirty=true;}else{const angle=THREE.MathUtils.euclideanModulo(a.sprite.rotation.y+Math.PI,2*Math.PI)-Math.PI;turns.set(id,{from:angle,start:performance.now()});}}
