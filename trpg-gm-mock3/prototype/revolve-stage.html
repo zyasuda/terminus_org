@@ -50,7 +50,9 @@ function standee(p){const g=new THREE.Group(),s=p.sheet,body=s.figure[3]-s.figur
  for(const [i,side] of ['front','back'].entries()){const m=new THREE.Mesh(new THREE.PlaneGeometry(w,h),new THREE.MeshBasicMaterial({map:tex(`./art-preview/characters/${p.id}-v64-${side}.png`),transparent:true,alphaTest:.04}));
   m.position.set((s.width/2-(s.figure[0]+s.figure[2])/2)/body,(s.figure[3]-s.height/2)/body,i?-.008:.008);m.rotation.y=i?Math.PI:0;g.add(m);}
  g.scale.setScalar(4.8*p.cm/172);g.position.set(p.x,0,p.z);scene.add(g);return g;}
-PARTY.forEach(standee);
+const party=PARTY.map(standee);
+// 回転が始まったら全員が後ろ（背景の方）を向き、回転後もそのまま。向きを変える秒数はゲームの scrollSeconds と同じ
+const FACE_SECONDS=.45;
 // カメラ：ゲームと同じ客席。PULL・BACK を0より大きくすると、回る間だけ後ろへ引く
 const look=3.8+20*2*(HORIZON/100-.5)*Math.tan(FOV*Math.PI/360);
 const SEAT={pos:new THREE.Vector3(0,3.8,10),look:new THREE.Vector3(0,look,-10)},WIDE={pos:new THREE.Vector3(0,11,40),look:new THREE.Vector3(0,6,-8)};
@@ -64,11 +66,12 @@ function setScene(i){cur=i;const sc=SCENES[i];backMat.map=tex(sc.bg);backMat.nee
 function start(){if(anim)return;const reduced=matchMedia('(prefers-reduced-motion: reduce)').matches;anim={next:(cur+1)%SCENES.length,t0:performance.now(),reduced,total:reduced?.9:PULL+TURN+BACK,swapped:false};go.disabled=true;}
 function step(now){if(!anim)return;const a=anim,el=(now-a.t0)/1000;
  if(a.reduced){// 動きを減らす設定：今のゲームと同じ暗転・明転
-  const t=clamp(el/a.total);fadeEl.style.opacity=String(1-Math.abs(t*2-1));if(t>=.5&&!a.swapped){a.swapped=true;setScene(a.next);}
+  const t=clamp(el/a.total);fadeEl.style.opacity=String(1-Math.abs(t*2-1));if(t>=.5&&!a.swapped){a.swapped=true;setScene(a.next);for(const s of party)s.rotation.y=Math.PI;}
   if(t>=1){anim=null;go.disabled=false;}return;}
  if(PULL)place(el<PULL?smooth(el/PULL):el<PULL+TURN?1:1-smooth((el-PULL-TURN)/BACK));
  // 0→90°で真横、そこで絵を差し替えて −90°→0° へ。全体で半回転
  const r=smooth(clamp((el-PULL)/TURN));
+ const face=smooth(clamp((el-PULL)/FACE_SECONDS));for(const s of party)s.rotation.y=Math.max(s.rotation.y,Math.PI*face);
  if(r>=.5&&!a.swapped){a.swapped=true;setScene(a.next);}
  pivot.rotation.y=r<.5?Math.PI*r:Math.PI*(r-1);
  if(el>=a.total){pivot.rotation.y=0;place(0);anim=null;go.disabled=false;}}
