@@ -13,6 +13,7 @@ vm.runInContext(`(async()=>{
  for(const c of cases){
   state=initial();chat=[];actionHistory=[];consents={};explorationOffers={};humanRequests=[];pendingTransfer=null;plan=[];fallbacks=[];unrecorded=[];busy=false;recipient=c.to;
   let setup='';
+  if(c.setup==='entry-dark-cache'){apply('lydia','light');apply('lydia','douse');state.discovery.cache=true;}
   if(c.setup==='entry-lit'){state.lit=true;state.everLit=true;}
   if(c.setup==='drain'){state.room='drain';state.lit=true;state.everLit=true;}
   if(c.setup==='entry-decoded'){

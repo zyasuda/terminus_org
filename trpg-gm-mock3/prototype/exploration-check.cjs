@@ -283,5 +283,10 @@ vm.runInContext(`(async()=>{
  ok(parseAI(fence('{"speech":"行こう"}')).speech==='行こう'&&parseAI('{"speech":"行こう"}').speech==='行こう','これまで読めた形が読めない');
  ok(rejects(()=>parseAI('前置き\\n'+fence('{"action":"wait"}')+'\\n'+fence('{"action":"smash"}'))),'JSONの囲みが2つある返答から恣意的に1つを選ぶ');
  ok(rejects(()=>parseAI('石扉の広間か、いい判断だな。')),'JSONの無い返答を受理');
+ // 2026-10-07：暗くて誰も調べられない時の調べる依頼には、GMが先に理由と灯りの頼み先を返します。依頼でない発言や明るい時は止めません。
+ fixture();apply('lydia','douse');state.discovery.cache=true;ask=async()=>{throw Error('LLMを呼ばない');};
+ const darkAsk=await explorationIntent('隠し収納を調べてくれる？','gareth');ok(darkAsk.clarify.startsWith('暗くて')&&darkAsk.clarify.includes('リディア')&&!darkAsk.jobs.length,'暗闇の調査依頼にGMが理由と灯りの持ち主を返さない');
+ ok((await explorationIntent('隠し収納の開け方が分からない','all')).clarify==='','暗闇の相談まで依頼として止める');
+ fixture();ok(!explorationBlockedReason(),'明るい時に調査を止める理由を返す');
  return count;
 })()`,context).then(n=>console.log('PASS: '+n+' checks — 明示依頼と短い了承 / 曖昧な提案の確認 / 指定相手・発言根拠 / 調査と実結果の共有 / 個人情報の保護 / 解読 / 候補の自発共有 / 二重実行・古い応答 / 会話から解錠判定 / 自分だけの選択肢 / 人間への依頼・保留・了承・自分の実行')).catch(e=>{console.error(e);process.exitCode=1;});

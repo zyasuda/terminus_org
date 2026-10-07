@@ -590,7 +590,11 @@ async function explorationIntent(text,to){
  }
  if(to!=='all'&&PEOPLE.some(p=>p.id===to)&&dialogueFocus(PEOPLE.find(p=>p.id===to),text).type==='profile')return {jobs:[],clarify:''};
  const choices=Object.fromEntries(aiPeople().map(p=>[p.id,Object.fromEntries(conversationChoices(p.id).map(a=>[a,LABEL[a]]))]));
- if(!Object.values(choices).some(x=>Object.keys(x).length))return {jobs:[],clarify:''};
+ if(!Object.values(choices).some(x=>Object.keys(x).length)){
+  const reason=explorationBlockedReason();
+  if(reason&&/調べ|見て|見てみ|確かめ|探して|探って|解読|読んで|開けて/.test(text))return {jobs:[],clarify:reason};
+  return {jobs:[],clarify:''};
+ }
  const epoch=generation,source=state,room=state.room,offers=currentOffers();
  const raw=await ask(EXPLORATION_INTENT_PROMPT,{text,to,choices,offers,visible:visibleTargets().map(t=>TARGETS[t].name),conversation:chat.filter(c=>!['private','error'].includes(c.kind)).slice(-10)},700);
  if(!responseIsCurrent(epoch,source)||room!==state.room)return {jobs:[],clarify:''};

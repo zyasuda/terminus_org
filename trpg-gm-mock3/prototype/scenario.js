@@ -64,6 +64,10 @@ function discoveryHint(s=state){
  if(d.etching)return '気づいたことは、調べた本人だけが知っています。仲間に伝えたいことはありますか？';
  return '景色の中の痕跡を探せる仲間はいましたね。キャラクターシートから能力を使えます。';
 }
+function explorationBlockedReason(s=state){
+ if(!s.lit){const holder=s.items.lantern.holder;return '暗くて手元が見えず、調べられません。'+(isHuman(holder)?'先にランタンを灯しましょう。':personName(holder)+'にランタンを灯してもらいましょう。');}
+ return null;
+}
 function actionsFor(id,s=state){
  if(!PEOPLE.some(p=>p.id===id)||s.phase==='end')return [];
  if(s.phase==='battle')return ownedActions(id,[...(id==='ines'?['study','aid','throw']:id==='brom'?['cover','strike']:id==='gareth'?['stab']:s.fire>0?['fire','spark']:['spark']),'retreat'],s);
