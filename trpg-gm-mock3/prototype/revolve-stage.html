@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="ja">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>本物どおりの廻り舞台</title>
+<style>
+:root{color-scheme:dark;--bg:#101817;--line:#344947;--text:#eee9dc;--gold:#dabc79}
+*{box-sizing:border-box}html,body{height:100%;margin:0}body{background:var(--bg);color:var(--text);font:13px/1.5 system-ui,sans-serif}
+#stage{position:fixed;inset:0}#stage canvas{width:100%;height:100%;display:block}
+#fade{position:fixed;inset:0;background:#000;opacity:0;pointer-events:none}
+#place{position:fixed;left:16px;top:12px;font-family:Georgia,"Yu Mincho",serif;font-size:22px;text-shadow:0 1px 4px #000}
+#go{position:fixed;right:16px;bottom:16px;background:#101817cc;color:var(--gold);border:1px solid var(--gold);border-radius:6px;padding:10px 16px;font:inherit;cursor:pointer}#go:disabled{opacity:.5;cursor:default}
+</style>
+<div id="stage"></div><div id="fade"></div><div id="place"></div><button id="go">場面を変える</button>
+<script type="module">
+import * as THREE from './vendor/three/three.module.min.js';
+// 本物どおりの廻り舞台：円盤の直径の線上に壁を1枚立て、表と裏に別の場面を描く。
+// 仲間は円盤の手前の前舞台に立ったまま動かない。転換ではカメラを引き、円盤を180°回して戻る。
+const FOV=65,HORIZON=54,TILE=70/36;
+const R=40,CZ=-3.5-R;// 円盤の半径と中心。手前の端は仲間の一番奥（戦闘の番人の位置も含む）より後ろ
+const W=2*R,H=W*614/1100;// 壁は円盤の直径いっぱい。高さは背景の絵の比
+const SCENES=[
+ {name:'坑道入口',bg:'../replay/img/mine_entrance_unlit.webp',floor:'#b6c0dc',sky:'#182027',prop:{img:'./assets/scenery/mine-cart-v1.png',w:7,h:4.7,x:-22,z:9}},
+ {name:'石扉の広間',bg:'../replay/img/s2_junction.webp',floor:'#8793a7',sky:'#151b20',prop:{img:'./art-preview/scenery/foreground-rock-v02.png',w:5,h:7.5,x:20,z:9}},
+];
+// 仲間の並び（探索時の手前2列）。スタンディーの印刷範囲は scenario.js の SCENARIO_SHEETS
+const PARTY=[
+ {id:'ines',cm:155,x:-4.5,z:2.2,sheet:{width:793,height:1251,figure:[261,65,615,1177]}},
+ {id:'brom',cm:135,x:-1.5,z:1.13,sheet:{width:924,height:1029,figure:[100,85,824,959]}},
+ {id:'gareth',cm:184,x:1.5,z:1.13,sheet:{width:780,height:1444,figure:[93,93,703,1354]}},
+ {id:'lydia',cm:172,x:4.5,z:2.2,sheet:{width:780,height:1444,figure:[149,87,655,1358]}},
+];
+const host=document.getElementById('stage'),fadeEl=document.getElementById('fade'),placeEl=document.getElementById('place'),go=document.getElementById('go');
+const renderer=new THREE.WebGLRenderer({antialias:true,preserveDrawingBuffer:true});renderer.setPixelRatio(Math.min(devicePixelRatio,1.5));renderer.outputColorSpace=THREE.SRGBColorSpace;host.append(renderer.domElement);
+const scene=new THREE.Scene();scene.background=new THREE.Color(SCENES[0].sky);
+const camera=new THREE.PerspectiveCamera(FOV,1,.1,400);
+const loader=new THREE.TextureLoader(),cache=new Map(),tex=(u,srgb=true)=>{if(!cache.has(u)){const t=loader.load(u);if(srgb)t.colorSpace=THREE.SRGBColorSpace;cache.set(u,t);}return cache.get(u);};
+const groundTex=rep=>{const m=tex('./assets/scenery/ground-coal-gravel-v1.png').clone(),n=tex('./assets/scenery/ground-coal-gravel-v1-normal.png',false).clone();for(const t of [m,n]){t.wrapS=t.wrapT=THREE.RepeatWrapping;t.repeat.set(rep,rep);t.anisotropy=8;}return [m,n];};
+const ambient=new THREE.HemisphereLight('#a9bac6','#51412e',1.2);scene.add(ambient);
+const lantern=new THREE.PointLight('#ffcc86',8,22,1);scene.add(lantern);
+// 前舞台（動かない床）。円盤の手前の端まで
+const apronDepth=16,[am,an]=groundTex(apronDepth/TILE);am.repeat.set(70/TILE,apronDepth/TILE);an.repeat.copy(am.repeat);
+const apronMat=new THREE.MeshStandardMaterial({map:am,normalMap:an,roughness:.96,metalness:0,color:SCENES[0].floor});
+const apron=new THREE.Mesh(new THREE.PlaneGeometry(70,apronDepth),apronMat);apron.rotation.x=-Math.PI/2;apron.position.set(0,-.02,CZ+R+apronDepth/2);scene.add(apron);
+// 円盤（盆）と、その上の壁・小道具
+const turntable=new THREE.Group();turntable.position.z=CZ;scene.add(turntable);
+const [dm,dn]=groundTex(2*R/TILE),discMat=new THREE.MeshStandardMaterial({map:dm,normalMap:dn,roughness:.96,metalness:0,color:SCENES[0].floor});
+const disc=new THREE.Mesh(new THREE.CircleGeometry(R,160),discMat);disc.rotation.x=-Math.PI/2;turntable.add(disc);
+const rim=new THREE.Mesh(new THREE.RingGeometry(R-.35,R,160),new THREE.MeshStandardMaterial({color:'#3a2a1a',roughness:.8}));rim.rotation.x=-Math.PI/2;rim.position.y=.01;turntable.add(rim);
+// 壁：厚みのある木の板の両面に、2つの場面の背景を貼る
+const T=.6;
+const wallCore=new THREE.Mesh(new THREE.BoxGeometry(W,H,T),new THREE.MeshStandardMaterial({color:'#2b2118',roughness:.9}));wallCore.position.y=H/2;turntable.add(wallCore);
+function face(sc,side){const m=new THREE.Mesh(new THREE.PlaneGeometry(W,H),new THREE.MeshBasicMaterial({map:tex(sc.bg),transparent:true,alphaTest:.1}));m.position.set(0,H/2,side*(T/2+.02));if(side<0)m.rotation.y=Math.PI;turntable.add(m);return m;}
+face(SCENES[0],1);face(SCENES[1],-1);
+// 小道具：表の場面の分は手前の半分、裏の場面の分は奥の半分に置く
+function prop(sc,side){const p=sc.prop,m=new THREE.Mesh(new THREE.PlaneGeometry(p.w,p.h),new THREE.MeshBasicMaterial({map:tex(p.img),transparent:true,alphaTest:.1}));m.position.set(side*p.x,p.h/2,side*p.z);if(side<0)m.rotation.y=Math.PI;turntable.add(m);}
+prop(SCENES[0],1);prop(SCENES[1],-1);
+// 仲間（前舞台に立ったまま）
+function standee(p){const g=new THREE.Group(),s=p.sheet,body=s.figure[3]-s.figure[1],w=s.width/body,h=s.height/body;
+ for(const [i,side] of ['front','back'].entries()){const m=new THREE.Mesh(new THREE.PlaneGeometry(w,h),new THREE.MeshBasicMaterial({map:tex(`./art-preview/characters/${p.id}-v64-${side}.png`),transparent:true,alphaTest:.04}));
+  m.position.set((s.width/2-(s.figure[0]+s.figure[2])/2)/body,(s.figure[3]-s.height/2)/body,i?-.008:.008);m.rotation.y=i?Math.PI:0;g.add(m);}
+ g.scale.setScalar(4.8*p.cm/172);g.position.set(p.x,0,p.z);scene.add(g);return g;}
+const party=PARTY.map(standee),lydia=party[3];lantern.position.set(lydia.position.x,3,lydia.position.z);
+// カメラ：ふだんはゲームと同じ客席の位置。転換中は引いて上から見下ろす
+const SEAT={pos:new THREE.Vector3(0,3.8,10),look:new THREE.Vector3(0,3.8+20*2*(HORIZON/100-.5)*Math.tan(FOV*Math.PI/360),-10)};
+const WIDE={pos:new THREE.Vector3(0,34,48),look:new THREE.Vector3(0,6,CZ+6)};
+const camPos=new THREE.Vector3(),camLook=new THREE.Vector3();
+function place(k){camPos.lerpVectors(SEAT.pos,WIDE.pos,k);camLook.lerpVectors(SEAT.look,WIDE.look,k);camera.position.copy(camPos);camera.lookAt(camLook);}
+function resize(){const w=host.clientWidth,h=host.clientHeight;renderer.setSize(w,h,false);camera.aspect=w/h;camera.updateProjectionMatrix();}
+new ResizeObserver(resize).observe(host);
+const smooth=t=>t<=0?0:t>=1?1:t*t*t*(t*(t*6-15)+10),clamp=t=>Math.max(0,Math.min(1,t));
+const PULL=1.2,TURN=3,BACK=1.2;
+let cur=0,turns=0,anim=null;
+function setScene(i){cur=i;const sc=SCENES[i];apronMat.color.set(sc.floor);discMat.color.set(sc.floor);scene.background.set(sc.sky);placeEl.textContent=sc.name;}
+function start(){if(anim)return;const reduced=matchMedia('(prefers-reduced-motion: reduce)').matches;anim={next:(cur+1)%SCENES.length,t0:performance.now(),reduced,total:reduced?.9:PULL+TURN+BACK,from:turns*Math.PI};go.disabled=true;}
+function step(now){if(!anim)return;const a=anim,el=(now-a.t0)/1000,sa=SCENES[cur],sb=SCENES[a.next];
+ if(a.reduced){// 動きを減らす設定：今のゲームと同じ暗転・明転
+  const t=clamp(el/a.total);fadeEl.style.opacity=String(1-Math.abs(t*2-1));if(t>=.5&&turntable.rotation.y===a.from){turntable.rotation.y=a.from+Math.PI;setScene(a.next);}
+  if(t>=1){turns++;anim=null;go.disabled=false;}return;}
+ const k=el<PULL?smooth(el/PULL):el<PULL+TURN?1:1-smooth((el-PULL-TURN)/BACK);place(k);
+ const r=smooth(clamp((el-PULL)/TURN));turntable.rotation.y=a.from+Math.PI*r;
+ const c=new THREE.Color(sa.floor).lerp(new THREE.Color(sb.floor),r);apronMat.color.copy(c);discMat.color.copy(c);scene.background.copy(new THREE.Color(sa.sky).lerp(new THREE.Color(sb.sky),r));
+ if(r>=.5)placeEl.textContent=sb.name;
+ if(el>=a.total){turns++;setScene(a.next);place(0);anim=null;go.disabled=false;}}
+go.onclick=start;
+function frame(now){requestAnimationFrame(frame);step(now);renderer.render(scene,camera);}
+setScene(0);place(0);requestAnimationFrame(frame);
+// 確認用：転換の途中の指定した秒数へ進める
+window.__lab={start,seek(s){if(anim)anim.t0=performance.now()-s*1000;},get total(){return anim?.total},get busy(){return !!anim}};
+</script>
+</html>
