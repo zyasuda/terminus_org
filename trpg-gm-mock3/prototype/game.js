@@ -606,6 +606,7 @@ async function explorationIntent(text,to){
 }
 function announceVisiblePoints(){
  if(state.phase!=='explore')return;
+ if(explorationBlockedReason())return;
  const fresh=visibleTargets().filter(t=>!announcedPoints.has(state.room+':'+t));
  if(!fresh.length)return;
  fresh.forEach(t=>announcedPoints.add(state.room+':'+t));
@@ -783,7 +784,7 @@ function setupDice(){
 }
 
 function gmText(text){const clean=text.trim().replace(/^```(?:json)?\s*/,'').replace(/\s*```$/,'');let value;try{value=JSON.parse(clean);}catch{return clean;}if(typeof value==='string')return value;for(const key of ['response','text','speech'])if(typeof value?.[key]==='string')return value[key];throw Error('GMの返答を文章として確認できませんでした。もう一度相談してください。');}
-async function consultGM(question){if(scenarioGMHint(question))return;const epoch=generation;const text=await ask('あなたはTRPGのGM。現在地で見える事実と共有された情報だけを整理し、次の相談を促す短い問いを1つ出す。既知の能力を案内してよい。知らない人物情報は本人へ尋ねるよう促す。未共有の個別情報や未訪問の場所の仕組みを暴露しない。行動を代行しない。入力された相談に答え、120文字以内の本文だけを返す。JSONやコードブロックは不要。',{question,public:publicView(),characters:PEOPLE.map(p=>({name:p.name,role:p.role,known:visibleProfile(p.id)})),shared:state.shared.slice(-16),conversation:chat.filter(c=>c.kind!=='error').slice(-12)});if(epoch===generation)say('GM',gmText(text),'gm');}
+async function consultGM(question){if(scenarioGMHint(question))return;const epoch=generation;const text=await ask('あなたはTRPGのGM。現在地で見える事実と共有された情報だけを整理し、次の相談を促す短い問いを1つ出す。既知の能力を案内してよい。知らない人物情報は本人へ尋ねるよう促す。未共有の個別情報や未訪問の場所の仕組みを暴露しない。行動を代行しない。入力された相談に答え、120文字以内の本文だけを返す。JSONやコードブロックは不要。blockedがあれば、それが今は調べられない理由なので、最初にその理由と解決の頼み先を伝える。',{question,blocked:explorationBlockedReason(),public:publicView(),characters:PEOPLE.map(p=>({name:p.name,role:p.role,known:visibleProfile(p.id)})),shared:state.shared.slice(-16),conversation:chat.filter(c=>c.kind!=='error').slice(-12)});if(epoch===generation)say('GM',gmText(text),'gm');}
 
 function chronicleMarkdown(entries=chat){return CHRONICLE_HEADER+entries.filter(e=>e.kind!=='error').map((e,i)=>'## '+(i+1)+'. '+e.who+'\n\n'+e.text).join('\n\n');}
 function updateAIComparison(){

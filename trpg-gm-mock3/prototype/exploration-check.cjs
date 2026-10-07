@@ -288,5 +288,12 @@ vm.runInContext(`(async()=>{
  const darkAsk=await explorationIntent('隠し収納を調べてくれる？','gareth');ok(darkAsk.clarify.startsWith('暗くて')&&darkAsk.clarify.includes('リディア')&&!darkAsk.jobs.length,'暗闇の調査依頼にGMが理由と灯りの持ち主を返さない');
  ok((await explorationIntent('隠し収納の開け方が分からない','all')).clarify==='','暗闇の相談まで依頼として止める');
  fixture();ok(!explorationBlockedReason(),'明るい時に調査を止める理由を返す');
+ // 2026-10-07：暗くて調べられない間は「〜が見えるよ。調べてみよう」と告知せず、灯した時に告知します。GM相談には調べられない理由を渡します。
+ fixture();apply('lydia','douse');state.discovery.cache=true;announcedPoints=new Set();chat=[];
+ announceVisiblePoints();ok(!chat.some(c=>c.text.includes('見えるよ')),'暗闇で「見えるよ。調べてみよう」と告知');
+ apply('lydia','light');chat=[];announceVisiblePoints();ok(chat.some(c=>c.text.includes('「隠し収納」')&&c.text.includes('見えるよ')),'灯した後に隠し収納を告知しない');
+ fixture();apply('lydia','douse');state.discovery.cache=true;let gmSystem='',gmInput=null;ask=async(system,payload)=>{gmSystem=system;gmInput=payload;return '暗くて調べられません。';};
+ await consultGM('隠し収納の開け方が分からない');ok(gmInput?.blocked?.startsWith('暗くて')&&gmSystem.includes('blocked'),'GM相談に暗くて調べられない理由を渡さない');
+ fixture();gmInput=null;await consultGM('隠し収納の開け方が分からない');ok(gmInput&&gmInput.blocked===null,'明るい時のGM相談に調べられない理由を渡す');
  return count;
 })()`,context).then(n=>console.log('PASS: '+n+' checks — 明示依頼と短い了承 / 曖昧な提案の確認 / 指定相手・発言根拠 / 調査と実結果の共有 / 個人情報の保護 / 解読 / 候補の自発共有 / 二重実行・古い応答 / 会話から解錠判定 / 自分だけの選択肢 / 人間への依頼・保留・了承・自分の実行')).catch(e=>{console.error(e);process.exitCode=1;});
