@@ -404,7 +404,7 @@ function wheelConversation(text,s=state){
  if(own&&actionsFor('ines',s).includes('pry'))return {selfAction:'pry'};
  return {clarify:'ブロムが輪を支えています。鉄片を外す細かい作業は、工具を持つイネスが担当できます。「私が工具で鉄片を外す」と話すか、操作輪を選んで工具を使えます。'};
 }
-function stageSnapshot(){return {room:state.room,phase:battlePreview?'battle':state.phase,image:state.phase==='explore'&&!battlePreview?ROOMS[state.room].image:'s3_chamber_v2',lit:state.lit||battlePreview,end:state.phase==='end'&&!battlePreview,battle:state.phase==='battle'||battlePreview,actors:(battlePreview?(previewPlacement||makePlacement(true)):state.phase==='explore'?[{id:humanId(),x:42,z:.03},...(placement||[])]:placement||[]).map(p=>({...p,heightCm:PEOPLE.find(person=>person.id===p.id).heightCm})),depth:{...depth},blueDust:!battlePreview&&blueDust(),cache:state.discovery.cache};}
+function stageSnapshot(){return {room:state.room,phase:battlePreview?'battle':state.phase,image:state.phase==='explore'&&!battlePreview?ROOMS[state.room].image:'s3_chamber_v2',lit:state.lit||battlePreview,end:state.phase==='end'&&!battlePreview,battle:state.phase==='battle'||battlePreview,actors:(battlePreview?(previewPlacement||makePlacement(true)):state.phase==='explore'?[{id:humanId(),x:42,z:.03},...(placement||[])]:placement||[]).map(p=>({...p,heightCm:PEOPLE.find(person=>person.id===p.id).heightCm,equipment:['hammer','shield'].filter(item=>hasItem(p.id,item)&&state.items[item].equipped)})),depth:{...depth},blueDust:!battlePreview&&blueDust(),cache:state.discovery.cache};}
 
 // 共通表示・会話から呼ぶ、この章だけの案内。
 function playerFocusRule(input){return input.focus.type==='battle'?`今は戦闘です。allowedから自分の行動を1つ選び、その行動名と意図をspeechで話す。仲間の依頼は参考にし、本人が判断する。仲間の選択はplanにある。攻撃はD20合計${BATTLE_RULES.target}以上で命中。見抜く成功後は攻撃に+${BATTLE_RULES.weakBonus}、イネスの支援後はリディアに+${BATTLE_RULES.aidBonus}。命中時の威力は火球${BATTLE_RULES.damage.fire}、石つぶて${BATTLE_RULES.damage.spark}、金槌${BATTLE_RULES.damage.strike}、投げ縄${BATTLE_RULES.damage.throw}、急所は弱点あり${BATTLE_RULES.damage.stabWeak}/なし${BATTLE_RULES.damage.stab}。火球は残数fireだけ使える。かばうは前衛への薙ぎ払いをブロムが引き受け${BATTLE_RULES.cover}ダメージ。リディアへの光線${BATTLE_RULES.beam}ダメージはかばえない。誰かのHPが0なら探索終了。生存と敵HPを踏まえて戦闘継続か撤退を自分で判断する。`:input.focus.type==='profile'?'人物についての質問です。questionに直接答える。selfProfileの質問された設定だけを自然に話す。次の探索や行動を提案しない。proposalは空。':
@@ -504,7 +504,7 @@ function setupScenarioProps(prop,texture,props,THREE){
  prop('etching',scenarioEtchingTexture(THREE),[11.5,3.4,-12],3,2.2);
 }
 const SCENARIO_ANCHORS={cart:[-11.3,1.7,-10],rails:[1,1.3,-4],etching:[11.5,4.5,-12],cache:[11.5,3,-12],door:[0,4,-7],rune:[-8,3.8,-6],wheel:[-4,2.8,-6],water:[5,1,-4]};
-const SCENARIO_SHEETS={ines:{width:793,height:1251,figure:[261,65,615,1177],plate:[233,33,639,1208]},brom:{width:924,height:1029,figure:[100,85,824,959],plate:[77,60,852,984]},gareth:{width:780,height:1444,figure:[93,93,703,1354],plate:[55,57,739,1389]},lydia:{width:780,height:1444,figure:[149,87,655,1358],plate:[110,51,700,1395]}};
+const SCENARIO_SHEETS={ines:{width:793,height:1251,figure:[261,65,615,1177],plate:[233,33,639,1208]},brom:{width:862,height:1118,figure:[63,101,810,988],plate:[42,74,832,1012]},gareth:{width:766,height:1309,figure:[148,63,675,1224],plate:[113,29,710,1257]},lydia:{width:780,height:1444,figure:[149,87,655,1358],plate:[110,51,700,1395]}};
 const SCENARIO_BATTLE_X={ines:-5.5,brom:.2,gareth:-1.8,lydia:-3.2};
 // 床の色は描いた地面の絵に掛ける倍率です。点灯時に、手前の床の平均が背景に描かれた地面の平均と同じ明るさ・色味になる値を画面で測って決めました（2026-10-07）。
 const SCENARIO_PALETTES={entry:['#b6c0dc','#182027',.96],hall:['#8793a7','#151b20',.94],drain:['#4c7197','#111d22',.7]};
@@ -513,8 +513,8 @@ function scenarioStageActors(){return ['ines','brom','gareth','lydia',SCENARIO_E
 function scenarioBattleRow(id){return id==='brom'||id==='gareth'?2:id==='lydia'?0:1;}
 function scenarioShadowWidth(id){return id==='brom'?1.8:1.25;}
 function scenarioPropsVisible(next){return next.room==='entry'&&!next.battle&&!next.end;}
-function scenarioStandeeImage(id,side){return './art-preview/characters/'+id+'-v64-'+side+'.png';}
-function scenarioStandeeModel(id){return './assets/standees/'+id+'-v64.glb';}
+function scenarioStandeeImage(id,side){return './art-preview/characters/'+id+(id==='brom'?'-hammer-shield':id==='gareth'?'-sheathed':'-v64')+'-'+side+'.png';}
+function scenarioStandeeModel(id){return './assets/standees/'+id+(id==='brom'?'-hammer-shield':id==='gareth'?'-sheathed':'-v64')+'.glb';}
 
 
 // 章に固有の会話解釈・演出・判定後の案内。

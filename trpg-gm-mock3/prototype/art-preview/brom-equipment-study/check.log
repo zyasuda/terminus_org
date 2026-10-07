@@ -1,0 +1,37 @@
+切り分け: /Users/yasuda_k/Desktop/Terminus/trpg-gm-mock3/prototype/art-preview/brom-equipment-study/brom-hammer-shield-front.png / /Users/yasuda_k/Desktop/Terminus/trpg-gm-mock3/prototype/art-preview/brom-equipment-study/brom-hammer-shield-back.png  (768x1024)
+
+素性の検査:
+  OK  前面 色 G/R                 0.751 (正常 0.7前後 / 0.45未満は緑の抜きすぎ)
+  OK  前面 縁の中間アルファ              374655px (2値化されていないか)
+  NG  前面 下地の残り                 2430px (緑/灰の切り抜き下地)
+  OK  前面 内部の穴                  1.09% (3%以上なら切り抜きで人物が欠けている)
+  OK  背面 色 G/R                 0.799 (正常 0.7前後 / 0.45未満は緑の抜きすぎ)
+  OK  背面 縁の中間アルファ              366773px (2値化されていないか)
+  NG  背面 下地の残り                 4307px (緑/灰の切り抜き下地)
+  OK  背面 内部の穴                  0.31% (3%以上なら切り抜きで人物が欠けている)
+
+
+二面図の検査: (指定ファイル)
+  前面 /Users/yasuda_k/Desktop/Terminus/trpg-gm-mock3/prototype/art-preview/brom-equipment-study/brom-hammer-shield-front.png
+  背面 /Users/yasuda_k/Desktop/Terminus/trpg-gm-mock3/prototype/art-preview/brom-equipment-study/brom-hammer-shield-back.png
+  人物高さ 886px を基準に判定
+
+  OK  余分な余白の面積(前面)                 1.09% (上限 5%)   狙いの余白 27px
+  OK  余白の超過(前面)                    1.41% (上限 3%)   13px (最大 40px / 狙い 27px)
+  OK  余分な余白の面積(背面)                 1.32% (上限 5%)   狙いの余白 27px
+  OK  余白の超過(背面)                    1.64% (上限 3%)   15px (最大 42px / 狙い 27px)
+  OK  前面の反転アルファとの一致                95.72% (上限 99.5%)   100%なら前面のシルエットで型抜きしただけ。背面を描いていない
+
+  参考値(合否には使わない。余白が大きいときに原因を探すため):
+      人物高さの差                       0.23%   前面 886px / 背面 884px
+      輪郭のずれ 中央値                    0.68%   6px
+      輪郭のずれ p95                    3.27%   29px
+      シルエットの食い違い(XOR/和集合)          7.67%   前面のみ 17156px / 背面のみ 11402px
+      足の横位置のずれ                     1.81%   16px (足2個の中心)
+      靴底の高さのずれ                     0.68%   6px
+
+合格。3D化(tools/standee/create_acrylic_standee.py)へ進んでよい。
+
+目で見る: output/brom-hammer-shield-review.png
+
+不合格。生成し直す。docs/STANDEE_TURNAROUND_SPEC.md の第5節・第8節を読む。
