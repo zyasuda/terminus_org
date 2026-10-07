@@ -62,9 +62,10 @@ function unchangedBodies(){
  for(const name of names)assert.equal(vm.runInContext(name+'.toString()',current),vm.runInContext(name+'.toString()',original),name+'の中身が変わった');
  return names.length;
 }
+// 坑道入口の背景は2026-10-07に、ランタンの火を消した絵（mine_entrance_unlit）へ意図して差し替えました。比較ではこの名前だけを分離前へ読み替えます。
 (async()=>{
  console.log('PASS: 移動した '+unchangedBodies()+' 関数の本文が分離前と完全一致');
- const before=await trace([reference]),after=await trace(require('./load-prototype.cjs').sources().map(s=>s.source));assert.deepEqual(after,before);
+ const before=await trace([reference]),after=await trace(require('./load-prototype.cjs').sources().map(s=>s.source.replace("image:'mine_entrance_unlit'","image:'mine_entrance'")));assert.deepEqual(after,before);
  console.log(JSON.stringify({reference:'c36fc01',...after}));
  console.log('PASS: 同じ状態・入力・出目で状態全体・結果文・行動履歴・会話入力・プロンプトが一致 / DOM参照 / 工具・潜入・破壊の3経路から結末まで');
  const lighting=execFileSync(process.execPath,[root+'/lighting-check.cjs'],{encoding:'utf8',cwd:root});assert.equal(lighting,referenceLighting());

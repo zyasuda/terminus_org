@@ -6,7 +6,7 @@ const PEOPLE=[
  {id:'gareth',heightCm:184,name:'ガレス',role:(isHuman('gareth')?'あなた':'AI')+'・盗賊',hp:15,skill:'鍵を外す。戦闘では弱点を狙う。',tool:'錠前破りと短剣',motive:'危険や無駄を避け、手早く進みたい。'},
  {id:'lydia',heightCm:172,name:'リディア',role:(isHuman('lydia')?'あなた':'AI')+'・魔法使い',hp:12,skill:'ランタンを灯す・消す。古い文字や魔法の記号を読み解く。戦闘では火球を2回使える。',tool:'ランタン、記録板と杖、古い坑道の地図',motive:'仕組みを理解してから動きたい。'}
 ];
-const ROOMS={entry:{name:'坑道入口',image:'mine_entrance',targets:['cart','rails'],links:['hall','drain']},hall:{name:'石扉の広間',image:'s2_junction',targets:['door','rune'],links:['entry']},drain:{name:'排水室',image:'s7_inner_chamber',targets:['wheel','water'],links:['entry']}};
+const ROOMS={entry:{name:'坑道入口',image:'mine_entrance_unlit',targets:['cart','rails'],links:['hall','drain']},hall:{name:'石扉の広間',image:'s2_junction',targets:['door','rune'],links:['entry']},drain:{name:'排水室',image:'s7_inner_chamber',targets:['wheel','water'],links:['entry']}};
 // 通路の見え方とリディアの地図の記載。
 const PASSAGES={entry:{hall:'奥へ続く通路',drain:'下りの通路'},hall:{entry:'入口へ戻る通路'},drain:{entry:'上りの通路'}};
 const MAPS={lydia_map:{rooms:['entry','hall','drain'],caption:'古い地図の記載です。現在も同じ状態かどうかは、訪れて確かめます。'}};
