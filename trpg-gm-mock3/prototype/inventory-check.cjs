@@ -41,6 +41,7 @@ vm.runInContext(`(async()=>{
  transferItem(give('shield','ines','brom','return'));ok(!state.items.shield.equipped&&!actionsFor('brom').includes('cover'),'返却時に自動装備');
  ok(rejects(()=>equipItem('ines','shield',true))&&rejects(()=>equipItem('brom','shield','true')),'未所持または不正な装備値を受理');
  ok(equipmentIntent('ブロム、盾を外してください','all').equipped===false&&equipmentIntent('盾を装備してください','brom').equipped===true&&!equipmentIntent('もし盾を外すなら','brom'),'会話の着脱依頼と仮定を取り違え');
+ ok(!equipmentIntent('私が工具で鉄片を外す','all')&&!equipmentIntent('ガレス、錠前を外して','gareth')&&!equipmentIntent('留め具を外す','all'),'探索の取り外しを装備の着脱へ横取りする');
  fixture();state.phase='battle';transferItem(give('hammer','brom','ines'));
  transferItem(give('staff','lydia','ines'));ok(!actionsFor('lydia').includes('fire')&&!actionsFor('lydia').includes('spark')&&actionsFor('lydia').includes('retreat'),'杖なしで魔法か撤退まで消える');
  plan=[{id:'lydia',action:'fire'}];planReview={};transferItem(give('staff','ines','lydia'));ok(!plan.length&&!planReview,'装備変更で古い戦闘計画が残る');

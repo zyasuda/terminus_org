@@ -40,6 +40,7 @@ function equipmentIntent(text,to,s=state){
  if(to==='gm'||/もし|仮に|方法|しない|ないで|やめ|貸|借|返|譲|渡/.test(text))return null;
  const verb=text.match(/(装備して|装備する|外して|外す)(?:ください|下さい|お願い|くれ)?[。！!\s]*$/)?.[1];if(!verb)return null;const equipped=verb.startsWith('装備');
  const items=['hammer','shield'].filter(item=>text.includes(ITEM_DEFS[item].name)),named=PEOPLE.filter(p=>text.includes(p.name)),who=to==='all'?(named.length===1?named[0].id:null):to;
+ if(!equipped&&!items.length)return null;
  if(items.length!==1||!who)return {clarify:'金槌・盾のどちらを、誰が着脱するか教えてください。'};
  if(named.some(p=>p.id!==who))return {clarify:'選んだ宛先と、発言にある相手が違います。'};
  if(!hasItem(who,items[0],s))return {clarify:personName(who)+'は'+ITEM_DEFS[items[0]].name+'を持っていません。'};
