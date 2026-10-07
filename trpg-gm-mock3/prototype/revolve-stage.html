@@ -15,7 +15,7 @@
 <script type="module">
 import * as THREE from './vendor/three/three.module.min.js';
 // 背景の板を今の位置のまま、縦の中心線を軸に回す。真横を向いた瞬間に次の場面の絵へ差し替え、
-// 残りの半分を回して正面へ戻す（裏返った絵を見せないため）。板の端が客席側へ振り出すので、回る間だけカメラを引く。
+// 残りの半分を回して正面へ戻す（裏返った絵を見せないため）。カメラは客席のまま動かさない（板の端は客席側へ振り出し、カメラの横を通り過ぎる）。
 // 舞台・床・照明・カメラの値はゲーム（stage.js・scenario.js、2026-10-07時点）と同じ。
 const stageZ=z=>1+(z-1)*2.6/4.5,FOV=65,HORIZON=54;
 const SCENES=[
@@ -51,14 +51,14 @@ function standee(p){const g=new THREE.Group(),s=p.sheet,body=s.figure[3]-s.figur
   m.position.set((s.width/2-(s.figure[0]+s.figure[2])/2)/body,(s.figure[3]-s.height/2)/body,i?-.008:.008);m.rotation.y=i?Math.PI:0;g.add(m);}
  g.scale.setScalar(4.8*p.cm/172);g.position.set(p.x,0,p.z);scene.add(g);return g;}
 PARTY.forEach(standee);
-// カメラ：ふだんはゲームと同じ客席。回る間は後ろへ引く（板の端が振り出す奥行き約24より後ろ）
+// カメラ：ゲームと同じ客席。PULL・BACK を0より大きくすると、回る間だけ後ろへ引く
 const look=3.8+20*2*(HORIZON/100-.5)*Math.tan(FOV*Math.PI/360);
 const SEAT={pos:new THREE.Vector3(0,3.8,10),look:new THREE.Vector3(0,look,-10)},WIDE={pos:new THREE.Vector3(0,11,40),look:new THREE.Vector3(0,6,-8)};
 function place(k){camera.position.lerpVectors(SEAT.pos,WIDE.pos,k);camera.lookAt(new THREE.Vector3().lerpVectors(SEAT.look,WIDE.look,k));}
 function resize(){const w=host.clientWidth,h=host.clientHeight;renderer.setSize(w,h,false);camera.aspect=w/h;camera.updateProjectionMatrix();}
 new ResizeObserver(resize).observe(host);
 const smooth=t=>t<=0?0:t>=1?1:t*t*t*(t*(t*6-15)+10),clamp=t=>Math.max(0,Math.min(1,t));
-const PULL=.8,TURN=2,BACK=.8;
+const PULL=0,TURN=2,BACK=0;
 let cur=0,anim=null;
 function setScene(i){cur=i;const sc=SCENES[i];backMat.map=tex(sc.bg);backMat.needsUpdate=true;back.scale.y=64*sc.aspect;cart.visible=sc.cart;floorMat.color.set(sc.floor);scene.background.set(sc.sky);placeEl.textContent=sc.name;}
 function start(){if(anim)return;const reduced=matchMedia('(prefers-reduced-motion: reduce)').matches;anim={next:(cur+1)%SCENES.length,t0:performance.now(),reduced,total:reduced?.9:PULL+TURN+BACK,swapped:false};go.disabled=true;}
@@ -66,7 +66,7 @@ function step(now){if(!anim)return;const a=anim,el=(now-a.t0)/1000;
  if(a.reduced){// 動きを減らす設定：今のゲームと同じ暗転・明転
   const t=clamp(el/a.total);fadeEl.style.opacity=String(1-Math.abs(t*2-1));if(t>=.5&&!a.swapped){a.swapped=true;setScene(a.next);}
   if(t>=1){anim=null;go.disabled=false;}return;}
- place(el<PULL?smooth(el/PULL):el<PULL+TURN?1:1-smooth((el-PULL-TURN)/BACK));
+ if(PULL)place(el<PULL?smooth(el/PULL):el<PULL+TURN?1:1-smooth((el-PULL-TURN)/BACK));
  // 0→90°で真横、そこで絵を差し替えて −90°→0° へ。全体で半回転
  const r=smooth(clamp((el-PULL)/TURN));
  if(r>=.5&&!a.swapped){a.swapped=true;setScene(a.next);}
