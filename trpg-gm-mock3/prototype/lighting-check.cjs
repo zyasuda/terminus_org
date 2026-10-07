@@ -77,6 +77,12 @@ const fs=require('node:fs'),vm=require('node:vm');
  view.speak('lydia');tick(20);ok(Math.abs(person('lydia').rotation.y)<.001&&facesBack('ines'),'話した人だけが正面を向かない');
  view.sync({...snapshot,room:'drain'});tick();ok(snapshot.actors.every(p=>!facesBack(p.id)),'暗転で移った場面にも後ろ向きが残る');
  view.sync({...snapshot,end:true});tick();ok(!view.revolve(()=>{},()=>{}),'終わった場面で背景を回す');view.sync(snapshot);tick();
+ // もともと後ろ寄り（−173°）を向いていた人は、180°へ近い方の7°だけ回る（遠回りの353°はクルクル回って見える。2026-10-07 試遊で発見）。−180°と+180°は同じ向きなので、差は一周の範囲で測る
+ person('ines').rotation.y=THREE.MathUtils.degToRad(-173);let travel=0,prev=person('ines').rotation.y;
+ ok(view.revolve(()=>view.sync({...snapshot,room:'hall'}),()=>{}),'2回目の転換で背景を回せない');
+ for(let i=0;i<70;i++){tick(1);travel+=Math.abs(THREE.MathUtils.euclideanModulo(person('ines').rotation.y-prev+Math.PI,2*Math.PI)-Math.PI);prev=person('ines').rotation.y;}
+ ok(travel<THREE.MathUtils.degToRad(10)&&facesBack('ines'),'後ろ寄りの人が遠回りして1周近く回る');
+ view.sync(snapshot);tick();
  ok(JSON.stringify(snapshot)===before,'背景を回す転換がゲームの入力状態を変更');
  console.log('PASS: '+checks+' checks — 発言者追従 / 7秒後の消灯 / 手動照明 / 色・広がり / 不在の人物 / 暗闇の保護 / 再点灯 / 明るさ0 / シーン移動 / 入力状態の保護 / 人物縮小・消失点・平行移動・回転の固定・4段階の立ち位置・内向きの角度・狭い画面での調査 / スタンディー・足元の影・床の質感 / 背景を回す転換・後ろ向き・話した人だけ正面');
 })().catch(e=>{console.error(e);process.exitCode=1});
