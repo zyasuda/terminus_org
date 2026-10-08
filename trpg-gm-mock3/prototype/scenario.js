@@ -52,7 +52,6 @@ function discoveryTargets(s=state){return s.room==='entry'?[...(s.discovery.etch
 function visibleTargets(s=state){return [...(s.lit?ROOMS[s.room].targets:[]),...(s.lit?discoveryTargets(s):s.room==='entry'&&s.discovery.cache?['cache']:[])];}
 function canShowProposal(id,a,s=state){return !['decode','open_cache'].includes(a)||s.discovery.proposals.some(p=>p.id===id&&p.action===a);}
 function propose(id,a,s=state){if(!['decode','open_cache'].includes(a)||!actionsFor(id,s).includes(a))return false;if(!s.discovery.proposals.some(p=>p.id===id&&p.action===a))s.discovery.proposals.push({id,action:a});return true;}
-function suggestedAction(id,s=state){return actionsFor(id,s).find(a=>['decode','open_cache'].includes(a))||'';}
 function blueDust(s=state){return s.phase==='explore'&&s.room==='entry'&&s.everLit&&!s.lit;}
 function discoveryHint(s=state){
  const d=s.discovery;
@@ -188,7 +187,6 @@ const SHEET_ABILITIES={
  gareth:[['解錠','鍵や収納の錠前を外します。収納には判定が必要です。'],['急所への攻撃','見つかった敵の弱点を狙います。']],
  lydia:[['灯りの操作','ランタンを灯す・消すことで、見え方を変えます。'],['古代文字の解読','古い文字や魔法の記号を読み解きます。'],['攻撃魔法','火球を使います。使い切った後も石つぶてを使えます。']]
 };
-const SHEET_ITEMS=Object.fromEntries(PEOPLE.map(p=>[p.id,Object.values(ITEM_DEFS).filter(d=>d.start===p.id).sort((a,b)=>a.slot-b.slot).map(d=>[d.name,d.detail])]));
 // 今回の試作用人物設定。正式なシナリオ設定ではありません。作者がここを編集します。
 // 呼び名・役割・既存能力・所持品は維持し、未設定だった経歴だけを補っています。
 const PROFILE_DRAFT={

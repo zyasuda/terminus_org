@@ -96,8 +96,7 @@ async function companions(planning=false,addressedTo='all',investigations=[]){
  if(!planning&&epoch===generation){const question=chat[start]?.text||'',profileQuestion=order.length===1&&dialogueFocus(order[0],question).type==='profile';if(!profileQuestion&&!investigations.length)for(const topic of Object.keys(CONSENT_TOPICS)){await settleConsent(topic,start);if(epoch!==generation)return;}if(epoch===generation)announceVisiblePoints();}
 }
 
-// 分担調査は観察と解読。支援・解錠の了承は本人の直前の一意な申し出だけを使います。
-function investigationChoices(id){return state.phase==='explore'?actionsFor(id).filter(safeInvestigation):[];}
+// 支援・解錠の了承は本人の直前の一意な申し出だけを使います。
 function conversationChoices(id){return state.phase==='explore'?actionsFor(id).filter(a=>!consentTopicOf(a)):[];}
 function currentOffers(){
  return Object.fromEntries(Object.entries(explorationOffers).filter(([id,v])=>v.room===state.room&&conversationChoices(id).includes(v.action)&&usefulInvestigation(v.action)));
