@@ -119,6 +119,13 @@ vm.runInContext(`(async()=>{
  ok(invalidBattle&&battleCalls===2&&actionHistory.length===0,'戦闘候補外を自動の代替行動へ変換か繰り返し過ぎる');
  battleCalls=0;ask=async()=>{battleCalls++;return battleCalls===1?'not json':JSON.stringify({speech:'盾で前衛をかばうぞ',action:'cover',share:false});};
  ok((await aiPlayer(PEOPLE[1],true)).action==='cover'&&battleCalls===2,'戦闘JSONの読み取り失敗から選び直せない');state.phase='explore';
+ // 光線の予告ではかばうが効かないため候補から外し、理由を本人判断と連携確認へ渡します。選ばれても攻撃へ黙って置き換えません（2026-10-08）。
+ state.phase='battle';state.round=2;const beamInput=dialogueInput(PEOPLE[1],true,null,null);ok(!beamInput.allowed.cover&&beamInput.allowed.strike&&beamInput.public.forecast==='マレンへの光線'&&beamInput.blockedActions.some(b=>b.action==='cover'&&b.reason.includes('光線')),'光線の予告でかばうが選べる、または理由が届かない');
+ battleCalls=0;ask=async()=>{battleCalls++;return JSON.stringify(battleCalls===1?{speech:'マレンをかばうぞ',action:'cover',share:false}:{speech:'金槌で殴るぞ',action:'strike',share:false});};ok((await aiPlayer(PEOPLE[1],true)).action==='strike'&&battleCalls===2,'光線の予告でかばうを採用');
+ battleCalls=0;ask=async()=>{battleCalls++;return JSON.stringify({speech:'マレンをかばうぞ',action:'cover',share:false});};let beamCover=false;try{await aiPlayer(PEOPLE[1],true);}catch{beamCover=true;}ok(beamCover&&battleCalls===2&&actionHistory.length===0,'効かないかばうを攻撃へ黙って置き換える');
+ const savedAudit=auditProfile;auditProfile=async()=>({valid:true,claims:[]});plan=[{id:'ines',action:'study'},{id:'brom',action:'strike'},{id:'gareth',action:'stab'},{id:'lydia',action:'fire'}];let coordinationInput=null;ask=async(system,payload)=>{if(payload.self==='brom'){coordinationInput=payload;return JSON.stringify({speech:'やはりかばう',action:'cover',agrees:true});}return JSON.stringify({speech:'了解',action:payload.own.action,agrees:true});};
+ let coordinationRejected=false;try{await coordinatePlan();}catch{coordinationRejected=true;}auditProfile=savedAudit;ok(coordinationRejected&&coordinationInput.blockedActions.some(b=>b.action==='cover')&&!coordinationInput.allowed.cover&&coordinationInput.rules.includes('光線はかばえない')&&!plan.some(p=>p.action==='cover')&&!planReady(),'連携確認で効かないかばうを採用');
+ state.round=1;state.phase='explore';plan=[];planReview=null;
  let classificationCalls=0;ask=async()=>{classificationCalls++;return JSON.stringify({kind:'conversation',jobs:[],clarify:''});};
  ok((await explorationIntent('力仕事は得意？','brom')).jobs.length===0&&classificationCalls===0,'人物質問に不要な調査分類を呼ぶ');
  fixture();state.room='drain';acquireItem('ines','ironbar');reportInvestigation(PEOPLE[1],'inspect_wheel',apply('brom','inspect_wheel'));

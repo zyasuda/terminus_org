@@ -10,7 +10,7 @@ export function createStage(host, controls, changed) {
  const scene=new THREE.Scene();scene.background=new THREE.Color('#101c20');
  const camera=new THREE.PerspectiveCamera(config.fov,1,.1,100);camera.position.set(0,3.8,10);
  const renderer=new THREE.WebGLRenderer({antialias:true,alpha:false,preserveDrawingBuffer:true});renderer.setPixelRatio(Math.min(devicePixelRatio,1.5));renderer.outputColorSpace=THREE.SRGBColorSpace;
- const canvas=renderer.domElement;canvas.className='stage-canvas';canvas.tabIndex=0;canvas.setAttribute('aria-label','舞台。ドラッグで上下左右、左右の矢印キーで見渡す');host.prepend(canvas);
+ const canvas=renderer.domElement;canvas.className='stage-canvas';canvas.tabIndex=0;canvas.setAttribute('aria-label','舞台。ドラッグで上下と左右を見渡す。左右の矢印キーで左右を向く');host.prepend(canvas);
  const glbLoader=new GLTFLoader();
  const loader=new THREE.TextureLoader(),textures=new Map(),actors=new Map(),props=new Map();let snap=null,panX=0,panY=0,room='',dirty=true,last=0,drag=null,panSlide=null,lost=false,revolving=null,allBack=false,backFacing=null;const faceFront=new Set(),turns=new Map();
  const reducedMotion=typeof matchMedia==='function'?matchMedia('(prefers-reduced-motion: reduce)'):null;
@@ -26,15 +26,15 @@ export function createStage(host, controls, changed) {
  const lantern=new THREE.PointLight('#ffcc86',8,22,1);lantern.position.set(2,3,2);scene.add(lantern);
  // 背景は上下の絵を保ったまま左右にも届く幅にし、平面の端を見せません。
  const back=flat(null,0,-2,-15,64,25);back.renderOrder=-3;
- // 比較試作：?background=folded のときだけ、左右18％を客席側へ25度折ります。
- const folded=globalThis.location?.search&&new URLSearchParams(location.search).get('background')==='folded';
+ // 既定で左右18％を客席側へ25度折ります。?background=flat のときだけ平面に戻します。
+ const folded=new URLSearchParams(globalThis.location?.search||'').get('background')!=='flat';
  if(folded){
   back.geometry.dispose();back.geometry=new THREE.PlaneGeometry(64,25,3,1);
   const positions=back.geometry.attributes.position,uv=back.geometry.attributes.uv,angle=THREE.MathUtils.degToRad(25),hinge=32-64*.18;
   for(let i=0;i<positions.count;i++){const column=i%4,x=[-32,-hinge,hinge,32][column],wing=Math.max(0,Math.abs(x)-hinge);positions.setX(i,Math.sign(x)*(Math.min(Math.abs(x),hinge)+wing*Math.cos(angle)));positions.setZ(i,wing*Math.sin(angle));uv.setX(i,[0,.18,.82,1][column]);}
   back.geometry.computeVertexNormals();back.geometry.computeBoundingSphere();
  }
- host.dataset.stageBackground=folded?'folded':'flat';
+ back.geometry.computeBoundingBox();host.dataset.stageBackground=folded?'folded':'flat';
  // 印刷面は光芒・床の光と色調を合わせ、絵の陰影を保ちます。
  // 見つかっていない場所は照らさず、ゲーム内の灯りの状態も変更しません。
  function lightTexture(beam=false){const c=document.createElement('canvas');c.width=256;c.height=512;const x=c.getContext('2d');
@@ -93,12 +93,15 @@ export function createStage(host, controls, changed) {
   const shadow=new THREE.Mesh(new THREE.PlaneGeometry(1,1),new THREE.MeshBasicMaterial({map:contactMap,color:'#10100d',transparent:true,opacity:.55,depthWrite:false}));shadow.rotation.x=-Math.PI/2;shadow.userData.contactShadow=id;scene.add(shadow);actors.set(id,{sprite,shadow});
  }return actors.get(id);}
  function stageZ(z){return 1+(z-1)*config.depthSpan/4.5;}
- // 向きを変えず、カメラと注視点を一緒に平行移動します。
- function orient(){camera.position.set(panX,3.8+panY,10);const y=camera.position.y+20*2*(config.horizon/100-.5)*Math.tan(config.fov*Math.PI/360);camera.lookAt(panX,y,-10);camera.updateMatrixWorld();}
- function panLimits(){const distance=camera.position.z-back.position.z,tangent=Math.tan(config.fov*Math.PI/360),halfX=distance*tangent*camera.aspect,halfY=distance*tangent;
+ // カメラは左右の位置を x=0 に固定し、その場で左右を向きます。panX は手前の列の奥行きで測った注視点の左右のずれで、従来の移動量と操作速度を角度へ読み替えます。上下の移動は従来どおりです。
+ const UP=new THREE.Vector3(0,1,0),ahead=()=>10-config.frontRow;
+ function orient(){camera.position.set(0,3.8+panY,10);const y=camera.position.y+20*2*(config.horizon/100-.5)*Math.tan(config.fov*Math.PI/360);camera.lookAt(0,y,-10);camera.rotateOnWorldAxis(UP,-Math.atan2(panX,ahead()));camera.updateMatrixWorld();}
+ function panLimits(){const distance=camera.position.z-back.position.z,tangent=Math.tan(config.fov*Math.PI/360),halfY=distance*tangent;
+  // 画面の端の視線が背景の端（折り返しは手前へ出た端）より1内側に収まる角度まで向けます。
+  const box=back.geometry.boundingBox,edge=Math.atan2(box.max.x-1,distance-box.max.z)-Math.atan(tangent*camera.aspect);
   const tilt=Math.atan(2*(config.horizon/100-.5)*tangent),bottomSlope=Math.tan(tilt-config.fov*Math.PI/360);
   const bustLimits=[...actors.values()].filter(a=>a.sprite.visible&&a.sprite.userData.actorId!==SCENARIO_ENEMY).map(a=>a.sprite.position.y+a.sprite.scale.y*config.bustLine-3.8-(10-a.sprite.position.z)*bottomSlope);
-  return {x:Math.max(0,Math.min(config.panX,32-halfX-1)),up:Math.max(0,Math.min(config.panY,back.position.y+back.geometry.parameters.height*back.scale.y/2-halfY-3.8-2,...bustLimits)),down:.8};
+  return {x:Math.max(0,Math.min(config.panX,ahead()*Math.tan(Math.max(0,edge)))),up:Math.max(0,Math.min(config.panY,back.position.y+back.geometry.parameters.height*back.scale.y/2-halfY-3.8-2,...bustLimits)),down:.8};
  }
  function setPan(x,y){const limit=panLimits();panX=Math.max(-limit.x,Math.min(limit.x,x));panY=Math.max(-limit.down,Math.min(limit.up,y));orient();dirty=true;host.dataset.stagePanX=panX.toFixed(2);host.dataset.stagePanY=panY.toFixed(2);const directions=[];if(Math.abs(panX)>.05)directions.push(panX<0?'左':'右');if(Math.abs(panY)>.05)directions.push(panY>0?'上':'下');host.dataset.stageDirection=directions.join('・')||'正面';controls.querySelectorAll('[data-look]').forEach(b=>{b.hidden=b.dataset.look==='left'?panX<=-limit.x+.001:b.dataset.look==='right'?panX>=limit.x-.001:false;});changed();}
  function projectPosition(a){if(!a)return null;point.set(...a);const view=point.clone().applyMatrix4(camera.matrixWorldInverse),v=point.clone().project(camera);const visible=view.z<0&&Math.abs(v.x)<.92&&Math.abs(v.y)<.86;return {x:(v.x+1)*host.clientWidth/2,y:(1-v.y)*host.clientHeight/2,visible};}
@@ -147,7 +150,7 @@ export function createStage(host, controls, changed) {
   for(const p of props.values()){const x=p.userData.stageX,z=stageZ(p.userData.stageZ)-back.position.z,a=back.rotation.y;p.position.x=x*Math.cos(a)+z*Math.sin(a);p.position.z=back.position.z-x*Math.sin(a)+z*Math.cos(a);p.rotation.y=a;}
   if(t>=1){if(!r.swapped){r.swapped=true;r.apply();}back.rotation.y=0;revolving=null;r.done();}
   return true;}
- function focusActor(id){const a=actors.get(id);if(snap?.battle||!a?.sprite.visible||!a.sprite.isGroup)return;host.dataset.stageFocus=id;faceFront.add(id);a.sprite.userData.facing='front';const reduced=slidePan(a.sprite.position.x);if(reduced||config.scrollSeconds<=0){a.sprite.rotation.y=0;turns.delete(id);updateFacing();dirty=true;}else{const angle=THREE.MathUtils.euclideanModulo(a.sprite.rotation.y+Math.PI,2*Math.PI)-Math.PI;turns.set(id,{from:angle,start:performance.now()});}}
+ function focusActor(id){const a=actors.get(id);if(snap?.battle||!a?.sprite.visible||!a.sprite.isGroup)return;host.dataset.stageFocus=id;faceFront.add(id);a.sprite.userData.facing='front';const reduced=slidePan(a.sprite.position.x*ahead()/(camera.position.z-a.sprite.position.z));if(reduced||config.scrollSeconds<=0){a.sprite.rotation.y=0;turns.delete(id);updateFacing();dirty=true;}else{const angle=THREE.MathUtils.euclideanModulo(a.sprite.rotation.y+Math.PI,2*Math.PI)-Math.PI;turns.set(id,{from:angle,start:performance.now()});}}
  controls.querySelectorAll('[data-look]').forEach(b=>b.onclick=()=>slidePan((b.dataset.look==='left'?-1:1)*panLimits().x));
  canvas.onpointerdown=e=>{if(e.button!==0)return;panSlide=null;canvas.focus();drag={id:e.pointerId,x:e.clientX,y:e.clientY,startX:panX,startY:panY,units:2*(10-config.frontRow)*Math.tan(config.fov*Math.PI/360)/host.clientHeight*config.sensitivity};canvas.setPointerCapture(e.pointerId);};
  canvas.onpointermove=e=>{if(!e.buttons){drag=null;return;}if(drag?.id===e.pointerId)setPan(drag.startX-(e.clientX-drag.x)*drag.units,drag.startY+(e.clientY-drag.y)*drag.units);};
