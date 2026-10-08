@@ -108,6 +108,15 @@ const fs=require('node:fs'),vm=require('node:vm');
    function runStaffChecks(){vm.runInContext("equipItem('lydia','staff',true);",context);ok(vm.runInContext("stageSnapshot().actors.find(p=>p.id==='lydia').equipment.includes('staff') && ownedActions('lydia',['fire','spark'],state).length===2",context),'杖の装備が表示と魔法に反映されない');vm.runInContext("equipItem('lydia','staff',false);",context);ok(vm.runInContext("!stageSnapshot().actors.find(p=>p.id==='lydia').equipment.includes('staff') && ownedActions('lydia',['fire','spark'],state).length===0",context),'杖を外しても魔法を使えてしまう');}
    const worn=id=>vm.runInContext(`scenarioStandeeVariant(stageSnapshot().actors.find(p=>p.id==='${id}'))`,context),run=code=>vm.runInContext(code,context),give=(mode,from,to)=>run(`transferItem({item:'dagger',from:'${from}',to:'${to}',mode:'${mode}'})`);
   ok(worn('gareth').file==='gareth-empty'&&worn('brom').file==='brom-empty'&&worn('ines').file==='ines-empty'&&worn('lydia').file==='maren-v64','開始時に剣・金槌・盾を外した素体にならない、またはイネスが素体・マレンが杖ありで登場しない');
+  {run("state=initial();state.phase='battle';placement=makePlacement(true)");
+   ok(worn('lydia').file==='maren-v64','通常のマレンが杖姿でない');
+   run("state.lit=true");ok(worn('lydia').file==='maren-lantern','点灯中にランタン姿にならない');
+   run("state.lit=false");ok(worn('lydia').file==='maren-v64','消灯しても杖姿に戻らない');
+   run("battlePreview=true;state.lit=false");ok(worn('lydia').file==='maren-v64','プレビューの照明だけでランタン姿になる');run("battlePreview=false;state.lit=true;transferItem({item:'lantern',from:'lydia',to:'ines',mode:'lend'})");
+   ok(worn('lydia').file==='maren-v64'&&worn('ines').file==='ines-empty','貸与後も本人がランタンを持つ、または借り手に未作成の絵を付ける');
+   run("transferItem({item:'lantern',from:'ines',to:'lydia',mode:'return'})");ok(worn('lydia').file==='maren-lantern','返却された点灯ランタン姿が戻らない');
+   run("equipItem('lydia','staff',false);state.lit=false");ok(worn('lydia').file==='maren-empty','杖未装備の消灯後が素体でない');run("state.lit=true");ok(worn('lydia').file==='maren-lantern','杖未装備の点灯でランタン姿にならない');
+   run("state=initial();state.phase='battle';placement=makePlacement(true)");}
   runStaffChecks();
   run("equipItem('gareth','dagger',true)");ok(worn('gareth').file==='gareth-sheathed','装備で納刀姿にならない');
   run("equipItem('gareth','dagger',false)");ok(worn('gareth').file==='gareth-empty'&&!worn('gareth').missing,'外しても剣の絵が残る');

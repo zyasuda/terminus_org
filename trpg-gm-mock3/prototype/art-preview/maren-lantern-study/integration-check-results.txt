@@ -1,0 +1,16 @@
+{"heightCm":[["ines",155],["brom",135],["gareth",184],["lydia",172]],"upperPan":3.04,"bustEdge":-1}
+{"battleRows":[{"id":"ines","row":"middle","x":-5.5,"z":3.63,"angle":195.80805774106545},{"id":"brom","row":"back","x":0.2,"z":2.56,"angle":153.4601617113764},{"id":"gareth","row":"back","x":-1.8,"z":2.56,"angle":168.60054251665875},{"id":"lydia","row":"front","x":-3.2,"z":4.7,"angle":186.122470196792},{"id":"guardian_rampage","row":"farthest","x":5.5,"z":-1.0099999999999998,"angle":0}]}
+{"characterHeightAt700px":{"before":428.78,"after":312.83},"depthWidth":{"before":4.5,"after":2.6},"horizonPercent":54}
+PASS: 136 checks — 発言者追従 / 7秒後の消灯 / 手動照明 / 色・広がり / 不在の人物 / 暗闇の保護 / 再点灯 / 明るさ0 / シーン移動 / 入力状態の保護 / 人物縮小・消失点・左右を向く・位置の固定・4段階の立ち位置・内向きの角度・狭い画面での調査 / スタンディー・足元の影・床の質感 / 背景を回す転換・後ろ向き・話した人だけ正面 / 装備と全身差分・読み直し防止・古い応答・読み込み失敗
+{"id":"ines-v64","bytes":3222196,"meshes":3,"printedSurfaces":2,"plateThickness":0.04}
+{"id":"brom-hammer-shield","bytes":4200660,"meshes":3,"printedSurfaces":2,"plateThickness":0.04}
+{"id":"brom-empty","bytes":4267764,"meshes":3,"printedSurfaces":2,"plateThickness":0.04}
+{"id":"gareth-sheathed","bytes":3684840,"meshes":3,"printedSurfaces":2,"plateThickness":0.04}
+{"id":"gareth-empty","bytes":3509092,"meshes":3,"printedSurfaces":2,"plateThickness":0.04}
+{"id":"maren-v64","bytes":4177036,"meshes":3,"printedSurfaces":2,"plateThickness":0.04}
+{"id":"ines-empty","bytes":3061228,"meshes":3,"printedSurfaces":2,"plateThickness":0.04}
+{"id":"maren-empty","bytes":3188476,"meshes":3,"printedSurfaces":2,"plateThickness":0.04}
+{"id":"lydia-empty","bytes":3034076,"meshes":3,"printedSurfaces":2,"plateThickness":0.04}
+{"id":"maren-lantern","bytes":3158500,"meshes":3,"printedSurfaces":2,"plateThickness":0.04}
+PASS: 60 checks — 実GLBの解析 / 表・裏・側面 / アクリル板の厚み / 有効な寸法
+PASS: 55 checks — 仲間の依頼 / 明示依頼・ボタンの本人了承・持ち主限定 / 本人の了承・保留 / 反対・疑問・撤回 / 相反する案 / 点灯済み / 二重実行防止 / 発言根拠 / シーン・戦闘の制限 / 通信・形式・人物照合の失敗 / 古い応答
