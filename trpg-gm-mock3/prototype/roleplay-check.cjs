@@ -4,7 +4,7 @@ const elements={};function el(){return {value:'',textContent:'',disabled:false,o
 const context=vm.createContext({document:{getElementById:id=>elements[id]??=el()},window:{},el,Event:class{},crypto:require('node:crypto').webcrypto});
 loadPrototype(context);
 // 仲間本人として話すAI呼び出し（着脱・受け渡し・地図・灯り・戦闘の連携確認）は、すべて共通の speechStyle を通します。
-const personaCalls=fs.readFileSync(__dirname+'/game.js','utf8').match(/await ask\((?:'あなたは'\+person\.name|`あなたは\$\{person\.name|'あなたは'\+personName\(holder\)|`あなたは協力型TRPG|CONSENT_TOPICS\[topic\]\.decisionPrompt)[^\n]*/g)||[];
+const personaCalls=require('./load-prototype.cjs').sources().map(s=>s.source).join('\n').match(/await ask\((?:'あなたは'\+person\.name|`あなたは\$\{person\.name|'あなたは'\+personName\(holder\)|`あなたは協力型TRPG|CONSENT_TOPICS\[topic\]\.decisionPrompt)[^\n]*/g)||[];
 if(personaCalls.length!==5||personaCalls.some(s=>!s.includes('speechStyle(')))throw Error('仲間本人のAI呼び出しに話し方が渡らない：'+personaCalls.length);
 vm.runInContext(`(async()=>{
  let checks=0;const ok=(v,m)=>{checks++;if(!v)throw Error(m)};
