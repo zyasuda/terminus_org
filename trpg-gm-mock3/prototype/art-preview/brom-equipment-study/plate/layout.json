@@ -1,0 +1,20 @@
+{
+  "width": 862,
+  "height": 1118,
+  "figure": [
+    63,
+    101,
+    810,
+    988
+  ],
+  "outside": {
+    "front": 0,
+    "back": 0,
+    "limit": 0.03
+  },
+  "margin": {
+    "front": 1.12,
+    "back": 1.48,
+    "limit": 5
+  }
+}

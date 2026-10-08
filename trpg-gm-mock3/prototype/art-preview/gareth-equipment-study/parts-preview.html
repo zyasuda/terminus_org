@@ -1,0 +1,35 @@
+<!doctype html><html lang="ja"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>ガレス：剣と鞘の取り付け試作</title>
+<style>
+:root{color-scheme:dark;font-family:"Hiragino Mincho ProN","Yu Mincho",serif;background:#101a1e;color:#e5dfd3}body{max-width:1040px;margin:0 auto;padding:22px}h1{font-size:23px;margin:0 0 10px}p{font-size:14px;line-height:1.7;margin:8px 0}button{font:inherit;background:#253336;color:inherit;border:1px solid #738078;border-radius:5px;padding:9px 20px;margin:10px 8px 10px 0;cursor:pointer}button[aria-pressed=true]{background:#52452e;border-color:#d3b878}main{display:grid;grid-template-columns:1fr 1fr;gap:18px}section{background:#162429;border:1px solid #3d4a4a;border-radius:6px;overflow:hidden}h2{font-size:17px;text-align:center;margin:12px}canvas{display:block;width:100%;height:530px}small{display:block;color:#aebcb7;margin:10px 0}#error{color:#ffaca5}@media(max-width:650px){canvas{height:390px}body{padding:12px}}
+</style>
+<h1>ガレス：同じ剣・鞘を、正面と背面から見る</h1><p>了承済みの素体を固定し、剣と鞘のパーツを左腰の後ろへ取り付けています。正面では体が柄を隠し、背面では柄が見える配置です。</p>
+<button data-state="sheathed" aria-pressed="true">納刀中</button><button data-state="lent" aria-pressed="false">剣と鞘を貸した状態</button><span id="status">素材を読み込んでいます…</span>
+<main><section><h2>正面</h2><canvas id="front"></canvas></section><section><h2>背面</h2><canvas id="back"></canvas></section></main>
+<small>表示試作です。本編の所持品・戦闘ルールには未接続です。武器パーツは表裏で同じ取り付け座標を使います。</small><p id="error" role="alert"></p>
+<script type="module">
+import * as THREE from '../../vendor/three/three.module.min.js';
+const loader=new THREE.TextureLoader();
+async function texture(path){const t=await loader.loadAsync(path);t.colorSpace=THREE.SRGBColorSpace;return t;}
+try{
+const [front,back,sword]=await Promise.all([texture('./gareth-empty-front.png'),texture('./gareth-empty-back-natural.png'),texture('./gareth-sheathed-part.png')]);
+const views=[];
+for(const [id,angle] of [['front',0],['back',Math.PI]]){
+ const canvas=document.getElementById(id),renderer=new THREE.WebGLRenderer({canvas,antialias:true,preserveDrawingBuffer:true});renderer.setPixelRatio(Math.min(devicePixelRatio,2));renderer.outputColorSpace=THREE.SRGBColorSpace;
+ const scene=new THREE.Scene();scene.background=new THREE.Color('#162429');const root=new THREE.Group();root.rotation.y=angle;scene.add(root);
+ for(const [map,bounds,rear] of [[front,[113,20,624,1168],false],[back,[101,23,616,1170],true]]){
+  const height=bounds[3]-bounds[1]+1,center=(bounds[0]+bounds[2])/2;
+  const mesh=new THREE.Mesh(new THREE.PlaneGeometry(656/height,1199/height),new THREE.MeshBasicMaterial({map,transparent:true,alphaTest:.15,side:THREE.FrontSide}));
+  mesh.position.set((rear?center-328:328-center)/height,(bounds[3]+1-1199/2)/height,rear?-.008:.008);mesh.rotation.y=rear?Math.PI:0;root.add(mesh);
+ }
+ // 同じパーツを同じ座標で使い、体の板が正面側の柄を遮ります。
+ const equipment=new THREE.Group(),ratio=sword.image.width/sword.image.height;
+ const mesh=new THREE.Mesh(new THREE.PlaneGeometry(.57*ratio,.57),new THREE.MeshBasicMaterial({map:sword,transparent:true,alphaTest:.15,side:THREE.DoubleSide}));
+ mesh.position.set(.27,.365,-.025);mesh.rotation.z=.42;equipment.add(mesh);root.add(equipment);
+ const camera=new THREE.OrthographicCamera(-.5,.5,1.08,-.05,.1,10);camera.position.set(0,.515,3);camera.lookAt(0,.515,0);
+ const view={renderer,scene,camera,equipment};views.push(view);
+ const draw=()=>{const w=canvas.clientWidth,h=canvas.clientHeight;renderer.setSize(w,h,false);const half=.565*w/h;camera.left=-half;camera.right=half;camera.top=.565;camera.bottom=-.565;camera.updateProjectionMatrix();renderer.render(scene,camera);};view.draw=draw;new ResizeObserver(draw).observe(canvas);draw();
+}
+function setState(state){for(const v of views){v.equipment.visible=state==='sheathed';v.draw();}document.querySelectorAll('[data-state]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.state===state)));document.getElementById('status').textContent=state==='sheathed'?'納刀中：剣と鞘を1セットで表示':'貸与中：剣と鞘を両方外しました';document.body.dataset.equipment=state;}
+document.querySelectorAll('[data-state]').forEach(b=>b.onclick=()=>setState(b.dataset.state));setState('sheathed');
+}catch(e){document.getElementById('error').textContent='素材を読み込めませんでした：'+e.message;}
+</script></html>

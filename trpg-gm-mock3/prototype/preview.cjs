@@ -28,6 +28,7 @@ async function callCloudGemma(payload,{key=cloudKey(),model=CLOUD_MODEL,fetcher=
 function replaceRequired(source,before,after){if(!source.includes(before))throw Error('mock2中継の置き換え元が見つかりません: '+before);return source.replace(before,after);}
 function prepareRelaySource(source,localLLM){
  source=replaceRequired(source,'const LLM_LOG_PATH = path.join(__dirname, "logs", "llm.jsonl");',`const LLM_LOG_PATH = ${JSON.stringify(LLM_LOG_PATH)};`);
+ source=replaceRequired(source,'max_tokens: payload.max_tokens || 1000,', 'max_tokens: payload.max_tokens || 1000,\n      ...(MODEL === \"claude-haiku-5-5\" ? { thinking: { type: \"disabled\" }, output_config: { effort: \"low\" } } : {}),');
  if(localLLM){source=replaceRequired(source,'if (process.env.LLM_API_KEY) {','if (process.env.LLM_API_KEY && BACKEND !== "ollama") {');source=replaceRequired(source,'think: !OLLAMA_ALWAYS_THINKS,','think: false,');}
  return source;
 }
@@ -42,7 +43,7 @@ function start(){
  process.env.LLM_BACKEND=process.env.MOCK3_LLM_BACKEND||'anthropic';
  const localLLM=process.env.LLM_BACKEND==='ollama';
  if(localLLM){process.env.LLM_MODEL=process.env.MOCK3_LLM_MODEL||'gemma4:e4b';process.env.OLLAMA_NUM_CTX=process.env.MOCK3_OLLAMA_NUM_CTX||'8192';process.env.OLLAMA_HOST='http://127.0.0.1:11434';}
- else if(process.env.LLM_BACKEND==='anthropic')process.env.LLM_MODEL=process.env.MOCK3_LLM_MODEL||'claude-haiku-4-5-20251001';
+ else if(process.env.LLM_BACKEND==='anthropic')process.env.LLM_MODEL=process.env.MOCK3_LLM_MODEL||'claude-haiku-5-5';
  const sourcePath=path.resolve(root,'../trpg-gm-mock2/server.cjs');
  const relayPort=Number(process.env.MOCK3_RELAY_PORT)||8798,previewPort=Number(process.env.MOCK3_PREVIEW_PORT)||8797;
  process.env.PORT=String(relayPort);

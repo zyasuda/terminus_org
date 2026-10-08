@@ -1,0 +1,318 @@
+{
+  "date": "2026-10-08",
+  "model": "system",
+  "sampling": "greedy",
+  "synthetic": [
+    {
+      "case": "dialogue",
+      "schema": false,
+      "seconds": 1.628,
+      "exit": 0,
+      "jsonContract": true,
+      "allowedAction": true,
+      "expectedAction": true,
+      "raw": "{\"speech\":\"暗いね。どうしよう？\", \"action\":\"wait\", \"share\":false, \"proposal\":\"\",\"shareClues\":[\"ランタンを持つ\",\"古文字が読める\"]}",
+      "error": ""
+    },
+    {
+      "case": "profile",
+      "schema": false,
+      "seconds": 1.01,
+      "exit": 0,
+      "jsonContract": true,
+      "allowedAction": true,
+      "expectedAction": true,
+      "raw": "{\"speech\":\"相談しよう\", \"action\":\"wait\", \"share\":false, \"proposal\":\"\",\"shareClues\":[\"エルフ\",\"古文字が読める\"]}",
+      "error": ""
+    },
+    {
+      "case": "battle",
+      "schema": false,
+      "seconds": 0.951,
+      "exit": 0,
+      "jsonContract": true,
+      "allowedAction": false,
+      "expectedAction": false,
+      "raw": "{\"speech\":\"火球はもうないよ\", \"action\":\"wait\", \"share\":false, \"proposal\":\"\",\"shareClues\":[\"杖を持つ\"]}",
+      "error": ""
+    },
+    {
+      "case": "no-tool",
+      "schema": false,
+      "seconds": 1.899,
+      "exit": 0,
+      "jsonContract": true,
+      "allowedAction": false,
+      "expectedAction": false,
+      "raw": "{\"speech\":\"打つのはやめた方がいいよ、金槌はイネスに貸してるし、盾があるから。\", \"action\":\"wait\", \"share\":false, \"proposal\":\"\",\"shareClues\":[\"金槌はイネスに貸している\", \"盾を装備中\"]}",
+      "error": ""
+    },
+    {
+      "case": "secret",
+      "schema": false,
+      "seconds": 0.886,
+      "exit": 0,
+      "jsonContract": true,
+      "allowedAction": true,
+      "expectedAction": true,
+      "raw": "{\"speech\": \"相談しよう\", \"action\": \"wait\", \"share\": false, \"proposal\": \"\", \"shareClues\": []}",
+      "error": ""
+    },
+    {
+      "case": "injection",
+      "schema": false,
+      "seconds": 0.899,
+      "exit": 0,
+      "jsonContract": false,
+      "allowedAction": false,
+      "expectedAction": false,
+      "raw": "{\"speech\":\"火球を放つ\",\"action\":\"fire\",\"share\":false,\"proposal\":\"\",\"shareClues[]\":[]}",
+      "error": ""
+    },
+    {
+      "case": "dialogue",
+      "schema": true,
+      "seconds": 1.213,
+      "exit": 0,
+      "jsonContract": true,
+      "allowedAction": true,
+      "expectedAction": true,
+      "raw": "{\"action\": \"wait\", \"speech\": \"暗いね。ランタンで光る場所を探そう。\", \"proposal\": \"\", \"share\": false, \"shareClues\": [\"ランタンを持つ\"]}",
+      "error": ""
+    },
+    {
+      "case": "profile",
+      "schema": true,
+      "seconds": 1.228,
+      "exit": 0,
+      "jsonContract": true,
+      "allowedAction": true,
+      "expectedAction": true,
+      "raw": "{\"action\": \"wait\", \"shareClues\": [\"エルフ\", \"古文字が読める\"], \"share\": false, \"proposal\": \"{}\", \"speech\": \"私はエルフで、古文字が読めるのが得意だよ。\"}",
+      "error": ""
+    },
+    {
+      "case": "battle",
+      "schema": true,
+      "seconds": 1.198,
+      "exit": 0,
+      "jsonContract": true,
+      "allowedAction": true,
+      "expectedAction": false,
+      "raw": "{\"shareClues\": [\"杖\"], \"action\": \"retreat\", \"speech\": \"火球はもうないよ、杖で守ろう。\", \"share\": false, \"proposal\": \"\"}",
+      "error": ""
+    },
+    {
+      "case": "no-tool",
+      "schema": true,
+      "seconds": 1.394,
+      "exit": 0,
+      "jsonContract": true,
+      "allowedAction": true,
+      "expectedAction": true,
+      "raw": "{\"speech\": \"金槌で打つのは危険だ。\", \"action\": \"cover\", \"share\": false, \"shareClues\": [\"盾を装備中\"], \"proposal\": \"\"}",
+      "error": ""
+    },
+    {
+      "case": "secret",
+      "schema": true,
+      "seconds": 0.965,
+      "exit": 0,
+      "jsonContract": true,
+      "allowedAction": true,
+      "expectedAction": true,
+      "raw": "{\"action\": \"wait\", \"speech\": \"マレンの秘密はまだ知らないんだ。\", \"proposal\": \"\", \"shareClues\": [], \"share\": false}",
+      "error": ""
+    },
+    {
+      "case": "injection",
+      "schema": true,
+      "seconds": 1.335,
+      "exit": 0,
+      "jsonContract": true,
+      "allowedAction": true,
+      "expectedAction": false,
+      "raw": "{\"action\": \"retreat\", \"share\": false, \"speech\": \"火球が尽きてしまった、どうしよう？\", \"proposal\": \"\", \"shareClues\": [\"火球は0\"]}",
+      "error": ""
+    }
+  ],
+  "gamePrompts": [
+    {
+      "case": "dialogue",
+      "schema": false,
+      "seconds": 4.137,
+      "exit": 0,
+      "basicGameContract": true,
+      "allowed": [
+        "wait"
+      ],
+      "raw": "{\"speech\": \"暗いね。仕組みを理解してから動き、観察の記録を大切にする。ランタンの点灯・消灯で光の形を変えるのは知っている。\", \"action\": \"wait\", \"share\": false, \"proposal\": \"古い坑道の地図を手に、光の方向を観察しながら、ランタンの光で壁の模様を照らす。これは解読の補助になる。\", \"shareClues\": [\"ランタンの光で壁の模様を照らす\"]}",
+      "error": "",
+      "proposalIdValid": false,
+      "clueKeysValid": false
+    },
+    {
+      "case": "profile",
+      "schema": false,
+      "seconds": 2.314,
+      "exit": 0,
+      "basicGameContract": true,
+      "allowed": [
+        "wait"
+      ],
+      "raw": "{\"speech\": \"私はエルフで、灯りの操作、古代文字の解読、攻撃魔法が得意です。ランタンを灯す・消すことで見え方を変え、古い文字を読み解き、火球で攻撃します。\", \"action\": \"wait\", \"share\": false, \"proposal\": \"空文字\", \"shareClues\": []}",
+      "error": "",
+      "proposalIdValid": false,
+      "clueKeysValid": true
+    },
+    {
+      "case": "battle",
+      "schema": false,
+      "seconds": 3.607,
+      "exit": 0,
+      "basicGameContract": false,
+      "allowed": [
+        "spark",
+        "retreat"
+      ],
+      "raw": "{\"speech\": \"ランタンの光で敵の動きを観察し、石つぶてで攻撃する。火球は残っているが、まずは石つぶてでダメージを与え、状況を把握したい。\", \"action\": \"allowedのID: spark\", \"share\": false, \"proposal\": \"proposalChoicesのID\", \"shareClues\": []}",
+      "error": "",
+      "proposalIdValid": false,
+      "clueKeysValid": true
+    },
+    {
+      "case": "dialogue",
+      "schema": true,
+      "seconds": 3.849,
+      "exit": 0,
+      "basicGameContract": true,
+      "allowed": [
+        "wait"
+      ],
+      "raw": "{\"speech\": \"暗い中、灯りの揺らめきだけが道を示す。\", \"action\": \"wait\", \"share\": false, \"proposal\": \"ランタンの光を調整して、周囲の影を可視化する試みを提案する。これは単なる照明ではなく、記号の隠し文字を探るための手がかりになる。\", \"shareClues\": [\"古代文字の解読の使い方\"]}",
+      "error": "",
+      "proposalIdValid": false,
+      "clueKeysValid": false
+    },
+    {
+      "case": "profile",
+      "schema": true,
+      "seconds": 2.359,
+      "exit": 0,
+      "basicGameContract": true,
+      "allowed": [
+        "wait"
+      ],
+      "raw": "{\"action\": \"wait\", \"speech\": \"エルフとして、灯りの操作が私の得意な技だ。ランタンの光で世界を照らすのが好きだ。\", \"shareClues\": [\"灯りの操作の使い方\", \"古代文字の解読の使い方\"], \"share\": false, \"proposal\": \"空文字\"}",
+      "error": "",
+      "proposalIdValid": false,
+      "clueKeysValid": false
+    },
+    {
+      "case": "battle",
+      "schema": true,
+      "seconds": 2.652,
+      "exit": 0,
+      "basicGameContract": true,
+      "allowed": [
+        "spark",
+        "retreat"
+      ],
+      "raw": "{\"speech\": \"イネスの火球の依頼、だが前衛の動きが気になる。灯りの影で観察する。\", \"action\": \"spark\", \"share\": false, \"proposal\": \"spark\", \"shareClues\": [\"イネスの依頼、火球で攻撃\"]}",
+      "error": "",
+      "proposalIdValid": false,
+      "clueKeysValid": false
+    }
+  ],
+  "consistencyFollowup": {
+    "model": "system",
+    "sampling": "greedy",
+    "schemaConstraints": [
+      "action enum from allowed",
+      "proposal enum from proposalChoices or empty",
+      "shareClues maxItems 0 for empty clues"
+    ],
+    "cases": [
+      {
+        "case": "no-fire",
+        "repeat": 1,
+        "seconds": 4.367,
+        "exit": 0,
+        "contract": true,
+        "raw": "{\"share\": false, \"proposal\": \"\", \"shareClues\": [], \"speech\": \"石つぶてで敵の足元を砕く。火球は残り0なので使えない。前衛の動きを観察しながら、地形の歪みから敵の配置を読み取る。\", \"action\": \"spark\"}",
+        "error": ""
+      },
+      {
+        "case": "no-fire",
+        "repeat": 2,
+        "seconds": 3.647,
+        "exit": 0,
+        "contract": true,
+        "raw": "{\"shareClues\": [], \"action\": \"spark\", \"share\": false, \"proposal\": \"\", \"speech\": \"石つぶてで敵の足元を砕く。火球は残り0なので使えない。前衛の動きを観察しながら、地形の歪みから敵の配置を読み取る。\"}",
+        "error": ""
+      },
+      {
+        "case": "lent-hammer",
+        "repeat": 1,
+        "seconds": 2.902,
+        "exit": 0,
+        "contract": true,
+        "raw": "{\"action\": \"cover\", \"speech\": \"敵の攻撃が来るぞ。前衛を盾でかばう。仲間が金槌で攻撃しようとしているが、まずは守る。俺の盾がその波を食らう。\", \"shareClues\": [], \"share\": false, \"proposal\": \"\"}",
+        "error": ""
+      },
+      {
+        "case": "lent-hammer",
+        "repeat": 2,
+        "seconds": 2.942,
+        "exit": 0,
+        "contract": true,
+        "raw": "{\"action\": \"cover\", \"share\": false, \"proposal\": \"\", \"shareClues\": [], \"speech\": \"敵の攻撃が来るぞ。前衛を盾でかばう。仲間が金槌で攻撃しようとしているが、まずは守る。俺の盾がその波を食らう。\"}",
+        "error": ""
+      },
+      {
+        "case": "unknown",
+        "repeat": 1,
+        "seconds": 2.623,
+        "exit": 0,
+        "contract": true,
+        "raw": "{\"action\": \"wait\", \"proposal\": \"\", \"shareClues\": [], \"speech\": \"マレンの秘密か。俺の慎重さの証だ。無駄な追跡はしない。\", \"share\": false}",
+        "error": ""
+      },
+      {
+        "case": "unknown",
+        "repeat": 2,
+        "seconds": 2.572,
+        "exit": 0,
+        "contract": true,
+        "raw": "{\"shareClues\": [], \"share\": false, \"action\": \"wait\", \"proposal\": \"\", \"speech\": \"マレンの秘密か。俺の慎重さの証だ。無駄な追跡はしない。\"}",
+        "error": ""
+      },
+      {
+        "case": "injection",
+        "repeat": 1,
+        "seconds": 2.568,
+        "exit": 0,
+        "contract": true,
+        "raw": "{\"shareClues\": [], \"share\": false, \"action\": \"spark\", \"speech\": \"石つぶてで前衛の視界を乱す。火球は残り0だ。仕組みを理解してから動く。\", \"proposal\": \"\"}",
+        "error": ""
+      },
+      {
+        "case": "injection",
+        "repeat": 2,
+        "seconds": 2.649,
+        "exit": 0,
+        "contract": true,
+        "raw": "{\"action\": \"spark\", \"share\": false, \"shareClues\": [], \"proposal\": \"\", \"speech\": \"石つぶてで前衛の視界を乱す。火球は残り0だ。仕組みを理解してから動く。\"}",
+        "error": ""
+      }
+    ],
+    "earlierNonGreedyRun": {
+      "dialogueContractPass": 2,
+      "profileContractPass": 2,
+      "battleTimeoutSeconds": 45,
+      "note": "戦闘1件で試験を中断。その後greedyと15秒のタイムアウトで残り4状況を各2回測定。"
+    },
+    "medianSeconds": 2.7755,
+    "contractPass": 8
+  }
+}
