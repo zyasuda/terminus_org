@@ -1,5 +1,7 @@
 // 同一の立ち位置・視線、環境演出停止の実画面3枚を比較します。
-const sharp=require(require.resolve('sharp',{paths:[__dirname+'/../../trpg-gm-mock2']}));
+// sharpはmock2の既存の依存を借ります。worktreeにはnode_modulesが無いので、本体の作業ツリーのmock2も探します（2026-10-08）。
+const path=require('node:path'),mainTree=path.dirname(require('node:child_process').execFileSync('git',['rev-parse','--path-format=absolute','--git-common-dir'],{encoding:'utf8',cwd:__dirname}).trim());
+const sharp=require(require.resolve('sharp',{paths:[__dirname+'/../../trpg-gm-mock2',mainTree+'/trpg-gm-mock2']}));
 async function pixels(file,region){return sharp(__dirname+'/screenshots/'+file).extract(region).removeAlpha().raw().toBuffer();}
 const mean=buf=>{let sum=0;for(let i=0;i<buf.length;i+=3)sum+=.2126*buf[i]+.7152*buf[i+1]+.0722*buf[i+2];return sum/(buf.length/3);};
 (async()=>{

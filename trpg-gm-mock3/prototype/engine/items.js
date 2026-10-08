@@ -9,8 +9,11 @@ function equipItem(who,item,equipped,s=state){
 }
 function equipmentIntent(text,to,s=state){
  if(to==='gm'||/もし|仮に|方法|しない|ないで|やめ|貸|借|返|譲|渡/.test(text))return null;
- const verb=text.match(/(装備して|装備する|外して|外す)(?:ください|下さい|お願い|くれ)?[。！!\s]*$/)?.[1];if(!verb)return null;const equipped=verb.startsWith('装備');
+ // 文末の依頼だけを読みます。「腰に下げておいて」等の身に着ける言い方も装備です。抜く・構える・握るは装備の状態に無いので実行せず案内します。
+ const end=String.raw`(?:て(?:おいて)?|といて|とく)?(?:ください|下さい|お願い(?:します)?|くれ)?(?:ね|よ)?[。！!\s]*$`,verb=text.match(RegExp(String.raw`(装備し|装備する|身に(?:つ|着)け|(?:腰|背中|背|腕)に(?:下げ|提げ|差し|吊るし|着け|付け|つけ|帯び)|帯び|外し|外す)`+end))?.[1];
  const items=Object.keys(ITEM_DEFS).filter(item=>ITEM_DEFS[item].equip&&[ITEM_DEFS[item].name,...ITEM_DEFS[item].aliases||[]].some(name=>text.includes(name))),named=PEOPLE.filter(p=>text.includes(p.name)),who=to==='all'?(named.length===1?named[0].id:null):to;
+ if(!verb){if(items.length&&RegExp(String.raw`(?:抜い|構え|握っ)`+end).test(text))return {clarify:'抜く・構える状態はありません。装備するか外すかを頼めます（片手剣の装備は鞘に納めて腰に下げた姿です）。'};return null;}
+ const equipped=!verb.startsWith('外');
  if(!equipped&&!items.length)return null;
  if(items.length!==1||!who)return {clarify:'どの装備品を、誰が着脱するか教えてください。'};
  if(named.some(p=>p.id!==who))return {clarify:'選んだ宛先と、発言にある相手が違います。'};
@@ -23,7 +26,7 @@ async function handleEquipment(intent,text){
  if($('dicePanel')?.open)throw Error('判定が終わってから着脱してください。');
  if(!isHuman(who)){
   const willUnequip=equipped&&ITEM_DEFS[item].handGroup?Object.keys(state.items).filter(other=>other!==item&&hasItem(who,other)&&state.items[other].equipped&&ITEM_DEFS[other].handGroup===ITEM_DEFS[item].handGroup):[];
-  const person=PEOPLE.find(p=>p.id===who),reply=parseAI(await ask('あなたは'+person.name+'。'+speechStyle(who)+'自分が持つ装備品の着脱依頼に本人として了承か拒否を返す。外すとは手や腰の装備から外して携行すること。片手剣は剣と鞘を一緒に着脱し、納刀・抜刀とは区別する。ランタンと杖は持ち替えで同時に装備できない。依頼された装備品は選択済み。了承するとwillUnequipの品をゲームが自動で外し、willDouseがtrueならランタンを消灯する。持ち替えそのものは可能。明かりを失うなどの懸念があれば理由を添えて拒否してよい。まだ実行済みと語らない。技能や状態を創作しない。JSONのみ:{"decision":"accept|decline","speech":"100文字以内"}。',{request:text,item:ITEM_DEFS[item].name,equipped,willUnequip,willDouse:item==='lantern'&&!equipped||willUnequip.includes('lantern'),inventory:inventoryView(who)},400));
+  const person=PEOPLE.find(p=>p.id===who),reply=parseAI(await ask('あなたは'+person.name+'。'+speechStyle(who)+'自分が持つ装備品の着脱依頼に本人として了承か拒否を返す。外すとは手や腰の装備から外して収納・携行し、その品を手に握ったり構えたりしないこと。持っている品と装備中の品は区別する。外す了承では元のwearから外すことを話し、元が手持ちの金槌なら腰から外す等の別の姿を創作しない。片手剣は剣と鞘を一緒に着脱し、納刀・抜刀とは区別する。wearは装備した時の実際の姿。装備を了承するならwearどおりに話し、依頼の言い方が違っても抜く・構える・握る等wearに無い姿を語らない。wearが無ければ姿を描写しない。ランタンと杖は持ち替えで同時に装備できない。依頼された装備品は選択済み。了承するとwillUnequipの品をゲームが自動で外し、willDouseがtrueならランタンを消灯する。持ち替えそのものは可能。明かりを失うなどの懸念があれば理由を添えて拒否してよい。まだ実行済みと語らない。技能や状態を創作しない。JSONのみ:{"decision":"accept|decline","speech":"100文字以内"}。',{request:text,item:ITEM_DEFS[item].name,wear:equipped?ITEM_DEFS[item].wear:undefined,equipped,willUnequip,willDouse:item==='lantern'&&!equipped||willUnequip.includes('lantern'),inventory:inventoryView(who)},400));
   if(!responseIsCurrent(epoch,source))return {performed:false};
   if(!reply||!['accept','decline'].includes(reply.decision)||typeof reply.speech!=='string'||!reply.speech.trim())throw Error('着脱の返答を確認できませんでした。');
   const audit=await auditProfile(who,reply.speech,text);if(!responseIsCurrent(epoch,source))return {performed:false};if(!audit.valid)throw Error('人物設定との食い違いがあるため、着脱を保留しました。');

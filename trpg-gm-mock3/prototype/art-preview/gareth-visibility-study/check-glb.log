@@ -1,0 +1,19 @@
+{"id":"gareth-empty","bytes":3509092,"size":[0.62373,1.30027,0.04],"min":[-0.312,-0.03733,-0.02],"max":[0.31173,1.26293,0.02],"nodes":1,"meshes":1,"materials":["Preview_Front","Preview_Rim","Preview_Back"],"mats":[{"name":"Preview_Front","map":true,"normalMap":false,"side":0,"transparent":true},{"name":"Preview_Rim","map":false,"normalMap":false,"side":2,"transparent":true},{"name":"Preview_Back","map":true,"normalMap":false,"side":0,"transparent":true}],"images":2}
+{"id":"gareth-sheathed","bytes":3684840,"size":[0.63367,1.30063,0.04],"min":[-0.31618,-0.03698,-0.02],"max":[0.3175,1.26365,0.02],"nodes":1,"meshes":1,"materials":["Preview_Front","Preview_Rim","Preview_Back"],"mats":[{"name":"Preview_Front","map":true,"normalMap":false,"side":0,"transparent":true},{"name":"Preview_Rim","map":false,"normalMap":false,"side":2,"transparent":true},{"name":"Preview_Back","map":true,"normalMap":false,"side":0,"transparent":true}],"images":2}
+{"id":"maren-lantern","bytes":3158500,"size":[0.57283,1.20056,0.04],"min":[-0.28592,-0.01996,-0.02],"max":[0.28692,1.1806,0.02],"nodes":1,"meshes":1,"materials":["Preview_Front","Preview_Rim","Preview_Back"],"mats":[{"name":"Preview_Front","map":true,"normalMap":false,"side":0,"transparent":true},{"name":"Preview_Rim","map":false,"normalMap":false,"side":2,"transparent":true},{"name":"Preview_Back","map":true,"normalMap":false,"side":0,"transparent":true}],"images":2}
+{"id":"gareth-sheathed-visible","bytes":3811264,"size":[0.63841,1.29951,0.04],"min":[-0.31801,-0.03695,-0.02],"max":[0.32039,1.26256,0.02],"nodes":1,"meshes":1,"materials":["Preview_Front","Preview_Rim","Preview_Back"],"mats":[{"name":"Preview_Front","map":true,"normalMap":false,"side":0,"transparent":true},{"name":"Preview_Rim","map":false,"normalMap":false,"side":2,"transparent":true},{"name":"Preview_Back","map":true,"normalMap":false,"side":0,"transparent":true}],"images":2}
+OK  身長(Y) 1.29951 ≒ gareth-empty 1.30027
+OK  板厚 0.04 = 0.04
+OK  足元の高さ min.y -0.03695 ≒ gareth-empty -0.03733
+OK  板厚の中心がz=0
+OK  ノード1・メッシュ1が既存と同数
+OK  材質の並び Preview_Front,Preview_Rim,Preview_Back が既存ガレスと同じ(.001の連番は除く)
+OK  材質の map/normalMap/side/transparent が maren-lantern(ノーマルマップ無しの既存)と同じ
+OK  ノーマルマップなし
+OK  埋め込み画像2枚
+OK  GLB内に plate/front.png と同一画素の画像
+OK  GLB内に plate/back.png(板座標の背面) と同一画素の画像
+OK  characters/gareth-sheathed-visible-front.png = plate/front.png
+OK  characters/gareth-sheathed-visible-back.png = plate/back.png の左右反転(自然な背面)
+OK  既存gareth-emptyも同じ規則(PNG背面=板背面の左右反転)
+PASS

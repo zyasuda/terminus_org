@@ -1,0 +1,102 @@
+{
+ "equipChat": [
+  "イネス（あなた）→全員｜ガレス、片手剣を腰に下げておいて",
+  "ガレス（AI）｜了解だ。片手剣は鞘に納めたまま腰の左に下げておく。抜かずに構えもしないから、そこは安心してくれ。",
+  "GM｜ガレスが片手剣を装備した。"
+ ],
+ "lightChat": [
+  "イネス（あなた）→全員｜マレン、ランタンを点けて",
+  "マレン（AI）｜灯りを点けますね。暗い坑道では、見えないものを見る準備が大切ですから。",
+  "GM｜マレンがランタンを灯した。岩肌が明るくなり、台車とレール、奥へ続く通路と下りの通路が浮かび上がった。"
+ ],
+ "dagger": {
+  "owner": "gareth",
+  "holder": "gareth",
+  "equipped": true
+ },
+ "lit": true,
+ "gareth": {
+  "file": "gareth-sheathed-visible",
+  "sheet": {
+   "width": 766,
+   "height": 1309,
+   "figure": [
+    148,
+    63,
+    679,
+    1225
+   ],
+   "plate": [
+    113,
+    30,
+    715,
+    1258
+   ]
+  },
+  "missing": ""
+ },
+ "variants": "gareth:gareth-sheathed-visible,ines:ines-empty,lydia:maren-lantern,brom:brom-empty",
+ "missing": "",
+ "assetError": "",
+ "actorRects": [
+  {
+   "x": 107.24270678639925,
+   "y": 214.831511750234,
+   "width": 189.84930745722994,
+   "height": 325.7680933805698
+  },
+  {
+   "x": 334.42534043528616,
+   "y": 263.5294477693578,
+   "width": 110.31459936037749,
+   "height": 272.91857563123637
+  },
+  {
+   "x": 455.6308297267781,
+   "y": 244.83154828107925,
+   "width": 122.1200689604442,
+   "height": 254.59336897801685
+  },
+  {
+   "x": 669.3824044670879,
+   "y": 297.7695983618368,
+   "width": 142.78336748539982,
+   "height": 186.6985668401992
+  }
+ ],
+ "labels": [
+  {
+   "t": "cart",
+   "text": "古い台車",
+   "x": 13,
+   "y": 361,
+   "w": 83,
+   "h": 36
+  },
+  {
+   "t": "rails",
+   "text": "途切れたレール",
+   "x": 589,
+   "y": 505,
+   "w": 118.53125,
+   "h": 36
+  }
+ ],
+ "overlaps": [],
+ "scene": [
+  24,
+  58,
+  1032,
+  560
+ ],
+ "glbResponses": [
+  "200 assets/standees/gareth-empty.glb",
+  "200 assets/standees/gareth-sheathed-visible.glb"
+ ],
+ "errors": [
+  "[.WebGL-0x12c004e6200]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels",
+  "[.WebGL-0x12c004e6200]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels",
+  "[.WebGL-0x12c004e6200]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels",
+  "[.WebGL-0x12c004e6200]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels (this message will no longer repeat)"
+ ]
+}

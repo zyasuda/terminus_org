@@ -1,0 +1,19 @@
+{"id":"brom-empty","bytes":4267764,"size":[0.65858,0.95537,0.04],"min":[-0.33011,-0.02815,-0.02],"max":[0.32847,0.92722,0.02],"nodes":1,"meshes":1,"materials":["Preview_Front.001","Preview_Rim.001","Preview_Back.001"],"mats":[{"name":"Preview_Front.001","map":true,"normalMap":true,"side":0,"transparent":true},{"name":"Preview_Rim.001","map":false,"normalMap":false,"side":2,"transparent":true},{"name":"Preview_Back.001","map":true,"normalMap":true,"side":0,"transparent":true}],"images":4}
+{"id":"brom-hammer-shield","bytes":4200660,"size":[0.80361,0.95479,0.04],"min":[-0.40028,-0.02638,-0.02],"max":[0.40333,0.92841,0.02],"nodes":1,"meshes":1,"materials":["Preview_Front","Preview_Rim","Preview_Back"],"mats":[{"name":"Preview_Front","map":true,"normalMap":true,"side":0,"transparent":true},{"name":"Preview_Rim","map":false,"normalMap":false,"side":2,"transparent":true},{"name":"Preview_Back","map":true,"normalMap":true,"side":0,"transparent":true}],"images":4}
+{"id":"maren-lantern","bytes":3158500,"size":[0.57283,1.20056,0.04],"min":[-0.28592,-0.01996,-0.02],"max":[0.28692,1.1806,0.02],"nodes":1,"meshes":1,"materials":["Preview_Front","Preview_Rim","Preview_Back"],"mats":[{"name":"Preview_Front","map":true,"normalMap":false,"side":0,"transparent":true},{"name":"Preview_Rim","map":false,"normalMap":false,"side":2,"transparent":true},{"name":"Preview_Back","map":true,"normalMap":false,"side":0,"transparent":true}],"images":2}
+{"id":"brom-shield-only","bytes":3337888,"size":[0.69098,0.95581,0.04],"min":[-0.34651,-0.02841,-0.02],"max":[0.34448,0.9274,0.02],"nodes":1,"meshes":1,"materials":["Preview_Front","Preview_Rim","Preview_Back"],"mats":[{"name":"Preview_Front","map":true,"normalMap":false,"side":0,"transparent":true},{"name":"Preview_Rim","map":false,"normalMap":false,"side":2,"transparent":true},{"name":"Preview_Back","map":true,"normalMap":false,"side":0,"transparent":true}],"images":2}
+OK  身長(Y) 0.95581 ≒ brom-empty 0.95537
+OK  板厚 0.04 = 0.04
+OK  足元の高さ min.y -0.02841 ≒ brom-empty -0.02815
+OK  板厚の中心がz=0
+OK  ノード1・メッシュ1が既存と同数
+OK  材質の並び Preview_Front,Preview_Rim,Preview_Back が既存ブロムと同じ(.001の連番は除く)
+OK  材質の map/normalMap/side/transparent が maren-lantern(ノーマルマップ無しの既存)と同じ
+OK  ノーマルマップなし
+OK  埋め込み画像2枚
+OK  GLB内に plate/front.png と同一画素の画像
+OK  GLB内に plate/back.png(板座標の背面) と同一画素の画像
+OK  characters/brom-shield-only-front.png = plate/front.png
+OK  characters/brom-shield-only-back.png = plate/back.png の左右反転(自然な背面)
+OK  既存brom-emptyも同じ規則(PNG背面=板背面の左右反転)
+PASS

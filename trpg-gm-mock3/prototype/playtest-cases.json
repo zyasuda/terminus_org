@@ -118,12 +118,12 @@
   },
   {
    "id": "douse-after-stale-light",
-   "note": "点灯中に「光を当てて」が点灯の依頼として相談に残り、解読後の消灯提案と食い違って保留になった",
-   "text": "リディア、ランタンを消してみて",
+   "note": "点灯中に「光を当てて」が点灯の依頼として相談に残り、解読後の消灯提案と食い違って保留になった。2026-10-08 再録：マレンへの改名後は依頼文の「リディア」がどの人物名にも合わず直接の依頼に乗らなくなったため、依頼文と前提の会話の人物名だけをマレンへ置き換え、前提の灯りの相談（settle.reply、2026-10-06の実記録）は維持。以降の呼び出しを現行コードで既存中継（claude-haiku-5-5）へ送り直した実応答（logs/llm.jsonl 2159・2161行）。同条件で3回中3回消灯",
+   "text": "マレン、ランタンを消してみて",
    "to": "all",
    "setup": "entry-decoded",
    "settle": {
-    "chat": "{\"public\":{\"phase\":\"explore\",\"room\":\"坑道入口\",\"lit\":true,\"navigation\":{\"exits\":[{\"id\":\"hall\",\"passage\":\"奥へ続く通路\",\"name\":null,\"visited\":false},{\"id\":\"drain\",\"passage\":\"下りの通路\",\"name\":null,\"visited\":false}],\"maps\":[{\"item\":\"lydia_map\",\"name\":\"古い坑道の地図\",\"holder\":\"lydia\",\"shared\":false}],\"known\":[{\"id\":\"entry\",\"name\":\"坑道入口\",\"visited\":true,\"current\":true,\"note\":\"\"}]},\"targets\":[\"古い台車\",\"途切れたレール\",\"壁の傷\"],\"inventory\":[{\"id\":\"hammer\",\"name\":\"金槌\",\"owner\":\"brom\",\"holder\":\"brom\"},{\"id\":\"shield\",\"name\":\"盾\",\"owner\":\"brom\",\"holder\":\"brom\"},{\"id\":\"picks\",\"name\":\"錠前破り\",\"owner\":\"gareth\",\"holder\":\"gareth\"},{\"id\":\"dagger\",\"name\":\"短剣\",\"owner\":\"gareth\",\"holder\":\"gareth\"},{\"id\":\"lantern\",\"name\":\"ランタン\",\"owner\":\"lydia\",\"holder\":\"lydia\"},{\"id\":\"lydia_map\",\"name\":\"古い坑道の地図\",\"owner\":\"lydia\",\"holder\":\"lydia\"}],\"holding\":false,\"drainChange\":false,\"round\":1,\"boss\":24,\"hp\":{\"ines\":12,\"brom\":18,\"gareth\":15,\"lydia\":12},\"weak\":false,\"fire\":2},\"actor\":\"lydia\",\"addressedTo\":\"all\",\"voices\":{},\"lines\":[{\"index\":7,\"id\":\"ines\",\"text\":\"壁の傷の中に、古い文字らしい刻みがある。\"},{\"index\":8,\"id\":\"brom\",\"text\":\"古い文字か。石工の目から見ても、刻みは相当な年月が経ってるな。リディア、その文字、読めそうか？それとも、まずは傷全体をしっかり見てから判断する方が良さそうだ。\"},{\"index\":9,\"id\":\"gareth\",\"text\":\"古い刻みか。文字なら読み手が要るな。リディア、その傷を詳しく見てもらえるか？あるいは地図と照らし合わせて、この場所に何か記されてないか確認してもらいたい。\"},{\"index\":10,\"id\":\"lydia\",\"text\":\"傷の中の刻みですね。ランタンの光を当てて、文字の形をはっきり見てみましょう。古い碑文の記号なら、輪郭がわかれば読み解けるかもしれません。\"}]}",
+    "chat": "{\"public\":{\"phase\":\"explore\",\"room\":\"坑道入口\",\"lit\":true,\"navigation\":{\"exits\":[{\"id\":\"hall\",\"passage\":\"奥へ続く通路\",\"name\":null,\"visited\":false},{\"id\":\"drain\",\"passage\":\"下りの通路\",\"name\":null,\"visited\":false}],\"maps\":[{\"item\":\"lydia_map\",\"name\":\"古い坑道の地図\",\"holder\":\"lydia\",\"shared\":false}],\"known\":[{\"id\":\"entry\",\"name\":\"坑道入口\",\"visited\":true,\"current\":true,\"note\":\"\"}]},\"targets\":[\"古い台車\",\"途切れたレール\",\"壁の傷\"],\"inventory\":[{\"id\":\"hammer\",\"name\":\"金槌\",\"owner\":\"brom\",\"holder\":\"brom\"},{\"id\":\"shield\",\"name\":\"盾\",\"owner\":\"brom\",\"holder\":\"brom\"},{\"id\":\"picks\",\"name\":\"錠前破り\",\"owner\":\"gareth\",\"holder\":\"gareth\"},{\"id\":\"dagger\",\"name\":\"短剣\",\"owner\":\"gareth\",\"holder\":\"gareth\"},{\"id\":\"lantern\",\"name\":\"ランタン\",\"owner\":\"lydia\",\"holder\":\"lydia\"},{\"id\":\"lydia_map\",\"name\":\"古い坑道の地図\",\"owner\":\"lydia\",\"holder\":\"lydia\"}],\"holding\":false,\"drainChange\":false,\"round\":1,\"boss\":24,\"hp\":{\"ines\":12,\"brom\":18,\"gareth\":15,\"lydia\":12},\"weak\":false,\"fire\":2},\"actor\":\"lydia\",\"addressedTo\":\"all\",\"voices\":{},\"lines\":[{\"index\":7,\"id\":\"ines\",\"text\":\"壁の傷の中に、古い文字らしい刻みがある。\"},{\"index\":8,\"id\":\"brom\",\"text\":\"古い文字か。石工の目から見ても、刻みは相当な年月が経ってるな。マレン、その文字、読めそうか？それとも、まずは傷全体をしっかり見てから判断する方が良さそうだ。\"},{\"index\":9,\"id\":\"gareth\",\"text\":\"古い刻みか。文字なら読み手が要るな。マレン、その傷を詳しく見てもらえるか？あるいは地図と照らし合わせて、この場所に何か記されてないか確認してもらいたい。\"},{\"index\":10,\"id\":\"lydia\",\"text\":\"傷の中の刻みですね。ランタンの光を当てて、文字の形をはっきり見てみましょう。古い碑文の記号なら、輪郭がわかれば読み解けるかもしれません。\"}]}",
     "reply": {
      "log": 1493,
      "ts": "2026-10-06T02:30:17.619Z",
@@ -134,40 +134,16 @@
    "expect": "doused",
    "replies": [
     {
-     "log": 1506,
-     "ts": "2026-10-06T02:30:53.597Z",
-     "system": "あなたは会話の調査依頼を読むGM",
-     "reply": "```json\n{\n  \"kind\": \"approval\",\n  \"jobs\": [\n    {\n      \"id\": \"lydia\",\n      \"action\": \"extinguish_lantern\",\n      \"quote\": \"ランタンを消してみて\"\n    }\n  ],\n  \"clarify\": \"\"\n}\n```"
+     "log": 2159,
+     "ts": "2026-10-08T06:32:55.238Z",
+     "system": "あなたはマレン。灯りの相談を受け",
+     "reply": "{\"speech\":\"イネスとリディアの二人が灯を消すよう求めていますね。ランタンを消して、暗がりでの見え方を確かめます。\",\"action\":\"douse\"}"
     },
     {
-     "log": 1509,
-     "ts": "2026-10-06T02:30:56.385Z",
-     "system": "あなたはTRPGのブロム。口調:",
-     "reply": "```json\n{\n  \"speech\": \"よし、リディア。古い文字が「灯を伏せよ」と言ってるなら、暗くしてみる価値があるな。光を消して、何が変わるか見てみよう。\",\n  \"action\": \"wait\",\n  \"share\": false,\n  \"proposal\": \"\",\n  \"shareClues\": []\n}\n```\n\nブロムは、リディアの提案に同意する。暗号めいた古い刻みが「灯を伏せよ」と指示しているなら、その指示に従ってみるのが筋だ。何か隠されたものが見えるかもしれん——力仕事ではなく、知恵の出番だ。"
-    },
-    {
-     "log": 1511,
-     "ts": "2026-10-06T02:30:59.294Z",
+     "log": 2161,
+     "ts": "2026-10-08T06:33:01.256Z",
      "system": "あなたは人物設定を照合するTRP",
-     "reply": "```json\n{\n  \"valid\": true,\n  \"claims\": [],\n  \"conflicts\": []\n}\n```\n\n**理由:**\n- questionはブロムに対する指示ではなく、リディアへの指示です。\n- speechはブロムがリディアの行動を支持する発言であり、ブロム自身の事実を開示していません。\n- 古い文字の解読能力についても、「言ってるなら」という仮定であり、ブロム自身が「古い文字を読める」と明確に肯定していません。\n- canoncalとの矛盾はありません。"
-    },
-    {
-     "log": 1513,
-     "ts": "2026-10-06T02:31:02.311Z",
-     "system": "あなたはTRPGのガレス。口調:",
-     "reply": "```json\n{\n  \"speech\": \"了解。リディア、頼む。消してみてくれ。暗くなった時に、この坑道で何が見えるか。それが次の手がかりだ。\",\n  \"action\": \"wait\",\n  \"share\": false,\n  \"proposal\": \"\",\n  \"shareClues\": []\n}\n```\n\nリディアがランタンを消すのを見守る。古い文字が「灯を伏せよ」と指示している以上、暗がりで何かが変わる可能性がある。無駄な横槍は入れない。"
-    },
-    {
-     "log": 1515,
-     "ts": "2026-10-06T02:31:03.597Z",
-     "system": "あなたは人物設定を照合するTRP",
-     "reply": "```json\n{\n  \"valid\": true,\n  \"claims\": [\n    {\n      \"key\": \"name\",\n      \"value\": \"ガレス\",\n      \"quote\": \"了解。リディア、頼む。消してみてくれ。暗くなった時に、この坑道で何が見えるか。それが次の手がかりだ。\"\n    }\n  ],\n  \"conflicts\": []\n}\n```"
-    },
-    {
-     "log": 1517,
-     "ts": "2026-10-06T02:31:05.951Z",
-     "system": "あなたはTRPGのリディア。口調",
-     "reply": "```json\n{\n  \"speech\": \"了解。では灯を消してみます。「蒼き塵は、隠された場所へ帰る」—光が無くなった時、何かが見えるかもしれません。\",\n  \"action\": \"douse\",\n  \"share\": true,\n  \"proposal\": \"\",\n  \"shareClues\": [\"darkness\"]\n}\n```\n\nランタンを消します。刻みの指示を文字通り実行して、暗闇での変化を観察するのが次のステップです。"
+     "reply": "{\"valid\":true,\"claims\":[{\"key\":\"item0\",\"value\":\"ランタン\",\"quote\":\"ランタンを消して\"},{\"key\":\"itemDetail0\",\"value\":\"持っている人が点灯・消灯できます。\",\"quote\":\"ランタンを消して\"}],\"conflicts\":[]}"
     }
    ]
   },

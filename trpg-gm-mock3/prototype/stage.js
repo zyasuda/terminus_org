@@ -96,7 +96,7 @@ export function createStage(host, controls, changed) {
    const bounds=new THREE.Box3().setFromObject(model),bodyFraction=body/(info.plate[3]-info.plate[1]),unit=1/((bounds.max.y-bounds.min.y)*bodyFraction),foot=(info.plate[3]-info.figure[3])/(info.plate[3]-info.plate[1])*(bounds.max.y-bounds.min.y);
    model.scale.setScalar(unit);model.position.set(-(bounds.min.x+bounds.max.x)/2*unit,-(bounds.min.y+foot)*unit,0);
    model.traverse(m=>{if(!m.isMesh)return;const old=m.material;const mat=new THREE.MeshBasicMaterial({map:old.map||null,color:old.color,opacity:old.opacity,transparent:true,alphaTest:old.map?.04:0,depthWrite:true,side:old.side});if(!old.map)mat.opacity=.2;m.material=mat;m.userData.baseColor=mat.color.clone();old.dispose();});
-   for(const child of [...a.sprite.children]){a.sprite.remove(child);release(child);}a.sprite.add(model);u.standeeLoaded=true;u.shown=v.file;report();dirty=true;
+   for(const child of [...a.sprite.children]){a.sprite.remove(child);release(child);}a.sprite.add(model);u.standeeLoaded=true;u.shown=v.file;report();dirty=true;changed();
   },undefined,()=>{if(u.request===request)host.dataset.stageAssetError='standee:'+p.id+':'+v.file;});
  }
  // GLBのテクスチャはその読み込み専用なので一緒に捨てます。PNGのテクスチャはtexture()の共用品なので残します。
@@ -117,6 +117,13 @@ export function createStage(host, controls, changed) {
  function projectPosition(a){if(!a)return null;point.set(...a);const view=point.clone().applyMatrix4(camera.matrixWorldInverse),v=point.clone().project(camera);const visible=view.z<0&&Math.abs(v.x)<.92&&Math.abs(v.y)<.86;return {x:(v.x+1)*host.clientWidth/2,y:(1-v.y)*host.clientHeight/2,visible};}
  function project(id){const p=anchors[id];return p?projectPosition([p[0],p[1],stageZ(p[2])]):null;}
  function projectActor(id){const a=actors.get(id);if(!a?.sprite.visible)return null;const p=a.sprite.position;return projectPosition([p.x,p.y+a.sprite.scale.y*.77,p.z]);}
+ // 見えている人物の板が画面に占める範囲（hostの左上基準のpx）。調査札が人物を避けるのに使います。
+ const box=new THREE.Box3(),corner=new THREE.Vector3();
+ function actorRects(){return [...actors.values()].filter(a=>a.sprite.visible).map(({sprite:o})=>{
+  if(o.isSprite){const p=o.position,s=o.scale;box.min.set(p.x-o.center.x*s.x,p.y-o.center.y*s.y,p.z);box.max.set(p.x+(1-o.center.x)*s.x,p.y+(1-o.center.y)*s.y,p.z);}else box.setFromObject(o);
+  let x0=Infinity,y0=Infinity,x1=-Infinity,y1=-Infinity;
+  for(let i=0;i<8;i++){corner.set(i&1?box.max.x:box.min.x,i&2?box.max.y:box.min.y,i&4?box.max.z:box.min.z).project(camera);const x=(corner.x+1)*host.clientWidth/2,y=(1-corner.y)*host.clientHeight/2;x0=Math.min(x0,x);y0=Math.min(y0,y);x1=Math.max(x1,x);y1=Math.max(y1,y);}
+  return {x:x0,y:y0,width:x1-x0,height:y1-y0};});}
  function sync(next){snap=next;if(room!==next.room+next.phase){room=next.room+next.phase;panSlide=null;turns.clear();faceFront.clear();host.dataset.stageFocus='';backFacing=!next.battle&&next.actors.length&&Math.random()<config.backFacingRate?next.actors[Math.floor(Math.random()*next.actors.length)].id:null;speaker='';until=0;setPan(0,0);if(!revolving)allBack=false;}back.material.map=texture('../replay/img/'+next.image+'.webp');back.material.needsUpdate=true;const backgroundImage=back.material.map.image;if(backgroundImage?.width&&backgroundImage?.height)back.scale.y=64*backgroundImage.height/backgroundImage.width/25; // 背景画の縦横比を保ち、横へ引き伸ばしません。
   if(!next.lit||next.end){pool.visible=beam.visible=false;for(const a of actors.values())a.sprite.material.color.set(0xffffff);}
   for(const v of [back,...props.values()])v.position.z=stageZ(v.userData.stageZ);
@@ -170,5 +177,5 @@ export function createStage(host, controls, changed) {
  canvas.addEventListener('webglcontextrestored',()=>{lost=false;dirty=true;canvas.hidden=false;host.classList.add('stage-ready');controls.hidden=false;changed();});
  function frame(now){requestAnimationFrame(frame);if(document.hidden||lost||now-last<33)return;last=now;for(const [id,turn] of turns){const t=Math.min(1,(now-turn.start)/(config.scrollSeconds*1000)),ease=t*t*(3-2*t);actors.get(id).sprite.rotation.y=turn.from+((turn.to||0)-turn.from)*ease;if(t>=1){if(turn.final!==undefined)actors.get(id).sprite.rotation.y=turn.final;turns.delete(id);}dirty=true;updateFacing();}if(panSlide){const t=Math.min(1,(now-panSlide.start)/(config.scrollSeconds*1000)),ease=t*t*(3-2*t);setPan(panSlide.from+(panSlide.to-panSlide.from)*ease,panSlide.y);if(t>=1)panSlide=null;}if(updateLight(now))dirty=true;if(stepRevolve(now))dirty=true;if(!dirty)return;dirty=false;renderer.render(scene,camera);}
  host.classList.add('stage-ready');host.dataset.stageRenderer='three';controls.hidden=false;orient();resize();requestAnimationFrame(frame);
- return {sync,project,projectActor,setPan,focusActor,revolve,config,resize,speak,setLight,refreshLight:()=>{dirty=true;},refreshLayout:()=>{if(snap)sync(snap);resize();}};
+ return {sync,project,projectActor,actorRects,setPan,focusActor,revolve,config,resize,speak,setLight,refreshLight:()=>{dirty=true;},refreshLayout:()=>{if(snap)sync(snap);resize();}};
 }

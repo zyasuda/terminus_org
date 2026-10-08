@@ -22,6 +22,8 @@ function freeLabelPosition(origin,size,bounds,obstacles){
  candidates.sort((a,b)=>((a.x-origin.x)**2*1.5+(a.y-origin.y)**2)-((b.x-origin.x)**2*1.5+(b.y-origin.y)**2));
  return candidates.find(p=>p.x>=8&&p.y>=8&&p.x+size.width<=bounds.width-8&&p.y+size.height<=bounds.height-8&&!obstacles.some(o=>rectOverlap({...p,...size},o,TARGET_CLEARANCE)))||origin;
 }
+// 見出しと出口の画面範囲。調査札はこれらと人物を避けます。
+function sceneChrome(scene){const bounds=scene.getBoundingClientRect();return [scene.querySelector('.scenehead'),$('exits')].filter(e=>e&&!e.hidden&&e.getBoundingClientRect().height).map(e=>{const r=e.getBoundingClientRect();return {x:r.left-bounds.left,y:r.top-bounds.top,width:r.width,height:r.height};});}
 function placeTargetLabels(){
  const scene=$('scene'),bounds=scene.getBoundingClientRect();if(!bounds.width)return;
  if(stageView&&scene.classList.contains('stage-ready')){placeStagePoints();return;}
@@ -31,7 +33,7 @@ function placeTargetLabels(){
   const ratio=img.naturalWidth/img.naturalHeight,width=Math.min(r.width,r.height*ratio),height=Math.min(r.height,r.width/ratio);
   return {x:r.x+(r.width-width)/2,y:r.y+r.height-height,width,height};
  });
- const obstacles=[...actors,...[scene.querySelector('.scenehead'),$('exits')].filter(e=>!e.hidden&&e.getBoundingClientRect().height).map(local)];
+ const obstacles=[...actors,...sceneChrome(scene)];
  for(const button of $('points').querySelectorAll('[data-target]')){
   const t=TARGETS[button.dataset.target],size={width:button.offsetWidth,height:button.offsetHeight};
   const origin={x:bounds.width*t.x/100,y:bounds.height*t.y/100},p=freeLabelPosition(origin,size,bounds,obstacles);

@@ -19,14 +19,15 @@ const VOICE_DEFAULT={ines:{一人称:'私',語尾:'だね'},brom:{一人称:'俺
 function initial(){return {profiles:initialProfiles(),items:initialItems(),transfers:[],reports:[],navigation:{known:['entry'],maps:[],offer:null},phase:'explore',room:'entry',lit:false,everLit:false,discovery:{etching:false,cache:false,opened:false,stoneOn:false,clues:Object.fromEntries(PEOPLE.map(p=>[p.id,[]])),shared:[],proposals:[],hints:0},visited:['entry'],seen:{},holding:false,drained:false,observedDrain:false,locked:true,supported:false,opened:false,noisy:false,runes:false,weak:false,boss:24,round:1,fire:2,hp:Object.fromEntries(PEOPLE.map(p=>[p.id,p.hp])),knowledge:Object.fromEntries(PEOPLE.map(p=>[p.id,[]])),shared:[]};}
 // ownerは所有者、holderは今持っている人。貸すとholderだけが変わり、返却先はownerです。
 // equip:trueは装備品。それ以外は使用アイテム。開始時はランタンだけ装備。handGroupが同じ品は持ち替え、点灯ランタンを外すと消灯。片手剣の内部IDはdagger。
+// wearは装備中の舞台の絵に描かれた実際の姿。装備の返答がこれと食い違う描写をしないよう、本人のAIへ渡します（2026-10-08）。
 const ITEM_DEFS={
  rope:{name:'投げ縄',detail:'投げ縄による攻撃に使います。',start:'ines',slot:0},
- hammer:{name:'金槌',detail:'障害物の破壊、戦闘での攻撃。',start:'brom',slot:0,equip:true},
- shield:{name:'盾',detail:'仲間をかばうための防具。',start:'brom',slot:1,equip:true},
+ hammer:{name:'金槌',detail:'障害物の破壊、戦闘での攻撃。',start:'brom',slot:0,equip:true,wear:'右手に柄を握って持つ'},
+ shield:{name:'盾',detail:'仲間をかばうための防具。',start:'brom',slot:1,equip:true,wear:'左腕に着ける'},
  picks:{name:'錠前破り',detail:'錠前を外すための道具。',start:'gareth',slot:0},
- dagger:{name:'片手剣',detail:'急所への攻撃に使います。',start:'gareth',slot:1,equip:true,aliases:['剣','短剣']},
+ dagger:{name:'片手剣',detail:'急所への攻撃に使います。',start:'gareth',slot:1,equip:true,aliases:['剣','短剣'],wear:'剣を鞘に納めたまま腰の左に下げる。手に握らず、抜かず、構えない'},
  lantern:{name:'ランタン',detail:'持っている人が点灯・消灯できます。',start:'lydia',slot:0,equip:true,handGroup:'maren-hand'},
- staff:{name:'記録板と杖',aliases:['杖'],detail:'記録と魔法のための持ち物。',start:'lydia',slot:1,equip:true,handGroup:'maren-hand'},
+ staff:{name:'記録板と杖',aliases:['杖'],detail:'記録と魔法のための持ち物。',start:'lydia',slot:1,equip:true,handGroup:'maren-hand',wear:'右手に杖を持って立てる'},
  lydia_map:{name:'古い坑道の地図',detail:'見つけた道と訪問済みの場所を確認します。',start:'lydia',slot:2},
  ironbar:{name:'鉄の工具',detail:'操作輪の引っ掛かりを外す、扉の隙間を固定する。',aliases:['工具','鉄の棒']},
  lampstone:{name:'灯石',detail:'ランタンを消したまま足元を照らす。'}
@@ -520,7 +521,7 @@ function scenarioPropsVisible(next){return next.room==='entry'&&!next.battle&&!n
 // 全身差分。equipmentはその絵に描かれた装備、sheetは既定（SCENARIO_SHEETS）と印刷範囲が違うときだけ書きます。
 // 本人が装備中の品と完全に一致する差分を選びます。無ければ先頭の現行姿のまま、絵が無いことを示します（借りた武器の絵を勝手に付けない）。
 // 金槌のみ・盾のみの絵は無いので、ブロムが片方だけ装備すると現行姿のまま不足を示します。
-const SCENARIO_STANDEE_VARIANTS={ines:[{file:'ines-empty',equipment:[],sheet:{width:793,height:1251,figure:[301,82,676,1179],plate:[272,50,709,1212]}}],brom:[{file:'brom-hammer-shield',equipment:['hammer','shield']},{file:'brom-empty',equipment:[],sheet:{width:866,height:1122,figure:[154,69,798,1028],plate:[125,41,825,1056]}}],gareth:[{file:'gareth-sheathed',equipment:['dagger']},{file:'gareth-empty',equipment:[],sheet:{width:766,height:1309,figure:[167,74,680,1224],plate:[132,40,714,1257]}}],lydia:[{file:'maren-v64',equipment:['staff']},{file:'maren-empty',equipment:[],sheet:{width:766,height:1309,figure:[126,64,685,1232],plate:[92,29,722,1264]}}]};
+const SCENARIO_STANDEE_VARIANTS={ines:[{file:'ines-empty',equipment:[],sheet:{width:793,height:1251,figure:[301,82,676,1179],plate:[272,50,709,1212]}}],brom:[{file:'brom-hammer-shield',equipment:['hammer','shield']},{file:'brom-hammer-only',equipment:['hammer'],sheet:{width:862,height:1118,figure:[63,101,763,989],plate:[39,74,793,1014]}},{file:'brom-shield-only',equipment:['shield'],sheet:{width:862,height:1118,figure:[183,101,810,988],plate:[155,75,834,1014]}},{file:'brom-empty',equipment:[],sheet:{width:866,height:1122,figure:[154,69,798,1028],plate:[125,41,825,1056]}}],gareth:[{file:'gareth-sheathed-visible',equipment:['dagger'],sheet:{width:766,height:1309,figure:[148,63,679,1225],plate:[113,30,715,1258]}},{file:'gareth-empty',equipment:[],sheet:{width:766,height:1309,figure:[167,74,680,1224],plate:[132,40,714,1257]}}],lydia:[{file:'maren-v64',equipment:['staff']},{file:'maren-empty',equipment:[],sheet:{width:766,height:1309,figure:[126,64,685,1232],plate:[92,29,722,1264]}}]};
 const MAREN_LANTERN_VARIANT={file:'maren-lantern',sheet:{width:766,height:1302,figure:[193,64,700,1213],plate:[161,31,732,1231]},missing:''};
 function scenarioStandeeVariant(p){if(p.id==='lydia'&&p.holdingLitLantern)return MAREN_LANTERN_VARIANT;const list=SCENARIO_STANDEE_VARIANTS[p.id];if(!list)return null;const worn=[...(p.equipment||[])].sort().join('+'),match=list.find(v=>[...v.equipment].sort().join('+')===worn),v=match||list[0];return {file:v.file,sheet:v.sheet||SCENARIO_SHEETS[p.id],missing:match?'':p.id+':'+(worn||'none')};}
 

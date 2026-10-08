@@ -95,13 +95,13 @@ const fs=require('node:fs'),vm=require('node:vm');
  ok(JSON.stringify(snapshot)===before,'背景を回す転換がゲームの入力状態を変更');
  // 装備と全身差分：本人が装備中の品だけを根拠に選ぶ。借り手へ未作成の武器絵を付けず、絵が無いことを示す
  {const variant=(id,equipment)=>context.scenarioStandeeVariant({id,equipment}),sheets=vm.runInContext('SCENARIO_SHEETS',context);
-  ok(variant('gareth',['dagger']).file==='gareth-sheathed'&&!variant('gareth',['dagger']).missing&&variant('gareth',['dagger']).sheet===sheets.gareth,'片手剣を装備したガレスが納刀姿にならない');
+  ok(variant('gareth',['dagger']).file==='gareth-sheathed-visible'&&!variant('gareth',['dagger']).missing&&variant('gareth',['dagger']).sheet.figure.join()==='148,63,679,1225'&&variant('gareth',['dagger']).sheet.plate.join()==='113,30,715,1258','片手剣を装備したガレスが視認性調整後の納刀姿、または印刷範囲にならない');
   ok(variant('gareth',[]).file==='gareth-empty'&&!variant('gareth',[]).missing&&variant('gareth',[]).sheet.figure.join()==='167,74,680,1224','剣を外したガレスが素体にならない、または素体の印刷範囲が違う');
   ok(variant('ines',['dagger']).file==='ines-empty'&&variant('ines',['dagger']).missing==='ines:dagger','借り手に剣の絵を付ける、または絵が無いことを示さない');
   ok(variant('brom',['hammer','shield']).file==='brom-hammer-shield'&&!variant('brom',['shield','hammer']).missing,'ブロムの現行姿が装備と一致しない');
   ok(variant('brom',[]).file==='brom-empty'&&!variant('brom',[]).missing&&variant('brom',[]).sheet.plate.join()==='125,41,825,1056'&&variant('brom',[]).sheet.figure.join()==='154,69,798,1028','両手が空のブロムが素体にならない、または素体の印刷範囲が違う');
   ok(variant('ines',[]).file==='ines-empty'&&!variant('ines',[]).missing&&variant('ines',[]).sheet.plate.join()==='272,50,709,1212'&&variant('lydia',[]).file==='maren-empty'&&!variant('lydia',[]).missing&&variant('lydia',[]).sheet.figure.join()==='126,64,685,1232'&&variant('lydia',['staff']).file==='maren-v64'&&variant('lydia',['staff']).sheet===sheets.lydia,'イネス・マレンの素体、または杖を装備したマレンの現行姿にならない');
-  ok(variant('brom',['shield']).file==='brom-hammer-shield'&&variant('brom',['shield']).missing==='brom:shield'&&variant('brom',['hammer']).missing==='brom:hammer','未作成の金槌のみ・盾のみの絵があるように扱う、または未対応を示さない');
+  ok(variant('brom',['shield']).file==='brom-shield-only'&&!variant('brom',['shield']).missing&&variant('brom',['shield']).sheet.figure.join()==='183,101,810,988'&&variant('brom',['hammer']).file==='brom-hammer-only'&&!variant('brom',['hammer']).missing&&variant('brom',['hammer']).sheet.plate.join()==='39,74,793,1014','金槌のみ・盾のみのブロムが専用の姿、または印刷範囲にならない');
   // 実際の所持・装備状態から選ぶ：装備／外す／貸与／借り手が装備／返却後は未装備／再装備
   vm.runInContext("state=initial();state.phase='battle';placement=makePlacement(true);",context);
 
@@ -118,14 +118,14 @@ const fs=require('node:fs'),vm=require('node:vm');
    run("equipItem('lydia','staff',false);state.lit=false");ok(worn('lydia').file==='maren-empty','杖未装備の消灯後が素体でない');run("equipItem('lydia','lantern',true);state.lit=true");ok(worn('lydia').file==='maren-lantern','杖未装備の点灯でランタン姿にならない');
    run("state=initial();state.phase='battle';placement=makePlacement(true)");}
   runStaffChecks();
-  run("equipItem('gareth','dagger',true)");ok(worn('gareth').file==='gareth-sheathed','装備で納刀姿にならない');
+  run("equipItem('gareth','dagger',true)");ok(worn('gareth').file==='gareth-sheathed-visible','装備で納刀姿にならない');
   run("equipItem('gareth','dagger',false)");ok(worn('gareth').file==='gareth-empty'&&!worn('gareth').missing,'外しても剣の絵が残る');
-  run("equipItem('gareth','dagger',true)");ok(worn('gareth').file==='gareth-sheathed','再装備で納刀姿に戻らない');
+  run("equipItem('gareth','dagger',true)");ok(worn('gareth').file==='gareth-sheathed-visible','再装備で納刀姿に戻らない');
   give('lend','gareth','ines');ok(worn('gareth').file==='gareth-empty'&&worn('ines').file==='ines-empty'&&!worn('ines').missing,'貸与で貸主に剣が残る、または借り手に絵が付く');
   run("equipItem('ines','dagger',true)");ok(worn('ines').file==='ines-empty'&&worn('ines').missing==='ines:dagger'&&worn('gareth').file==='gareth-empty','借り手の装備で絵を偽る');
   give('return','ines','gareth');ok(worn('gareth').file==='gareth-empty'&&!worn('ines').missing,'返却で自動的に納刀姿になる');
-  run("equipItem('gareth','dagger',true)");ok(worn('gareth').file==='gareth-sheathed','返却後の再装備で納刀姿に戻らない');
-  run("equipItem('brom','hammer',true)");ok(worn('brom').file==='brom-hammer-shield'&&worn('brom').missing==='brom:hammer','金槌だけ装備したブロムの未対応を示さない');
+  run("equipItem('gareth','dagger',true)");ok(worn('gareth').file==='gareth-sheathed-visible','返却後の再装備で納刀姿に戻らない');
+  run("equipItem('brom','hammer',true)");ok(worn('brom').file==='brom-hammer-only'&&!worn('brom').missing,'金槌だけ装備したブロムが金槌のみの姿にならない');
   // 舞台での差し替え：同じ差分は読み直さない／古い応答を捨てる／失敗しても今の姿を残す／足元0・身長1・位置を保つ
   const fake=()=>{const scene=new THREE.Group(),map=new THREE.Texture(),mesh=new THREE.Mesh(new THREE.BoxGeometry(1,2,.04),new THREE.MeshStandardMaterial({map}));scene.add(mesh);const f={scene,disposed:0};for(const o of [mesh.geometry,map])o.addEventListener('dispose',()=>f.disposed++);return f;};
   const dressed=eq=>({...fullParty,actors:fullParty.actors.map(p=>({...p,equipment:eq[p.id]||[]}))}),armed={brom:['hammer','shield'],gareth:['dagger']},bare={brom:['hammer','shield']};
@@ -137,25 +137,27 @@ const fs=require('node:fs'),vm=require('node:vm');
   let pngDisposed=0;for(const m of pngs)m.material.map.addEventListener('dispose',()=>pngDisposed++);
   const stale=last();ok(stale.url==='./assets/standees/gareth-empty.glb','素体GLBを読まない');
   view.sync(dressed(armed));tick();const place=[g().position.clone(),g().scale.clone(),g().rotation.y];
-  ok(last().url==='./assets/standees/gareth-sheathed.glb'&&garethRequests().length===2,'装備したのに納刀姿を読まない');
+  ok(last().url==='./assets/standees/gareth-sheathed-visible.glb'&&garethRequests().length===2,'装備したのに納刀姿を読まない');
   view.sync(dressed(armed));tick();ok(garethRequests().length===2,'同じ差分を読み直す');
   const old=fake();stale.done({scene:old.scene});ok(old.disposed===2&&!g().children.includes(old.scene)&&pngs.every(m=>g().children.includes(m)),'古い応答が新しい状態を上書きする、または破棄されない');
   const sheathed=fake();last().done({scene:sheathed.scene});tick();
-  ok(g().children.length===1&&g().children[0]===sheathed.scene&&pngDisposed===0&&host.dataset.stageVariants.includes('gareth:gareth-sheathed')&&host.dataset.stageStandees.includes('gareth'),'納刀姿へ差し替わらない、または共用のPNG地図を捨てる');
-  {const b=local(sheathed.scene),s=sheets.gareth,body=s.figure[3]-s.figure[1];ok(Math.abs(b.min.y+(s.plate[3]-s.figure[3])/body)<1e-9&&Math.abs(b.max.y-(s.figure[3]-s.plate[1])/body)<1e-9&&Math.abs((b.min.x+b.max.x)/2)<1e-9,'納刀姿の足元0・身長1が揃わない');}
+  ok(g().children.length===1&&g().children[0]===sheathed.scene&&pngDisposed===0&&host.dataset.stageVariants.includes('gareth:gareth-sheathed-visible')&&host.dataset.stageStandees.includes('gareth'),'納刀姿へ差し替わらない、または共用のPNG地図を捨てる');
+  {const b=local(sheathed.scene),s=context.scenarioStandeeVariant({id:'gareth',equipment:['dagger']}).sheet,body=s.figure[3]-s.figure[1];ok(Math.abs(b.min.y+(s.plate[3]-s.figure[3])/body)<1e-9&&Math.abs(b.max.y-(s.figure[3]-s.plate[1])/body)<1e-9&&Math.abs((b.min.x+b.max.x)/2)<1e-9,'納刀姿の足元0・身長1が揃わない');}
   view.sync(dressed(bare));tick();ok(last().url==='./assets/standees/gareth-empty.glb'&&garethRequests().length===3&&g().children[0]===sheathed.scene,'外したときに素体を読まない、または届く前に姿を消す');
   ok(g().position.equals(place[0])&&g().scale.equals(place[1])&&g().rotation.y===place[2],'装備の変化で位置・身長・向きが変わる');
   const pending=last();view.sync(dressed(armed));tick();ok(garethRequests().length===3,'読み込み済みの姿へ戻るのに読み直す');
   const late=fake();pending.done({scene:late.scene});ok(late.disposed===2&&g().children[0]===sheathed.scene,'取り消した素体の応答が納刀姿を上書きする');
   view.sync(dressed(bare));tick();delete host.dataset.stageAssetError;last().fail(new Error('test'));
-  ok(host.dataset.stageAssetError==='standee:gareth:gareth-empty'&&g().children[0]===sheathed.scene&&sheathed.disposed===0&&host.dataset.stageVariants.includes('gareth:gareth-sheathed'),'読み込み失敗で今の姿が消える、またはエラーを示さない');
+  ok(host.dataset.stageAssetError==='standee:gareth:gareth-empty'&&g().children[0]===sheathed.scene&&sheathed.disposed===0&&host.dataset.stageVariants.includes('gareth:gareth-sheathed-visible'),'読み込み失敗で今の姿が消える、またはエラーを示さない');
   const failed=garethRequests().length;view.sync(dressed(bare));tick();ok(garethRequests().length===failed,'失敗した差分を同期のたびに読み直す');
   view.sync(dressed(armed));tick();view.sync(dressed(bare));tick();const empty=fake();last().done({scene:empty.scene});tick();
   ok(g().children[0]===empty.scene&&sheathed.disposed===2&&host.dataset.stageVariants.includes('gareth:gareth-empty'),'素体へ差し替わらない、または旧GLBの形状・地図を捨てない');
   {const b=local(empty.scene);ok(Math.abs(b.min.y+(1257-1224)/1150)<1e-9&&Math.abs(b.max.y-(1224-40)/1150)<1e-9,'素体の足元0・身長1が揃わない');}
   ok(g().position.equals(place[0])&&g().scale.equals(place[1])&&g().rotation.y===place[2],'差し替え後に位置・身長・向きが変わる');
-  view.sync(dressed({...armed,ines:['dagger'],brom:['shield']}));tick();ok(host.dataset.stageEquipmentMissing.split(',').sort().join()==='brom:shield,ines:dagger','絵の無い装備状態を示さない');
+  view.sync(dressed({...armed,ines:['dagger'],brom:['shield']}));tick();ok(host.dataset.stageEquipmentMissing==='ines:dagger'&&glbRequests.some(r=>r.url==='./assets/standees/brom-shield-only.glb'),'絵の無い装備状態を示さない、または盾のみの姿を読まない');
   view.sync(dressed(armed));tick();ok(!host.dataset.stageEquipmentMissing,'絵のある状態で未対応を示す');
+  // 調査札が避ける人物の画面範囲：見えている人物ごとに面積のある矩形を返す（2026-10-08）
+  {const rects=view.actorRects();ok(rects.length===dressed(armed).actors.length&&rects.every(r=>r.width>0&&r.height>0&&Number.isFinite(r.x+r.y)),'人物の画面範囲を返さない');}
  }
  console.log('PASS: '+checks+' checks — 発言者追従 / 7秒後の消灯 / 手動照明 / 色・広がり / 不在の人物 / 暗闇の保護 / 再点灯 / 明るさ0 / シーン移動 / 入力状態の保護 / 人物縮小・消失点・左右を向く・位置の固定・4段階の立ち位置・内向きの角度・狭い画面での調査 / スタンディー・足元の影・床の質感 / 背景を回す転換・後ろ向き・話した人だけ正面 / 装備と全身差分・読み直し防止・古い応答・読み込み失敗');
 })().catch(e=>{console.error(e);process.exitCode=1});

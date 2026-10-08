@@ -9,7 +9,9 @@ function parseAI(text){
   throw error;
  }
 }
-async function ask(system,payload,maxTokens=450){const connection=aiConnection,started=performance.now(),turn=aiTurn;if(turn)turn.calls++;try{const res=await fetch('/api/gm',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({connection,turnId:turn?.turnId||null,system,messages:[{role:'user',content:JSON.stringify(payload)}],max_tokens:maxTokens}),signal:AbortSignal.timeout(45000)});const data=await res.json();aiLastTiming={connection,durationMs:Math.round(performance.now()-started),ok:res.ok,usage:data.usage||{}};updateAIComparison();if(!res.ok)throw Error(data.error?.message||'AI中継からエラーが返りました。');apiReady=true;return (data.content||[]).map(c=>c.text||'').join('');}finally{if(turn)turn.totalMs+=Math.round(performance.now()-started);}}
+// 入力のidは保存・応答の契約なので変えません。lydia等が人物名として読まれないよう、全送信で呼び名との対応を添えます（2026-10-08。マレンを旧名リディアと呼ぶ応答が出たため）。
+function aiIdNote(){return '\n入力の'+PEOPLE.map(p=>p.id+'='+p.name).join('・')+'は人物の内部idで、人物名ではない（これを含む品idも内部記号）。人物を呼ぶ・書くときは必ず対応する名前を使う。';}
+async function ask(system,payload,maxTokens=450){const connection=aiConnection,started=performance.now(),turn=aiTurn;if(turn)turn.calls++;try{const res=await fetch('/api/gm',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({connection,turnId:turn?.turnId||null,system:system+aiIdNote(),messages:[{role:'user',content:JSON.stringify(payload)}],max_tokens:maxTokens}),signal:AbortSignal.timeout(45000)});const data=await res.json();aiLastTiming={connection,durationMs:Math.round(performance.now()-started),ok:res.ok,usage:data.usage||{}};updateAIComparison();if(!res.ok)throw Error(data.error?.message||'AI中継からエラーが返りました。');apiReady=true;return (data.content||[]).map(c=>c.text||'').join('');}finally{if(turn)turn.totalMs+=Math.round(performance.now()-started);}}
 // 人物への質問では、問いに必要な設定だけを渡し、探索候補で話題を逸らさないようにします。
 async function aiPlayer(p,planning=false,requested=null,correction=null){
  const input=dialogueInput(p,planning,requested,correction),possible=actionsFor(p.id),allowed=Object.keys(input.allowed),proposalChoices=Object.keys(input.proposalChoices);

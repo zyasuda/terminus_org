@@ -1,7 +1,7 @@
 const fs=require('node:fs'),vm=require('node:vm');
 const loadPrototype=require('./load-prototype.cjs').load;
 const elements={},element=()=>({innerHTML:'',style:{},classList:{toggle(){}},querySelectorAll(){return []},setAttribute(){},removeAttribute(){},replaceChildren(){},append(){},dataset:{},open:false,close(){this.open=false;}});
-const context=vm.createContext({document:{getElementById(id){return elements[id]??=element();},querySelector(){return element()}},crypto:require('node:crypto').webcrypto});
+const context=vm.createContext({document:{getElementById(id){return elements[id]??=element();},querySelector(){return element()}},crypto:require('node:crypto').webcrypto,performance,AbortSignal});
 loadPrototype(context);
 vm.runInContext(`(async()=>{
  let count=0;const ok=(v,m)=>{count++;if(!v)throw Error(m)},rejects=fn=>{try{fn();return false}catch{return true}};
@@ -18,13 +18,18 @@ vm.runInContext(`(async()=>{
  placement=makePlacement(true);const looks=()=>Object.fromEntries(stageSnapshot().actors.map(p=>[p.id,scenarioStandeeVariant(p)]));let look=looks();
  ok(look.gareth.file==='gareth-empty'&&look.brom.file==='brom-empty'&&!look.gareth.missing&&!look.brom.missing,'開始時の舞台がガレス・ブロムの素体にならない');
  state.phase='battle';look=looks();ok(equipIds.every(i=>state.items[i].equipped===(i==='lantern'))&&look.brom.file==='brom-empty'&&look.gareth.file==='gareth-empty'&&!['strike','cover'].some(a=>actionsFor('brom').includes(a))&&!actionsFor('gareth').includes('stab')&&actionsFor('brom').includes('retreat'),'戦闘で自動装備、または未装備で武器の行動が出る');
+ const sendAsk=ask;
  {const startAsk=ask,startAudit=auditProfile;auditProfile=async()=>({valid:true,claims:[],conflicts:[]});
   ask=async()=>JSON.stringify({decision:'decline',speech:'まだ構えなくていい。'});ok(!(await handleEquipment({who:'brom',item:'hammer',equipped:true},'ブロム、金槌を装備してください')).performed&&!state.items.hammer.equipped&&!actionsFor('brom').includes('strike'),'本人の拒否でも装備する');
   ask=async()=>JSON.stringify({decision:'accept',speech:'分かった、構えよう。'});
   ok((await handleEquipment({who:'brom',item:'hammer',equipped:true},'ブロム、金槌を装備してください')).performed&&state.items.hammer.equipped&&actionsFor('brom').includes('strike')&&!actionsFor('brom').includes('cover'),'本人了承で金槌の攻撃が戻らない');
-  look=looks();ok(look.brom.file==='brom-hammer-shield'&&look.brom.missing==='brom:hammer','金槌だけの絵が無いことを示さない');
+  look=looks();ok(look.brom.file==='brom-hammer-only'&&!look.brom.missing&&look.brom.sheet.figure.join()==='63,101,763,989','金槌だけの姿にならない');
   ok((await handleEquipment({who:'brom',item:'shield',equipped:true},'ブロム、盾を装備してください')).performed&&actionsFor('brom').includes('cover')&&looks().brom.file==='brom-hammer-shield'&&!looks().brom.missing,'本人了承で盾のかばう・両方の姿が戻らない');
-  ok((await handleEquipment({who:'gareth',item:'dagger',equipped:true},'ガレス、片手剣を装備してください')).performed&&actionsFor('gareth').includes('stab')&&looks().gareth.file==='gareth-sheathed'&&!looks().gareth.missing,'本人了承で急所狙い・納刀姿が戻らない');
+  // ブロムの4状態（2026-10-08）：素体・金槌のみ・盾のみ・両方。
+  equipItem('brom','hammer',false);look=looks();ok(look.brom.file==='brom-shield-only'&&!look.brom.missing&&look.brom.sheet.plate.join()==='155,75,834,1014','盾だけの姿にならない');
+  equipItem('brom','shield',false);look=looks();ok(look.brom.file==='brom-empty'&&!look.brom.missing,'両方外して素体に戻らない');
+  equipItem('brom','hammer',true);equipItem('brom','shield',true);ok(looks().brom.file==='brom-hammer-shield'&&!looks().brom.missing,'両方の姿に戻らない');
+  ok((await handleEquipment({who:'gareth',item:'dagger',equipped:true},'ガレス、片手剣を装備してください')).performed&&actionsFor('gareth').includes('stab')&&looks().gareth.file==='gareth-sheathed-visible'&&!looks().gareth.missing,'本人了承で急所狙い・納刀姿が戻らない');
   ask=startAsk;auditProfile=startAudit;}
  reset();placement=makePlacement(true);look=looks();ok(equipIds.every(i=>state.items[i].equipped===(i==='lantern')&&hasItem(ITEM_DEFS[i].start,i))&&look.brom.file==='brom-empty'&&look.gareth.file==='gareth-empty','最初からの再開始で素体に戻らない');fixture();
  ok(actionsFor('lydia').includes('light')&&!actionsFor('ines').includes('light'),'初期のランタン所持者が不正');
@@ -87,6 +92,14 @@ vm.runInContext(`(async()=>{
  ok(rejects(()=>equipItem('ines','dagger',true))&&rejects(()=>equipItem('gareth','picks',false))&&rejects(()=>equipItem('lydia','lydia_map',false)),'未所持の剣や装備品でない品の着脱を受理');
  ok(equipmentIntent('ガレス、片手剣を外してください','all').item==='dagger'&&equipmentIntent('剣を装備して','gareth').equipped===true&&equipmentIntent('短剣を外して','gareth').item==='dagger','片手剣・剣・旧名の短剣で着脱を依頼できない');
  ok(!equipmentIntent('片手剣を装備している？','gareth')&&!equipmentIntent('もし剣を外すなら','gareth')&&equipmentIntent('片手剣を外して','brom').clarify&&equipmentIntent('ブロム、ガレスの剣を外して','brom').clarify&&equipmentIntent('剣を外して','all').clarify,'質問・仮定・未所持・他人指定・宛先なしで剣を処理');
+ // 撮影で見つかった言い方（2026-10-08）：身に着ける言い方は装備、抜く・構えるは状態に無いので案内だけ。質問・否定・仮定・他人の品は実行しない。
+ {const e=equipmentIntent('ガレス、片手剣を腰に下げておいて','all');ok(e&&e.who==='gareth'&&e.item==='dagger'&&e.equipped===true,'「腰に下げておいて」を装備の依頼として読めない');}
+ ok(equipmentIntent('剣を腰に下げといて','gareth')?.equipped===true&&equipmentIntent('盾を身に着けておいてください','brom')?.equipped===true&&equipmentIntent('片手剣を装備しておいて','gareth')?.equipped===true,'身に着ける言い方・「おいて」の装備依頼を読めない');
+ ok(!equipmentIntent('片手剣を腰に下げておいて？','gareth')&&!equipmentIntent('片手剣は腰に下げてる？','gareth')&&!equipmentIntent('片手剣を腰に下げないで','gareth')&&!equipmentIntent('もし片手剣を腰に下げたら','gareth')&&!equipmentIntent('片手剣を腰に下げる方法は？','gareth'),'質問・否定・仮定を装備として実行');
+ ok(equipmentIntent('ブロム、ガレスの剣を腰に下げて','brom').clarify&&equipmentIntent('片手剣を腰に下げておいて','ines').clarify&&equipmentIntent('片手剣を腰に下げて','all').clarify,'他人の剣・未所持・宛先なしで装備を処理');
+ ok(equipmentIntent('ガレス、片手剣を構えて','all')?.clarify&&equipmentIntent('剣を抜いておいて','gareth')?.clarify&&!equipmentIntent('ガレス、錠前の釘を抜いて','all')&&!equipmentIntent('ブロム、扉を支えて','all'),'抜刀・構えを装備として扱う、または装備品以外の依頼を横取りする');
+ {const sent=[];const realFetch=globalThis.fetch;fetch=async(url,o)=>{sent.push(JSON.parse(o.body));return {ok:true,json:async()=>({content:[{text:'{}'}]})}};const saved=updateAIComparison;updateAIComparison=()=>{};await sendAsk('あなたはGM。',{actor:'lydia'});updateAIComparison=saved;fetch=realFetch;ok(sent[0].system.startsWith('あなたはGM。')&&sent[0].system.includes('lydia=マレン')&&sent[0].system.includes('ines=イネス')&&sent[0].messages[0].content==='{"actor":"lydia"}','AIへ内部idと呼び名の対応を渡さない、または入力を書き換える');}
+ {armedFixture();equipItem('gareth','dagger',false);let got=null;ask=async(prompt,data)=>{got={prompt,data};return JSON.stringify({decision:'accept',speech:'分かった、鞘ごと腰に下げておく。'})};ok((await handleEquipment({who:'gareth',item:'dagger',equipped:true},'ガレス、片手剣を腰に下げておいて')).performed&&state.items.dagger.equipped&&/鞘/.test(got.data.wear)&&/腰/.test(got.data.wear)&&got.prompt.includes('wearどおり'),'装備の返答に納刀して腰に下げた実際の姿を渡さない');}
  armedFixture();let asked=null,equipFailed;ask=async(prompt,data)=>{asked=data;return JSON.stringify({decision:'accept',speech:'分かった。'})};auditProfile=async()=>({valid:true,claims:[],conflicts:[]});
  equipFailed=false;try{await handleEquipment({who:'brom',item:'dagger',equipped:false},'ブロム、片手剣を外してください。')}catch{equipFailed=true}ok(equipFailed&&!asked&&state.items.dagger.equipped,'未所持の人へ剣の着脱を尋ねる、または他人の剣を外す');
  equipFailed=false;try{await handleEquipment({who:'gareth',item:'picks',equipped:false},'ガレス、錠前破りを外してください。')}catch{equipFailed=true}ok(equipFailed&&!asked,'装備品でない品の着脱を尋ねる');

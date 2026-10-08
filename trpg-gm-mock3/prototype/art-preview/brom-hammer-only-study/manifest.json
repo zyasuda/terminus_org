@@ -1,0 +1,19 @@
+{
+  "id": "brom-hammer-only",
+  "date": "2026-10-08",
+  "source": {"file": "review-v1.png", "sha256": "1c92bf5dd2002635e93b967587f9408d0a7944bc87936c8ede93715f261c5f76", "layout": "左=前面・右=背面", "adoptedBy": "作者"},
+  "tools": {
+    "processImage": "/private/tmp/brom-standee-tools/tools/standee-preview/process-image.mjs",
+    "blenderBuild": "plate/build.py（maren-lantern-study/plate/build.py の写し。パス・HEIGHT_U・シーン名のみ変更）",
+    "node": "v24.20.0",
+    "blender": "5.2.0"
+  },
+  "build": {"heightU": 0.9, "heightCm": 135, "metresPerTile": 1.5, "plateThicknessU": 0.04, "normalMap": false, "backMaterialUV": "直接UV（flip_uなし）"},
+  "sheet": {"width": 862, "height": 1118, "figure": [63, 101, 763, 989], "plate": [39, 74, 793, 1014]},
+  "outputs": {
+    "glb": {"path": "prototype/assets/standees/brom-hammer-only.glb", "bytes": 3585484, "sha256": "c263bdbe79f63f4fe97b6a762b228e9fe23320110aad05dc9dbd72de8fff35e5", "size": [0.7652, 0.95549, 0.04], "min": [-0.37905, -0.02736, -0.02], "max": [0.38615, 0.92813, 0.02]},
+    "front": {"path": "prototype/art-preview/characters/brom-hammer-only-front.png", "bytes": 1075812, "note": "plate/front.png と同一"},
+    "back": {"path": "prototype/art-preview/characters/brom-hammer-only-back.png", "bytes": 1059727, "note": "plate/back.png の左右反転（自然な背面）"}
+  },
+  "logs": ["plate-process.log", "blender.log", "check-glb.log"]
+}

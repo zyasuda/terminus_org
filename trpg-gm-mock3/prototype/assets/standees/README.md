@@ -26,3 +26,7 @@ Standee-wiz/public/models/から既存のv64 GLBをそのままコピーして�
 2026-10-08 作者指定：開始時はマレンのみ杖を装備し、杖あり姿で登場。他の3人は素体。再開始でも同じ初期状態に戻る。杖を外す・貸与すると素体になり、杖の魔法は使用不可。
 
 2026-10-08 ランタン点灯表示：マレンが本人のランタンを所持し実点灯中の場合、採用済みmaren-lantern姿を優先表示。通常は杖姿、消灯・貸与後は現在の杖装備に応じた姿へ戻る。装備状態・魔法ルールは変えない。詳細 art-preview/maren-lantern-study/README.md。
+
+ブロム金槌のみ・盾のみ（2026-10-08）：作者採用済みのbrom-hammer-only.glb・brom-shield-only.glbをSCENARIO_STANDEE_VARIANTSへ登録（素材は無変更）。figure・plateは各art-preview/brom-*-only-study/manifest.jsonのsheetと同じ値。これでブロムは素体・金槌のみ・盾のみ・両方の4状態とも専用の姿になる。standee-check.cjsの解析対象にも追加。
+
+ガレス納刀姿の視認性調整（2026-10-08）：作者採用済みのart-preview/gareth-visibility-study/review-v1.png（鞘の幅・明暗・鍔と柄の輪郭を調整した案）を、同じprocess-image.mjsとbrom-hammer-onlyと同じBlender板作成処理（184cm/1.5、板厚0.04、足元原点、ノーマルマップなし、背面材質は直接UV）でgareth-sheathed-visible.glbへ。はみ出し0.00%/0.00%、余分な余白0.92%/0.83%。PNG代替はart-preview/characters/gareth-sheathed-visible-front.png（板の表）と-back.png（板の裏を自然な背面へ戻したもの）。SCENARIO_STANDEE_VARIANTSでガレスが片手剣を装備中のfileとsheetだけをこの素材へ変更。旧gareth-sheathed.glbと前後PNGは比較・記録として保持し、standee-check.cjsの解析対象にも残す。詳細はart-preview/gareth-visibility-study/README.md。

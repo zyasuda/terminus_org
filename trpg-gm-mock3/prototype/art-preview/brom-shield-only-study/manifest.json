@@ -1,0 +1,19 @@
+{
+  "id": "brom-shield-only",
+  "date": "2026-10-08",
+  "source": {"file": "review-v1.png", "sha256": "172a70fddc2a8032e44831ab8afbc6c17911c6aa9768e2228ecccbdbde34a594", "layout": "左=前面・右=背面", "adoptedBy": "作者"},
+  "tools": {
+    "processImage": "/private/tmp/brom-standee-tools/tools/standee-preview/process-image.mjs",
+    "blenderBuild": "plate/build.py（brom-hammer-only-study/plate/build.py の写し。パス・シーン名のみ変更）",
+    "node": "v24.20.0",
+    "blender": "5.2.0"
+  },
+  "build": {"heightU": 0.9, "heightCm": 135, "metresPerTile": 1.5, "plateThicknessU": 0.04, "normalMap": false, "backMaterialUV": "直接UV（flip_uなし）"},
+  "sheet": {"width": 862, "height": 1118, "figure": [183, 101, 810, 988], "plate": [155, 75, 834, 1014]},
+  "outputs": {
+    "glb": {"path": "prototype/assets/standees/brom-shield-only.glb", "bytes": 3337888, "sha256": "0937665495afedf6655b04da0e20c17aab6aa1d4a5d8d53231495fe08dafc72c", "size": [0.69098, 0.95581, 0.04], "min": [-0.34651, -0.02841, -0.02], "max": [0.34448, 0.9274, 0.02]},
+    "front": {"path": "prototype/art-preview/characters/brom-shield-only-front.png", "bytes": 1102266, "note": "plate/front.png と同一"},
+    "back": {"path": "prototype/art-preview/characters/brom-shield-only-back.png", "bytes": 1052182, "note": "plate/back.png の左右反転（自然な背面）"}
+  },
+  "logs": ["plate-process.log", "blender.log", "check-glb.log"]
+}

@@ -111,7 +111,9 @@ function placeStagePoints(){
  if(!stageView)return;
  if(!$('scene').classList.contains('stage-ready')){$('points').querySelectorAll('[data-target]').forEach(b=>b.hidden=false);if($('dustspot'))$('dustspot').hidden=false;$('actions').hidden=false;placeTargetLabels();return;}
  const bounds=$('scene').getBoundingClientRect();
- for(const b of $('points').querySelectorAll('[data-target]')){const p=stageView.project(b.dataset.target);b.hidden=!p?.visible;if(p){b.style.left=Math.max(8,Math.min(bounds.width-b.offsetWidth-8,p.x-b.offsetWidth/2))+'px';b.style.top=p.y+'px';}}
+ // 投影位置を起点に、全人物の板・見出し・出口・置いた札を避けます（2026-10-08）。
+ const obstacles=[...stageView.actorRects(),...sceneChrome($('scene'))];
+ for(const b of $('points').querySelectorAll('[data-target]')){const p=stageView.project(b.dataset.target);b.hidden=!p?.visible;if(p&&!b.hidden){const size={width:b.offsetWidth,height:b.offsetHeight},q=freeLabelPosition({x:Math.max(8,Math.min(bounds.width-size.width-8,p.x-size.width/2)),y:p.y},size,bounds,obstacles);b.style.left=q.x+'px';b.style.top=q.y+'px';obstacles.push({...q,...size});}}
  const dust=$('dustspot'),p=stageView.project(SCENARIO_DUST_TARGET);if(dust){dust.hidden=!p?.visible;if(p){dust.style.left=p.x+'px';dust.style.top=p.y+'px';}}
  if(target&&!stageView.project(target)?.visible){$('actions').hidden=true;}else $('actions').hidden=false;
  positionContextActions();

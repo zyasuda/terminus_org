@@ -1,0 +1,20 @@
+{
+  "id": "gareth-sheathed-visible",
+  "date": "2026-10-08",
+  "source": {"file": "review-v1.png", "sha256": "4c77203e758788c87df864a34624064875c71f95a87ca870e082ee01cc43f882", "layout": "左=前面・右=自然な背面", "generatedBy": "Codex image_gen（gareth-sheathed-painted-review.png を参照した編集、prompt.txt）", "adoptedBy": "作者（comparison.png の右）"},
+  "tools": {
+    "processImage": "/private/tmp/brom-standee-tools/tools/standee-preview/process-image.mjs",
+    "blenderBuild": "plate/build.py（brom-hammer-only-study/plate/build.py の写し。パス・HEIGHT_U・シーン名のみ変更）",
+    "node": "v24.20.0",
+    "blender": "5.2.0"
+  },
+  "build": {"heightU": 1.2266666667, "heightCm": 184, "metresPerTile": 1.5, "plateThicknessU": 0.04, "normalMap": false, "backMaterialUV": "直接UV（flip_uなし）"},
+  "sheet": {"width": 766, "height": 1309, "figure": [148, 63, 679, 1225], "plate": [113, 30, 715, 1258]},
+  "outputs": {
+    "glb": {"path": "prototype/assets/standees/gareth-sheathed-visible.glb", "bytes": 3811264, "sha256": "bb725cfaf09fb350117f458f00d133bed719da2af99f573d1f48893c290ccefc", "size": [0.63841, 1.29951, 0.04], "min": [-0.31801, -0.03695, -0.02], "max": [0.32039, 1.26256, 0.02]},
+    "front": {"path": "prototype/art-preview/characters/gareth-sheathed-visible-front.png", "bytes": 1203391, "note": "plate/front.png と同一"},
+    "back": {"path": "prototype/art-preview/characters/gareth-sheathed-visible-back.png", "bytes": 1167446, "note": "plate/back.png の左右反転（自然な背面）"}
+  },
+  "kept": ["prototype/assets/standees/gareth-sheathed.glb", "prototype/art-preview/characters/gareth-sheathed-front.png", "prototype/art-preview/characters/gareth-sheathed-back.png"],
+  "logs": ["plate-process.log", "blender.log", "check-glb.log", "browser.log"]
+}
