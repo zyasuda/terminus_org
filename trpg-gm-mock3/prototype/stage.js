@@ -26,6 +26,15 @@ export function createStage(host, controls, changed) {
  const lantern=new THREE.PointLight('#ffcc86',8,22,1);lantern.position.set(2,3,2);scene.add(lantern);
  // 背景は上下の絵を保ったまま左右にも届く幅にし、平面の端を見せません。
  const back=flat(null,0,-2,-15,64,25);back.renderOrder=-3;
+ // 比較試作：?background=folded のときだけ、左右18％を客席側へ25度折ります。
+ const folded=globalThis.location?.search&&new URLSearchParams(location.search).get('background')==='folded';
+ if(folded){
+  back.geometry.dispose();back.geometry=new THREE.PlaneGeometry(64,25,3,1);
+  const positions=back.geometry.attributes.position,uv=back.geometry.attributes.uv,angle=THREE.MathUtils.degToRad(25),hinge=32-64*.18;
+  for(let i=0;i<positions.count;i++){const column=i%4,x=[-32,-hinge,hinge,32][column],wing=Math.max(0,Math.abs(x)-hinge);positions.setX(i,Math.sign(x)*(Math.min(Math.abs(x),hinge)+wing*Math.cos(angle)));positions.setZ(i,wing*Math.sin(angle));uv.setX(i,[0,.18,.82,1][column]);}
+  back.geometry.computeVertexNormals();back.geometry.computeBoundingSphere();
+ }
+ host.dataset.stageBackground=folded?'folded':'flat';
  // 印刷面は光芒・床の光と色調を合わせ、絵の陰影を保ちます。
  // 見つかっていない場所は照らさず、ゲーム内の灯りの状態も変更しません。
  function lightTexture(beam=false){const c=document.createElement('canvas');c.width=256;c.height=512;const x=c.getContext('2d');
