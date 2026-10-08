@@ -34,6 +34,7 @@ vm.runInContext(`(async()=>{
  const rows=inventoryIntroductions(moved),lydia=rows.find(r=>r.id==='lydia'),brom=rows.find(r=>r.id==='brom');
  ok(lydia.items.join(',')==='lydia_map'&&!lydia.offer&&!lydia.speech.includes('ランタン'),'持っていないランタンを紹介・操作提案');
  ok(brom.items.join(',')==='hammer'&&!brom.speech.includes('盾'),'存在しない品を紹介');
+ const garethIntro=inventoryIntroductions(initial()).find(r=>r.id==='gareth');ok(garethIntro.items.join(',')==='picks,dagger'&&garethIntro.speech.includes('片手剣')&&!garethIntro.speech.includes('短剣')&&PEOPLE.find(p=>p.id==='gareth').tool==='錠前破りと片手剣','ガレスの紹介や人物設定が片手剣の呼称と食い違う');
  state=initial();chat=[];consents={};actionHistory=[];introduceInventory();
  ok(chat.length===4&&state.profiles.history.length===6&&!state.lit,'新しい開始で紹介や点灯が残る');
  ok(mentionsOwnProfile('投げ縄があるよ')&&!mentionsOwnProfile('ランタンを持ってる人は？'),'本人の品名による自己申告を見落とす／他者の質問を自己申告にする');

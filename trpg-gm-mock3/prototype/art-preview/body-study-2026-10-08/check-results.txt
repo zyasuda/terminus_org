@@ -1,0 +1,3 @@
+{"id":"maren","width":1312,"height":1199,"transparentPixels":892844,"halves":[{"pixels":306372,"bounds":[72,10,629,1176]},{"pixels":304648,"bounds":[683,8,1243,1163]}]}
+{"id":"ines","width":1374,"height":1145,"transparentPixels":1036643,"halves":[{"pixels":244605,"bounds":[249,29,622,1125]},{"pixels":245344,"bounds":[933,32,1306,1125]}]}
+{"id":"lydia","width":1312,"height":1199,"transparentPixels":823944,"halves":[{"pixels":238172,"bounds":[148,20,624,1175]},{"pixels":241826,"bounds":[687,22,1174,1171]}]}

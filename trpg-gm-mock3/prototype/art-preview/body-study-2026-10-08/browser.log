@@ -1,0 +1,46 @@
+{
+ "start": {
+  "variants": "lydia:maren-empty,ines:ines-empty,gareth:gareth-empty,brom:brom-empty",
+  "standees": "lydia,ines,gareth,brom",
+  "missing": "",
+  "error": ""
+ },
+ "lit": {
+  "variants": "lydia:maren-empty,ines:ines-empty,gareth:gareth-empty,brom:brom-empty",
+  "standees": "lydia,ines,gareth,brom",
+  "missing": "",
+  "error": ""
+ },
+ "battle": {
+  "variants": "lydia:maren-empty,ines:ines-empty,gareth:gareth-empty,brom:brom-empty",
+  "standees": "lydia,ines,gareth,brom",
+  "missing": "",
+  "error": ""
+ },
+ "equipped": {
+  "hammer": false,
+  "shield": false,
+  "dagger": false
+ },
+ "requests": [
+  "assets/standees/maren-empty.glb",
+  "assets/standees/ines-empty.glb",
+  "assets/standees/gareth-empty.glb",
+  "assets/standees/brom-empty.glb",
+  "art-preview/characters/maren-empty-front.png",
+  "art-preview/characters/maren-empty-back.png",
+  "art-preview/characters/ines-empty-front.png",
+  "art-preview/characters/ines-empty-back.png",
+  "art-preview/characters/gareth-empty-front.png",
+  "art-preview/characters/gareth-empty-back.png",
+  "art-preview/characters/brom-empty-front.png",
+  "art-preview/characters/brom-empty-back.png"
+ ],
+ "httpFailures": [],
+ "console": [
+  "warning: [.WebGL-0x12400495c00]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels",
+  "warning: [.WebGL-0x12400495c00]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels",
+  "warning: [.WebGL-0x12400495c00]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels",
+  "warning: [.WebGL-0x12400495c00]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels (this message will no longer repeat)"
+ ]
+}

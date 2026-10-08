@@ -1,0 +1,26 @@
+{
+  "width": 793,
+  "height": 1251,
+  "figure": [
+    301,
+    82,
+    676,
+    1179
+  ],
+  "outside": {
+    "front": 0,
+    "back": 0,
+    "limit": 0.03
+  },
+  "margin": {
+    "front": 0.97,
+    "back": 0.5,
+    "limit": 5
+  },
+  "plate": [
+    272,
+    50,
+    709,
+    1212
+  ]
+}

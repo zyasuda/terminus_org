@@ -3,7 +3,7 @@
 const PEOPLE=[
  {id:'ines',heightCm:155,name:'イネス',role:(isHuman('ines')?'あなた':'AI')+'・斥候',hp:12,skill:'痕跡や仕掛けを調べる。狭い隙間へ入る。工具を使う。戦闘では弱点を見抜く。',tool:'投げ縄',motive:'危険を負う前に仕組みを確かめたい。'},
  {id:'brom',heightCm:135,name:'ブロム',role:(isHuman('brom')?'あなた':'AI')+'・盾役',hp:18,skill:'重い扉や操作輪を支える。金槌で壊す。戦闘では仲間をかばう。',tool:'金槌と盾',motive:'力仕事を引き受けるが、仲間の考えも聞きたい。'},
- {id:'gareth',heightCm:184,name:'ガレス',role:(isHuman('gareth')?'あなた':'AI')+'・盗賊',hp:15,skill:'鍵を外す。戦闘では弱点を狙う。',tool:'錠前破りと短剣',motive:'危険や無駄を避け、手早く進みたい。'},
+ {id:'gareth',heightCm:184,name:'ガレス',role:(isHuman('gareth')?'あなた':'AI')+'・盗賊',hp:15,skill:'鍵を外す。戦闘では弱点を狙う。',tool:'錠前破りと片手剣',motive:'危険や無駄を避け、手早く進みたい。'},
  {id:'lydia',heightCm:172,name:'マレン',role:(isHuman('lydia')?'あなた':'AI')+'・魔法使い',hp:12,skill:'ランタンを灯す・消す。古い文字や魔法の記号を読み解く。戦闘では火球を2回使える。',tool:'ランタン、記録板と杖、古い坑道の地図',motive:'仕組みを理解してから動きたい。'}
 ];
 const ROOMS={entry:{name:'坑道入口',image:'mine_entrance_unlit',targets:['cart','rails'],links:['hall','drain']},hall:{name:'石扉の広間',image:'s2_junction',targets:['door','rune'],links:['entry']},drain:{name:'排水室',image:'s7_inner_chamber',targets:['wheel','water'],links:['entry']}};
@@ -18,14 +18,15 @@ const CHAT_TONE={ines:'観察好きで率直',brom:'温かい豪快さ。岩や�
 const VOICE_DEFAULT={ines:{一人称:'私',語尾:'だね'},brom:{一人称:'俺',語尾:'だぜ'},gareth:{一人称:'俺',語尾:'だな'},lydia:{一人称:'私',語尾:'ですね'}};
 function initial(){return {profiles:initialProfiles(),items:initialItems(),transfers:[],reports:[],navigation:{known:['entry'],maps:[],offer:null},phase:'explore',room:'entry',lit:false,everLit:false,discovery:{etching:false,cache:false,opened:false,stoneOn:false,clues:Object.fromEntries(PEOPLE.map(p=>[p.id,[]])),shared:[],proposals:[],hints:0},visited:['entry'],seen:{},holding:false,drained:false,observedDrain:false,locked:true,supported:false,opened:false,noisy:false,runes:false,weak:false,boss:24,round:1,fire:2,hp:Object.fromEntries(PEOPLE.map(p=>[p.id,p.hp])),knowledge:Object.fromEntries(PEOPLE.map(p=>[p.id,[]])),shared:[]};}
 // ownerは所有者、holderは今持っている人。貸すとholderだけが変わり、返却先はownerです。
+// equip:trueの品は着脱でき、外している間は関連行動を使えません。開始時は全員外しており、本人の了承を得て装備します（自動装備しない）。片手剣は鞘と合わせて1品で、内部IDはdaggerのままです。
 const ITEM_DEFS={
  rope:{name:'投げ縄',detail:'投げ縄による攻撃に使います。',start:'ines',slot:0},
- hammer:{name:'金槌',detail:'障害物の破壊、戦闘での攻撃。',start:'brom',slot:0},
- shield:{name:'盾',detail:'仲間をかばうための防具。',start:'brom',slot:1},
+ hammer:{name:'金槌',detail:'障害物の破壊、戦闘での攻撃。',start:'brom',slot:0,equip:true},
+ shield:{name:'盾',detail:'仲間をかばうための防具。',start:'brom',slot:1,equip:true},
  picks:{name:'錠前破り',detail:'錠前を外すための道具。',start:'gareth',slot:0},
- dagger:{name:'短剣',detail:'急所への攻撃に使います。',start:'gareth',slot:1},
+ dagger:{name:'片手剣',detail:'急所への攻撃に使います。',start:'gareth',slot:1,equip:true,aliases:['剣','短剣']},
  lantern:{name:'ランタン',detail:'持っている人が点灯・消灯できます。',start:'lydia',slot:0},
- staff:{name:'記録板と杖',detail:'記録と魔法のための持ち物。',start:'lydia',slot:1},
+ staff:{name:'記録板と杖',aliases:['杖'],detail:'記録と魔法のための持ち物。',start:'lydia',slot:1,equip:true},
  lydia_map:{name:'古い坑道の地図',detail:'見つけた道と訪問済みの場所を確認します。',start:'lydia',slot:2},
  ironbar:{name:'鉄の工具',detail:'操作輪の引っ掛かりを外す、扉の隙間を固定する。',aliases:['工具','鉄の棒']},
  lampstone:{name:'灯石',detail:'ランタンを消したまま足元を照らす。'}
@@ -409,7 +410,7 @@ function wheelConversation(text,s=state){
  if(own&&actionsFor('ines',s).includes('pry'))return {selfAction:'pry'};
  return {clarify:'ブロムが輪を支えています。鉄片を外す細かい作業は、工具を持つイネスが担当できます。「私が工具で鉄片を外す」と話すか、操作輪を選んで工具を使えます。'};
 }
-function stageSnapshot(){return {room:state.room,phase:battlePreview?'battle':state.phase,image:state.phase==='explore'&&!battlePreview?ROOMS[state.room].image:'s3_chamber_v2',lit:state.lit||battlePreview,end:state.phase==='end'&&!battlePreview,battle:state.phase==='battle'||battlePreview,actors:(battlePreview?(previewPlacement||makePlacement(true)):state.phase==='explore'?[{id:humanId(),x:42,z:.03},...(placement||[])]:placement||[]).map(p=>({...p,heightCm:PEOPLE.find(person=>person.id===p.id).heightCm,equipment:['hammer','shield'].filter(item=>hasItem(p.id,item)&&state.items[item].equipped)})),depth:{...depth},blueDust:!battlePreview&&blueDust(),cache:state.discovery.cache};}
+function stageSnapshot(){return {room:state.room,phase:battlePreview?'battle':state.phase,image:state.phase==='explore'&&!battlePreview?ROOMS[state.room].image:'s3_chamber_v2',lit:state.lit||battlePreview,end:state.phase==='end'&&!battlePreview,battle:state.phase==='battle'||battlePreview,actors:(battlePreview?(previewPlacement||makePlacement(true)):state.phase==='explore'?[{id:humanId(),x:42,z:.03},...(placement||[])]:placement||[]).map(p=>({...p,heightCm:PEOPLE.find(person=>person.id===p.id).heightCm,equipment:Object.keys(state.items).filter(item=>ITEM_DEFS[item].equip&&hasItem(p.id,item)&&state.items[item].equipped)})),depth:{...depth},blueDust:!battlePreview&&blueDust(),cache:state.discovery.cache};}
 
 // 共通表示・会話から呼ぶ、この章だけの案内。
 function playerFocusRule(input){return input.focus.type==='battle'?`今は戦闘です。allowedから自分の行動を1つ選び、その行動名と意図をspeechで話す。仲間の依頼は参考にし、本人が判断する。仲間の選択はplanにある。攻撃はD20合計${BATTLE_RULES.target}以上で命中。見抜く成功後は攻撃に+${BATTLE_RULES.weakBonus}、イネスの支援後はマレンに+${BATTLE_RULES.aidBonus}。命中時の威力は火球${BATTLE_RULES.damage.fire}、石つぶて${BATTLE_RULES.damage.spark}、金槌${BATTLE_RULES.damage.strike}、投げ縄${BATTLE_RULES.damage.throw}、急所は弱点あり${BATTLE_RULES.damage.stabWeak}/なし${BATTLE_RULES.damage.stab}。火球は残数fireだけ使える。かばうは前衛への薙ぎ払いをブロムが引き受け${BATTLE_RULES.cover}ダメージ。マレンへの光線${BATTLE_RULES.beam}ダメージはかばえない。誰かのHPが0なら探索終了。生存と敵HPを踏まえて戦闘継続か撤退を自分で判断する。`:input.focus.type==='profile'?'人物についての質問です。questionに直接答える。selfProfileの質問された設定だけを自然に話す。次の探索や行動を提案しない。proposalは空。':
@@ -518,8 +519,11 @@ function scenarioStageActors(){return ['ines','brom','gareth','lydia',SCENARIO_E
 function scenarioBattleRow(id){return id==='brom'||id==='gareth'?2:id==='lydia'?0:1;}
 function scenarioShadowWidth(id){return id==='brom'?1.8:1.25;}
 function scenarioPropsVisible(next){return next.room==='entry'&&!next.battle&&!next.end;}
-function scenarioStandeeImage(id,side){return './art-preview/characters/'+(id==='lydia'?'maren':id)+(id==='brom'?'-hammer-shield':id==='gareth'?'-sheathed':'-v64')+'-'+side+'.png';}
-function scenarioStandeeModel(id){return './assets/standees/'+(id==='lydia'?'maren':id)+(id==='brom'?'-hammer-shield':id==='gareth'?'-sheathed':'-v64')+'.glb';}
+// 全身差分。equipmentはその絵に描かれた装備、sheetは既定（SCENARIO_SHEETS）と印刷範囲が違うときだけ書きます。
+// 本人が装備中の品と完全に一致する差分を選びます。無ければ先頭の現行姿のまま、絵が無いことを示します（借りた武器の絵を勝手に付けない）。
+// 金槌のみ・盾のみの絵は無いので、ブロムが片方だけ装備すると現行姿のまま不足を示します。
+const SCENARIO_STANDEE_VARIANTS={ines:[{file:'ines-empty',equipment:[],sheet:{width:793,height:1251,figure:[301,82,676,1179],plate:[272,50,709,1212]}}],brom:[{file:'brom-hammer-shield',equipment:['hammer','shield']},{file:'brom-empty',equipment:[],sheet:{width:866,height:1122,figure:[154,69,798,1028],plate:[125,41,825,1056]}}],gareth:[{file:'gareth-sheathed',equipment:['dagger']},{file:'gareth-empty',equipment:[],sheet:{width:766,height:1309,figure:[167,74,680,1224],plate:[132,40,714,1257]}}],lydia:[{file:'maren-v64',equipment:['staff']},{file:'maren-empty',equipment:[],sheet:{width:766,height:1309,figure:[126,64,685,1232],plate:[92,29,722,1264]}}]};
+function scenarioStandeeVariant(p){const list=SCENARIO_STANDEE_VARIANTS[p.id];if(!list)return null;const worn=[...(p.equipment||[])].sort().join('+'),match=list.find(v=>[...v.equipment].sort().join('+')===worn),v=match||list[0];return {file:v.file,sheet:v.sheet||SCENARIO_SHEETS[p.id],missing:match?'':p.id+':'+(worn||'none')};}
 
 
 // 章に固有の会話解釈・演出・判定後の案内。

@@ -117,7 +117,8 @@ vm.runInContext(`(async()=>{
  const correctedBattle=await aiPlayer(PEOPLE[3],true);ok(battleCalls===2&&correctedBattle.action==='fire'&&correctedBattle.share===false,'候補外の戦闘行動を実行か選び直し後も停止');
  battleCalls=0;ask=async()=>{battleCalls++;return JSON.stringify({speech:'弱点を探るわ',action:'detect_weakness',share:false});};let invalidBattle=false;try{await aiPlayer(PEOPLE[3],true);}catch{invalidBattle=true;}
  ok(invalidBattle&&battleCalls===2&&actionHistory.length===0,'戦闘候補外を自動の代替行動へ変換か繰り返し過ぎる');
- battleCalls=0;ask=async()=>{battleCalls++;return battleCalls===1?'not json':JSON.stringify({speech:'盾で前衛をかばうぞ',action:'cover',share:false});};
+ // 開始時は装備を外しているため、装備済みのブロム・ガレスを前提にする戦闘の検査では本人に装備させます。
+ equipItem('brom','shield',true);equipItem('brom','hammer',true);equipItem('gareth','dagger',true);battleCalls=0;ask=async()=>{battleCalls++;return battleCalls===1?'not json':JSON.stringify({speech:'盾で前衛をかばうぞ',action:'cover',share:false});};
  ok((await aiPlayer(PEOPLE[1],true)).action==='cover'&&battleCalls===2,'戦闘JSONの読み取り失敗から選び直せない');state.phase='explore';
  // 光線の予告ではかばうが効かないため候補から外し、理由を本人判断と連携確認へ渡します。選ばれても攻撃へ黙って置き換えません（2026-10-08）。
  state.phase='battle';state.round=2;const beamInput=dialogueInput(PEOPLE[1],true,null,null);ok(!beamInput.allowed.cover&&beamInput.allowed.strike&&beamInput.public.forecast==='マレンへの光線'&&beamInput.blockedActions.some(b=>b.action==='cover'&&b.reason.includes('光線')),'光線の予告でかばうが選べる、または理由が届かない');

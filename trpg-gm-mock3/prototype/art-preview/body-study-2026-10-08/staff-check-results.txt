@@ -1,0 +1,4 @@
+{"heightCm":[["ines",155],["brom",135],["gareth",184],["lydia",172]],"upperPan":3.04,"bustEdge":-1}
+{"battleRows":[{"id":"ines","row":"middle","x":-5.5,"z":3.63,"angle":195.80805774106545},{"id":"brom","row":"back","x":0.2,"z":2.56,"angle":153.4601617113764},{"id":"gareth","row":"back","x":-1.8,"z":2.56,"angle":168.60054251665875},{"id":"lydia","row":"front","x":-3.2,"z":4.7,"angle":186.122470196792},{"id":"guardian_rampage","row":"farthest","x":5.5,"z":-1.0099999999999998,"angle":0}]}
+{"characterHeightAt700px":{"before":428.78,"after":312.83},"depthWidth":{"before":4.5,"after":2.6},"horizonPercent":54}
+PASS: 128 checks — 発言者追従 / 7秒後の消灯 / 手動照明 / 色・広がり / 不在の人物 / 暗闇の保護 / 再点灯 / 明るさ0 / シーン移動 / 入力状態の保護 / 人物縮小・消失点・左右を向く・位置の固定・4段階の立ち位置・内向きの角度・狭い画面での調査 / スタンディー・足元の影・床の質感 / 背景を回す転換・後ろ向き・話した人だけ正面 / 装備と全身差分・読み直し防止・古い応答・読み込み失敗

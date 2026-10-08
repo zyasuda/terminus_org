@@ -1,15 +1,31 @@
 const fs=require('node:fs'),vm=require('node:vm');
 const loadPrototype=require('./load-prototype.cjs').load;
-const elements={},element=()=>({innerHTML:'',style:{},classList:{toggle(){}},querySelectorAll(){return []},open:false,close(){this.open=false;}});
-const context=vm.createContext({document:{getElementById(id){return elements[id]??=element();}},crypto:require('node:crypto').webcrypto});
+const elements={},element=()=>({innerHTML:'',style:{},classList:{toggle(){}},querySelectorAll(){return []},setAttribute(){},removeAttribute(){},replaceChildren(){},append(){},dataset:{},open:false,close(){this.open=false;}});
+const context=vm.createContext({document:{getElementById(id){return elements[id]??=element();},querySelector(){return element()}},crypto:require('node:crypto').webcrypto});
 loadPrototype(context);
 vm.runInContext(`(async()=>{
  let count=0;const ok=(v,m)=>{count++;if(!v)throw Error(m)},rejects=fn=>{try{fn();return false}catch{return true}};
  render=()=>{};say=(who,text,kind='')=>chat.push({who,text,kind});
  const fixture=()=>{state=initial();actionHistory=[];chat=[];plan=[];consents={};pendingTransfer=null;};fixture();
+ // 開始時は装備を外しています。装備済みを前提にする着脱・戦闘の検査だけ、本人が装備した状態から始めます。
+ const armedFixture=()=>{fixture();for(const r of Object.values(state.items))if('equipped' in r)r.equipped=true;};
  const give=(item,from,to,mode='give')=>({item,from,to,mode});
  ok(Object.keys(state.items).length===8&&Object.values(state.items).every(r=>r.owner===r.holder),'初期装備の所有者が不正');
  ok(inventoryView('brom').items.length===2&&!inventoryView('brom').others.some(i=>i.id==='rope'),'他人の未開示の持ち物をAIに漏らす');
+ // 開始時は戦闘が無いので、金槌・盾・片手剣は所持したまま外しています。戦闘に入っても自動装備せず、本人の了承でだけ装備します（2026-10-08）。
+ const equipIds=Object.keys(ITEM_DEFS).filter(i=>ITEM_DEFS[i].equip);ok(equipIds.sort().join()==='dagger,hammer,shield,staff'&&equipIds.every(i=>state.items[i].equipped===(i==='staff')&&state.items[i].owner===ITEM_DEFS[i].start&&state.items[i].holder===ITEM_DEFS[i].start),'開始時に装備中、または所持者が変わる');
+ placement=makePlacement(true);const looks=()=>Object.fromEntries(stageSnapshot().actors.map(p=>[p.id,scenarioStandeeVariant(p)]));let look=looks();
+ ok(look.gareth.file==='gareth-empty'&&look.brom.file==='brom-empty'&&!look.gareth.missing&&!look.brom.missing,'開始時の舞台がガレス・ブロムの素体にならない');
+ state.phase='battle';look=looks();ok(equipIds.every(i=>state.items[i].equipped===(i==='staff'))&&look.brom.file==='brom-empty'&&look.gareth.file==='gareth-empty'&&!['strike','cover'].some(a=>actionsFor('brom').includes(a))&&!actionsFor('gareth').includes('stab')&&actionsFor('brom').includes('retreat'),'戦闘で自動装備、または未装備で武器の行動が出る');
+ {const startAsk=ask,startAudit=auditProfile;auditProfile=async()=>({valid:true,claims:[],conflicts:[]});
+  ask=async()=>JSON.stringify({decision:'decline',speech:'まだ構えなくていい。'});ok(!(await handleEquipment({who:'brom',item:'hammer',equipped:true},'ブロム、金槌を装備してください')).performed&&!state.items.hammer.equipped&&!actionsFor('brom').includes('strike'),'本人の拒否でも装備する');
+  ask=async()=>JSON.stringify({decision:'accept',speech:'分かった、構えよう。'});
+  ok((await handleEquipment({who:'brom',item:'hammer',equipped:true},'ブロム、金槌を装備してください')).performed&&state.items.hammer.equipped&&actionsFor('brom').includes('strike')&&!actionsFor('brom').includes('cover'),'本人了承で金槌の攻撃が戻らない');
+  look=looks();ok(look.brom.file==='brom-hammer-shield'&&look.brom.missing==='brom:hammer','金槌だけの絵が無いことを示さない');
+  ok((await handleEquipment({who:'brom',item:'shield',equipped:true},'ブロム、盾を装備してください')).performed&&actionsFor('brom').includes('cover')&&looks().brom.file==='brom-hammer-shield'&&!looks().brom.missing,'本人了承で盾のかばう・両方の姿が戻らない');
+  ok((await handleEquipment({who:'gareth',item:'dagger',equipped:true},'ガレス、片手剣を装備してください')).performed&&actionsFor('gareth').includes('stab')&&looks().gareth.file==='gareth-sheathed'&&!looks().gareth.missing,'本人了承で急所狙い・納刀姿が戻らない');
+  ask=startAsk;auditProfile=startAudit;}
+ reset();placement=makePlacement(true);look=looks();ok(equipIds.every(i=>state.items[i].equipped===(i==='staff')&&hasItem(ITEM_DEFS[i].start,i))&&look.brom.file==='brom-empty'&&look.gareth.file==='gareth-empty','最初からの再開始で素体に戻らない');fixture();
  ok(actionsFor('lydia').includes('light')&&!actionsFor('ines').includes('light'),'初期のランタン所持者が不正');
  ok(!publicView().inventory.some(i=>i.id==='rope')&&publicView().inventory.some(i=>i.id==='lantern'),'公開の持ち物の境界が不正');
  apply('lydia','light');apply('ines','inspect_cart');apply('ines','take');
@@ -32,8 +48,8 @@ vm.runInContext(`(async()=>{
  fixture();transferItem(give('lantern','lydia','ines','lend'));ok(!actionsFor('lydia').includes('light')&&actionsFor('ines').includes('light'),'ランタンの所持者と操作権が一致しない');
  ok(lanternRequest('ランタンを灯して','lydia')==='light'&&lanternRequest('ランタンを灯して','brom')===null,'持っていない仲間の依頼を勝手に変更');
  apply('ines','light');ok(state.lit,'借りたランタンを使えない');transferItem(give('lantern','ines','lydia','return'));ok(state.lit&&actionsFor('lydia').includes('douse'),'返却で点灯状態が失われる');
- fixture();state.phase='battle';transferItem(give('hammer','brom','ines'));ok(!actionsFor('brom').includes('strike')&&actionsFor('brom').includes('cover')&&!actionsFor('ines').includes('strike'),'装備を持たない攻撃または譲渡で技能を習得');
- fixture();state.phase='battle';plan=[{id:'brom',action:'cover'}];planReview={};
+ armedFixture();state.phase='battle';transferItem(give('hammer','brom','ines'));ok(!actionsFor('brom').includes('strike')&&actionsFor('brom').includes('cover')&&!actionsFor('ines').includes('strike'),'装備を持たない攻撃または譲渡で技能を習得');
+ armedFixture();state.phase='battle';plan=[{id:'brom',action:'cover'}];planReview={};
  equipItem('brom','shield',false);ok(hasItem('brom','shield')&&!actionsFor('brom').includes('cover')&&actionsFor('brom').includes('strike')&&!plan.length&&!planReview,'着脱で所持・行動・計画が一致しない');
  equipItem('brom','shield',true);ok(actionsFor('brom').includes('cover'),'再装備でかばうが戻らない');
  transferItem(give('shield','brom','ines','lend'));ok(!state.items.shield.equipped&&state.items.shield.owner==='brom'&&stageSnapshot().actors.every(p=>!p.equipment.includes('shield')),'貸与直後に誰かが自動装備');
@@ -53,12 +69,33 @@ vm.runInContext(`(async()=>{
  ok(transferCandidates('工具を貸して','brom')[0].mode==='lend','貸してを譲渡と取り違え');
  ok(transferCandidates('ブロム、その工具を少し貸して。仕掛けを調べたら返すわ','brom')[0].from==='brom','返却の約束を今の返却と取り違え');
  const realAsk=ask;let calls=0;
- fixture();const equipment={who:'brom',item:'shield',equipped:false};
+ armedFixture();const equipment={who:'brom',item:'shield',equipped:false};
  ask=async()=>JSON.stringify({decision:'decline',speech:'今は装備しておく。'});auditProfile=async()=>({valid:true,claims:[],conflicts:[]});
  ok(!(await handleEquipment(equipment,'盾を外してください')).performed&&state.items.shield.equipped,'拒否でも装備を外す');
  ask=async()=>JSON.stringify({decision:'accept',speech:'分かった、外そう。'});ok((await handleEquipment(equipment,'盾を外してください')).performed&&!state.items.shield.equipped,'本人了承後も外れない');
- fixture();ask=async()=>{transferItem(give('shield','brom','ines','lend'));return JSON.stringify({decision:'accept',speech:'分かった。'})};let equipmentBad=false;try{await handleEquipment(equipment,'盾を外してください')}catch{equipmentBad=true}ok(equipmentBad&&hasItem('ines','shield'),'受け渡し後の古い了承で着脱');
+ armedFixture();ask=async()=>{transferItem(give('shield','brom','ines','lend'));return JSON.stringify({decision:'accept',speech:'分かった。'})};let equipmentBad=false;try{await handleEquipment(equipment,'盾を外してください')}catch{equipmentBad=true}ok(equipmentBad&&hasItem('ines','shield'),'受け渡し後の古い了承で着脱');
  ok(!equipmentIntent('盾を装備している？','brom')&&!equipmentIntent('盾を貸して、装備してください','brom')&&equipmentIntent('ガレス、盾を外してください','brom').clarify,'質問・複合依頼・宛先違いを実行');
+ // ガレスの片手剣（内部ID dagger）。鞘と合わせて1品で、着脱・貸与・返却は金槌・盾と同じ根拠で扱います。
+ fixture();state.phase='battle';placement=makePlacement(true);
+ ok(ITEM_DEFS.dagger.name==='片手剣'&&!state.items.dagger.equipped&&!actionsFor('gareth').includes('stab')&&!stageSnapshot().actors.find(p=>p.id==='gareth').equipment.length&&equipItem('gareth','dagger',true)&&state.items.dagger.equipped&&actionsFor('gareth').includes('stab')&&stageSnapshot().actors.find(p=>p.id==='gareth').equipment.includes('dagger'),'片手剣の開始時の未装備・装備後の急所狙い・演出の装備配列が一致しない');
+ equipItem('gareth','dagger',false);ok(hasItem('gareth','dagger')&&!actionsFor('gareth').includes('stab')&&!stageSnapshot().actors.find(p=>p.id==='gareth').equipment.includes('dagger'),'片手剣を外しても急所狙いや表示が残る');
+ equipItem('gareth','dagger',true);transferItem(give('dagger','gareth','ines','lend'));ok(!state.items.dagger.equipped&&state.items.dagger.owner==='gareth'&&!actionsFor('gareth').includes('stab'),'片手剣の貸与で装備が残る');
+ equipItem('ines','dagger',true);ok(stageSnapshot().actors.find(p=>p.id==='ines').equipment.includes('dagger')&&!actionsFor('ines').includes('stab'),'借り手が急所狙いを習得、または装備表示が出ない');
+ transferItem(give('dagger','ines','gareth','return'));ok(!state.items.dagger.equipped&&!actionsFor('gareth').includes('stab')&&stageSnapshot().actors.every(p=>!p.equipment.includes('dagger')),'返却時に片手剣を自動装備');
+ equipItem('gareth','dagger',true);ok(actionsFor('gareth').includes('stab'),'返却後に本人が装備しても急所狙いが戻らない');
+ ok(rejects(()=>equipItem('ines','dagger',true))&&rejects(()=>equipItem('gareth','picks',false))&&rejects(()=>equipItem('lydia','lantern',false)),'未所持の剣や装備品でない品の着脱を受理');
+ ok(equipmentIntent('ガレス、片手剣を外してください','all').item==='dagger'&&equipmentIntent('剣を装備して','gareth').equipped===true&&equipmentIntent('短剣を外して','gareth').item==='dagger','片手剣・剣・旧名の短剣で着脱を依頼できない');
+ ok(!equipmentIntent('片手剣を装備している？','gareth')&&!equipmentIntent('もし剣を外すなら','gareth')&&equipmentIntent('片手剣を外して','brom').clarify&&equipmentIntent('ブロム、ガレスの剣を外して','brom').clarify&&equipmentIntent('剣を外して','all').clarify,'質問・仮定・未所持・他人指定・宛先なしで剣を処理');
+ armedFixture();let asked=null,equipFailed;ask=async(prompt,data)=>{asked=data;return JSON.stringify({decision:'accept',speech:'分かった。'})};auditProfile=async()=>({valid:true,claims:[],conflicts:[]});
+ equipFailed=false;try{await handleEquipment({who:'brom',item:'dagger',equipped:false},'ブロム、片手剣を外してください。')}catch{equipFailed=true}ok(equipFailed&&!asked&&state.items.dagger.equipped,'未所持の人へ剣の着脱を尋ねる、または他人の剣を外す');
+ equipFailed=false;try{await handleEquipment({who:'gareth',item:'picks',equipped:false},'ガレス、錠前破りを外してください。')}catch{equipFailed=true}ok(equipFailed&&!asked,'装備品でない品の着脱を尋ねる');
+ ask=async()=>JSON.stringify({decision:'decline',speech:'今は剣を手放せない。'});ok(!(await handleEquipment({who:'gareth',item:'dagger',equipped:false},'ガレス、片手剣を外してください。')).performed&&state.items.dagger.equipped,'剣の拒否でも外す');
+ ask=async()=>{throw Error('接続失敗')};equipFailed=false;try{await handleEquipment({who:'gareth',item:'dagger',equipped:false},'ガレス、片手剣を外してください。')}catch{equipFailed=true}ok(equipFailed&&state.items.dagger.equipped,'通信失敗で剣を外す');
+ ask=async()=>{generation++;return JSON.stringify({decision:'accept',speech:'分かった。'})};ok(!(await handleEquipment({who:'gareth',item:'dagger',equipped:false},'ガレス、片手剣を外してください。')).performed&&state.items.dagger.equipped,'古い了承で剣を外す');
+ // シートの「外すよう頼む」と同じ経路：人間の依頼文として会話に出し、本人が了承してから外します。
+ armedFixture();updateRecipients=()=>{};chat=[];asked=null;ask=async(prompt,data)=>{asked=data;return JSON.stringify({decision:'accept',speech:'分かった、鞘に収めておく。'})};
+ const sheetRequest=await submitMessage('ガレス、片手剣を外してください。','gareth');
+ ok(sheetRequest?.performed&&!state.items.dagger.equipped&&asked?.request==='ガレス、片手剣を外してください。'&&asked.item==='片手剣'&&chat[0].kind==='you'&&chat[0].who.includes('→ガレス')&&chat.some(c=>c.kind==='gm'&&c.text==='ガレスが片手剣を外した。'),'仲間への着脱依頼が本人了承と会話の依頼文を経由しない');
  fixture();acquireItem('ines','ironbar');transferItem(give('ironbar','ines','brom'));
  ask=async()=>{calls++;return JSON.stringify({kind:'request',index:0,quote:'工具を貸して'})};
  const borrowed=await transferIntent('工具を貸して','brom');ok(borrowed.transfer.from==='brom'&&borrowed.transfer.to==='ines','借りる人と貸す人を逆転');

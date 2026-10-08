@@ -87,5 +87,27 @@ vm.runInContext(`(async()=>{
  fixture();busy=false;apply('lydia','light');actionHistory=[];ask=async()=>{throw Error('LLMを呼ばない');};
  proposeConsent('lantern','lydia','douse','ランタンを消してみましょうか？');consents.lantern=mergeConsentSignals('lantern',consents.lantern,[signal('gareth','douse','oppose')]);
  await submitMessage('お願い','lydia');ok(state.lit,'反対が残っているのに短い了承で消灯');
+ // 2026-10-08：AI仲間の品は明示依頼でも本人が了承してから操作します。分類の呼び出しは省き、本人の判断1回だけです。
+ auditProfile=async()=>({valid:true,claims:[],conflicts:[]});
+ let decisionInput;fixture();busy=false;calls=0;ask=async(system,payload)=>{calls++;decisionInput=payload;return JSON.stringify({speech:'ええ、灯します。',action:'light'});};
+ let sent=await submitMessage('ランタンを灯して','lydia');
+ ok(state.lit&&calls===1&&decisionInput.proposal==='light'&&decisionInput.voices['ines:light']?.stance==='request'&&actionHistory.at(-1)?.initiator==='lydia'&&sent?.performed,'明示依頼が本人の了承を経て本人の操作として実行されない');
+ fixture();busy=false;ask=async()=>JSON.stringify({speech:'今は暗いままで様子を見たいわ。',action:'wait'});await submitMessage('ランタンを灯して','lydia');
+ ok(!state.lit&&actionHistory.length===0&&consentBlocked('lantern'),'本人の保留を無視して明示依頼を実行');
+ fixture();busy=false;ask=async()=>{throw Error('通信失敗');};await submitMessage('ランタンを灯して','lydia');ok(!state.lit&&actionHistory.length===0&&chat.at(-1).kind==='error','通信失敗で明示依頼を実行');
+ fixture();busy=false;ask=async()=>JSON.stringify({speech:'扉を壊すわ。',action:'smash'});await submitMessage('ランタンを灯して','lydia');ok(!state.lit&&actionHistory.length===0,'明示依頼で別の行動を受理');
+ fixture();busy=false;ask=async()=>{generation++;return JSON.stringify({speech:'灯します。',action:'light'});};await submitMessage('ランタンを灯して','lydia');ok(!state.lit&&actionHistory.length===0,'古い判断で明示依頼を実行');
+ fixture();busy=false;auditProfile=async()=>({valid:false,claims:[],conflicts:[{}]});ask=async()=>JSON.stringify({speech:'灯します。',action:'light'});await submitMessage('ランタンを灯して','lydia');ok(!state.lit&&actionHistory.length===0,'人物照合の失敗で明示依頼を実行');
+ auditProfile=async()=>({valid:true,claims:[],conflicts:[]});
+ // 持っていない人には操作させません。持ち主へ渡った後は持ち主が判断します。
+ fixture();busy=false;state.items.lantern.holder='brom';calls=0;ask=async()=>{calls++;return JSON.stringify({speech:'灯します。',action:'light'});};
+ await submitMessage('ランタンを灯して','lydia');ok(!state.lit&&calls===0&&chat.at(-1).text.includes('ブロムが持っています'),'持っていないマレンが点灯した');
+ await submitMessage('ランタンを灯して','brom');ok(state.lit&&calls===1&&actionHistory.at(-1)?.id==='brom'&&actionHistory.at(-1)?.initiator==='brom','持ち主のブロムが了承して点灯しない');
+ // 人間が持つランタンは本人の操作なので、聞き直さずに実行します。
+ fixture();busy=false;state.items.lantern.holder='ines';calls=0;ask=async()=>{calls++;throw Error('LLMを呼ばない');};
+ await submitMessage('イネス、ランタンを灯して','all');ok(state.lit&&calls===0,'自分のランタンを自分で灯せない');
+ // 仲間のシートのボタンも同じ了承を経由します。
+ fixture();busy=false;calls=0;ask=async()=>{calls++;return JSON.stringify({speech:'少し待って。',action:'wait'});};confirmScenarioAction=()=>true;
+ request('lydia','light');for(let i=0;busy&&i<1000;i++)await Promise.resolve();ok(!state.lit&&calls===1&&actionHistory.length===0,'ボタンの依頼が本人の了承を飛ばした');
  return count;
-})()`,context).then(n=>console.log('PASS: '+n+' checks — 仲間の依頼 / 本人の了承・保留 / 反対・疑問・撤回 / 相反する案 / 点灯済み / 二重実行防止 / 発言根拠 / シーン・戦闘の制限 / 通信・形式・人物照合の失敗 / 古い応答')).catch(e=>{console.error(e);process.exitCode=1;});
+})()`,context).then(n=>console.log('PASS: '+n+' checks — 仲間の依頼 / 明示依頼・ボタンの本人了承・持ち主限定 / 本人の了承・保留 / 反対・疑問・撤回 / 相反する案 / 点灯済み / 二重実行防止 / 発言根拠 / シーン・戦闘の制限 / 通信・形式・人物照合の失敗 / 古い応答')).catch(e=>{console.error(e);process.exitCode=1;});

@@ -1,0 +1,26 @@
+Node v24.20.0
+
+node prototype/inventory-check.cjs
+exit: 0
+PASS: 85 checks — 個別所有 / 入手 / 譲渡・貸与・返却 / 装備と能力 / シートと記憶 / 宛先・曖昧な品 / 拒否と保留 / 通信・設定照合・古い応答 / 二重移動防止
+
+node prototype/lighting-check.cjs
+exit: 0
+{"heightCm":[["ines",155],["brom",135],["gareth",184],["lydia",172]],"upperPan":3.04,"bustEdge":-1}
+{"battleRows":[{"id":"ines","row":"middle","x":-5.5,"z":3.63,"angle":195.80805774106545},{"id":"brom","row":"back","x":0.2,"z":2.56,"angle":153.4601617113764},{"id":"gareth","row":"back","x":-1.8,"z":2.56,"angle":168.60054251665875},{"id":"lydia","row":"front","x":-3.2,"z":4.7,"angle":186.122470196792},{"id":"guardian_rampage","row":"farthest","x":5.5,"z":-1.0099999999999998,"angle":0}]}
+{"characterHeightAt700px":{"before":428.78,"after":312.83},"depthWidth":{"before":4.5,"after":2.6},"horizonPercent":54}
+PASS: 125 checks — 発言者追従 / 7秒後の消灯 / 手動照明 / 色・広がり / 不在の人物 / 暗闇の保護 / 再点灯 / 明るさ0 / シーン移動 / 入力状態の保護 / 人物縮小・消失点・左右を向く・位置の固定・4段階の立ち位置・内向きの角度・狭い画面での調査 / スタンディー・足元の影・床の質感 / 背景を回す転換・後ろ向き・話した人だけ正面 / 装備と全身差分・読み直し防止・古い応答・読み込み失敗
+
+node prototype/standee-check.cjs
+exit: 0
+{"id":"ines-v64","bytes":3222196,"meshes":3,"printedSurfaces":2,"plateThickness":0.04}
+{"id":"brom-hammer-shield","bytes":4200660,"meshes":3,"printedSurfaces":2,"plateThickness":0.04}
+{"id":"brom-empty","bytes":4267764,"meshes":3,"printedSurfaces":2,"plateThickness":0.04}
+{"id":"gareth-sheathed","bytes":3684840,"meshes":3,"printedSurfaces":2,"plateThickness":0.04}
+{"id":"gareth-empty","bytes":3509092,"meshes":3,"printedSurfaces":2,"plateThickness":0.04}
+{"id":"maren-v64","bytes":4177036,"meshes":3,"printedSurfaces":2,"plateThickness":0.04}
+PASS: 36 checks — 実GLBの解析 / 表・裏・側面 / アクリル板の厚み / 有効な寸法
+
+node prototype/check.cjs
+exit: 0
+PASS: 連携の食い違い・本人の了承・変更時の再確認・個別の撤退希望・全員撤退 / 点灯・消灯の明示依頼と相談の区別 / キャラクターシートの情報保護・共有・本人の行動履歴・依頼元 / ダイスの境界・支援・再挑戦・二重報酬防止・戦闘判定回数 / クロニクルの公開情報限定 / 雷光の減衰 / 発見・共有・提案・解読・消灯・収納・灯石 / 未共有情報の保護 / 相談と実行の分離 / 手がかりなしの発見 / 調査ラベルの重なり回避 / 奥行き投影と探索・戦闘配置 / 暗闇と点灯 / 全員の調査と個別情報 / 会話の宛先 / 接続制限 / 地図の発見と再訪記録 / 道具＋支援の排水 / 再訪の状態変化 / 工具の別用途 / 破壊ルート / 戦闘の勝利と撤退

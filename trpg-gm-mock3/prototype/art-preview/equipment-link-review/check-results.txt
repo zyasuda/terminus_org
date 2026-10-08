@@ -1,0 +1,108 @@
+Node v24.20.0
+
+node prototype/inventory-check.cjs
+exit: 0
+PASS: 76 checks — 個別所有 / 入手 / 譲渡・貸与・返却 / 装備と能力 / シートと記憶 / 宛先・曖昧な品 / 拒否と保留 / 通信・設定照合・古い応答 / 二重移動防止
+
+node prototype/lantern-check.cjs
+exit: 0
+PASS: 55 checks — 仲間の依頼 / 明示依頼・ボタンの本人了承・持ち主限定 / 本人の了承・保留 / 反対・疑問・撤回 / 相反する案 / 点灯済み / 二重実行防止 / 発言根拠 / シーン・戦闘の制限 / 通信・形式・人物照合の失敗 / 古い応答
+
+node prototype/ui-check.cjs
+exit: 0
+PASS: 72 checks — 戦闘プレビューの表示・進行保護・復帰 / 場面転換の暗転・更新・明転・動き低減 / 発見の重複整理・本人限定 / 未共有と共有済み / 現在の申し出・保留 / 古い申し出の除外 / 実結果の表示と会話形式維持 / 本人の情報共有 / 寄り絵の発見条件・状態保護 / 持ち物の画像・用途開示・所有追従
+
+node prototype/opening-check.cjs
+exit: 0
+PASS: 35 checks — GMの導入 / 実所持と発言 / 限定開示 / 個別所有 / 人間の紹介 / 矛盾・質問 / 短い了承から点灯 / 再開始
+
+node prototype/exploration-check.cjs
+exit: 0
+PASS: 208 checks — 明示依頼と短い了承 / 曖昧な提案の確認 / 指定相手・発言根拠 / 調査と実結果の共有 / 個人情報の保護 / 解読 / 候補の自発共有 / 二重実行・古い応答 / 会話から解錠判定 / 自分だけの選択肢 / 人間への依頼・保留・了承・自分の実行
+
+node prototype/navigation-check.cjs
+exit: 0
+PASS: 71 checks — 通路と地名の区別 / マレンの地図のみ / 未訪問情報の保護 / 個別所有・貸与 / 会話の相談と移動 / 本人の了承と古い応答 / 地図なし探索 / 戦闘への接続
+
+node prototype/profile-check.cjs
+exit: 0
+PASS: 33 checks — 本人の全設定 / 未開示の保護 / 発言根拠と正本の照合 / 項目別の開示 / 全員の知識更新 / 重複防止 / 矛盾時の言い直し / 2回で保留 / 接続失敗 / リセットと古い応答
+
+node prototype/roleplay-check.cjs
+exit: 0
+PASS: 32 checks — 本人の設定と知識 / 仲間の秘密保護 / 編集と任意の下書き / 非送信・非実行 / 遅い応答・再開始・通信失敗 / シート入力 / マイクの開始・停止・手入力保護 / 照明の話し手と宛先・非公開記録の区別
+
+node prototype/scenario-parity.cjs
+exit: 1
+AssertionError [ERR_ASSERTION]: actionsForの中身が変わった
++ actual - expected
+
+  'function actionsFor(id,s=state){\n' +
+    " if(!PEOPLE.some(p=>p.id===id)||s.phase==='end')return [];\n" +
++   " if(s.phase==='battle')return ownedActions(id,[...(id==='ines'?['study','aid','throw']:id==='brom'?[...(s.round%2?['cover']:[]),'strike']:id==='gareth'?['stab']:s.fire>0?['fire','spark']:['spark']),'retreat'],s);\n" +
+-   " if(s.phase==='battle')return ownedActions(id,[...(id==='ines'?['study','aid','throw']:id==='brom'?['cover','strike']:id==='gareth'?['stab']:s.fire>0?['fire','spark']:['spark']),'retreat'],s);\n" +
+    " if(!s.lit)return ownedActions(id,[...(hasItem(id,'lantern',s)?['light']:[]),...(id==='ines'&&blueDust(s)&&!s.discovery.cache?['find_cache']:[]),...(hasItem(id,'lampstone',s)&&!s.discovery.stoneOn?['use_stone']:[])],s);\n" +
+    " const out=[...ROOMS[s.room].targets,...discoveryTargets(s)].filter(t=>!(s.seen[id]||[]).includes(t)).map(t=>t==='door'?'inspect':'inspect_'+t);\n" +
+    " if(hasItem(id,'lantern',s))out.push('douse');\n" +
+    " if(id==='ines'&&s.room==='entry'&&!s.discovery.etching)out.push('scout');\n" +
+    " if(id==='lydia'&&s.room==='entry'&&s.discovery.etching&&!s.discovery.clues.lydia.includes('darkness')&&knowsClue(id,'etching',s))out.push('decode');\n" +
+
+    at unchangedBodies (/Users/yasuda_k/Desktop/Terminus/trpg-gm-mock3/prototype/scenario-parity.cjs:64:195)
+    at /Users/yasuda_k/Desktop/Terminus/trpg-gm-mock3/prototype/scenario-parity.cjs:69:28
+    at Object.<anonymous> (/Users/yasuda_k/Desktop/Terminus/trpg-gm-mock3/prototype/scenario-parity.cjs:77:3)
+    at Module._compile (node:internal/modules/cjs/loader:1929:14)
+    at Object..js (node:internal/modules/cjs/loader:2060:10)
+    at Module.load (node:internal/modules/cjs/loader:1651:32)
+    at Module._load (node:internal/modules/cjs/loader:1443:12)
+    at wrapModuleLoad (node:internal/modules/cjs/loader:261:19)
+    at Module.executeUserEntryPoint [as runMain] (node:internal/modules/run_main:154:5)
+    at node:internal/main/run_main_module:33:47 {
+  generatedMessage: false,
+  code: 'ERR_ASSERTION',
+  actual: 'function actionsFor(id,s=state){\n' +
+    " if(!PEOPLE.some(p=>p.id===id)||s.phase==='end')return [];\n" +
+    " if(s.phase==='battle')return ownedActions(id,[...(id==='ines'?['study','aid','throw']:id==='brom'?[...(s.round%2?['cover']:[]),'strike']:id==='gareth'?['stab']:s.fire>0?['fire','spark']:['spark']),'retreat'],s);\n" +
+    " if(!s.lit)return ownedActions(id,[...(hasItem(id,'lantern',s)?['light']:[]),...(id==='ines'&&blueDust(s)&&!s.discovery.cache?['find_cache']:[]),...(hasItem(id,'lampstone',s)&&!s.discovery.stoneOn?['use_stone']:[])],s);\n" +
+    " const out=[...ROOMS[s.room].targets,...discoveryTargets(s)].filter(t=>!(s.seen[id]||[]).includes(t)).map(t=>t==='door'?'inspect':'inspect_'+t);\n" +
+    " if(hasItem(id,'lantern',s))out.push('douse');\n" +
+    " if(id==='ines'&&s.room==='entry'&&!s.discovery.etching)out.push('scout');\n" +
+    " if(id==='lydia'&&s.room==='entry'&&s.discovery.etching&&!s.discovery.clues.lydia.includes('darkness')&&knowsClue(id,'etching',s))out.push('decode');\n" +
+    " if(id==='gareth'&&s.room==='entry'&&s.discovery.cache&&!s.discovery.opened&&knowsClue(id,'cache_lock',s))out.push('open_cache');\n" +
+    " if(hasItem(id,'lampstone',s)&&!s.discovery.stoneOn)out.push('use_stone');\n" +
+    '...',
+  expected: 'function actionsFor(id,s=state){\n' +
+    " if(!PEOPLE.some(p=>p.id===id)||s.phase==='end')return [];\n" +
+    " if(s.phase==='battle')return ownedActions(id,[...(id==='ines'?['study','aid','throw']:id==='brom'?['cover','strike']:id==='gareth'?['stab']:s.fire>0?['fire','spark']:['spark']),'retreat'],s);\n" +
+    " if(!s.lit)return ownedActions(id,[...(hasItem(id,'lantern',s)?['light']:[]),...(id==='ines'&&blueDust(s)&&!s.discovery.cache?['find_cache']:[]),...(hasItem(id,'lampstone',s)&&!s.discovery.stoneOn?['use_stone']:[])],s);\n" +
+    " const out=[...ROOMS[s.room].targets,...discoveryTargets(s)].filter(t=>!(s.seen[id]||[]).includes(t)).map(t=>t==='door'?'inspect':'inspect_'+t);\n" +
+    " if(hasItem(id,'lantern',s))out.push('douse');\n" +
+    " if(id==='ines'&&s.room==='entry'&&!s.discovery.etching)out.push('scout');\n" +
+    " if(id==='lydia'&&s.room==='entry'&&s.discovery.etching&&!s.discovery.clues.lydia.includes('darkness')&&knowsClue(id,'etching',s))out.push('decode');\n" +
+    " if(id==='gareth'&&s.room==='entry'&&s.discovery.cache&&!s.discovery.opened&&knowsClue(id,'cache_lock',s))out.push('open_cache');\n" +
+    " if(hasItem(id,'lampstone',s)&&!s.discovery.stoneOn)out.push('use_stone');\n" +
+    '...',
+  operator: 'strictEqual',
+  diff: 'simple'
+}
+
+node prototype/playtest-check.cjs
+exit: 1
+PENDING hold-to-brom-request-quote（引用のずれは許さない方針（2026-10-07 作者）。誤判定で実行されるのを避けるため。台詞だけ返って実行されない体験への手当ては未決）
+  代替処理: exploration-validation
+  イネス（あなた）→ブロム：ブロム、操作輪を支えて。
+  ブロム（AI）：おう、任せとけ！俺の肩は岩より頑丈だぜ。だがな、ただ支えるだけじゃ力にならねえ。お前さん、工具でどこに手をかけるつもりな
+  マレン（AI）：「操作輪」と「水溜まり」が見えるよ。気になる場所を調べてみよう。
+PASS hold-to-brom-request
+PASS hold-to-all-approval-offers
+PASS hold-to-brom-approval-no-offer
+FAIL douse-after-stale-light
+  代替処理: exploration-validation
+  記録に無い呼び出し: あなたはTRPGのマレン。口調:落ち着い
+  イネス（あなた）→全員：リディア、ランタンを消してみて
+  ブロム（AI）：よし、リディア。古い文字が「灯を伏せよ」と言ってるなら、暗くしてみる価値があるな。光を消して、何が変わるか見てみよう。
+  ガレス（AI）：了解。リディア、頼む。消してみてくれ。暗くなった時に、この坑道で何が見えるか。それが次の手がかりだ。
+  接続・応答の確認：記録に無い呼び出し ゲームの状態は保持しています。
+PASS douse-short-approval
+PASS reply-prose-before-json
+PASS dark-request-only-ok
+FAIL: 1/8 件の場面で依頼が実行されない

@@ -96,5 +96,13 @@ vm.runInContext(`(async()=>{
  await publishOwnKnowledge(5);ok(privateSummary().count===1&&!chat.length,'存在しない発見を共有');
  await publishOwnKnowledge(0);ok(privateSummary().count===0&&chat.length===1&&chat[0].kind==='you','手がかりでない自分の発見を共有できない');
  await publishOwnKnowledge(0);ok(chat.length===1,'共有済みの発見を二重送信');
+ // 持ち物シートの着脱ボタン：自分の品は直接、AI仲間の品は本人へ頼む表示にします。
+ state=initial();chat=[];busy=false;battlePreview=false;stageView=null;
+ const sheetDialog=$('sheet');Object.assign(sheetDialog,{open:true,dataset:{},classList:{add(){},remove(){},contains:()=>false},setAttribute(){},querySelectorAll:()=>[],querySelector:()=>Object.assign(document.createElement('div'),{removeAttribute(){},setAttribute(){}})});
+ revealProfile('gareth',[{key:itemKey('gareth','dagger')}],state,'検査');transferItem({item:'shield',from:'brom',to:'ines',mode:'lend'});
+ sheet('gareth','items');const garethSheet=sheetDialog.innerHTML;sheet('ines','items');const inesSheet=sheetDialog.innerHTML;
+ ok(garethSheet.includes('片手剣')&&garethSheet.includes('data-equip-item="dagger"')&&garethSheet.includes('>装備するよう頼む</button>')&&!garethSheet.includes('>装備する</button>'),'開始時は外している剣を本人へ頼んで装備する形のボタンがない');
+ equipItem('gareth','dagger',true);sheet('gareth','items');ok(sheetDialog.innerHTML.includes('>外すよう頼む</button>')&&!sheetDialog.innerHTML.includes('>外す</button>'),'AI仲間の剣に頼む形の着脱ボタンがない');
+ ok(inesSheet.includes('data-equip-item="shield"')&&inesSheet.includes('>装備する</button>')&&!inesSheet.includes('よう頼む')&&!inesSheet.includes('data-equip-item="dagger"'),'自分の借りた盾の着脱、または他人の剣が自分の欄に出る');
  return count;
 })()`,context).then(n=>console.log('PASS: '+n+' checks — 戦闘プレビューの表示・進行保護・復帰 / 場面転換の暗転・更新・明転・動き低減 / 発見の重複整理・本人限定 / 未共有と共有済み / 現在の申し出・保留 / 古い申し出の除外 / 実結果の表示と会話形式維持 / 本人の情報共有 / 寄り絵の発見条件・状態保護 / 持ち物の画像・用途開示・所有追従')).catch(e=>{console.error(e);process.exitCode=1});
