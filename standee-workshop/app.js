@@ -8,8 +8,8 @@
   const images = new Map();
   const VIEW_NAME = { front: '正面', back: '背面' };
   const ITEM_NAME = { sword: '片手剣', scabbard: '鞘', staff: '杖', lantern: 'ランタン', necklace: '琥珀の首飾り', hammer: '金槌', shield: '盾', axe: '手斧' };
-  const ACTOR_NAME = { gareth: 'ガレス', maren: 'マレン', brom: 'ブロム' };
-  const WORN = { gareth: '鎧は着用中', maren: '旅装は着用中', brom: '鎧は着用中' };
+  const ACTOR_NAME = { gareth: 'ガレス', maren: 'マレン', brom: 'ブロム', lydia: 'リディア' };
+  const WORN = { gareth: '鎧は着用中', maren: '旅装は着用中', brom: '鎧は着用中', lydia: '旅装は着用中' };
   const BROM_PLACE = { hammer: 'ブロムの右手に', shield: 'ブロムの左腕に', axe: 'ブロムの右手に' };
   const NUDGE = 2, NUDGE_FAST = 6;      // 矢印キー1回の移動量（px）。Shift で速く
 
@@ -18,9 +18,10 @@
   const casts = {
     gareth: { state: W.initialState(), history: [] }, maren: { state: W.maren.initialState(), history: [] },
     brom: { state: W.brom.initialState(), history: [] },
+    lydia: { state: W.lydia.initialState(), history: [] },
   };
   let { state, history } = casts.gareth;
-  const RULES = { gareth: W, maren: W.maren, brom: W.brom };
+  const RULES = { gareth: W, maren: W.maren, brom: W.brom, lydia: W.lydia };
   const rules = () => RULES[actor];   // いまの俳優の規則
   let dragItem = null;                  // 棚から運んでいる品
   let press = null;                     // 人物の上で押している品 { p, item, base, moved }
@@ -56,8 +57,10 @@
     for (const el of document.querySelectorAll('.shelf-items')) el.hidden = el.dataset.actor !== actor;
     for (const el of document.querySelectorAll('.actor-name')) el.textContent = ACTOR_NAME[actor];
     $('worn-tag').textContent = WORN[actor];
+    document.querySelector('.shelf > .note').hidden = actor === 'lydia';
     canvas.setAttribute('aria-label', {
       gareth: 'ガレス。鞘を着けているときは矢印キーで鞘を少しずらせます',
+      lydia: 'リディア。素手の正面と背面を見られます',
       maren: 'マレン。持ち物は手に持つだけで、位置は動かしません',
       brom: 'ブロム。金槌か手斧は右手、盾は左腕に着けるだけで、位置は動かしません',
     }[actor]);
@@ -76,13 +79,17 @@
   function paint(target, view) {
     const c = target.getContext('2d');
     c.clearRect(0, 0, W.WIDTH, W.HEIGHT);
+    const frame = W.displayFrame(actor, view);
+    c.save(); c.translate(frame.x, frame.y); c.scale(frame.scale, frame.scale);
     W.drawView(c, rules().layers(state, view), images, (w, h) => Object.assign(document.createElement('canvas'), { width: w, height: h }));
+    c.restore();
   }
 
   // 運んでいる剣の行き先を輪で、鞘の取り付け位置を真鍮の枠で示す
   function paintGuides() {
     const v = state.view;
-    ctx.save(); ctx.strokeStyle = '#e0c27f'; ctx.fillStyle = '#e0c27f';
+    const frame = W.displayFrame(actor, v);
+    ctx.save(); ctx.translate(frame.x, frame.y); ctx.scale(frame.scale, frame.scale); ctx.strokeStyle = '#e0c27f'; ctx.fillStyle = '#e0c27f';
     if (actor === 'maren') {
       // 運んでいる品を持つ手の位置
       if (dragItem) {
@@ -170,7 +177,8 @@
     }
     // 品の少し下に置き、画面の外へ出ないよう左右を詰める
     const p = rules().itemPoint(state, state.view, card.item), r = canvas.getBoundingClientRect(), d = $('dais').getBoundingClientRect();
-    const x = r.left - d.left + p.x * r.width / W.WIDTH, y = r.top - d.top + p.y * r.height / W.HEIGHT;
+    const frame = W.displayFrame(actor, state.view);
+    const x = r.left - d.left + (frame.x + p.x * frame.scale) * r.width / W.WIDTH, y = r.top - d.top + (frame.y + p.y * frame.scale) * r.height / W.HEIGHT;
     const left = Math.max(8 - d.left, Math.min(x - el.offsetWidth / 2, document.documentElement.clientWidth - 8 - d.left - el.offsetWidth));
     el.style.left = left + 'px';
     el.style.top = (y + 28) + 'px';
@@ -264,7 +272,8 @@
 
   function toCanvas(e) {
     const r = canvas.getBoundingClientRect();
-    return { x: (e.clientX - r.left) * W.WIDTH / r.width, y: (e.clientY - r.top) * W.HEIGHT / r.height };
+    const frame = W.displayFrame(actor, state.view);
+    return { x: ((e.clientX - r.left) * W.WIDTH / r.width - frame.x) / frame.scale, y: ((e.clientY - r.top) * W.HEIGHT / r.height - frame.y) / frame.scale };
   }
 
   // 棚
@@ -340,6 +349,7 @@
     const d = { ArrowLeft: [-step, 0], ArrowRight: [step, 0], ArrowUp: [0, -step], ArrowDown: [0, step] }[e.key];
     if (!d) return;
     e.preventDefault();
+    if (actor === 'lydia') return say('リディアは素手です');
     if (actor === 'maren') return say('マレンの持ち物は手に持つだけで、位置は動かしません');
     if (actor === 'brom') return say('ブロムの金槌・手斧・盾は着けるだけで、位置は動かしません');
     if (state.scabbard !== 'waist') return say('鞘を着けると、矢印キーで位置を整えられます');
@@ -390,7 +400,7 @@
   const FILES = ['body-front.png', 'body-back.png', 'sheathed-front.png', 'sheathed-back.png', 'scabbard-empty-front.png',
     'scabbard-empty-and-cuff-back.png', 'hand-sword-front.png', 'grip-back.png', 'blade-back.png'].map((f) => W.DIR + f)
     .concat(['maren-empty-review.png', 'maren-lantern-review.png', 'staff-front-source.png', 'staff-back-source.png'].map((f) => W.MAREN_DIR + f))
-    .concat([W.maren.NECKLACE.src])
+    .concat([W.maren.NECKLACE.src, W.lydia.src])
     .concat([...new Set(Object.values(W.brom.BROM_SRC).flatMap(p => Object.values(p).map(q => W.BROM_DIR + q.src)))]);
   Promise.all(FILES.map((f) => new Promise((ok, ng) => {
     const img = new Image();

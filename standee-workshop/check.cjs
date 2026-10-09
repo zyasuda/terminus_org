@@ -359,3 +359,31 @@ for (const v of ['front', 'back']) {
 }
 
 console.log(`standee-workshop check: ok (${srcs.size} assets + maren 6 poses + necklace + brom 12 poses)`);
+
+// リディアは独立した素手の前後姿。
+assert.deepEqual(W.lydia.ITEMS, []);
+assert.equal(W.lydia.setView(W.lydia.initialState(), 'back').view, 'back');
+assert.ok(fs.existsSync(path.join(__dirname, W.lydia.src)));
+for (const view of ['front', 'back']) {
+  const layer = W.lydia.layers(W.lydia.initialState(), view)[0];
+  assert.equal(layer.src, W.lydia.src);
+  assert.ok(layer.scale > 0);
+  assert.equal(W.lydia.hitItem({}, view, {x:328,y:600}), null);
+}
+console.log('lydia check: ok (2 views, empty hands)');
+
+for (const actor of ['gareth','maren','lydia','brom']) for (const view of ['front','back']) {
+  const f = W.displayFrame(actor, view);
+  const foot = actor === 'gareth' ? (view === 'front' ? 1168 : 1170) : 1140;
+  const height = actor === 'gareth' ? (view === 'front' ? 1148 : 1147) : {maren:1080,lydia:750,brom:620}[actor];
+  assert.ok(Math.abs(foot * f.scale + f.y - 1140) < 0.001);
+  assert.ok(Math.abs(height * f.scale - W.DISPLAY_HEIGHT[actor]) < 0.001);
+  for (const p of [{x:150,y:600},{x:500,y:1100}]) {
+    assert.ok(Math.abs(((p.x*f.scale+f.x)-f.x)/f.scale-p.x)<0.001);
+  }
+}
+console.log('display height check: ok (8 views, common foot 1140)');
+
+assert.deepEqual(W.HEIGHT_CM, {gareth:184,maren:173,lydia:172,brom:145});
+for (const actor of Object.keys(W.HEIGHT_CM)) assert.ok(Math.abs(W.DISPLAY_HEIGHT[actor] / W.HEIGHT_CM[actor] - 4.5) < 1e-9);
+console.log('specified height check: ok (184 / 173 / 172 / 145cm, 4.5px/cm)');

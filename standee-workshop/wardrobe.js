@@ -513,13 +513,38 @@
     }
   }
 
+  const LYDIA_SRC = {"front":{"crop":{"x":0,"y":0,"w":627,"h":1254},"headTop":20,"footY":1230,"headX":346},"back":{"crop":{"x":627,"y":0,"w":627,"h":1254},"headTop":23,"footY":1224,"headX":909}};
+  const lydia = {
+    ITEMS: [], LYDIA_SRC, src: 'assets/lydia/empty-v1.png',
+    initialState: () => ({ view: 'front' }), setView,
+    layers: (s, view) => {
+      const m = LYDIA_SRC[view], c = m.crop, k = (1140 - 390) / (m.footY - m.headTop);
+      return [{ src: lydia.src, crop: c, rotation: 0, scale: k,
+        x: 328 - c.w / 2 + k * (c.x + c.w / 2 - m.headX),
+        y: 390 - c.h / 2 + k * (c.y + c.h / 2 - m.headTop) }];
+    },
+    outfitLabel: () => '素手', isOut: () => false,
+    itemPoint: () => null, hitItem: () => null, cardActions: () => [],
+  };
+
+  // 衣装部屋の表示身長。素材座標と装備の当たり判定は保ち、描画時だけ揃える。
+  // ガレス・マレン・リディアは素材登録値。ブロム145cmは作者指定（2026-10-09）。全員4.5px/cm。
+  const HEIGHT_CM = { gareth: 184, maren: 173, lydia: 172, brom: 145 };
+  const DISPLAY_HEIGHT = Object.fromEntries(Object.entries(HEIGHT_CM).map(([actor, cm]) => [actor, cm * 4.5]));
+  function displayFrame(actor, view) {
+    const height = { gareth: view === 'front' ? 1148 : 1147, maren: 1080, lydia: 750, brom: 620 }[actor];
+    const foot = actor === 'gareth' ? (view === 'front' ? 1168 : 1170) : 1140;
+    const scale = DISPLAY_HEIGHT[actor] / height;
+    return { scale, x: 328 * (1 - scale), y: 1140 - foot * scale };
+  }
+
   // ガレスの規則（maren と同じ名前で呼べるもの：ITEMS・initialState・setView・layers・outfitLabel・isOut・itemPoint・hitItem・cardActions）
   const api = {
-    WIDTH, HEIGHT, SCABBARD_RANGE, DIR, HAND_POINT, WAIST_POINT, ITEMS: ['sword', 'scabbard'],
+    HEIGHT_CM, DISPLAY_HEIGHT, displayFrame, WIDTH, HEIGHT, SCABBARD_RANGE, DIR, HAND_POINT, WAIST_POINT, ITEMS: ['sword', 'scabbard'],
     initialState, giveSword, returnSword, wearScabbard, removeScabbard, sheathe, draw, nudgeScabbard, setView,
     layers, outfitLabel, swordTarget, hitScabbard, hitItem, isDrag, cardActions, itemPoint, drawView,
     isOut: (s, item) => s[item] !== 'shelf',
-    maren, MAREN_DIR, brom, BROM_DIR,
+    maren, MAREN_DIR, brom, BROM_DIR, lydia,
   };
   if (typeof module === 'object' && module.exports) module.exports = api;
   else root.Wardrobe = api;
