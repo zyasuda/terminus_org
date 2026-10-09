@@ -56,8 +56,9 @@
     for (const b of document.querySelectorAll('.cast button')) b.setAttribute('aria-pressed', String(b.dataset.actor === actor));
     for (const el of document.querySelectorAll('.shelf-items')) el.hidden = el.dataset.actor !== actor;
     for (const el of document.querySelectorAll('.actor-name')) el.textContent = ACTOR_NAME[actor];
-    $('worn-tag').textContent = WORN[actor];
     document.querySelector('.shelf > .note').hidden = actor === 'lydia';
+    document.querySelector('.outfits').hidden = actor !== 'maren';
+    $('spare-peg').hidden = actor === 'maren';
     canvas.setAttribute('aria-label', {
       gareth: 'ガレス。鞘を着けているときは矢印キーで鞘を少しずらせます',
       lydia: 'リディア。素手の正面と背面を見られます',
@@ -212,6 +213,21 @@
     paint(canvas, state.view);
     paintGuides();
     $('outfit').textContent = rules().outfitLabel(state);
+    if (actor === 'maren') {
+      if (state.outfit === 'dark') {
+        thumb('thumb-staff', W.MAREN_DIR + 'dark-staff-v1.png', 20, 30, 140, 330);
+        thumb('thumb-lantern', W.MAREN_DIR + 'dark-lantern-v1.png', 40, 475, 125, 250);
+      } else {
+        thumb('thumb-staff', W.MAREN_DIR + 'staff-front-source.png', 25, 80, 110, 420);
+        thumb('thumb-lantern', W.MAREN_DIR + 'maren-lantern-review.png', 140, 510, 130, 290);
+      }
+    }
+    $('worn-tag').textContent = actor === 'maren' && state.outfit === 'dark' ? '黒の旅装は着用中' : WORN[actor];
+    for (const b of document.querySelectorAll('.outfits button')) {
+      b.setAttribute('aria-pressed', String(actor === 'maren' && b.dataset.outfit === state.outfit));
+      b.disabled = b.dataset.outfit === 'dark' && !W.maren.darkReady;   // 黒の3姿が揃うまで準備中
+      if (b.disabled) b.title = '準備中';
+    }
     const gareth = actor === 'gareth', maren = actor === 'maren', brom = actor === 'brom';
     $('open-sword').hidden = !gareth || state.sword === 'shelf';
     $('open-scabbard').hidden = !gareth || state.scabbard !== 'waist';
@@ -366,6 +382,14 @@
     if (card && !$('card').contains(e.target) && e.target !== canvas && !e.target.closest('.stage-actions')) closeCard(false);
   });
 
+  // 衣装掛け：マレンの着替え（取り消しできる）
+  for (const b of document.querySelectorAll('.outfits button')) {
+    b.addEventListener('click', () => {
+      const next = b.dataset.outfit;
+      if (commit(W.maren.dress(state, next), next === 'dark' ? '黒の旅装に着替えました' : 'いつもの旅装に着替えました')) flash();
+    });
+  }
+
   // 見出し：俳優の切替
   for (const b of document.querySelectorAll('.cast button')) b.addEventListener('click', () => switchActor(b.dataset.actor));
 
@@ -400,6 +424,7 @@
   const FILES = ['body-front.png', 'body-back.png', 'sheathed-front.png', 'sheathed-back.png', 'scabbard-empty-front.png',
     'scabbard-empty-and-cuff-back.png', 'hand-sword-front.png', 'grip-back.png', 'blade-back.png'].map((f) => W.DIR + f)
     .concat(['maren-empty-review.png', 'maren-lantern-review.png', 'staff-front-source.png', 'staff-back-source.png'].map((f) => W.MAREN_DIR + f))
+    .concat([...new Set(Object.values(W.maren.MAREN_DARK_SRC).filter(Boolean).flatMap((p) => [p.front.src, p.back.src]))].map((f) => W.MAREN_DIR + f))
     .concat([W.maren.NECKLACE.src, W.lydia.src])
     .concat([...new Set(Object.values(W.brom.BROM_SRC).flatMap(p => Object.values(p).map(q => W.BROM_DIR + q.src)))]);
   Promise.all(FILES.map((f) => new Promise((ok, ng) => {

@@ -135,7 +135,7 @@ assert.equal(M.outfitLabel(M.hold(m, null)), '何も持たない');
 // ガレスの品はマレンの棚に無く、マレンの絵にガレスの素材は出ない。職業・能力値の項目は持たない
 assert.deepEqual(M.ITEMS, ['staff', 'lantern', 'necklace']);
 assert.ok(!M.ITEMS.includes('sword') && !M.ITEMS.includes('scabbard'));
-assert.deepEqual(Object.keys(M.initialState()).sort(), ['hold', 'necklace', 'view']);
+assert.deepEqual(Object.keys(M.initialState()).sort(), ['hold', 'necklace', 'outfit', 'view']);
 // 各姿は1枚の全身絵だけ（手の合成なし）。頭頂・頭の中心は同じ座標へ写る
 for (const hold of [null, 'staff', 'lantern']) for (const v of ['front', 'back']) {
   const ls = M.layers({ hold, view: v }, v);
@@ -200,6 +200,58 @@ for (const v of ['front', 'back']) {
 // 杖は右手を上げた元の姿勢、ランタンは下げた姿勢のまま：杖の手はランタンの手より上
 for (const v of ['front', 'back']) assert.ok(M.itemPoint(M.hold(m, 'staff'), v).y < M.itemPoint(M.hold(m, 'lantern'), v).y - 100, v);
 for (const f of ['index.html', 'app.js', 'wardrobe.js']) assert.ok(!fs.readFileSync(path.join(__dirname, f), 'utf8').includes('trpg-gm-mock3'), f);
+
+// ── 黒の旅装：衣装×手持ち3×首飾り×前後。衣装は他の3つと独立で、遷移は元の state を変えない（取り消しに必要） ──
+assert.equal(M.initialState().outfit, 'normal');
+let darkPoses = 0;
+for (const outfit of ['normal', 'dark']) for (const hold of [null, 'staff', 'lantern']) for (const necklace of [false, true]) for (const view of ['front', 'back']) {
+  const st = { outfit, hold, necklace, view }, snap = JSON.stringify(st), tag = `${outfit}/${hold}/${necklace}/${view}`;
+  const swap = outfit === 'dark' ? 'normal' : 'dark';
+  assert.equal(M.dress(st, outfit), st, `${tag} 同じ衣装は変化なし`);
+  assert.deepEqual(M.dress(st, swap), { ...st, outfit: swap }, `${tag} 着替えても手持ち・首飾り・向きはそのまま`);
+  assert.deepEqual(M.dress(M.dress(st, swap), outfit), st, `${tag} 着替えを戻すと元どおり`);
+  for (const h of [null, 'staff', 'lantern']) assert.equal(M.hold(st, h).outfit, outfit, `${tag} 持ち替えても衣装はそのまま`);
+  assert.equal(M.wear(st, !necklace).outfit, outfit, `${tag} 首飾りを着け外ししても衣装はそのまま`);
+  assert.equal(M.setView(st, view === 'front' ? 'back' : 'front').outfit, outfit);
+  assert.equal(JSON.stringify(st), snap, `${tag} 元の state を変えない`);
+  assert.equal(M.outfitLabel(st).startsWith('黒の旅装・'), outfit === 'dark', tag);
+  if (outfit === 'dark' && !M.MAREN_DARK_SRC[hold || 'none']) continue;   // 素材待ちの姿は描かない
+  if (outfit === 'dark') darkPoses++;
+  // 絵：衣装の元絵1枚（＋正面だけ首飾り）。頭頂・足裏・頭の中心は通常と同じ座標＝173cm共通の倍率
+  const ls = M.layers(st, view), file = path.basename(ls[0].src), src = (outfit === 'dark' ? M.MAREN_DARK_SRC : M.MAREN_SRC)[hold || 'none'][view];
+  assert.equal(ls.length, view === 'front' && necklace ? 2 : 1, `${tag} 層の数（背面の首飾りは描かない）`);
+  assert.equal(file.startsWith('dark-'), outfit === 'dark', `${tag} ${file}`);
+  if (outfit === 'dark') assert.equal(file, M.MAREN_DARK_FILES[hold || 'none'], `${tag} 指定の素材だけ使う`);
+  assert.ok(fs.existsSync(path.join(__dirname, ls[0].src)), ls[0].src);
+  for (const [p, want] of [[{ x: src.headX, y: src.headTop }, { x: M.MAREN_X, y: M.MAREN_TOP }], [{ x: src.headX, y: src.footY }, { x: M.MAREN_X, y: M.MAREN_FOOT }]]) {
+    const q = M.marenPoint(src, p);
+    assert.ok(Math.abs(q.x - want.x) < 1e-9 && Math.abs(q.y - want.y) < 1e-9, `${tag} ${JSON.stringify(q)}`);
+  }
+  // 当たり：首飾りは正面の胸元だけ、手持ちは手元
+  const np = M.itemPoint(st, view, 'necklace');
+  if (necklace && view === 'front') {
+    assert.equal(M.hitItem(st, view, np), 'necklace', tag);
+    assert.ok(np.y > M.MAREN_TOP + 200 && np.y < M.MAREN_TOP + 400 && Math.abs(np.x - M.MAREN_X) < 40, `${tag} 胸元 ${JSON.stringify(np)}`);
+  } else if (necklace) assert.notEqual(M.hitItem(st, view, np), 'necklace', `${tag} 背面の首飾りは押せない`);
+  if (hold) {
+    const hp = M.itemPoint(st, view);
+    assert.equal(M.hitItem(st, view, hp), hold, tag);
+    assert.ok(hp.x > 0 && hp.x < W.WIDTH && hp.y > 0 && hp.y < W.HEIGHT, `${tag} 手がキャンバス内`);
+  }
+}
+// 黒の6姿は人物の左右（measure-maren-dark.cjs の bbox）がキャンバス幅に収まり、crop の内側にある
+const DARK_BBOX = { 'none/front': [32, 589], 'none/back': [669, 1232], 'staff/front': [23, 603], 'staff/back': [652, 1231], 'lantern/front': [48, 605], 'lantern/back': [669, 1222] };
+for (const [k, [x0, x1]] of Object.entries(DARK_BBOX)) {
+  const [hold, v] = k.split('/'), m = M.MAREN_DARK_SRC[hold] && M.MAREN_DARK_SRC[hold][v];
+  if (!m) continue;
+  const l = M.marenPoint(m, { x: x0, y: m.footY }).x, r = M.marenPoint(m, { x: x1, y: m.footY }).x;
+  assert.ok(l > 0 && r < W.WIDTH, `dark ${k} 左右 ${l.toFixed(1)}-${r.toFixed(1)}`);
+  assert.ok(x0 >= m.crop.x && x1 < m.crop.x + m.crop.w, `dark ${k} 人物が crop の内側`);
+}
+// 素材が揃うまで黒は押せない（app.js は darkReady でボタンを止める）。揃ったら黒の12通り（手持ち3×首飾り×前後）すべて描く
+assert.equal(M.darkReady, darkPoses === 12, `darkReady ${M.darkReady} / 黒の姿 ${darkPoses}`);
+for (const [hold, file] of Object.entries(M.MAREN_DARK_FILES)) if (M.MAREN_DARK_SRC[hold]) assert.ok(fs.existsSync(path.join(__dirname, W.MAREN_DIR, file)), file);
+console.log(`maren dark check: ok (24 states, ${darkPoses}/12 dark states drawable${M.darkReady ? '' : ', waiting for assets'})`);
 
 // ── ブロム：右手（金槌・手斧・空）と盾（左腕）は独立に着け外し。6状態×前後の12姿 ──
 const B = W.brom;

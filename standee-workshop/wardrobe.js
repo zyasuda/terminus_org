@@ -154,13 +154,31 @@
       back: { src: 'staff-back-source.png', crop: { x: 0, y: 0, w: 664, h: 1328 }, headTop: 75, headX: 297, footY: 1284, hand: { x: 555, y: 455 }, neck: { x: 300, y: 260 } },
     },
   };
+  // 黒の旅装（作者承認済の替え衣装）。測り方・揃え方は MAREN_SRC と同じ。
+  // headTop・headX・footY は measure-maren-dark.cjs の実測。未着の姿は null にし、3姿が揃うまで衣装掛けの「黒」は押せない（他の絵で代用しない）
+  // hand・neck は元絵を拡大して見て置いた仮の調整値。neck は胸元の留め具の下（V字の開き）
+  const MAREN_DARK_FILES = { none: 'dark-empty-v1.png', staff: 'dark-staff-v1.png', lantern: 'dark-lantern-v1.png' };
+  const MAREN_DARK_SRC = {
+    none: {
+      front: { src: MAREN_DARK_FILES.none, crop: { x: 0, y: 0, w: 629, h: 1254 }, headTop: 14, headX: 357, footY: 1239, neck: { x: 340, y: 300, w: 120 } },
+      back: { src: MAREN_DARK_FILES.none, crop: { x: 629, y: 0, w: 625, h: 1254 }, headTop: 15, headX: 903, footY: 1239, neck: { x: 903, y: 210 } },
+    },
+    staff: {
+      front: { src: MAREN_DARK_FILES.staff, crop: { x: 0, y: 0, w: 628, h: 1254 }, headTop: 20, headX: 370, footY: 1235, hand: { x: 105, y: 405 }, neck: { x: 352, y: 302, w: 120 } },
+      back: { src: MAREN_DARK_FILES.staff, crop: { x: 628, y: 0, w: 626, h: 1254 }, headTop: 23, headX: 881, footY: 1232, hand: { x: 1160, y: 395 }, neck: { x: 881, y: 215 } },
+    },
+    lantern: {
+      front: { src: MAREN_DARK_FILES.lantern, crop: { x: 0, y: 0, w: 637, h: 1254 }, headTop: 35, headX: 379, footY: 1225, hand: { x: 100, y: 450 }, neck: { x: 362, y: 313, w: 120 } },
+      back: { src: MAREN_DARK_FILES.lantern, crop: { x: 637, y: 0, w: 617, h: 1254 }, headTop: 36, headX: 898, footY: 1224, hand: { x: 1180, y: 445 }, neck: { x: 898, y: 230 } },
+    },
+  };
   const marenScale = (m) => (MAREN_FOOT - MAREN_TOP) / (m.footY - m.headTop);
   // 元絵の点 → キャンバスの点
   function marenPoint(m, p) {
     const k = marenScale(m);
     return { x: MAREN_X + (p.x - m.headX) * k, y: MAREN_TOP + (p.y - m.headTop) * k };
   }
-  const pose = (s, view) => MAREN_SRC[s.hold || 'none'][view];
+  const pose = (s, view) => (s.outfit === 'dark' ? MAREN_DARK_SRC : MAREN_SRC)[s.hold || 'none'][view];
   function marenLayer(s, view) {
     const m = pose(s, view), c = m.crop, k = marenScale(m);
     // drawLayer は crop の中心で縮尺するので、頭の中心と頭頂が MAREN_X・MAREN_TOP に来る左上を逆算する
@@ -182,19 +200,21 @@
   // 品のある位置（カードを出す場所と当たり判定）。首飾りは着けているときだけ、手持ちは持っているときだけ
   function marenItemPoint(s, view, item = s.hold) {
     if (item === 'necklace') return s.necklace ? marenPoint(pose(s, view), pose(s, view).neck) : null;
-    return item && s.hold === item ? marenPoint(MAREN_SRC[item][view], MAREN_SRC[item][view].hand) : null;
+    return item && s.hold === item ? marenPoint(pose(s, view), pose(s, view).hand) : null;
   }
   const maren = {
-    ITEMS: ['staff', 'lantern', 'necklace'], MAREN_SRC, MAREN_TOP, MAREN_FOOT, MAREN_X, NECKLACE, marenPoint,
-    // necklace は手持ちと独立。持ち替えても着けたまま
-    initialState: () => ({ hold: null, necklace: false, view: 'front' }),
+    ITEMS: ['staff', 'lantern', 'necklace'], MAREN_SRC, MAREN_DARK_SRC, MAREN_DARK_FILES, MAREN_TOP, MAREN_FOOT, MAREN_X, NECKLACE, marenPoint,
+    darkReady: Object.values(MAREN_DARK_SRC).every(Boolean),
+    // outfit（'normal' | 'dark'）と necklace は手持ちと独立。持ち替えても着替えても互いにそのまま
+    initialState: () => ({ outfit: 'normal', hold: null, necklace: false, view: 'front' }),
+    dress: (s, outfit) => (s.outfit === outfit ? s : { ...s, outfit }),
     // item は 'staff' | 'lantern' | null。杖とランタンは同じ手なので、持たせると前の品は棚へ戻る
     hold: (s, item) => (s.hold === item ? s : { ...s, hold: item }),
     wear: (s, on) => (s.necklace === on ? s : { ...s, necklace: on }),
     setView: (s, view) => ({ ...s, view }),
     layers: (s, view) => (view === 'front' && s.necklace ? [marenLayer(s, view), necklaceLayer(s)] : [marenLayer(s, view)]),
     outfitLabel(s) {
-      const hold = { staff: '杖を手に', lantern: 'ランタンを手に' }[s.hold] || '何も持たない';
+      const hold = (s.outfit === 'dark' ? '黒の旅装・' : '') + ({ staff: '杖を手に', lantern: 'ランタンを手に' }[s.hold] || '何も持たない');
       if (!s.necklace) return hold;
       return `${hold}・琥珀の首飾り${s.view === 'back' ? '（背面では髪に隠れて見えません）' : ''}`;
     },

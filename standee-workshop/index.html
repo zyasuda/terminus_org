@@ -44,18 +44,24 @@
   .rail { position: relative; display: flex; justify-content: space-around; padding-top: 12px; }
   .rail::before { content: ""; position: absolute; left: 0; right: 0; top: 0; height: 5px;
     background: linear-gradient(var(--brass-2), var(--brass)); border-radius: 3px; }
+  .peg[hidden] { display: none; }
   .peg { display: flex; flex-direction: column; align-items: center; width: 92px; }
   .coat-hanger { position: relative; width: 84px; height: 26px; }
   .coat-hanger::before { content: ""; position: absolute; left: 50%; top: -16px; width: 12px; height: 15px; transform: translateX(-50%);
     border: 3px solid var(--brass-2); border-bottom: 0; border-radius: 8px 8px 0 0; }
   .coat-hanger::after { content: ""; position: absolute; inset: 0; border-bottom: 3px solid var(--brass);
     background:
-      linear-gradient(to top right, transparent calc(50% - 2px), var(--brass) calc(50% - 2px) calc(50% + 1px), transparent calc(50% + 1px)) left / 50% 100% no-repeat,
-      linear-gradient(to top left, transparent calc(50% - 2px), var(--brass) calc(50% - 2px) calc(50% + 1px), transparent calc(50% + 1px)) right / 50% 100% no-repeat; }
+      linear-gradient(to bottom right, transparent calc(50% - 2px), var(--brass) calc(50% - 2px) calc(50% + 1px), transparent calc(50% + 1px)) left / 50% 100% no-repeat,
+      linear-gradient(to bottom left, transparent calc(50% - 2px), var(--brass) calc(50% - 2px) calc(50% + 1px), transparent calc(50% + 1px)) right / 50% 100% no-repeat; }
   .tag { margin: 10px 0 0; padding: 6px 8px; background: var(--paper); color: var(--night); border-radius: 2px;
     font-family: var(--mincho); font-size: 13px; line-height: 1.35; text-align: center; position: relative; }
   .tag::before { content: ""; position: absolute; left: 50%; top: -8px; width: 1px; height: 8px; background: var(--brass); }
   .note { color: var(--muted); font-size: 13px; margin: 6px 0 0; }
+  .outfits:not([hidden]) { display: flex; justify-content: center; margin-top: 14px; }
+  .outfits button { border-radius: 0; min-width: 72px; font-family: var(--mincho); }
+  .outfits button:first-child { border-radius: 6px 0 0 6px; }
+  .outfits button:last-child { border-radius: 0 6px 6px 0; }
+  .outfits button[aria-pressed="true"] { background: var(--brass); color: var(--night); border-color: var(--brass); }
 
   /* 眺める台 */
   .stage { display: flex; flex-direction: column; align-items: center; min-height: 0; }
@@ -176,7 +182,12 @@
     <h2 id="rack-title">衣装掛け</h2>
     <div class="rail">
       <div class="peg"><span class="coat-hanger" aria-hidden="true"></span><p class="tag" id="worn-tag">鎧は着用中</p></div>
-      <div class="peg"><span class="coat-hanger" aria-hidden="true"></span><p class="tag">替え衣装は準備中</p></div>
+      <div class="peg" id="spare-peg"><span class="coat-hanger" aria-hidden="true"></span><p class="tag">替え衣装は準備中</p></div>
+    </div>
+    <!-- マレンの衣装。手持ち・首飾りとは独立 -->
+    <div class="outfits" role="group" aria-label="マレンの衣装" hidden>
+      <button data-outfit="normal" aria-pressed="true">通常</button>
+      <button data-outfit="dark" aria-pressed="false">黒</button>
     </div>
   </aside>
 
