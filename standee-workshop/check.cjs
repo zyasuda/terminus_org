@@ -4,7 +4,7 @@ const assert = require('assert/strict');
 const fs = require('fs'), path = require('path');
 const W = require('./wardrobe.js');
 
-const names = (s, v) => W.layers(s, v).map((l) => path.basename(l.src) + (l.clip ? (l.clip.x === 0 ? '#scabbard' : '#cuff') : ''));
+const names = (s, v) => W.layers(s, v).map((l) => path.basename(l.src) + (l.clip ? (l.clip.x === 0 ? '#scabbard' : '#cuff') : '') + (l.crop ? (l.crop === W.CURVED.blade.crop ? '#blade' : '#hilt') : ''));
 const HILTS = ['sheathed-front.png', 'sheathed-back.png', 'hand-sword-front.png', 'grip-back.png'];
 let s = W.initialState();
 
@@ -118,6 +118,126 @@ for (const sword of ['hand', 'scabbard']) for (const v of ['front', 'back']) for
 for (const src of srcs) assert.ok(fs.existsSync(path.join(__dirname, src)), src);
 assert.ok(![...srcs].some((p) => p.includes('..')));
 for (const f of ['index.html', 'app.js']) assert.ok(!fs.readFileSync(path.join(__dirname, f), 'utf8').includes('trpg-gm-mock3'), f);
+
+// ── 反りのある片手剣：剣と鞘は組で替わる。2組×剣3×鞘2×前後（鞘なしの納刀は除く） ──
+const C = W.CURVED, CS = C.sword, CB = C.scabbard;
+const HF = C.handFront, GB = C.gripBack;
+const STRAIGHT_ONLY = ['sheathed-front.png', 'sheathed-back.png', 'scabbard-empty-front.png', 'hand-sword-front.png', 'grip-back.png', 'blade-back.png', 'scabbard-empty-and-cuff-back.png#scabbard'];
+const SET_HILTS = [...HILTS, HF, GB, CS + '#hilt'];
+// 反りのある組の合成順。手は新しい握りの絵、背面の刀身（#blade）は体の奥。納刀は鞘＋柄の切り出し（#hilt）
+const CURVED_WANT = {
+  'shelf/shelf': [['body-front.png'], ['body-back.png']],
+  'shelf/waist': [['body-front.png', CB], ['body-back.png', CB]],
+  'hand/shelf': [['body-front.png', HF], [CS + '#blade', 'body-back.png', GB, 'scabbard-empty-and-cuff-back.png#cuff']],
+  'hand/waist': [['body-front.png', CB, HF], [CS + '#blade', 'body-back.png', GB, CB, 'scabbard-empty-and-cuff-back.png#cuff']],
+  'scabbard/waist': [['body-front.png', CB, CS + '#hilt'], ['body-back.png', CB, CS + '#hilt']],
+};
+assert.equal(W.initialState().swordSet, 'straight');
+let combos = 0;
+for (const swordSet of W.SWORD_SETS) for (const sword of ['shelf', 'hand', 'scabbard']) for (const scabbard of ['shelf', 'waist']) for (const v of ['front', 'back']) {
+  if (sword === 'scabbard' && scabbard === 'shelf') continue;
+  combos++;
+  const st = { ...W.initialState(), swordSet, sword, scabbard, view: v }, snap = JSON.stringify(st), tag = `${swordSet}/${sword}/${scabbard}/${v}`;
+  const ns = names(st, v), swap = swordSet === 'curved' ? 'straight' : 'curved';
+  if (swordSet === 'curved') assert.deepEqual(ns, CURVED_WANT[`${sword}/${scabbard}`][v === 'front' ? 0 : 1], tag);
+  else assert.ok(!ns.some((n) => n.startsWith(CS) || [CB, HF, GB].includes(n)), `${tag} 通常の組に反りの素材を出さない`);
+  if (swordSet === 'curved') assert.ok(!ns.some((n) => STRAIGHT_ONLY.includes(n)), `${tag} 旧剣・旧鞘を出さない`);
+  assert.equal(ns.filter((n) => SET_HILTS.includes(n)).length, sword === 'shelf' ? 0 : 1, `${tag} 柄はちょうど1か所`);
+  // 切替は組だけ替える。居場所・ずれ・向きはそのまま、元の state は変えない（取り消しに必要）
+  const sw = W.setSwordSet(st, swap);
+  assert.deepEqual(sw, { ...st, swordSet: swap }, tag);
+  assert.equal(W.setSwordSet(st, swordSet), st, `${tag} 同じ組は変化なし`);
+  assert.equal(W.setSwordSet(st, 'katana'), st, `${tag} 知らない組は変化なし`);
+  assert.deepEqual(W.setSwordSet(sw, swordSet), st, `${tag} 戻すと元どおり`);
+  assert.equal(JSON.stringify(st), snap, `${tag} 元の state を変えない`);
+  // 組で変わらないもの：素体（手のマスク＝表示寸法）、表示名、カード、当たり
+  const body = (x) => W.layers(x, v).find((l) => l.src.endsWith(`body-${v}.png`));
+  assert.deepEqual(body(sw), body(st), `${tag} 素体は同じ`);
+  assert.equal(W.outfitLabel(sw), W.outfitLabel(st));
+  for (const item of W.ITEMS) assert.deepEqual(W.cardActions(sw, item), W.cardActions(st, item), `${tag} ${item}`);
+  for (const p of [W.HAND_POINT[v], W.WAIST_POINT[v]]) assert.equal(W.hitItem(sw, v, p), W.hitItem(st, v, p), tag);
+}
+assert.equal(combos, 20);
+// 反りのある組の遷移：抜刀→納刀→抜刀→鞘を剣ごと外す。組はずっと反りのまま
+let cv = W.setSwordSet(W.wearScabbard(W.giveSword(W.initialState(), 'hand')), 'curved');
+const cvDrawn = cv;
+cv = W.sheathe(cv);
+assert.deepEqual([cv.sword, cv.swordSet], ['scabbard', 'curved']);
+assert.deepEqual(W.draw(cv), cvDrawn);
+const cvOff = W.removeScabbard(cv);
+assert.deepEqual([cvOff.sword, cvOff.scabbard, cvOff.swordSet], ['shelf', 'shelf', 'curved'], '鞘を外すと剣も棚へ、組はそのまま');
+// 取り消し（app.js と同じく前の state を向きだけ今に合わせて戻す）
+const hist = [cvDrawn];
+const back1 = W.setView(hist.pop(), 'back');
+assert.deepEqual(back1, { ...cvDrawn, view: 'back' });
+const hist2 = [W.initialState()], afterSwap = W.setSwordSet(hist2[0], 'curved');
+assert.equal(W.setView(hist2.pop(), afterSwap.view).swordSet, 'straight', '切替を取り消すと元の組');
+// 反りのある鞘と柄の切り出しは鞘のずれと一緒に動く（前後独立）
+const cvMoved = W.nudgeScabbard(W.sheathe(cvDrawn), 'front', 10, -4);
+for (const l of W.layers(cvMoved, 'front')) if (l.src.endsWith(CB) || l.crop) {
+  const base = l.crop ? C.hilt.front : C.scabbardAt.front;
+  assert.deepEqual([l.x, l.y], [base.x + 10, base.y - 4]);
+}
+for (const l of W.layers(cvMoved, 'back')) if (l.src.endsWith(CB)) assert.equal(l.x, C.scabbardAt.back.x, '背面は動かない');
+// ── 反りのある組の配置。drawLayer と同じ変換で元画像の点をキャンバスへ写して確かめる（座標は素材の alpha を測った値） ──
+const pngSize = (f) => { const b = fs.readFileSync(path.join(__dirname, f)); return { w: b.readUInt32BE(16), h: b.readUInt32BE(20) }; };
+const toCanvas = (l, [px, py]) => {
+  const c = l.crop || { x: 0, y: 0, ...pngSize(l.src) }, f = l.flip ? -1 : 1, a = l.rotation * Math.PI / 180;
+  const dx = f * l.scale * (px - c.x - c.w / 2), dy = l.scale * (py - c.y - c.h / 2);
+  return { x: l.x + c.w / 2 + dx * Math.cos(a) - dy * Math.sin(a), y: l.y + c.h / 2 + dx * Math.sin(a) + dy * Math.cos(a) };
+};
+const dist = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
+const inPoly = (poly, [x, y]) => {
+  let inn = false;
+  for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+    const [xi, yi] = poly[i], [xj, yj] = poly[j];
+    if ((yi > y) !== (yj > y) && x < ((xj - xi) * (y - yi)) / (yj - yi) + xi) inn = !inn;
+  }
+  return inn;
+};
+const find = (st, v, name) => W.layers(st, v)[names(st, v).indexOf(name)];
+// 素材はすべて読め、手の2枚は旧素材と同じ寸法（同じ変換で手が同じ位置に来る。背面は1px差まで）
+for (const f of [CS, CB, HF, GB]) assert.ok(fs.existsSync(path.join(__dirname, W.DIR, f)), f);
+for (const sword of ['hand', 'scabbard']) for (const v of ['front', 'back']) for (const l of W.layers({ ...worn, swordSet: 'curved', sword }, v)) assert.ok(fs.existsSync(path.join(__dirname, l.src)), l.src);
+assert.deepEqual(pngSize(W.DIR + HF), pngSize(W.DIR + 'hand-sword-front.png'));
+const gbs = pngSize(W.DIR + GB), gbo = pngSize(W.DIR + 'grip-back.png');
+assert.ok(Math.abs(gbs.w - gbo.w) <= 1 && Math.abs(gbs.h - gbo.h) <= 1, `${JSON.stringify(gbs)} / ${JSON.stringify(gbo)}`);
+const cvBack = { ...cvDrawn, view: 'back' };
+const hf = find(cvDrawn, 'front', HF), gb = find(cvBack, 'back', GB), blade = find(cvBack, 'back', CS + '#blade');
+for (const [l, g] of [[hf, W.GRIP.front], [gb, W.GRIP.back.grip]]) assert.deepEqual([l.x, l.y, l.rotation, l.scale], [g.x, g.y, g.rotation, g.scale], `${l.src} は旧素材と同じ変換`);
+// 背面の刀身：柄・鍔は描かない（柄頭・鍔の中心は cut の外、刀身は内）。切り口の中心は新しい握りの鍔(425,825)に1px以内
+for (const p of [[40, 65], [404, 326], [465, 250], [340, 400]]) assert.ok(!inPoly(C.blade.cut, p), `刀身に柄・鍔 ${p}`);
+for (const p of [[480, 385], [900, 710], [1500, 990]]) assert.ok(inPoly(C.blade.cut, p), `刀身 ${p}`);
+const tsubaBack = toCanvas(gb, [425, 825]);
+assert.ok(dist(toCanvas(blade, [472, 382]), tsubaBack) < 1, `刀身の根元 ${JSON.stringify(toCanvas(blade, [472, 382]))} / 鍔 ${JSON.stringify(tsubaBack)}`);
+// 刀身の長さは正面と同じくらい（正面：鍔(330,480)→切先(1141,1288)、背面：鍔→切先(1512,995)）
+const lenFront = dist(toCanvas(hf, [330, 480]), toCanvas(hf, [1141, 1288])), lenBack = dist(tsubaBack, toCanvas(blade, [1512, 995]));
+assert.ok(Math.abs(lenBack / lenFront - 1) < 0.1, `刀身の長さ 正面${lenFront.toFixed(0)} 背面${lenBack.toFixed(0)}`);
+// 鞘：口(80,152)が WAIST_POINT へ、口→先端(1510,985)の表示の長さ380〜420px、先端は下向き（口より下）
+const cvSheathed = W.sheathe(cvDrawn);
+for (const v of ['front', 'back']) {
+  const st = { ...cvSheathed, view: v }, sc = find(st, v, CB), hilt = find(st, v, CS + '#hilt');
+  const mouth = toCanvas(sc, [80, 152]), tip = toCanvas(sc, [1510, 985]);
+  assert.ok(dist(mouth, W.WAIST_POINT[v]) < 1, `${v} 鞘の口 ${JSON.stringify(mouth)}`);
+  assert.ok(dist(mouth, tip) >= 380 && dist(mouth, tip) <= 420, `${v} 鞘の長さ ${dist(mouth, tip).toFixed(0)}`);
+  assert.ok(tip.y - mouth.y > 350, `${v} 鞘は下向き`);
+  // 吊り革の先(355,18)・(575,185)は鞘より体の中心側（正面は左、背面は右）
+  for (const p of [[355, 18], [575, 185]]) {
+    const q = toCanvas(sc, p);
+    assert.ok(v === 'front' ? q.x < mouth.x : q.x > mouth.x, `${v} 吊り革 ${p} → ${q.x.toFixed(0)}`);
+  }
+  // 納刀の柄：鞘と同じ向き・倍率・反転で、鍔の刀身側(432,347)が鞘の口に1px以内（同軸）。刀身は cut の外
+  assert.deepEqual([hilt.rotation, hilt.scale, !!hilt.flip], [sc.rotation, sc.scale, !!sc.flip], `${v} 柄と鞘は同じ向き`);
+  assert.ok(dist(toCanvas(hilt, [432, 347]), mouth) < 1, `${v} 柄の鍔が鞘の口`);
+  assert.ok(dist(toCanvas(hilt, [40, 65]), mouth) > 80, `${v} 柄頭は鞘の口から外へ出る`);
+  for (const p of [[40, 65], [404, 326], [465, 250], [340, 400]]) assert.ok(inPoly(C.hilt.cut, p), `${v} 柄・鍔 ${p}`);
+  for (const p of [[480, 385], [462, 385], [900, 710]]) assert.ok(!inPoly(C.hilt.cut, p), `${v} 刀身・はばきは鞘の外に描かない ${p}`);
+}
+for (const [what, c] of [['柄', C.hilt.crop], ['刀身', C.blade.crop]]) {
+  const cs = pngSize(W.DIR + CS);
+  assert.ok(c.x >= 0 && c.y >= 0 && c.x + c.w <= cs.w && c.y + c.h <= cs.h, `${what}の切り出しが剣の画像の内側`);
+}
+console.log(`curved sword check: ok (${combos} states, blade ${lenBack.toFixed(0)}px / front ${lenFront.toFixed(0)}px)`);
 
 // ── マレン：手持ちは1つ。杖とランタンは持ち替え、何も持たないも選べる ──
 const M = W.maren;

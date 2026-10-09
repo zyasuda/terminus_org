@@ -3,7 +3,6 @@
   'use strict';
   const W = window.Wardrobe;
   const $ = (id) => document.getElementById(id);
-  $('view-curved-set').addEventListener('click', () => $('curved-set').showModal());
   const canvas = $('stage'), ctx = canvas.getContext('2d');
   const images = new Map();
   const VIEW_NAME = { front: '正面', back: '背面' };
@@ -229,6 +228,17 @@
       if (b.disabled) b.title = '準備中';
     }
     const gareth = actor === 'gareth', maren = actor === 'maren', brom = actor === 'brom';
+    if (gareth) {
+      const curved = state.swordSet === 'curved';
+      for (const b of document.querySelectorAll('.sword-sets button')) b.setAttribute('aria-pressed', String(b.dataset.set === state.swordSet));
+      if (curved) {
+        thumb('thumb-sword', W.DIR + W.CURVED.sword, 26, 40, 1487, 961);         // 範囲は画像の alpha の外接矩形
+        thumb('thumb-scabbard', W.DIR + W.CURVED.scabbard, 32, 18, 1479, 980);
+      } else {
+        thumb('thumb-sword', W.DIR + 'hand-sword-front.png', 0, 240, 1159, 1060);
+        thumb('thumb-scabbard', W.DIR + 'scabbard-empty-front.png', 430, 535, 140, 440);
+      }
+    }
     $('open-sword').hidden = !gareth || state.sword === 'shelf';
     $('open-scabbard').hidden = !gareth || state.scabbard !== 'waist';
     $('open-hold').hidden = !maren || !state.hold;
@@ -382,6 +392,15 @@
     if (card && !$('card').contains(e.target) && e.target !== canvas && !e.target.closest('.stage-actions')) closeCard(false);
   });
 
+  // 棚：ガレスの剣と鞘の組の切替（取り消しできる）
+  for (const b of document.querySelectorAll('.sword-sets button')) {
+    b.addEventListener('click', () => {
+      const next = b.dataset.set;
+      if (commit(W.setSwordSet(state, next), next === 'curved' ? '反りのある片手剣と鞘に替えました' : '通常の片手剣と鞘に替えました')
+        && (state.sword !== 'shelf' || state.scabbard !== 'shelf')) flash();
+    });
+  }
+
   // 衣装掛け：マレンの着替え（取り消しできる）
   for (const b of document.querySelectorAll('.outfits button')) {
     b.addEventListener('click', () => {
@@ -411,10 +430,12 @@
     $('wings-dialog').showModal();
   });
 
-  // 棚の絵（品の画像から切り出す）
-  function thumb(id, src, sx, sy, sw, sh, filter) {
+  // 棚の絵（品の画像から切り出す。範囲を省くと画像全体）
+  function thumb(id, src, sx = 0, sy = 0, sw, sh, filter) {
     const c = $(id), g = c.getContext('2d'), img = images.get(src);
+    sw = sw || img.width; sh = sh || img.height;
     const k = Math.min(c.width / sw, c.height / sh), w = sw * k, h = sh * k;
+    g.clearRect(0, 0, c.width, c.height);   // 絵を差し替えたとき前の絵を残さない
     g.save();
     if (filter) g.filter = filter;
     g.drawImage(img, sx, sy, sw, sh, (c.width - w) / 2, (c.height - h) / 2, w, h);
@@ -422,7 +443,8 @@
   }
 
   const FILES = ['body-front.png', 'body-back.png', 'sheathed-front.png', 'sheathed-back.png', 'scabbard-empty-front.png',
-    'scabbard-empty-and-cuff-back.png', 'hand-sword-front.png', 'grip-back.png', 'blade-back.png'].map((f) => W.DIR + f)
+    'scabbard-empty-and-cuff-back.png', 'hand-sword-front.png', 'grip-back.png', 'blade-back.png']
+    .concat([W.CURVED.sword, W.CURVED.scabbard, W.CURVED.handFront, W.CURVED.gripBack]).map((f) => W.DIR + f)
     .concat(['maren-empty-review.png', 'maren-lantern-review.png', 'staff-front-source.png', 'staff-back-source.png'].map((f) => W.MAREN_DIR + f))
     .concat([...new Set(Object.values(W.maren.MAREN_DARK_SRC).filter(Boolean).flatMap((p) => [p.front.src, p.back.src]))].map((f) => W.MAREN_DIR + f))
     .concat([W.maren.NECKLACE.src, W.lydia.src])
@@ -433,8 +455,6 @@
     img.onerror = () => ng(new Error(f));
     img.src = f;
   }))).then(() => {
-    thumb('thumb-sword', W.DIR + 'hand-sword-front.png', 0, 240, 1159, 1060);
-    thumb('thumb-scabbard', W.DIR + 'scabbard-empty-front.png', 430, 535, 140, 440);
     thumb('thumb-staff', W.MAREN_DIR + 'staff-front-source.png', 25, 80, 110, 420);   // 杖の頭（全長だと細すぎて見えない）
     thumb('thumb-lantern', W.MAREN_DIR + 'maren-lantern-review.png', 140, 510, 130, 290);
     thumb('thumb-necklace', W.maren.NECKLACE.src, 140, 95, 1122, 925);

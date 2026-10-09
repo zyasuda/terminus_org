@@ -26,10 +26,46 @@
   const HAND_RADIUS = 70;                      // 剣を持つ手を押したとみなす半径（キャンバスpx）
   const DRAG_SLOP = 6;                         // これ未満の動きはクリック扱い（キャンバスpx）
 
-  // sword: 'shelf' | 'hand' | 'scabbard'、scabbard: 'shelf' | 'waist'
+  // 反りのある片手剣と、それに合う鞘（剣と鞘は組で替わる）。素材は Codex の背景除去（2026-10-09）
+  // 数値は素材の alpha を測って決めた（座標はすべて元画像の画素。剣と鞘の画像は 1536x1024 で、どちらも左上から右下へ約33度）
+  const CURVED = {
+    sword: 'curved-sword-sprite-v1.png', scabbard: 'curved-scabbard-sprite-v1.png',
+    // 握った手は旧素材と同じ寸法・同じ手の位置で剣だけ替えた絵。GRIP.front／GRIP.back.grip と同じ変換で描く
+    handFront: 'curved-hand-sword-front-v1.png', gripBack: 'curved-grip-back-v1.png',
+    // 背面の刀身：剣の画像から柄・鍔・はばきを除いた刀身だけ。cut は鍔の面と平行な線(472,382)より先。
+    // 左右反転し、切り口の中心を新しい握りの鍔(425,825)＝キャンバス(582.5,683.6)へ。切り口は鍔の長径と重なり、鍔の下に隠れる。
+    // 向きは正面の刀身の鏡像（根元の接線117度）、長さも正面と同じくらい（倍率0.37）。体の奥に描く
+    blade: {
+      crop: { x: 380, y: 255, w: 1134, h: 747 },
+      cut: [[381.7, 501.8], [562.3, 262.2], [1760.2, 1164.9], [1579.7, 1404.5]],
+      x: -105.2, y: 467, rotation: -25, scale: 0.37, flip: true,
+    },
+    // 空鞘：口(80,152)を WAIST_POINT へ、表示の長さ約400px（倍率0.24）。口から先端へ正面は約77度、背面はその鏡像。
+    // 正面を左右反転するのは吊り革を体の側へ向けるため（反転なしの rotation 47 だと革の先が腕の外へ出る）
+    scabbardAt: {
+      front: { x: -263.7, y: 231.2, rotation: -73, scale: 0.24, flip: true },
+      back: { x: -607.3, y: 231.2, rotation: 73, scale: 0.24 },
+    },
+    // 納刀：剣の画像の柄＋鍔を、鍔の刀身側(432,347)が鞘の口に来るよう同じ向き・倍率で重ねる。
+    // cut は元画像の座標の多角形で、鍔の先（はばき・刀身）を落とす。矩形の crop だけでは斜めの鍔と刀身を分けられない
+    hilt: {
+      crop: { x: 20, y: 30, w: 450, h: 410 },
+      cut: [[27.5, -270.9], [586.5, 150.4], [285.5, 549.7], [-273.5, 128.4]],
+      front: { x: 232.4, y: 304.2, rotation: -73, scale: 0.24, flip: true },
+      back: { x: -17.4, y: 304.2, rotation: 73, scale: 0.24 },
+    },
+  };
+  const SWORD_SETS = ['straight', 'curved'];
+
+  // sword: 'shelf' | 'hand' | 'scabbard'、scabbard: 'shelf' | 'waist'、swordSet: 'straight' | 'curved'
   // offset は前後独立。自動で揃えない。unchecked は「もう片面でまだ見ていない変更がある」面
   function initialState() {
-    return { sword: 'shelf', scabbard: 'shelf', offset: { front: { x: 0, y: 0 }, back: { x: 0, y: 0 } }, view: 'front', unchecked: null };
+    return { sword: 'shelf', scabbard: 'shelf', swordSet: 'straight', offset: { front: { x: 0, y: 0 }, back: { x: 0, y: 0 } }, view: 'front', unchecked: null };
+  }
+  // 剣と鞘の組を替える。剣・鞘の居場所、鞘のずれ、向きはそのまま
+  function setSwordSet(s, swordSet) {
+    if (s.swordSet === swordSet || !SWORD_SETS.includes(swordSet)) return s;
+    return { ...s, swordSet };
   }
   const other = (v) => (v === 'front' ? 'back' : 'front');
   const clamp = (n) => Math.max(-SCABBARD_RANGE, Math.min(SCABBARD_RANGE, n));
@@ -61,20 +97,33 @@
     return { ...s, view, unchecked: s.unchecked === view ? null : s.unchecked };
   }
 
-  // 1面の部品を奥から順に返す。{ src, x, y, rotation, scale, clip?, mask? }
+  // 反りのある組の鞘（納刀なら柄の切り出しを重ねる）。鞘のずれごと動く
+  function curvedScabbard(s, view) {
+    const o = s.offset[view], move = (p) => ({ ...p, x: p.x + o.x, y: p.y + o.y });
+    const out = [move({ src: DIR + CURVED.scabbard, ...CURVED.scabbardAt[view] })];
+    if (s.sword === 'scabbard') out.push(move({ src: DIR + CURVED.sword, crop: CURVED.hilt.crop, cut: CURVED.hilt.cut, ...CURVED.hilt[view] }));
+    return out;
+  }
+
+  // 1面の部品を奥から順に返す。{ src, x, y, rotation, scale, crop?, cut?, clip?, flip?, mask? }
   function layers(s, view) {
-    const out = [], hand = s.sword === 'hand', o = s.offset[view];
+    const out = [], hand = s.sword === 'hand', o = s.offset[view], curved = s.swordSet === 'curved';
     const at = (src, extra = {}) => ({ src: DIR + src, x: o.x, y: o.y, rotation: 0, scale: 1, ...extra });
     const fixed = (p, extra = {}) => ({ ...p, src: DIR + p.src, ...extra });
-    if (view === 'back' && hand) out.push(fixed(GRIP.back.blade));
+    // 背面の刀身は体の奥。反りのある組は旧 blade-back の代わりに新しい剣の刀身だけを描く
+    if (view === 'back' && hand) out.push(curved ? fixed({ src: CURVED.sword, ...CURVED.blade }) : fixed(GRIP.back.blade));
     out.push(fixed({ src: `body-${view}.png`, x: 0, y: 0, rotation: 0, scale: 1 }, hand ? { mask: HAND_MASK[view] } : {}));
     if (view === 'front') {
-      if (s.scabbard === 'waist') out.push(at(s.sword === 'scabbard' ? 'sheathed-front.png' : 'scabbard-empty-front.png'));
-      if (hand) out.push(fixed(GRIP.front));
-    } else {
-      if (hand) out.push(fixed(GRIP.back.grip));
       if (s.scabbard === 'waist') {
-        out.push(s.sword === 'scabbard'
+        if (curved) out.push(...curvedScabbard(s, view));
+        else out.push(at(s.sword === 'scabbard' ? 'sheathed-front.png' : 'scabbard-empty-front.png'));
+      }
+      if (hand) out.push(fixed({ ...GRIP.front, src: curved ? CURVED.handFront : GRIP.front.src }));
+    } else {
+      if (hand) out.push(fixed({ ...GRIP.back.grip, src: curved ? CURVED.gripBack : GRIP.back.grip.src }));
+      if (s.scabbard === 'waist') {
+        if (curved) out.push(...curvedScabbard(s, view));
+        else out.push(s.sword === 'scabbard'
           ? at('sheathed-back.png')
           : at('scabbard-empty-and-cuff-back.png', { clip: { x: 0, y: 0, w: BACK_SPLIT_X, h: HEIGHT } }));
       }
@@ -506,7 +555,8 @@
   };
 
   // 旧試作 core.js の drawLayer と同じ変換：画像中心で回転・縮尺し、左上を(x,y)に置く
-  // crop があれば元絵のその範囲だけを1枚の画像として扱う
+  // crop があれば元絵のその範囲だけを1枚の画像として扱う。flip は画像中心で左右反転
+  // cut は元絵の座標の多角形 [[x,y],…]。その内側だけ描く（変換と一緒に回る。反りのある剣の画像を鍔の面で柄側と刀身側に分ける）
   function drawLayer(ctx, layer, img) {
     const c = layer.crop, w = c ? c.w : img.width, h = c ? c.h : img.height;
     ctx.save();
@@ -514,7 +564,13 @@
     if (layer.clip) { ctx.beginPath(); ctx.rect(layer.clip.x + layer.x, layer.clip.y + layer.y, layer.clip.w, layer.clip.h); ctx.clip(); }
     ctx.translate(layer.x + w / 2, layer.y + h / 2);
     ctx.rotate(layer.rotation * Math.PI / 180);
-    ctx.scale(layer.scale, layer.scale);
+    ctx.scale(layer.flip ? -layer.scale : layer.scale, layer.scale);
+    if (layer.cut) {
+      const ox = (c ? c.x : 0) + w / 2, oy = (c ? c.y : 0) + h / 2;
+      ctx.beginPath();
+      layer.cut.forEach(([x, y], i) => (i ? ctx.lineTo(x - ox, y - oy) : ctx.moveTo(x - ox, y - oy)));
+      ctx.clip();
+    }
     if (c) ctx.drawImage(img, c.x, c.y, w, h, -w / 2, -h / 2, w, h);
     else ctx.drawImage(img, -w / 2, -h / 2);
     ctx.restore();
@@ -561,7 +617,7 @@
   // ガレスの規則（maren と同じ名前で呼べるもの：ITEMS・initialState・setView・layers・outfitLabel・isOut・itemPoint・hitItem・cardActions）
   const api = {
     HEIGHT_CM, DISPLAY_HEIGHT, displayFrame, WIDTH, HEIGHT, SCABBARD_RANGE, DIR, HAND_POINT, WAIST_POINT, ITEMS: ['sword', 'scabbard'],
-    initialState, giveSword, returnSword, wearScabbard, removeScabbard, sheathe, draw, nudgeScabbard, setView,
+    CURVED, SWORD_SETS, GRIP, setSwordSet, initialState, giveSword, returnSword, wearScabbard, removeScabbard, sheathe, draw, nudgeScabbard, setView,
     layers, outfitLabel, swordTarget, hitScabbard, hitItem, isDrag, cardActions, itemPoint, drawView,
     isOut: (s, item) => s[item] !== 'shelf',
     maren, MAREN_DIR, brom, BROM_DIR, lydia,
