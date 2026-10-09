@@ -1,0 +1,296 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>衣装部屋（試作）</title>
+<style>
+  :root {
+    --night: #0d2023; --teal: #14302f; --teal-2: #1b3f40; --line: #2c5653;
+    --leather: #5e3a22; --leather-2: #7d5130; --brass: #b8944a; --brass-2: #e0c27f;
+    --paper: #ece2cb; --muted: #a9b9b0; --warn: #e9a95c;
+    --mincho: "Hiragino Mincho ProN", "Yu Mincho", "YuMincho", "Noto Serif JP", serif;
+    --sans: "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Yu Gothic UI", "Noto Sans JP", sans-serif;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; }
+  body {
+    background: radial-gradient(ellipse at 50% 30%, var(--teal-2), var(--night) 70%);
+    color: var(--paper); font-family: var(--sans); font-size: 15px;
+    display: grid; grid-template-rows: auto 1fr auto; min-height: 100vh;
+  }
+  h1, h2, .plaque { font-family: var(--mincho); font-weight: 600; letter-spacing: .08em; }
+  header { display: flex; align-items: baseline; gap: 14px; padding: 14px 24px 0; }
+  header h1 { margin: 0; font-size: 26px; color: var(--brass-2); }
+  header small { color: var(--muted); }
+  /* 俳優の切替：見出しの1か所だけ */
+  .cast { display: flex; margin-left: auto; align-self: center; }
+  .cast button { border-radius: 0; min-width: 76px; font-family: var(--mincho); }
+  .cast button:first-child { border-radius: 6px 0 0 6px; }
+  .cast button:last-child { border-radius: 0 6px 6px 0; }
+  .cast button[aria-pressed="true"] { background: var(--brass); color: var(--night); border-color: var(--brass); }
+  button { font-family: var(--sans); font-size: 14px; color: var(--paper); cursor: pointer;
+    background: var(--teal); border: 1px solid var(--line); border-radius: 6px; padding: 8px 14px; }
+  button:hover { border-color: var(--brass); }
+  button:focus-visible { outline: 2px solid var(--brass-2); outline-offset: 2px; }
+  canvas:focus-visible { outline: 1px dashed rgba(224,194,127,.45); }
+  button:disabled { opacity: .4; cursor: default; }
+
+  .room { display: grid; grid-template-columns: 210px 1fr 250px; gap: 20px; padding: 10px 24px; min-height: 0; }
+  .room h2 { margin: 0 0 12px; font-size: 17px; color: var(--brass-2); }
+
+  /* 衣装掛け：真鍮の棒に空のハンガー。空なのは鎧を着ているから */
+  .rack { align-self: start; padding-top: 18px; }
+  .rail { position: relative; display: flex; justify-content: space-around; padding-top: 12px; }
+  .rail::before { content: ""; position: absolute; left: 0; right: 0; top: 0; height: 5px;
+    background: linear-gradient(var(--brass-2), var(--brass)); border-radius: 3px; }
+  .peg { display: flex; flex-direction: column; align-items: center; width: 92px; }
+  .coat-hanger { position: relative; width: 84px; height: 26px; }
+  .coat-hanger::before { content: ""; position: absolute; left: 50%; top: -16px; width: 12px; height: 15px; transform: translateX(-50%);
+    border: 3px solid var(--brass-2); border-bottom: 0; border-radius: 8px 8px 0 0; }
+  .coat-hanger::after { content: ""; position: absolute; inset: 0; border-bottom: 3px solid var(--brass);
+    background:
+      linear-gradient(to top right, transparent calc(50% - 2px), var(--brass) calc(50% - 2px) calc(50% + 1px), transparent calc(50% + 1px)) left / 50% 100% no-repeat,
+      linear-gradient(to top left, transparent calc(50% - 2px), var(--brass) calc(50% - 2px) calc(50% + 1px), transparent calc(50% + 1px)) right / 50% 100% no-repeat; }
+  .tag { margin: 10px 0 0; padding: 6px 8px; background: var(--paper); color: var(--night); border-radius: 2px;
+    font-family: var(--mincho); font-size: 13px; line-height: 1.35; text-align: center; position: relative; }
+  .tag::before { content: ""; position: absolute; left: 50%; top: -8px; width: 1px; height: 8px; background: var(--brass); }
+  .note { color: var(--muted); font-size: 13px; margin: 6px 0 0; }
+
+  /* 眺める台 */
+  .stage { display: flex; flex-direction: column; align-items: center; min-height: 0; }
+  .plaque { margin: 0 0 6px; padding: 4px 18px; border: 1px solid var(--brass); border-radius: 3px;
+    background: var(--leather); color: var(--brass-2); font-size: 17px; }
+  .dais { position: relative; display: flex; justify-content: center; }
+  .dais::after { content: ""; position: absolute; left: 50%; bottom: 0; width: 70%; height: 46px; transform: translateX(-50%);
+    border-radius: 50%; background: radial-gradient(ellipse, rgba(224,194,127,.18), transparent 70%); border-bottom: 2px solid var(--brass); z-index: 0; }
+  #stage { position: relative; z-index: 1; height: calc(100vh - 270px); min-height: 420px; width: auto; touch-action: none; }
+  #stage.over-scabbard { cursor: grab; }
+  #stage.over-hand { cursor: pointer; }
+  #stage.grabbing { cursor: grabbing; }
+  .dais.drop-on #stage { filter: drop-shadow(0 0 10px rgba(224,194,127,.35)); }
+  /* 着けた瞬間の控えめな光と揺れ */
+  #stage.equip-flash { animation: equip-flash .45s ease-out; }
+  @keyframes equip-flash {
+    0% { filter: drop-shadow(0 0 0 rgba(224,194,127,0)); transform: translateY(0); }
+    35% { filter: drop-shadow(0 0 12px rgba(224,194,127,.55)); transform: translateY(-3px); }
+    100% { filter: drop-shadow(0 0 0 rgba(224,194,127,0)); transform: translateY(0); }
+  }
+  @media (prefers-reduced-motion: reduce) { #stage.equip-flash { animation: none; } }
+  .stage-actions { display: flex; gap: 10px; min-height: 40px; margin-top: 8px; }
+  .stage-actions button[aria-expanded="true"] { border-color: var(--brass); }
+  /* 案内は人物の足もとに出す */
+  .hint { position: absolute; left: 50%; bottom: 10px; z-index: 2; transform: translateX(-50%); width: max-content; max-width: 92%;
+    margin: 0; padding: 4px 12px; border-radius: 12px; background: rgba(13,32,35,.82); color: var(--paper); font-size: 13px; text-align: center; }
+  .hint:empty { display: none; }
+
+  /* 品の操作カード：押した品のそばに出る */
+  .prop-card { position: absolute; z-index: 3; min-width: 132px; padding: 8px 10px 10px; border: 1px solid var(--brass); border-radius: 6px;
+    background: linear-gradient(var(--leather-2), var(--leather)); box-shadow: 0 6px 18px rgba(0,0,0,.45); }
+  .prop-card h3 { margin: 0 0 6px; font-family: var(--mincho); font-size: 15px; font-weight: 600; color: var(--brass-2); letter-spacing: .08em; }
+  .prop-card .card-actions { display: flex; flex-direction: column; gap: 6px; }
+  .prop-card button { font-size: 13px; padding: 6px 10px; text-align: left; }
+
+  /* 小道具棚：革色の板に真鍮の縁 */
+  .shelf { align-self: start; padding: 14px; border-radius: 8px; background: linear-gradient(var(--leather-2), var(--leather)); border: 2px solid var(--brass); }
+  .shelf h2 { color: var(--brass-2); }
+  .slot { padding: 10px 0 12px; border-bottom: 4px solid #3e2615; }
+  .slot:last-child { border-bottom: 0; }
+  .item { display: flex; align-items: center; gap: 10px; width: 100%; text-align: left; background: rgba(13,32,35,.55); }
+  .item canvas { width: 64px; height: 64px; flex: none; }
+  .item[draggable="true"] { cursor: grab; }
+  .slot.out .item { opacity: .45; cursor: default; }
+  .slot .where { margin: 6px 0 0; font-size: 13px; color: var(--paper); }
+  .shelf .note { color: var(--paper); opacity: .8; margin: -6px 0 4px; }
+  .slot.missing .item { border-style: dashed; color: var(--muted); cursor: default; }
+  .ghost { width: 64px; height: 64px; border: 1px dashed var(--muted); border-radius: 4px; flex: none; }
+  .item .pick { color: var(--brass-2); font-family: var(--mincho); }
+
+  /* 床：前後の切替と舞台袖 */
+  .floor { display: flex; align-items: center; gap: 16px; padding: 10px 24px 14px; border-top: 1px solid var(--line); background: rgba(13,32,35,.7); }
+  .turn { display: flex; }
+  .turn button { border-radius: 0; min-width: 84px; position: relative; }
+  .turn button:first-child { border-radius: 6px 0 0 6px; }
+  .turn button:last-child { border-radius: 0 6px 6px 0; }
+  .turn button[aria-pressed="true"] { background: var(--brass); color: var(--night); border-color: var(--brass); }
+  .turn .dot { position: absolute; top: 4px; right: 6px; width: 8px; height: 8px; border-radius: 50%; background: var(--warn); display: none; }
+  .turn button.needs .dot { display: block; }
+  #unchecked { flex: 1; margin: 0; color: var(--warn); font-size: 13px; }
+  #wings { font-family: var(--mincho); font-size: 16px; background: var(--leather); border-color: var(--brass); color: var(--brass-2); }
+  .proto { color: var(--muted); font-size: 12px; margin: 0; max-width: 340px; }
+  .proto summary { cursor: pointer; }
+  .proto p { margin: 6px 0 0; }
+
+  dialog { background: var(--night); color: var(--paper); border: 2px solid var(--brass); border-radius: 10px; padding: 18px 22px; max-width: 96vw; }
+  dialog::backdrop { background: rgba(0,0,0,.7); }
+  dialog h2 { margin: 0 0 4px; color: var(--brass-2); }
+  .pair { display: flex; gap: 18px; margin: 12px 0; }
+  .pair figure { margin: 0; text-align: center; }
+  .pair canvas { height: 68vh; width: auto; display: block; background: var(--teal); border-radius: 6px; }
+  .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+  #load-error { color: var(--warn); }
+
+  /* 幅の狭い画面：ガレス→棚→衣装掛けの縦並び */
+  @media (max-width: 760px) {
+    html, body { height: auto; }
+    .stage { min-height: auto; }
+    header { flex-wrap: wrap; gap: 2px 10px; padding: 10px 14px 0; }
+    header h1 { font-size: 22px; }
+    .room { grid-template-columns: minmax(0, 1fr); gap: 16px; padding: 8px 14px; }
+    .stage { order: 0; } .shelf { order: 1; } .rack { order: 2; padding-top: 0; }
+    #stage { height: min(56vh, 480px); min-height: 300px; max-width: 100%; }
+    .shelf h2, .shelf .note { margin-bottom: 8px; }
+    .shelf-items:not([hidden]) { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+    .cast { margin-left: 0; }
+    .slot { padding: 0; border-bottom: 0; }
+    .item { flex-direction: column; text-align: center; gap: 4px; padding: 6px; }
+    .item canvas, .ghost { width: 48px; height: 48px; }
+    .slot .where { font-size: 12px; text-align: center; }
+    .floor { flex-wrap: wrap; gap: 10px; padding: 10px 14px; }
+    #unchecked { flex-basis: 100%; order: 1; }
+    .proto { order: 2; flex-basis: 100%; max-width: none; }
+    .pair { gap: 8px; }
+    .pair figure { flex: 1; min-width: 0; }
+    .pair canvas { height: auto; width: 100%; }
+  }
+  @media (min-width: 761px) {
+    .shelf { max-height: calc(100dvh - 150px); overflow-y: auto; scrollbar-color: var(--brass) var(--leather); }
+  }
+</style>
+</head>
+<body>
+<header>
+  <h1>衣装部屋</h1>
+  <small>舞台へ出る前の身支度（試作）</small>
+  <div class="cast" role="group" aria-label="身支度する俳優">
+    <button data-actor="gareth" aria-pressed="true">ガレス</button>
+    <button data-actor="maren" aria-pressed="false">マレン</button>
+    <button data-actor="brom" aria-pressed="false">ブロム</button>
+  </div>
+  <p id="load-error" role="alert"></p>
+</header>
+
+<main class="room">
+  <aside class="rack" aria-labelledby="rack-title">
+    <h2 id="rack-title">衣装掛け</h2>
+    <div class="rail">
+      <div class="peg"><span class="coat-hanger" aria-hidden="true"></span><p class="tag" id="worn-tag">鎧は着用中</p></div>
+      <div class="peg"><span class="coat-hanger" aria-hidden="true"></span><p class="tag">替え衣装は準備中</p></div>
+    </div>
+  </aside>
+
+  <section class="stage" aria-label="眺める台">
+    <p class="plaque" id="outfit" role="status">素手</p>
+    <div class="dais" id="dais">
+      <canvas id="stage" width="656" height="1199" tabindex="0" aria-label="ガレス。鞘を着けているときは矢印キーで鞘を少しずらせます"></canvas>
+      <p class="hint" id="hint"></p>
+      <div class="prop-card" id="card" role="group" aria-labelledby="card-title" hidden>
+        <h3 id="card-title"></h3>
+        <div class="card-actions"></div>
+      </div>
+    </div>
+    <div class="stage-actions">
+      <button id="open-sword" data-item="sword" aria-controls="card" aria-expanded="false" hidden>剣を整える</button>
+      <button id="open-scabbard" data-item="scabbard" aria-controls="card" aria-expanded="false" hidden>鞘を整える</button>
+      <button id="open-hold" aria-controls="card" aria-expanded="false" hidden>持ち物を整える</button>
+      <button id="open-necklace" data-item="necklace" aria-controls="card" aria-expanded="false" hidden>首飾りを整える</button>
+      <button id="open-hammer" data-item="hammer" aria-controls="card" aria-expanded="false" hidden>金槌を整える</button>
+      <button id="open-shield" data-item="shield" aria-controls="card" aria-expanded="false" hidden>盾を整える</button>
+      <button id="open-axe" data-item="axe" aria-controls="card" aria-expanded="false" hidden>手斧を整える</button>
+    </div>
+  </section>
+
+  <aside class="shelf" aria-labelledby="shelf-title">
+    <h2 id="shelf-title">小道具棚</h2>
+    <p class="note"><span class="actor-name">ガレス</span>へドラッグ、またはクリックで渡します</p>
+    <div class="shelf-items" data-actor="gareth">
+    <div class="slot" data-item="sword">
+      <button class="item" draggable="true"><canvas id="thumb-sword" width="128" height="128" aria-hidden="true"></canvas><span>片手剣</span></button>
+      <p class="where"></p>
+    </div>
+    <div class="slot" data-item="scabbard">
+      <button class="item" draggable="true"><canvas id="thumb-scabbard" width="128" height="128" aria-hidden="true"></canvas><span>鞘</span></button>
+      <p class="where"></p>
+    </div>
+    <div class="slot missing">
+      <button class="item" id="view-curved-set"><img src="assets/designs/curved-sword-v1.png" width="64" height="64" style="object-fit:contain" alt=""><span>反りのある片刃剣<br><small>デザインを見る</small></span></button>
+      <img src="assets/designs/curved-scabbard-v1.png" alt="焦げ茶の革と真鍮の反った鞘" style="display:block;width:100%;height:80px;object-fit:contain">
+      <p class="where">剣と鞘の新しい候補。装着は準備中です。</p>
+    </div>
+    </div>
+    <!-- マレンの手持ちは1つ。杖とランタンは持ち替え -->
+    <div class="shelf-items" data-actor="maren" hidden>
+      <div class="slot" data-item="staff">
+        <button class="item" draggable="true"><canvas id="thumb-staff" width="128" height="128" aria-hidden="true"></canvas><span>杖<br><small class="pick">おすすめ『魔法使いの身支度』</small></span></button>
+        <p class="where"></p>
+      </div>
+      <div class="slot" data-item="lantern">
+        <button class="item" draggable="true"><canvas id="thumb-lantern" width="128" height="128" aria-hidden="true"></canvas><span>ランタン</span></button>
+        <p class="where"></p>
+      </div>
+      <div class="slot" data-item="none">
+        <button class="item"><span class="ghost" aria-hidden="true"></span><span>何も持たない</span></button>
+        <p class="where"></p>
+      </div>
+      <!-- 首飾りは手持ちと別。持ち替えても着けたまま -->
+      <div class="slot" data-item="necklace">
+        <button class="item" draggable="true"><canvas id="thumb-necklace" width="128" height="128" aria-hidden="true"></canvas><span>琥珀の首飾り<br><small>手持ちとは別</small></span></button>
+        <p class="where"></p>
+      </div>
+    </div>
+    <!-- ブロムの右手（金槌か手斧の持ち替え）と盾（左腕）は別々に着け外しできる -->
+    <div class="shelf-items" data-actor="brom" hidden>
+      <div class="slot" data-item="hammer">
+        <button class="item" draggable="true"><canvas id="thumb-hammer" width="128" height="128" aria-hidden="true"></canvas><span>金槌<br><small>右手に持つ</small></span></button>
+        <p class="where"></p>
+      </div>
+      <div class="slot" data-item="axe">
+        <button class="item" draggable="true"><canvas id="thumb-axe" width="128" height="128" aria-hidden="true"></canvas><span>手斧<br><small>右手に持つ</small></span></button>
+        <p class="where"></p>
+      </div>
+      <div class="slot" data-item="shield">
+        <button class="item" draggable="true"><canvas id="thumb-shield" width="128" height="128" aria-hidden="true"></canvas><span>盾<br><small>左腕に着ける</small></span></button>
+        <p class="where"></p>
+      </div>
+    </div>
+  </aside>
+</main>
+
+<footer class="floor">
+  <div class="turn" role="group" aria-label="向き">
+    <button data-view="front" aria-pressed="true">正面<span class="dot"></span></button>
+    <button data-view="back" aria-pressed="false">背面<span class="dot"></span></button>
+  </div>
+  <p id="unchecked" role="status"></p>
+  <details class="proto">
+    <summary>試作について</summary>
+    <p>素材の採否は未判定。保存・復元・PNG出力は未実装。鞘の真鍮枠は動かせる範囲を示すだけで、素材どうしのつながりは保証しません。</p>
+  </details>
+  <button id="undo" disabled>取り消し</button>
+  <button id="wings">舞台袖へ</button>
+</footer>
+
+<dialog id="wings-dialog" aria-labelledby="wings-title">
+  <h2 id="wings-title">舞台袖：前後の確認</h2>
+  <p class="note">前後は同じ装備として見えるかを確かめます。舞台への出口は、この試作にはまだありません。</p>
+  <div class="pair">
+    <figure><canvas id="wings-front" width="656" height="1199"></canvas><figcaption>正面</figcaption></figure>
+    <figure><canvas id="wings-back" width="656" height="1199"></canvas><figcaption>背面</figcaption></figure>
+  </div>
+  <form method="dialog"><button>衣装部屋へ戻る</button></form>
+</dialog>
+
+<dialog id="curved-set" aria-labelledby="curved-set-title">
+  <h2 id="curved-set-title">片刃剣と、それに合わせた鞘</h2>
+  <p class="note">浅い反り・焦げ茶の革・控えめな真鍮。握りと腰への取り付けは準備中です。</p>
+  <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;max-width:800px">
+    <figure style="margin:12px 0"><img src="assets/designs/curved-sword-v1.png" alt="日本刀風の片刃剣" style="width:100%"><figcaption>片刃剣</figcaption></figure>
+    <figure style="margin:12px 0"><img src="assets/designs/curved-scabbard-v1.png" alt="革の吊り帯が付いた空の鞘" style="width:100%"><figcaption>空の鞘</figcaption></figure>
+  </div>
+  <form method="dialog"><button>衣装部屋へ戻る</button></form>
+</dialog>
+<p id="announce" class="sr-only" aria-live="polite"></p>
+<script src="wardrobe.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
