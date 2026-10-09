@@ -9,6 +9,7 @@
   const ITEM_NAME = { sword: '片手剣', scabbard: '鞘', staff: '杖', lantern: 'ランタン', necklace: '琥珀の首飾り', hammer: '金槌', shield: '盾', axe: '手斧' };
   const ACTOR_NAME = { gareth: 'ガレス', maren: 'マレン', brom: 'ブロム', lydia: 'リディア' };
   const WORN = { gareth: '鎧は着用中', maren: '旅装は着用中', brom: '鎧は着用中', lydia: '旅装は着用中' };
+  const OUTFIT_NAME = { maren: { dark: '黒の旅装' }, lydia: { wine: 'ワインの旅装' } };   // 替え衣装のある俳優と、その衣装名
   const BROM_PLACE = { hammer: 'ブロムの右手に', shield: 'ブロムの左腕に', axe: 'ブロムの右手に' };
   const NUDGE = 2, NUDGE_FAST = 6;      // 矢印キー1回の移動量（px）。Shift で速く
 
@@ -56,8 +57,8 @@
     for (const el of document.querySelectorAll('.shelf-items')) el.hidden = el.dataset.actor !== actor;
     for (const el of document.querySelectorAll('.actor-name')) el.textContent = ACTOR_NAME[actor];
     document.querySelector('.shelf > .note').hidden = actor === 'lydia';
-    document.querySelector('.outfits').hidden = actor !== 'maren';
-    $('spare-peg').hidden = actor === 'maren';
+    for (const el of document.querySelectorAll('.outfits')) el.hidden = el.dataset.actor !== actor;
+    $('spare-peg').hidden = actor in OUTFIT_NAME;
     canvas.setAttribute('aria-label', {
       gareth: 'ガレス。鞘を着けているときは矢印キーで鞘を少しずらせます',
       lydia: 'リディア。素手の正面と背面を見られます',
@@ -221,9 +222,9 @@
         thumb('thumb-lantern', W.MAREN_DIR + 'maren-lantern-review.png', 140, 510, 130, 290);
       }
     }
-    $('worn-tag').textContent = actor === 'maren' && state.outfit === 'dark' ? '黒の旅装は着用中' : WORN[actor];
-    for (const b of document.querySelectorAll('.outfits button')) {
-      b.setAttribute('aria-pressed', String(actor === 'maren' && b.dataset.outfit === state.outfit));
+    $('worn-tag').textContent = state.outfit && state.outfit !== 'normal' ? `${OUTFIT_NAME[actor][state.outfit]}は着用中` : WORN[actor];
+    for (const b of document.querySelectorAll(`.outfits[data-actor="${actor}"] button`)) {
+      b.setAttribute('aria-pressed', String(b.dataset.outfit === state.outfit));
       b.disabled = b.dataset.outfit === 'dark' && !W.maren.darkReady;   // 黒の3姿が揃うまで準備中
       if (b.disabled) b.title = '準備中';
     }
@@ -401,11 +402,11 @@
     });
   }
 
-  // 衣装掛け：マレンの着替え（取り消しできる）
+  // 衣装掛け：マレン・リディアの着替え（取り消しできる）。ボタンはその俳優の組にしか見えない
   for (const b of document.querySelectorAll('.outfits button')) {
     b.addEventListener('click', () => {
       const next = b.dataset.outfit;
-      if (commit(W.maren.dress(state, next), next === 'dark' ? '黒の旅装に着替えました' : 'いつもの旅装に着替えました')) flash();
+      if (commit(rules().dress(state, next), next === 'normal' ? 'いつもの旅装に着替えました' : `${OUTFIT_NAME[actor][next]}に着替えました`)) flash();
     });
   }
 
@@ -447,7 +448,7 @@
     .concat([W.CURVED.sword, W.CURVED.scabbard, W.CURVED.handFront, W.CURVED.gripBack]).map((f) => W.DIR + f)
     .concat(['maren-empty-review.png', 'maren-lantern-review.png', 'staff-front-source.png', 'staff-back-source.png'].map((f) => W.MAREN_DIR + f))
     .concat([...new Set(Object.values(W.maren.MAREN_DARK_SRC).filter(Boolean).flatMap((p) => [p.front.src, p.back.src]))].map((f) => W.MAREN_DIR + f))
-    .concat([W.maren.NECKLACE.src, W.lydia.src])
+    .concat([W.maren.NECKLACE.src, ...Object.values(W.lydia.LYDIA_OUTFITS).map((o) => o.src)])
     .concat([...new Set(Object.values(W.brom.BROM_SRC).flatMap(p => Object.values(p).map(q => W.BROM_DIR + q.src)))]);
   Promise.all(FILES.map((f) => new Promise((ok, ng) => {
     const img = new Image();

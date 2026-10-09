@@ -544,6 +544,50 @@ for (const view of ['front', 'back']) {
 }
 console.log('lydia check: ok (2 views, empty hands)');
 
+// ── リディアのワインの旅装：衣装は向きと独立。素手のまま。頭頂390・足裏1140・頭の中心328へ揃う ──
+const L = W.lydia;
+assert.deepEqual(L.initialState(), { outfit: 'normal', view: 'front' });
+for (const outfit of ['normal', 'wine']) for (const view of ['front', 'back']) {
+  const st = { outfit, view }, snap = JSON.stringify(st), tag = `lydia ${outfit}/${view}`, swap = outfit === 'wine' ? 'normal' : 'wine';
+  assert.equal(L.dress(st, outfit), st, `${tag} 同じ衣装は変化なし`);
+  assert.deepEqual(L.dress(st, swap), { ...st, outfit: swap }, `${tag} 着替えても向きはそのまま`);
+  assert.deepEqual(L.dress(L.dress(st, swap), outfit), st, `${tag} 戻すと元どおり`);
+  assert.equal(L.setView(st, view === 'front' ? 'back' : 'front').outfit, outfit, `${tag} 向きを変えても衣装はそのまま`);
+  assert.equal(JSON.stringify(st), snap, `${tag} 元の state を変えない`);
+  const ls = L.layers(st, view), o = L.LYDIA_OUTFITS[outfit], m = o.pose[view], l = ls[0], c = l.crop;
+  assert.equal(ls.length, 1, tag);
+  assert.equal(l.src, o.src, tag);
+  assert.ok(fs.existsSync(path.join(__dirname, l.src)), l.src);
+  const at = (sx, sy) => ({ x: l.x + c.w / 2 + l.scale * (sx - c.x - c.w / 2), y: l.y + c.h / 2 + l.scale * (sy - c.y - c.h / 2) });
+  for (const [p, want] of [[at(m.headX, m.headTop), { x: 328, y: 390 }], [at(m.headX, m.footY), { x: 328, y: 1140 }]]) {
+    assert.ok(Math.abs(p.x - want.x) < 1e-9 && Math.abs(p.y - want.y) < 1e-9, `${tag} ${JSON.stringify(p)}`);
+  }
+  assert.equal(L.hitItem(st, view, { x: 328, y: 600 }), null, `${tag} 素手`);
+  assert.equal(L.outfitLabel(st), outfit === 'wine' ? 'ワインの旅装・素手' : '素手');
+}
+assert.equal(L.LYDIA_OUTFITS.normal.src, 'assets/lydia/empty-v1.png', '通常の素材はそのまま');
+assert.deepEqual(L.LYDIA_SRC, { front: { crop: { x: 0, y: 0, w: 627, h: 1254 }, headTop: 20, footY: 1230, headX: 346 }, back: { crop: { x: 627, y: 0, w: 627, h: 1254 }, headTop: 23, footY: 1224, headX: 909 } }, '通常の値はそのまま');
+assert.equal(L.LYDIA_OUTFITS.wine.src, 'assets/lydia/wine-empty-v3.png', 'ワインは新版 v3');
+for (const v of ['v1', 'v2']) assert.ok(fs.existsSync(path.join(__dirname, `assets/lydia/wine-empty-${v}.png`)), `旧 ${v} は保存`);
+assert.deepEqual(L.LYDIA_WINE_SRC, { front: { crop: { x: 0, y: 0, w: 627, h: 1254 }, headTop: 21, footY: 1238, headX: 350 }, back: { crop: { x: 627, y: 0, w: 627, h: 1254 }, headTop: 26, footY: 1234, headX: 905 } }, 'measure-lydia.cjs の実測');
+assert.deepEqual(pngSize(L.LYDIA_OUTFITS.wine.src), { w: 1254, h: 1254 });
+// ワインの人物（measure-lydia.cjs の bbox）は crop の内側で、表示してもキャンバス幅に収まる
+for (const [view, [x0, x1]] of Object.entries({ front: [134, 580], back: [673, 1139] })) {
+  const m = L.LYDIA_WINE_SRC[view], k = 750 / (m.footY - m.headTop);
+  assert.ok(x0 >= m.crop.x && x1 < m.crop.x + m.crop.w, `wine ${view} crop`);
+  assert.ok(328 + (x0 - m.headX) * k > 0 && 328 + (x1 - m.headX) * k < W.WIDTH, `wine ${view} 左右`);
+}
+// 取り消し（app.js と同じく、前の state を向きだけ今に合わせて戻す）。俳優ごとに履歴を持つので他人の衣装は変わらない
+const lh = [L.initialState()], lw = L.setView(L.dress(lh[0], 'wine'), 'back');
+assert.deepEqual(L.setView(lh.pop(), lw.view), { outfit: 'normal', view: 'back', unchecked: undefined }, 'ワインを取り消すと通常・背面のまま');
+const casts = { maren: M.dress(M.initialState(), 'dark'), lydia: L.dress(L.initialState(), 'wine') };
+assert.deepEqual([casts.maren.outfit, casts.lydia.outfit], ['dark', 'wine'], '俳優を切り替えても互いの衣装はそのまま');
+assert.ok(!('dress' in W) && !('dress' in B), 'ガレス・ブロムに衣装切替は無い');
+const html = fs.readFileSync(path.join(__dirname, 'index.html'), 'utf8');
+assert.deepEqual([...html.matchAll(/class="outfits" data-actor="(\w+)"/g)].map((x) => x[1]), ['maren', 'lydia'], '衣装掛けのボタンはマレンとリディアだけ');
+assert.ok(fs.readFileSync(path.join(__dirname, 'app.js'), 'utf8').includes('LYDIA_OUTFITS'), 'FILES にワインの素材');
+console.log('lydia wine check: ok (2 outfits x 2 views)');
+
 for (const actor of ['gareth','maren','lydia','brom']) for (const view of ['front','back']) {
   const f = W.displayFrame(actor, view);
   const foot = actor === 'gareth' ? (view === 'front' ? 1168 : 1170) : 1140;

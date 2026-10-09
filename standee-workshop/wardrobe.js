@@ -589,17 +589,26 @@
     }
   }
 
+  // headTop・headX・footY は measure-lydia.cjs の実測
   const LYDIA_SRC = {"front":{"crop":{"x":0,"y":0,"w":627,"h":1254},"headTop":20,"footY":1230,"headX":346},"back":{"crop":{"x":627,"y":0,"w":627,"h":1254},"headTop":23,"footY":1224,"headX":909}};
+  // ワインの旅装（作者添付の新版 v3・素手、2026-10-09）。測り方・揃え方は LYDIA_SRC と同じ
+  const LYDIA_WINE_SRC = {"front":{"crop":{"x":0,"y":0,"w":627,"h":1254},"headTop":21,"footY":1238,"headX":350},"back":{"crop":{"x":627,"y":0,"w":627,"h":1254},"headTop":26,"footY":1234,"headX":905}};
+  const LYDIA_OUTFITS = {
+    normal: { src: 'assets/lydia/empty-v1.png', pose: LYDIA_SRC },
+    wine: { src: 'assets/lydia/wine-empty-v3.png', pose: LYDIA_WINE_SRC },
+  };
   const lydia = {
-    ITEMS: [], LYDIA_SRC, src: 'assets/lydia/empty-v1.png',
-    initialState: () => ({ view: 'front' }), setView,
+    ITEMS: [], LYDIA_SRC, LYDIA_WINE_SRC, LYDIA_OUTFITS, src: LYDIA_OUTFITS.normal.src,
+    // outfit（'normal' | 'wine'）。小道具は無く素手のまま
+    initialState: () => ({ outfit: 'normal', view: 'front' }), setView,
+    dress: (s, outfit) => (s.outfit === outfit ? s : { ...s, outfit }),
     layers: (s, view) => {
-      const m = LYDIA_SRC[view], c = m.crop, k = (1140 - 390) / (m.footY - m.headTop);
-      return [{ src: lydia.src, crop: c, rotation: 0, scale: k,
+      const o = LYDIA_OUTFITS[s.outfit] || LYDIA_OUTFITS.normal, m = o.pose[view], c = m.crop, k = (1140 - 390) / (m.footY - m.headTop);
+      return [{ src: o.src, crop: c, rotation: 0, scale: k,
         x: 328 - c.w / 2 + k * (c.x + c.w / 2 - m.headX),
         y: 390 - c.h / 2 + k * (c.y + c.h / 2 - m.headTop) }];
     },
-    outfitLabel: () => '素手', isOut: () => false,
+    outfitLabel: (s) => (s.outfit === 'wine' ? 'ワインの旅装・素手' : '素手'), isOut: () => false,
     itemPoint: () => null, hitItem: () => null, cardActions: () => [],
   };
 

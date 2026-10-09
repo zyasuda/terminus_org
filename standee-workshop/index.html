@@ -190,10 +190,14 @@
       <div class="peg"><span class="coat-hanger" aria-hidden="true"></span><p class="tag" id="worn-tag">鎧は着用中</p></div>
       <div class="peg" id="spare-peg"><span class="coat-hanger" aria-hidden="true"></span><p class="tag">替え衣装は準備中</p></div>
     </div>
-    <!-- マレンの衣装。手持ち・首飾りとは独立 -->
-    <div class="outfits" role="group" aria-label="マレンの衣装" hidden>
+    <!-- 替え衣装は俳優ごと。マレンは手持ち・首飾りとは独立、リディアは素手のまま -->
+    <div class="outfits" data-actor="maren" role="group" aria-label="マレンの衣装" hidden>
       <button data-outfit="normal" aria-pressed="true">通常</button>
       <button data-outfit="dark" aria-pressed="false">黒</button>
+    </div>
+    <div class="outfits" data-actor="lydia" role="group" aria-label="リディアの衣装" hidden>
+      <button data-outfit="normal" aria-pressed="true">通常</button>
+      <button data-outfit="wine" aria-pressed="false">ワイン</button>
     </div>
   </aside>
 
@@ -302,7 +306,7 @@
   <form method="dialog"><button>衣装部屋へ戻る</button></form>
 </dialog>
 <p id="announce" class="sr-only" aria-live="polite"></p>
-<script src="wardrobe.js"></script>
-<script src="app.js"></script>
+<script src="wardrobe.js?v=lydia-wine-v3"></script>
+<script src="app.js?v=lydia-wine-v3"></script>
 </body>
 </html>
