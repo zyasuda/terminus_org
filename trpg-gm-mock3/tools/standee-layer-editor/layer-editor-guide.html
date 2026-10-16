@@ -101,6 +101,7 @@ footer{margin-top:60px;font-size:14px;color:#4c5f5d}
 <main>
 <nav class="toc" aria-label="目次"><ol>
   <li><a href="#what">このツールがすること・しないこと</a></li>
+  <li><a href="#position">この手引きの位置づけ</a></li>
   <li><a href="#start">起動のしかた</a></li>
   <li><a href="#map">画面の地図（番号つき）</a></li>
   <li><a href="#tutorial">最初の練習：デモ図形で動かして保存</a></li>
@@ -139,7 +140,17 @@ footer{margin-top:60px;font-size:14px;color:#4c5f5d}
   </div>
 </div>
 
-<h2 id="start">2. 起動のしかた</h2>
+<h2 id="position">2. この手引きの位置づけ</h2>
+<div class="box ok"><strong>役割を分けています。</strong>このページは、正面・背面の透明PNGを4レイヤーで合わせ、JSONとPNGを書き出す<b>2D制作手引き</b>です。光源を動かす3D確認とGLB出力は、独立した <code>standee-studio</code> 側で行います。</div>
+<ul>
+  <li><b>このツール：</b>素体・装備・前後の重ね順・位置・回転・縮尺・マスクを決める</li>
+  <li><b>衣装部屋（standee-workshop）：</b>完成した人物・衣装・装備の組み合わせを選び、前後を見比べるビューアーとして使う</li>
+  <li><b>standee-studio：</b>制作データを受け取り、BlenderでGLBを作り、光源を動かして確認する</li>
+  <li><b>ゲーム本編：</b>採用を作者が確認した出力だけを、ゲーム別の変換処理へ渡す</li>
+</ul>
+<p>したがって、このページで保存するJSONはレイヤー作業の正本です。透明PNGは表示・受け渡し用、衣装部屋は組み合わせ確認用、3Dの見た目は光源を含めた確認用です。3D確認にはBlenderが必須で、Blenderが無い環境では2D編集とPNG出力までを使います。3D確認結果が自動で本編へ登録されることはありません。</p>
+
+<h2 id="start">3. 起動のしかた</h2>
 <p>ログインやAPIキーは要りません。ターミナルで次の2行を実行し、ブラウザーで下のアドレスを開きます。</p>
 <pre class="box"><code>cd ~/Desktop/Terminus/trpg-gm-mock3
 python3 -m http.server 8765</code></pre>
@@ -147,7 +158,7 @@ python3 -m http.server 8765</code></pre>
 （この手引きもそのサーバー経由で開いていれば、上の <a href="layer-editor.html" target="_blank" rel="noopener">編集ツールを開く</a> でも同じ画面が開きます）</p>
 <div class="box warn"><strong>注意：</strong>ファイルをダブルクリックして開く（アドレスが <code>file://</code> で始まる）と、<span class="btn">ガレス既存素体</span> の読み込みだけが失敗します。デモ図形や自分のPNGの読み込みは動きます。</div>
 
-<h2 id="map">3. 画面の地図（番号つき）</h2>
+<h2 id="map">4. 画面の地図（番号つき）</h2>
 <p>画面は左・中央・右の3列と、ページ下部の「生成依頼文」でできています。下の図はガレスを読み込んだ直後の、<b>ページ最上部</b>の様子です。</p>
 
 <figure class="shot" aria-label="ページ上部の画面図">
@@ -207,7 +218,7 @@ python3 -m http.server 8765</code></pre>
 </table>
 <div class="box"><strong>読み込むと置き換わります。</strong><span class="btn">デモ図形</span> と <span class="btn">ガレス既存素体</span> は、今の作業を丸ごと置き換えます。未保存の変更があるときは確認が出ます。</div>
 
-<h2 id="tutorial">4. 最初の練習：デモ図形で「動かす」と「保存」だけ</h2>
+<h2 id="tutorial">5. 最初の練習：デモ図形で「動かす」と「保存」だけ</h2>
 <p>まずは壊しても困らない図形で、2つの操作だけ試します。所要時間は数分です。</p>
 <ol class="steps">
   <li><a href="layer-editor.html" target="_blank" rel="noopener">編集ツールを開き</a>、左列の下にある「素材を読む」が見えるまでスクロールして <span class="num">A</span> <span class="btn">デモ図形</span> を押します。正面と背面に、灰色の人型・剣・盾・肌色の丸が出ます。</li>
@@ -219,7 +230,7 @@ python3 -m http.server 8765</code></pre>
   <li>（確認）剣をもう一度動かしてから、ページ下の <span class="num">D</span> で今のJSONを選びます。剣が保存した時の位置に戻れば、保存と復元ができています。</li>
 </ol>
 
-<h2 id="four">5. 基本の4手順（ガレスで試す）</h2>
+<h2 id="four">6. 基本の4手順（ガレスで試す）</h2>
 <div class="four">
   <div><b>① 「ガレス既存素体」を押す</b><span class="btn" style="background:#ece4d2;color:#0f3d40">ガレス既存素体</span></div>
   <div><b>② 装備画像を入れる</b>レイヤーの段の Choose File</div>
@@ -251,7 +262,7 @@ python3 -m http.server 8765</code></pre>
 <h3>④ JSON保存</h3>
 <p><span class="num">8</span> <span class="btn">設定をJSON保存</span>。続きをするときは <span class="num">D</span> <span class="btn">JSONから復元</span> でそのファイルを選びます。見た目を確定した画像が欲しいときだけ、<span class="num">9</span> <span class="btn">透明PNG（前後）</span> も押します（違いは <a href="#json-png">12</a>）。</p>
 
-<h2 id="noimage">6. 装備画像がまだ無いとき（生成の前段階）</h2>
+<h2 id="noimage">7. 装備画像がまだ無いとき（生成の前段階）</h2>
 <p>このツールは絵を描きません。装備画像が無い人は、ここで<b>生成AIに渡す材料</b>を作り、ツールの外で生成してもらってから、5章の②へ戻ります。</p>
 <table>
 <tr><th>段階</th><th>どこで</th><th>状態</th></tr>
@@ -283,7 +294,7 @@ python3 -m http.server 8765</code></pre>
   <p>d. できた正面用・背面用のPNGを、<a href="#four">5章</a>の②から読み込みます。生成された装備の手首を、ピンクの十字に合わせるように動かします。</p></div>
 </div>
 
-<h2 id="lr">7. 正面・背面と左右</h2>
+<h2 id="lr">8. 正面・背面と左右</h2>
 <p>キャラクターの「右手」は、正面から見ると画面の<b>左</b>、背中から見ると画面の<b>右</b>に来ます。依頼文はこの変換を自動で書きます。</p>
 <div class="lr">
   <div class="fig"><b>正面</b>（こちらを向いている）
@@ -295,7 +306,7 @@ python3 -m http.server 8765</code></pre>
 </div>
 <div class="box warn"><strong>反転で済ませません。</strong>正面用の装備を左右反転しても背面用にはなりません（剣の刃の向き、鞘の位置、見える面が変わるため）。正面用と背面用は別々の画像を用意します。このツールにも反転で代用する機能はありません。</div>
 
-<h2 id="layers">8. 奥と手前：紙の重ね順</h2>
+<h2 id="layers">9. 奥と手前：紙の重ね順</h2>
 <p>1面は4枚の透明な紙を重ねたものと考えます。下の紙ほど奥、上の紙ほど手前です。左の一覧は<b>上ほど手前</b>の順に並んでいます。</p>
 <div class="two">
   <div class="stack" aria-label="4枚の紙を重ねた図">
@@ -316,7 +327,7 @@ python3 -m http.server 8765</code></pre>
 </div>
 <p><b>アクリル外枠（参照）</b>は4枚とは別の確認用の重ね画像です。板の形の画像を読むと薄く重ねて表示されますが、透明PNGには入りません。</p>
 
-<h2 id="method">9. 手首交換と固定指</h2>
+<h2 id="method">10. 手首交換と固定指</h2>
 <p>手に武器を持たせる方法は2つです。<span class="num">F</span> の「方式」で選ぶと、依頼文の書き方が変わります。</p>
 <div class="two">
   <div>
@@ -341,7 +352,7 @@ python3 -m http.server 8765</code></pre>
 </div>
 <p>デモ図形は練習用に、剣（手前の装備）と肌色の丸（交換手/遮蔽指）を別々の段に入れてあります。実際の手首交換では、手と武器が1枚の絵になります。</p>
 
-<h2 id="mask">10. マスクは必要な時だけ</h2>
+<h2 id="mask">11. マスクは必要な時だけ</h2>
 <p>マスクは、素体の一部を四角く透明にする機能です。<b>素体の段にだけ</b>効き、装備の段は消しません。</p>
 <ul>
   <li><b>使うとき：</b>手首交換で、素体の元の手が新しい手の周りからはみ出して見えるとき。</li>
@@ -354,7 +365,7 @@ python3 -m http.server 8765</code></pre>
 </ol>
 <p>マスクも面ごとです。背面にも必要なら、<span class="num">2</span> で背面に切り替えて同じ操作をします。赤い点線と十字は <span class="num">4</span> の横の「接続点・マスク枠を表示」で隠せます（書き出しには最初から入りません）。</p>
 
-<h2 id="json-png">11. 〜 12. JSONとPNGの違い</h2>
+<h2 id="json-png">12. JSONとPNGの違い</h2>
 <table>
 <tr><th></th><th>設定をJSON保存</th><th>透明PNG（前後）</th><th>参照ガイドPNG（前後）</th></tr>
 <tr><td>ファイル</td><td><code>standee-layers.json</code>（1つ）</td><td><code>standee-front.png</code><br><code>standee-back.png</code></td><td><code>guide-front.png</code><br><code>guide-back.png</code></td></tr>
@@ -391,7 +402,7 @@ python3 -m http.server 8765</code></pre>
 </ul>
 
 <footer>
-  この手引きは <code>tools/standee-layer-editor/</code> の index.html / app.js / core.js（2026-10-08時点）の内容から書いています。画面図は既存の screenshots/ を使用しました。
+  この手引きは <code>tools/standee-layer-editor/</code> の index.html / app.js / core.js / flow.js（2026-10-16時点）の内容から書いています。画面図は既存の screenshots/ を使用しました。3D確認の運用はBORGの引き継ぎ記録を参照してください。
   <a href="layer-editor.html" target="_blank" rel="noopener">編集ツールを開く</a>
 </footer>
 </main>
