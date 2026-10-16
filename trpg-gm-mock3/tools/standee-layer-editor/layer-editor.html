@@ -1,0 +1,152 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>詳細レイヤー編集 — 立ち絵制作</title>
+<style>
+:root{
+  --bg:#0e2629;--panel:#14353a;--line:#2e5458;--ivory:#ece4d2;--muted:#a9b7ae;--brass:#c39b55;--brass-dim:#6e5730;--err:#ffaca5;
+  color-scheme:dark;background:var(--bg);color:var(--ivory);
+  font-family:"Hiragino Sans","Hiragino Kaku Gothic ProN","Yu Gothic UI","Meiryo",system-ui,sans-serif;font-size:14px;
+}
+body{margin:0;padding:16px 18px 40px}
+h1,h2,h3{font-family:"Hiragino Mincho ProN","Yu Mincho","YuMincho",serif;font-weight:600;letter-spacing:.04em}
+h1{font-size:22px;margin:0 0 4px}h2{font-size:16px;margin:0 0 10px;color:var(--brass)}h3{font-size:14px;margin:14px 0 6px;color:var(--brass)}
+header p{margin:0;color:var(--muted)}
+#status{margin:10px 0 0;padding:8px 12px;border-left:3px solid var(--brass);background:#0a1d20;color:var(--ivory);line-height:1.7}
+#error{margin:6px 0 0;color:var(--err);min-height:1.4em}
+.grid{display:grid;grid-template-columns:250px minmax(0,1fr) 270px;gap:14px;margin-top:12px;align-items:start}
+aside,.stage,.prompt{background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:12px}
+button,select,input,textarea{font:inherit;color:var(--ivory);background:#0b2124;border:1px solid var(--line);border-radius:4px}
+button{padding:6px 10px;cursor:pointer;border-color:var(--brass-dim)}button:hover{border-color:var(--brass)}
+:focus-visible{outline:2px solid var(--brass);outline-offset:2px}
+input[type=number]{width:84px;padding:4px}input[type=text],textarea{width:100%;box-sizing:border-box;padding:6px}
+.layer{border-top:1px solid var(--line);padding:8px 0}
+.layer.selected{background:#1d4449;margin:0 -12px;padding:8px 12px;border-left:3px solid var(--brass)}
+.row{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:4px 0}
+.file{font-size:12px;max-width:100%}
+.views{display:flex;gap:14px;overflow:auto;max-height:78vh}
+.views section{flex:none}
+.views h2{text-align:center}
+canvas{display:block;background:
+  repeating-conic-gradient(#20474b 0 25%,#183b3f 0 50%) 0 0/24px 24px;border:1px solid var(--line);cursor:grab;touch-action:none}
+canvas:active{cursor:grabbing}
+fieldset{border:1px solid var(--line);border-radius:4px;margin:8px 0;padding:6px 10px}
+legend{color:var(--muted)}
+label{display:inline-flex;gap:6px;align-items:center}
+.fields{display:grid;grid-template-columns:70px auto;gap:4px 8px;align-items:center}
+.masks li{margin:4px 0}.masks ul{padding-left:0;list-style:none}
+.prompt{margin-top:14px}
+.prompt-grid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.3fr);gap:14px}
+#promptText{min-height:260px;font-size:13px;line-height:1.6}
+.note{color:var(--muted);font-size:12px;line-height:1.6}
+</style>
+</head>
+<body>
+<header>
+  <p class="note"><a href="index.html" style="color:var(--brass)">← 制作フロー（納刀→抜刀→素手）へ戻る</a>　｜　<a href="layer-editor-guide.html" style="color:var(--brass)">詳細レイヤー編集の手引き</a></p>
+  <h1>詳細レイヤー編集</h1>
+  <p>固定した素体に装備パーツを重ね、正面と背面を同じ縮尺で比べます。画像生成は行いません。</p>
+  <p id="status" role="status" aria-live="polite"></p>
+  <p id="error" role="alert"></p>
+</header>
+
+<div class="grid">
+  <aside aria-labelledby="layersTitle">
+    <h2 id="layersTitle">レイヤー</h2>
+    <fieldset><legend>編集する面</legend>
+      <label><input type="radio" name="view" value="front" checked> 正面</label>
+      <label><input type="radio" name="view" value="back"> 背面</label>
+    </fieldset>
+    <p class="note">上ほど手前に描きます。</p>
+    <div id="layerList"></div>
+    <div class="layer">
+      <strong>アクリル外枠（参照）</strong>
+      <div class="row"><label><input type="checkbox" id="frameVisible" checked> 表示</label></div>
+      <input class="file" type="file" id="frameFile" accept="image/png,image/jpeg,image/webp" aria-label="アクリル外枠の参照画像を読む">
+      <p class="note">ガイド扱い。透明PNG書き出しには含めません。</p>
+    </div>
+    <h3>素材を読む</h3>
+    <div class="row">
+      <button id="loadDemo">デモ図形</button>
+      <button id="loadGareth">ガレス既存素体</button>
+    </div>
+    <p class="note">読み込むと編集中の内容を置き換えます。デモ図形は自作の幾何図形で、実キャラ画像ではありません。</p>
+  </aside>
+
+  <div class="stage">
+    <div class="row">
+      <label>拡大 <select id="zoom">
+        <option value="0.35">35%</option><option value="0.5" selected>50%</option><option value="1">100%</option><option value="2">200%</option>
+      </select></label>
+      <label><input type="checkbox" id="guidesVisible" checked> 接続点・マスク枠を表示</label>
+    </div>
+    <p class="note">キャンバスをドラッグすると選択中のレイヤーが動きます。矢印キーで1px（Shiftで10px）。</p>
+    <div class="views">
+      <section><h2>正面</h2><canvas id="canvas-front" tabindex="0" aria-label="正面の合成。ドラッグか矢印キーで選択中のレイヤーを移動"></canvas></section>
+      <section><h2>背面</h2><canvas id="canvas-back" tabindex="0" aria-label="背面の合成。ドラッグか矢印キーで選択中のレイヤーを移動"></canvas></section>
+    </div>
+  </div>
+
+  <aside aria-labelledby="selTitle">
+    <h2 id="selTitle">選択中：<span id="selName"></span></h2>
+    <div class="fields">
+      <label for="f-x">位置 x</label><input type="number" id="f-x" data-field="x" step="1">
+      <label for="f-y">位置 y</label><input type="number" id="f-y" data-field="y" step="1">
+      <label for="f-rotation">回転 °</label><input type="number" id="f-rotation" data-field="rotation" step="0.5">
+      <label for="f-scale">縮尺</label><input type="number" id="f-scale" data-field="scale" step="0.01">
+    </div>
+    <div id="maskBox" class="masks">
+      <h3>元の手を隠すマスク（素体だけ）</h3>
+      <ul id="maskList"></ul>
+      <button id="addMask">矩形を追加</button>
+    </div>
+    <h3>接続点（この面）</h3>
+    <div class="fields">
+      <label for="a-x">x</label><input type="number" id="a-x" data-anchor="x" step="1">
+      <label for="a-y">y</label><input type="number" id="a-y" data-anchor="y" step="1">
+    </div>
+    <h3>保存・書き出し</h3>
+    <div class="row">
+      <button id="saveJson">設定をJSON保存</button>
+      <label for="loadJson">JSONから復元</label><input class="file" type="file" id="loadJson" accept="application/json,.json">
+    </div>
+    <div class="row">
+      <button id="exportPng">透明PNG（前後）</button>
+      <button id="exportGuide">参照ガイドPNG（前後）</button>
+    </div>
+    <p class="note">透明PNGには接続点・マスク枠・外枠を含めません。前後は別ファイルです。</p>
+  </aside>
+</div>
+
+<section class="prompt" aria-labelledby="promptTitle">
+  <h2 id="promptTitle">生成依頼文</h2>
+  <div class="prompt-grid">
+    <div>
+      <label for="p-weapon">武器種</label>
+      <input type="text" id="p-weapon" maxlength="200" placeholder="例：片手剣">
+      <label for="p-appearance" style="margin-top:8px">外観</label>
+      <textarea id="p-appearance" rows="4" maxlength="1000" placeholder="例：鋼の直刃、真鍮の鍔、革巻きの柄"></textarea>
+      <fieldset><legend>方式</legend>
+        <label><input type="radio" name="method" value="wrist" checked> 手首交換</label>
+        <label><input type="radio" name="method" value="fingers"> 固定指</label>
+      </fieldset>
+      <fieldset><legend>持ち手（人物から見て）</legend>
+        <label><input type="radio" name="hand" value="right" checked> 右手</label>
+        <label><input type="radio" name="hand" value="left"> 左手</label>
+      </fieldset>
+      <p class="note">接続点は各面の数値を使います。参照ガイドPNGと一緒に渡してください。</p>
+    </div>
+    <div>
+      <label for="promptText">依頼文</label>
+      <textarea id="promptText" readonly></textarea>
+      <div class="row"><button id="copyPrompt">依頼文をコピー</button></div>
+    </div>
+  </div>
+</section>
+
+<script src="core.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

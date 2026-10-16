@@ -4,36 +4,67 @@ function equipItem(who,item,equipped,s=state){
  const group=ITEM_DEFS[item].handGroup;let removedLamp=item==='lantern'&&!equipped;
  if(equipped&&group)for(const [other,r] of Object.entries(s.items))if(other!==item&&r.holder===who&&r.equipped&&ITEM_DEFS[other].handGroup===group){r.equipped=false;if(other==='lantern')removedLamp=true;}
  if(removedLamp)s.lit=false;
- s.items[item].equipped=equipped;if(s===state){plan=[];planReview=null;}
+ s.items[item].equipped=equipped;if(!equipped&&'drawn' in s.items[item])s.items[item].drawn=false;if(s===state){plan=[];planReview=null;}
  return personName(who)+'が'+ITEM_DEFS[item].name+'を'+(equipped?'装備した。':'外した。')+(removedLamp?'ランタンを消灯して収納した。':'');
+}
+// 抜刀・納刀は持ち主本人（今回はガレス）が装備中の自分の剣だけ。見た目の状態で、行動・判定は変えません。
+function canDraw(who,item,s=state){const r=s.items[item];return !!ITEM_DEFS[item]?.draw&&ITEM_DEFS[item].start===who&&r?.owner===who&&r.holder===who&&r.equipped===true;}
+function drawItem(who,item,drawn,s=state){
+ if(!canDraw(who,item,s)||typeof drawn!=='boolean')throw Error('抜刀・納刀は、持ち主が自分の剣を装備している時だけできます。');
+ s.items[item].drawn=drawn;return personName(who)+'が'+ITEM_DEFS[item].name+'を'+(drawn?'抜いた。':'鞘に納めた。');
+}
+function drawIntent(who,item,drawn,named,s=state){
+ const name=ITEM_DEFS[item].name,r=s.items[item];
+ if(!who)return {clarify:'誰に剣を'+(drawn?'抜く':'納める')+'よう頼むか、宛先を選んでください。'};
+ if(named.some(p=>p.id!==who))return {clarify:'選んだ宛先と、発言にある相手が違います。'};
+ if(ITEM_DEFS[item].start!==who)return {clarify:'抜刀・納刀は今回、'+personName(ITEM_DEFS[item].start)+'の'+name+'だけ対応しています。'};
+ if(!r||r.holder!==who||r.owner!==who)return {clarify:personName(who)+'は今、自分の'+name+'を持っていません。'};
+ if(!r.equipped)return {clarify:personName(who)+'は'+name+'を装備していません。先に装備するよう頼めます。'};
+ if(r.drawn===drawn)return {clarify:personName(who)+'はすでに'+name+'を'+(drawn?'抜いています。':'鞘に納めています。')};
+ return {who,item,drawn};
 }
 function equipmentIntent(text,to,s=state){
  if(to==='gm'||/もし|仮に|方法|しない|ないで|やめ|貸|借|返|譲|渡/.test(text))return null;
- // 文末の依頼だけを読みます。「腰に下げておいて」等の身に着ける言い方も装備です。抜く・構える・握るは装備の状態に無いので実行せず案内します。
+ // 文末の依頼だけを読みます。「腰に下げておいて」等の身に着ける言い方も装備です。構える・握るは状態に無いので案内だけ。剣の抜刀・納刀は別の状態（drawIntent）です。
  const end=String.raw`(?:て(?:おいて)?|といて|とく)?(?:ください|下さい|お願い(?:します)?|くれ)?(?:ね|よ)?[。！!\s]*$`,verb=text.match(RegExp(String.raw`(装備し|装備する|身に(?:つ|着)け|(?:腰|背中|背|腕)に(?:下げ|提げ|差し|吊るし|着け|付け|つけ|帯び)|帯び|外し|外す)`+end))?.[1];
  const items=Object.keys(ITEM_DEFS).filter(item=>ITEM_DEFS[item].equip&&[ITEM_DEFS[item].name,...ITEM_DEFS[item].aliases||[]].some(name=>text.includes(name))),named=PEOPLE.filter(p=>text.includes(p.name)),who=to==='all'?(named.length===1?named[0].id:null):to;
- if(!verb){if(items.length&&RegExp(String.raw`(?:抜い|構え|握っ)`+end).test(text))return {clarify:'抜く・構える状態はありません。装備するか外すかを頼めます（片手剣の装備は鞘に納めて腰に下げた姿です）。'};return null;}
+ if(!verb){
+  // 抜刀・納刀は剣の名前と一緒の依頼、または「抜刀して／納刀して」だけ。「釘を抜いて」等は横取りしません。
+  const draw=text.match(RegExp(String.raw`(抜刀し|抜刀する|納刀し|納刀する|抜い|抜く|納め|収め|鞘に戻し)`+end))?.[1],swords=Object.keys(ITEM_DEFS).filter(item=>ITEM_DEFS[item].draw&&(/刀/.test(draw)||items.includes(item)));
+  if(draw&&swords.length===1)return drawIntent(who,swords[0],draw.startsWith('抜'),named,s);
+  if(items.length&&RegExp(String.raw`(?:抜い|構え|握っ)`+end).test(text))return {clarify:'構える・握る状態はありません。剣を抜く・納めるのは、ガレスが自分の片手剣を装備している時だけ頼めます。'};return null;}
  const equipped=!verb.startsWith('外');
  if(!equipped&&!items.length)return null;
  if(items.length!==1||!who)return {clarify:'どの装備品を、誰が着脱するか教えてください。'};
  if(named.some(p=>p.id!==who))return {clarify:'選んだ宛先と、発言にある相手が違います。'};
  if(!hasItem(who,items[0],s))return {clarify:personName(who)+'は'+ITEM_DEFS[items[0]].name+'を持っていません。'};
+ // 抜いたまま装備中の剣に「装備して」と頼んでも、抜刀状態を黙って消しません。
+ if(equipped&&s.items[items[0]].equipped&&s.items[items[0]].drawn)return {clarify:personName(who)+'は'+ITEM_DEFS[items[0]].name+'を装備して抜いています。鞘に納めるなら「剣を納めて」と頼めます。'};
  return {who,item:items[0],equipped};
 }
 async function handleEquipment(intent,text){
- const {who,item,equipped}=intent,epoch=generation,source=state,room=state.room,record=state.items[item],before={...record};
+ const {who,item,equipped,drawn}=intent,draw=typeof drawn==='boolean',epoch=generation,source=state,room=state.room,record=state.items[item],before={...record};
+ if(draw&&!canDraw(who,item))throw Error(personName(who)+'は装備中の自分の剣を持っていないため、抜刀・納刀できません。');
  if(!ITEM_DEFS[item]?.equip||!hasItem(who,item))throw Error(personName(who)+'は着脱できる'+(ITEM_DEFS[item]?.name||'品')+'を持っていません。');
- if($('dicePanel')?.open)throw Error('判定が終わってから着脱してください。');
+ if($('dicePanel')?.open)throw Error('判定が終わってから'+(draw?'抜刀・納刀':'着脱')+'してください。');
  if(!isHuman(who)){
+  if(draw){const poses=ITEM_DEFS[item].draw,person=PEOPLE.find(p=>p.id===who),reply=parseAI(await ask('あなたは'+person.name+'。'+speechStyle(who)+'自分の片手剣を抜く、または鞘に納める依頼に本人として了承か拒否を返す。poseは了承後の実際の姿、nowは今の姿。了承するならposeどおりに話し、構える・振る・斬りかかる等poseに無い姿を語らない。抜刀は見た目の状態で、戦闘の判定・攻撃・能力は変わらない。攻撃したと語らない。まだ実行済みと語らない。技能や状態を創作しない。理由があれば拒否してよい。JSONのみ:{"decision":"accept|decline","speech":"100文字以内"}。',{request:text,item:ITEM_DEFS[item].name,drawn,pose:poses[drawn?'drawn':'sheathed'],now:poses[record.drawn?'drawn':'sheathed'],inventory:inventoryView(who)},400));
+   if(!responseIsCurrent(epoch,source))return {performed:false};
+   if(!reply||!['accept','decline'].includes(reply.decision)||typeof reply.speech!=='string'||!reply.speech.trim())throw Error('抜刀・納刀の返答を確認できませんでした。');
+   const audit=await auditProfile(who,reply.speech,text);if(!responseIsCurrent(epoch,source))return {performed:false};if(!audit.valid)throw Error('人物設定との食い違いがあるため、抜刀・納刀を保留しました。');
+   if(room!==state.room||record!==state.items[item]||before.holder!==record.holder||before.owner!==record.owner||before.equipped!==record.equipped||before.drawn!==record.drawn)throw Error('場面や持ち物が変わったため、もう一度依頼してください。');
+   say(person.name+'（AI）',reply.speech);if(reply.decision!=='accept')return {performed:false};
+  }else{
   const willUnequip=equipped&&ITEM_DEFS[item].handGroup?Object.keys(state.items).filter(other=>other!==item&&hasItem(who,other)&&state.items[other].equipped&&ITEM_DEFS[other].handGroup===ITEM_DEFS[item].handGroup):[];
-  const person=PEOPLE.find(p=>p.id===who),reply=parseAI(await ask('あなたは'+person.name+'。'+speechStyle(who)+'自分が持つ装備品の着脱依頼に本人として了承か拒否を返す。外すとは手や腰の装備から外して収納・携行し、その品を手に握ったり構えたりしないこと。持っている品と装備中の品は区別する。外す了承では元のwearから外すことを話し、元が手持ちの金槌なら腰から外す等の別の姿を創作しない。片手剣は剣と鞘を一緒に着脱し、納刀・抜刀とは区別する。wearは装備した時の実際の姿。装備を了承するならwearどおりに話し、依頼の言い方が違っても抜く・構える・握る等wearに無い姿を語らない。wearが無ければ姿を描写しない。ランタンと杖は持ち替えで同時に装備できない。依頼された装備品は選択済み。了承するとwillUnequipの品をゲームが自動で外し、willDouseがtrueならランタンを消灯する。持ち替えそのものは可能。明かりを失うなどの懸念があれば理由を添えて拒否してよい。まだ実行済みと語らない。技能や状態を創作しない。JSONのみ:{"decision":"accept|decline","speech":"100文字以内"}。',{request:text,item:ITEM_DEFS[item].name,wear:equipped?ITEM_DEFS[item].wear:undefined,equipped,willUnequip,willDouse:item==='lantern'&&!equipped||willUnequip.includes('lantern'),inventory:inventoryView(who)},400));
+  const person=PEOPLE.find(p=>p.id===who),reply=parseAI(await ask('あなたは'+person.name+'。'+speechStyle(who)+'自分が持つ装備品の着脱依頼に本人として了承か拒否を返す。外すとは手や腰の装備から外して収納・携行し、その品を手に握ったり構えたりしないこと。持っている品と装備中の品は区別する。外す了承では元のwearから外すことを話し、元が手持ちの金槌なら腰から外す等の別の姿を創作しない。片手剣は剣と鞘を一緒に着脱し、納刀・抜刀とは区別する。drawnがtrueなら今は剣を抜いて右手に握っている。外す了承では剣を鞘に納めてから剣と鞘を外すと話す。wearは装備した時の実際の姿。装備を了承するならwearどおりに話し、依頼の言い方が違っても抜く・構える・握る等wearに無い姿を語らない。wearが無ければ姿を描写しない。ランタンと杖は持ち替えで同時に装備できない。依頼された装備品は選択済み。了承するとwillUnequipの品をゲームが自動で外し、willDouseがtrueならランタンを消灯する。持ち替えそのものは可能。明かりを失うなどの懸念があれば理由を添えて拒否してよい。まだ実行済みと語らない。技能や状態を創作しない。JSONのみ:{"decision":"accept|decline","speech":"100文字以内"}。',{request:text,item:ITEM_DEFS[item].name,wear:equipped?ITEM_DEFS[item].wear:undefined,equipped,drawn:record.drawn,willUnequip,willDouse:item==='lantern'&&!equipped||willUnequip.includes('lantern'),inventory:inventoryView(who)},400));
   if(!responseIsCurrent(epoch,source))return {performed:false};
   if(!reply||!['accept','decline'].includes(reply.decision)||typeof reply.speech!=='string'||!reply.speech.trim())throw Error('着脱の返答を確認できませんでした。');
   const audit=await auditProfile(who,reply.speech,text);if(!responseIsCurrent(epoch,source))return {performed:false};if(!audit.valid)throw Error('人物設定との食い違いがあるため、着脱を保留しました。');
-  if(room!==state.room||record!==state.items[item]||before.holder!==record.holder||before.equipped!==record.equipped)throw Error('場面や持ち物が変わったため、もう一度依頼してください。');
+  if(room!==state.room||record!==state.items[item]||before.holder!==record.holder||before.equipped!==record.equipped||before.drawn!==record.drawn)throw Error('場面や持ち物が変わったため、もう一度依頼してください。');
   say(person.name+'（AI）',reply.speech);if(reply.decision!=='accept')return {performed:false};
+  }
  }
- const result=equipItem(who,item,equipped);sayResult('GM',result,'gm');state.shared.push(result);render();return {performed:true};
+ const result=draw?drawItem(who,item,drawn):equipItem(who,item,equipped);sayResult('GM',result,'gm');state.shared.push(result);render();return {performed:true};
 }
 function itemKey(who,item,detail=false){const d=ITEM_DEFS[item];return (detail?'itemDetail':'item')+(d.start===who?d.slot:'_'+item);}
 function knownItems(who,s=state,viewer=humanId()){return Object.entries(s.items).filter(([item,record])=>record.holder===who&&knowsProfile(who,itemKey(who,item),s,viewer)).map(([id,r])=>({id,name:ITEM_DEFS[id].name,...r}));}
@@ -51,7 +82,7 @@ function validateTransfer(t,s=state){
 function transferSummary(t){return personName(t.from)+' → '+personName(t.to)+'：'+ITEM_DEFS[t.item].name+'を'+({give:'譲渡',lend:'貸与',return:'返却'}[t.mode]);}
 function transferItem(t,s=state){
  const record=validateTransfer(t,s),giveBack=t.mode==='return'&&record.owner===record.holder;record.holder=t.to;if(t.mode==='give'||giveBack)record.owner=t.to;
- if(ITEM_DEFS[t.item].equip)record.equipped=false;
+ if(ITEM_DEFS[t.item].equip)record.equipped=false;if('drawn' in record)record.drawn=false;
  const event={item:t.item,from:t.from,to:t.to,mode:t.mode,room:s.room};s.transfers.push(event);revealItem(t.to,t.item,s);
  if(s===state){for(const id of [t.from,t.to])actionHistory.push({id,action:'transfer',initiator:humanId(),room:s.room,transfer:event,result:{text:transferSummary(event)}});plan=[];planReview=null;for(const topic of Object.keys(CONSENT_TOPICS))if(t.item===CONSENT_TOPICS[topic].item)delete consents[topic];}
  return event;

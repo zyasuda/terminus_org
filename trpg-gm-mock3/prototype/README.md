@@ -714,3 +714,13 @@ Codexの実AI・実クリックでも素体→金槌のみ→両方→盾のみ�
 
 - 作者採用済みの鞘の見分けやすさ調整案（`art-preview/gareth-visibility-study/review-v1.png`）から `gareth-sheathed-visible.glb` と前後PNGを作成し、`SCENARIO_STANDEE_VARIANTS` のガレス片手剣装備時の `file`・`sheet` だけを差し替えた。ゲームの動作・保存形式・旧 `gareth-sheathed` 素材は変更なし。
 - 検査：`lighting-check.cjs`・`inventory-check.cjs` の装備時の期待を新素材へ更新、`standee-check.cjs` に新素材を追加（旧素材の解析も維持）。実ブラウザーでチャットから装備・点灯し、新しい姿と調査札の非重なり（0件）を確認。工程・記録は `art-preview/gareth-visibility-study/README.md`。
+
+### ガレスの手動抜刀・納刀（2026-10-08）
+
+- 作者が手動指定を選択。状態は `state.items.dagger.drawn`（初期 `false`）。画面内の実行状態だけに持ち、localStorage等の保存は追加していない。開始時の素体・装備時の納刀は従来どおり。
+- 抜く／納めるのは、ガレスが自分の片手剣（所有者・所持者ともガレス）を装備している時だけ。未装備・他人所持・借り手・譲り受けた人は不可。今回はガレスのみ対応で、他の人物にはシートの状態・操作を出さず、会話では「今回はガレスの片手剣だけ対応」と案内する。
+- 入口：シートの持ち物で装備中の剣に「装備中・納刀中／抜刀中」と「抜くよう頼む／納めるよう頼む」。会話の「剣を抜いて」「抜刀して」「剣を鞘に納めて」「納刀して」等の明示依頼も同じ `equipmentIntent` → `handleEquipment` の本人了承経路。質問・否定・仮定・GM宛て・「釘を抜いて」等は扱わない。拒否・古い応答・人物照合の失敗・返答待ち中の持ち物変化では変えない。
+- 外す・受け渡しで `drawn=false`。抜刀中に「装備して」と頼んでも抜刀状態を消さず、納める言い方を案内する。戦闘・プレビューで自動抜刀しない。
+- 抜刀は見た目の状態で、攻撃・急所狙いの可否や判定は変えない。本人の返答には了承後の実際の姿（納刀：左腰の鞘に納め両手は空／抜刀：右手に剣、左腰に空の鞘）を `pose` として渡す。
+- 表示は未接続：`stageSnapshot` の各人物に `drawn` を渡すが、抜刀姿の素材は画像採用待ち（Codex担当）のため `SCENARIO_STANDEE_VARIANTS` へ未登録・仮ファイル参照なし。抜刀中は納刀姿のまま `missing='gareth:dagger:drawn'` を記録する。採用後に `equipment:['dagger:drawn']` の差分を足せば照合される。
+- 検査：`inventory-check.cjs` 129項目（抜刀・納刀の境界を追加、旧「抜いて＝案内のみ」の期待を更新）、`ui-check.cjs` 80項目（シートの状態・操作・借り手非表示）、`roleplay-check.cjs`（話し方を通す本人呼び出しを5→6件に更新）。`scenario-parity.cjs` は従来どおり `actionsFor` の差で失敗（上記の判断待ち、HEADでも同じ）。

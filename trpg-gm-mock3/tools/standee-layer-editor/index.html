@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>立ち絵制作 — 納刀→抜刀→素手</title>
+<style>
+:root{
+  --bg:#0e2629;--panel:#14353a;--line:#2e5458;--ivory:#ece4d2;--muted:#a9b7ae;--brass:#c39b55;--brass-dim:#6e5730;--err:#ffaca5;--done:#8fc7a0;
+  color-scheme:dark;background:var(--bg);color:var(--ivory);
+  font-family:"Hiragino Sans","Hiragino Kaku Gothic ProN","Yu Gothic UI","Meiryo",system-ui,sans-serif;font-size:14px;
+}
+body{margin:0;padding:16px 18px 40px}
+h1,h2,h3{font-family:"Hiragino Mincho ProN","Yu Mincho","YuMincho",serif;font-weight:600;letter-spacing:.04em}
+h1{font-size:22px;margin:0}h2{font-size:16px;margin:0 0 10px;color:var(--brass)}h3{font-size:14px;margin:0 0 6px;color:var(--ivory)}
+a{color:var(--brass)}
+.top{display:flex;justify-content:space-between;align-items:flex-start;gap:16px;flex-wrap:wrap}
+.top nav{color:var(--muted);margin-top:4px}
+.data{display:flex;gap:8px;flex-wrap:wrap}
+#status{margin:10px 0 0;padding:8px 12px;border-left:3px solid var(--brass);background:#0a1d20;line-height:1.7}
+#error{margin:6px 0 0;color:var(--err);min-height:1.4em}
+button{font:inherit;color:var(--ivory);background:#0b2124;border:1px solid var(--brass-dim);border-radius:4px;padding:7px 12px;cursor:pointer}
+button:hover:not(:disabled){border-color:var(--brass)}
+button:disabled{opacity:.45;cursor:not-allowed}
+button[aria-pressed=true]{background:var(--brass-dim);border-color:var(--brass)}
+:focus-visible{outline:2px solid var(--brass);outline-offset:2px}
+/* 3段階（作成状態の表示。押すとその段階へ移る） */
+ol.stages{list-style:none;display:grid;grid-template-columns:repeat(3,1fr);gap:0;margin:14px 0 0;padding:0;counter-reset:none}
+ol.stages li{position:relative}
+ol.stages li:not(:last-child)::after{content:"→";position:absolute;right:-8px;top:50%;transform:translateY(-50%);color:var(--brass);z-index:1}
+.stage{width:100%;text-align:left;border-radius:0;border:1px solid var(--line);background:var(--panel);padding:10px 16px;display:flex;gap:12px;align-items:center}
+.stage .no{font:600 26px/1 "Hiragino Mincho ProN","Yu Mincho",serif;color:var(--brass)}
+.stage b{display:block;font-size:16px}
+.stage small{color:var(--muted)}
+.stage small.done{color:var(--done)}
+.stage[aria-current=step]{background:#1d4449;border-color:var(--brass);box-shadow:inset 0 -3px 0 var(--brass)}
+/* 正面｜操作｜背面 */
+.work{display:grid;grid-template-columns:minmax(0,1fr) 330px minmax(0,1fr);gap:14px;margin-top:14px;align-items:start}
+.view,.ops{background:var(--panel);border:1px solid var(--line);border-radius:0 0 6px 6px;padding:12px}
+.ops{border-top:3px solid var(--brass)}
+.view h2{text-align:center}
+.pics{display:flex;gap:8px;justify-content:center}
+figure{margin:0;flex:1;min-width:0;text-align:center}
+figcaption{color:var(--muted);font-size:12px;margin-bottom:4px}
+canvas{display:block;margin:0 auto;max-width:100%;max-height:70vh;width:auto;height:auto;border:1px solid var(--line);
+  background:repeating-conic-gradient(#20474b 0 25%,#183b3f 0 50%) 0 0/24px 24px}
+.empty-pic{display:flex;align-items:center;justify-content:center;height:50vh;border:1px dashed var(--line);color:var(--muted);padding:0 12px}
+.ops fieldset{border:1px solid var(--line);border-radius:4px;margin:0 0 10px;padding:8px 10px}
+.ops legend{color:var(--brass);padding:0 4px}
+.ops .row{display:flex;gap:8px;flex-wrap:wrap;margin:6px 0}
+.need{border-left:3px solid var(--err);background:#2a2324;padding:8px 10px;margin:0 0 10px;line-height:1.7}
+.note{color:var(--muted);font-size:12px;line-height:1.6;margin:6px 0}
+.size-warn{color:var(--err);font-size:12px}
+details pre{white-space:pre-wrap;font-size:12px;line-height:1.6;background:#0b2124;border:1px solid var(--line);padding:8px;max-height:220px;overflow:auto}
+@media (max-width:1000px){.work{grid-template-columns:1fr}.ops{order:-1}}
+</style>
+</head>
+<body>
+<header>
+  <div class="top">
+    <div>
+      <h1>立ち絵制作：納刀 → 抜刀 → 素手</h1>
+      <nav><a href="guide.html">使い方</a>　｜　<a href="layer-editor.html">詳細レイヤー編集</a>（パーツを重ねて位置を合わせる上級者向け）</nav>
+    </div>
+    <div class="data">
+      <button id="saveFlow">制作データを保存</button>
+      <button id="openFlow">制作データを開く</button>
+      <button id="loadDemo">試作デモ（ガレス）を開く</button>
+      <input type="file" id="flowFile" accept="application/json,.json" hidden>
+    </div>
+  </div>
+  <p id="status" role="status" aria-live="polite"></p>
+  <p id="error" role="alert"></p>
+</header>
+
+<ol class="stages" id="stages" aria-label="制作の段階"></ol>
+
+<div class="work">
+  <section class="view" aria-labelledby="v-front"><h2 id="v-front">正面</h2><div class="pics" id="pics-front"></div></section>
+
+  <section class="ops" aria-labelledby="opsTitle">
+    <h2 id="opsTitle"></h2>
+    <div id="need" class="need" hidden></div>
+    <p class="note" id="opsNote"></p>
+    <div id="viewOps"></div>
+    <div class="row">
+      <button id="compare" aria-pressed="false">基準と比較する</button>
+      <button id="saveBase">基準として保存</button>
+    </div>
+    <div class="row"><button id="exportPng">この段階のPNGを保存（正面・背面）</button></div>
+    <p class="note">画像の生成はこのツールの外で行います。読み込みに失敗しても、表示中の画像はそのまま残ります。</p>
+  </section>
+
+  <section class="view" aria-labelledby="v-back"><h2 id="v-back">背面</h2><div class="pics" id="pics-back"></div></section>
+</div>
+
+<script src="core.js"></script>
+<script src="flow-core.js"></script>
+<script src="flow.js"></script>
+</body>
+</html>

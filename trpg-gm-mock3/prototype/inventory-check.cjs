@@ -92,12 +92,12 @@ vm.runInContext(`(async()=>{
  ok(rejects(()=>equipItem('ines','dagger',true))&&rejects(()=>equipItem('gareth','picks',false))&&rejects(()=>equipItem('lydia','lydia_map',false)),'未所持の剣や装備品でない品の着脱を受理');
  ok(equipmentIntent('ガレス、片手剣を外してください','all').item==='dagger'&&equipmentIntent('剣を装備して','gareth').equipped===true&&equipmentIntent('短剣を外して','gareth').item==='dagger','片手剣・剣・旧名の短剣で着脱を依頼できない');
  ok(!equipmentIntent('片手剣を装備している？','gareth')&&!equipmentIntent('もし剣を外すなら','gareth')&&equipmentIntent('片手剣を外して','brom').clarify&&equipmentIntent('ブロム、ガレスの剣を外して','brom').clarify&&equipmentIntent('剣を外して','all').clarify,'質問・仮定・未所持・他人指定・宛先なしで剣を処理');
- // 撮影で見つかった言い方（2026-10-08）：身に着ける言い方は装備、抜く・構えるは状態に無いので案内だけ。質問・否定・仮定・他人の品は実行しない。
+ // 撮影で見つかった言い方（2026-10-08）：身に着ける言い方は装備、構えるは状態に無いので案内だけ（抜くは2026-10-08から装備中のガレスの抜刀依頼）。質問・否定・仮定・他人の品は実行しない。
  {const e=equipmentIntent('ガレス、片手剣を腰に下げておいて','all');ok(e&&e.who==='gareth'&&e.item==='dagger'&&e.equipped===true,'「腰に下げておいて」を装備の依頼として読めない');}
  ok(equipmentIntent('剣を腰に下げといて','gareth')?.equipped===true&&equipmentIntent('盾を身に着けておいてください','brom')?.equipped===true&&equipmentIntent('片手剣を装備しておいて','gareth')?.equipped===true,'身に着ける言い方・「おいて」の装備依頼を読めない');
  ok(!equipmentIntent('片手剣を腰に下げておいて？','gareth')&&!equipmentIntent('片手剣は腰に下げてる？','gareth')&&!equipmentIntent('片手剣を腰に下げないで','gareth')&&!equipmentIntent('もし片手剣を腰に下げたら','gareth')&&!equipmentIntent('片手剣を腰に下げる方法は？','gareth'),'質問・否定・仮定を装備として実行');
  ok(equipmentIntent('ブロム、ガレスの剣を腰に下げて','brom').clarify&&equipmentIntent('片手剣を腰に下げておいて','ines').clarify&&equipmentIntent('片手剣を腰に下げて','all').clarify,'他人の剣・未所持・宛先なしで装備を処理');
- ok(equipmentIntent('ガレス、片手剣を構えて','all')?.clarify&&equipmentIntent('剣を抜いておいて','gareth')?.clarify&&!equipmentIntent('ガレス、錠前の釘を抜いて','all')&&!equipmentIntent('ブロム、扉を支えて','all'),'抜刀・構えを装備として扱う、または装備品以外の依頼を横取りする');
+ ok(equipmentIntent('ガレス、片手剣を構えて','all')?.clarify&&equipmentIntent('剣を抜いておいて','gareth')?.drawn===true&&!equipmentIntent('ガレス、錠前の釘を抜いて','all')&&!equipmentIntent('ブロム、扉を支えて','all'),'構えを状態として扱う、抜刀を装備として扱う、または装備品以外の依頼を横取りする');
  {const sent=[];const realFetch=globalThis.fetch;fetch=async(url,o)=>{sent.push(JSON.parse(o.body));return {ok:true,json:async()=>({content:[{text:'{}'}]})}};const saved=updateAIComparison;updateAIComparison=()=>{};await sendAsk('あなたはGM。',{actor:'lydia'});updateAIComparison=saved;fetch=realFetch;ok(sent[0].system.startsWith('あなたはGM。')&&sent[0].system.includes('lydia=マレン')&&sent[0].system.includes('ines=イネス')&&sent[0].messages[0].content==='{"actor":"lydia"}','AIへ内部idと呼び名の対応を渡さない、または入力を書き換える');}
  {armedFixture();equipItem('gareth','dagger',false);let got=null;ask=async(prompt,data)=>{got={prompt,data};return JSON.stringify({decision:'accept',speech:'分かった、鞘ごと腰に下げておく。'})};ok((await handleEquipment({who:'gareth',item:'dagger',equipped:true},'ガレス、片手剣を腰に下げておいて')).performed&&state.items.dagger.equipped&&/鞘/.test(got.data.wear)&&/腰/.test(got.data.wear)&&got.prompt.includes('wearどおり'),'装備の返答に納刀して腰に下げた実際の姿を渡さない');}
  armedFixture();let asked=null,equipFailed;ask=async(prompt,data)=>{asked=data;return JSON.stringify({decision:'accept',speech:'分かった。'})};auditProfile=async()=>({valid:true,claims:[],conflicts:[]});
@@ -133,5 +133,37 @@ vm.runInContext(`(async()=>{
  fixture();ok(!state.transfers.length&&hasItem('lydia','lantern')&&Object.keys(state.items).length===8,'最初からで所有状態が残る');
  fixture();state.lit=true;auditProfile=async()=>({valid:true,claims:[],conflicts:[]});ask=async(system,payload)=>{ok(payload.willUnequip.join()==='lantern'&&payload.willDouse,'持ち替えで外す品と消灯を本人に知らせない');return JSON.stringify({decision:'accept',speech:'杖に持ち替えましょう。'});};
  ok((await handleEquipment({who:'lydia',item:'staff',equipped:true},'杖を装備してください')).performed&&state.items.staff.equipped&&!state.items.lantern.equipped&&!state.lit,'本人了承後の持ち替えが反映されない');ask=async()=>JSON.stringify({decision:'decline',speech:'今は杖を持っておきます。'});ok(!(await handleEquipment({who:'lydia',item:'lantern',equipped:true},'ランタンを装備してください')).performed&&state.items.staff.equipped&&!state.items.lantern.equipped,'本人拒否で持ち替えを実行する');
+ // ガレスの手動抜刀・納刀（2026-10-08）：本人が装備中の自分の剣だけ、本人の了承で。見た目の状態で、行動・判定は変えない。抜刀姿の絵は採用前なので納刀姿＋不足表示。
+ {fixture();placement=makePlacement(true);const startAsk=ask,startAudit=auditProfile,garethLook=()=>scenarioStandeeVariant(stageSnapshot().actors.find(p=>p.id==='gareth'));
+  ok(state.items.dagger.drawn===false&&!('drawn' in state.items.hammer)&&garethLook().file==='gareth-empty','開始時の抜刀状態・素体が不正');
+  ok(equipmentIntent('ガレス、剣を抜いて','all')?.clarify&&equipmentIntent('抜刀して','gareth')?.clarify,'未装備で抜刀を受理');
+  armedFixture();placement=makePlacement(true);state.phase='battle';ok(!state.items.dagger.drawn&&garethLook().file==='gareth-sheathed-visible'&&!garethLook().missing,'戦闘で自動抜刀する、または装備時が納刀姿でない');state.phase='explore';
+  {const e=equipmentIntent('ガレス、剣を抜いて','all');ok(e&&e.who==='gareth'&&e.item==='dagger'&&e.drawn===true&&!('equipped' in e),'「剣を抜いて」を抜刀の依頼として読めない');}
+  ok(equipmentIntent('抜刀して','gareth')?.drawn===true&&equipmentIntent('片手剣を抜いてください','gareth')?.drawn===true,'「抜刀して」等を読めない');
+  ok(equipmentIntent('剣を鞘に納めて','gareth')?.clarify&&equipmentIntent('納刀して','gareth')?.clarify,'納刀中に重ねて納刀を受理');
+  ok(!equipmentIntent('剣を抜いてくれる？','gareth')&&!equipmentIntent('剣を抜かないで','gareth')&&!equipmentIntent('もし剣を抜いたら','gareth')&&!equipmentIntent('剣を抜く方法は？','gareth')&&!equipmentIntent('ガレス、錠前の釘を抜いて','all')&&!equipmentIntent('剣を抜いて','gm'),'質問・否定・仮定・剣以外・GM宛てを抜刀として実行');
+  ok(equipmentIntent('剣を抜いて','all')?.clarify&&equipmentIntent('ブロム、ガレスの剣を抜いて','brom')?.clarify&&equipmentIntent('剣を抜いて','brom')?.clarify,'宛先なし・他人指定・他人宛てで抜刀を処理');
+  ok(equipmentIntent('ガレス、片手剣を構えて','all')?.clarify,'構えるを状態として扱う');
+  auditProfile=async()=>({valid:true,claims:[],conflicts:[]});let got=null;
+  ask=async()=>JSON.stringify({decision:'decline',speech:'まだ抜かなくていい。'});ok(!(await handleEquipment({who:'gareth',item:'dagger',drawn:true},'ガレス、剣を抜いて')).performed&&!state.items.dagger.drawn,'本人の拒否でも抜刀する');
+  ask=async()=>{generation++;return JSON.stringify({decision:'accept',speech:'抜こう。'})};ok(!(await handleEquipment({who:'gareth',item:'dagger',drawn:true},'ガレス、剣を抜いて')).performed&&!state.items.dagger.drawn,'古い了承で抜刀する');
+  ask=async()=>{equipItem('gareth','dagger',false);return JSON.stringify({decision:'accept',speech:'抜こう。'})};let failed=false;try{await handleEquipment({who:'gareth',item:'dagger',drawn:true},'剣を抜いて')}catch{failed=true}ok(failed&&!state.items.dagger.drawn,'返答待ちの間に外した剣を抜刀する');equipItem('gareth','dagger',true);
+  ask=async()=>JSON.stringify({decision:'accept',speech:'抜こう。'});auditProfile=async()=>({valid:false,claims:[],conflicts:[{}]});failed=false;try{await handleEquipment({who:'gareth',item:'dagger',drawn:true},'剣を抜いて')}catch{failed=true}ok(failed&&!state.items.dagger.drawn,'設定照合の失敗で抜刀する');auditProfile=async()=>({valid:true,claims:[],conflicts:[]});
+  got=null;ask=async(prompt,data)=>{got={prompt,data};return JSON.stringify({decision:'accept',speech:'分かった、右手に抜いておく。'})};state.phase='battle';const before=actionsFor('gareth').join();
+  ok((await handleEquipment({who:'gareth',item:'dagger',drawn:true},'ガレス、剣を抜いて')).performed&&state.items.dagger.drawn&&state.items.dagger.equipped,'本人了承で抜刀しない');
+  ok(/右手/.test(got.data.pose)&&/空の鞘/.test(got.data.pose)&&/左腰/.test(got.data.now)&&got.prompt.includes('poseどおり')&&got.prompt.includes('判定'),'返答へ抜刀後の実際の姿・判定不変を渡さない');
+  ok(actionsFor('gareth').join()===before&&chat.some(c=>c.kind==='gm'&&c.text.includes('抜いた')),'抜刀で行動が変わる、または結果を記録しない');state.phase='explore';
+  ok(stageSnapshot().actors.find(p=>p.id==='gareth').drawn.join()==='dagger'&&garethLook().file==='gareth-sheathed-visible'&&garethLook().missing==='gareth:dagger:drawn','舞台へ抜刀状態を渡さない、または未採用の抜刀姿を参照する');
+  ok(equipmentIntent('剣を装備して','gareth')?.clarify&&state.items.dagger.drawn,'抜刀中の再装備依頼で抜刀状態を黙って消す');
+  ok(equipmentIntent('ガレス、剣を抜いて','all')?.clarify&&equipmentIntent('剣を鞘に納めて','gareth')?.drawn===false&&equipmentIntent('納刀して','gareth')?.drawn===false&&equipmentIntent('片手剣を納めてください','gareth')?.drawn===false,'抜刀中の納刀依頼を読めない、または重ねて抜刀を受理');
+  got=null;ask=async(prompt,data)=>{got={prompt,data};return JSON.stringify({decision:'accept',speech:'鞘に納める。'})};ok((await handleEquipment({who:'gareth',item:'dagger',drawn:false},'ガレス、剣を鞘に納めて')).performed&&!state.items.dagger.drawn&&state.items.dagger.equipped&&/左腰/.test(got.data.pose)&&garethLook().file==='gareth-sheathed-visible'&&!garethLook().missing,'本人了承で納刀・納刀姿に戻らない');
+  state.items.dagger.drawn=true;ask=async(prompt,data)=>{got={prompt,data};return JSON.stringify({decision:'accept',speech:'納めて外す。'})};ok((await handleEquipment({who:'gareth',item:'dagger',equipped:false},'ガレス、片手剣を外して')).performed&&!state.items.dagger.equipped&&state.items.dagger.drawn===false&&got.data.drawn===true,'抜刀中に外しても抜刀状態が残る、または今の姿を渡さない');
+  equipItem('gareth','dagger',true);state.items.dagger.drawn=true;transferItem(give('dagger','gareth','ines','lend'));ok(state.items.dagger.drawn===false&&!state.items.dagger.equipped,'受け渡しで抜刀状態が残る');
+  equipItem('ines','dagger',true);ok(!canDraw('ines','dagger')&&equipmentIntent('剣を抜いて','ines')?.clarify.includes('ガレス')&&rejects(()=>drawItem('ines','dagger',true)),'借り手が抜刀できる');
+  transferItem(give('dagger','ines','gareth','return'));ok(rejects(()=>drawItem('gareth','dagger',true))&&!state.items.dagger.drawn,'返却直後の未装備で抜刀できる');
+  armedFixture();transferItem(give('dagger','gareth','ines'));equipItem('ines','dagger',true);ok(!canDraw('ines','dagger')&&equipmentIntent('剣を抜いて','ines')?.clarify&&rejects(()=>drawItem('ines','dagger',true)),'譲り受けた人が抜刀できる');
+  armedFixture();asked=null;ask=async(p,d)=>{asked=d;return JSON.stringify({decision:'accept',speech:'抜こう。'})};failed=false;try{await handleEquipment({who:'brom',item:'dagger',drawn:true},'剣を抜いて')}catch{failed=true}ok(failed&&!asked&&!state.items.dagger.drawn,'持ち主以外へ抜刀を尋ねる');
+  ask=async()=>JSON.stringify({decision:'accept',speech:'抜こう。'});const sent=await submitMessage('ガレス、剣を抜いて','gareth');ok(sent?.performed&&state.items.dagger.drawn,'会話の明示依頼が同じ了承経路で抜刀しない');
+  ask=startAsk;auditProfile=startAudit;fixture();ok(state.items.dagger.drawn===false,'最初からで抜刀状態が残る');}
  return count;
-})()`,context).then(n=>console.log('PASS: '+n+' checks — 個別所有 / 入手 / 譲渡・貸与・返却 / 装備と能力 / シートと記憶 / 宛先・曖昧な品 / 拒否と保留 / 通信・設定照合・古い応答 / 二重移動防止')).catch(e=>{console.error(e);process.exitCode=1});
+})()`,context).then(n=>console.log('PASS: '+n+' checks — 個別所有 / 入手 / 譲渡・貸与・返却 / 装備と能力 / シートと記憶 / 宛先・曖昧な品 / 拒否と保留 / 通信・設定照合・古い応答 / 二重移動防止 / ガレスの抜刀・納刀')).catch(e=>{console.error(e);process.exitCode=1});

@@ -1,0 +1,399 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>詳細レイヤー編集 — 図解の手引き</title>
+<style>
+:root{
+  --paper:#f2ead8;--paper2:#e8dec7;--ink:#173235;--teal:#0f3d40;--teal2:#1d5a5e;--line:#c9bc9f;
+  --brass:#a87a2e;--pink:#d42a93;--warn:#9a3a22;--ok:#2b6b4a;
+  background:var(--paper);color:var(--ink);
+  font-family:"Hiragino Sans","Hiragino Kaku Gothic ProN","Yu Gothic UI","Meiryo",system-ui,sans-serif;
+  font-size:18px;line-height:1.9;
+}
+body{margin:0}
+main{max-width:1080px;margin:0 auto;padding:0 28px 80px}
+h1,h2,h3{font-family:"Hiragino Mincho ProN","Yu Mincho","YuMincho",serif;color:var(--teal);letter-spacing:.04em;line-height:1.5}
+h1{font-size:34px;margin:0}
+h2{font-size:27px;margin:64px 0 14px;padding-top:18px;border-top:3px double var(--teal)}
+h3{font-size:21px;margin:34px 0 8px}
+p,li{max-width:46em}
+a{color:var(--teal2);font-weight:600}
+code,kbd{font-family:"SF Mono",Menlo,Consolas,monospace;font-size:.86em;background:var(--paper2);padding:1px 6px;border-radius:3px}
+kbd{border:1px solid var(--line)}
+.btn{display:inline-block;font-size:.9em;background:var(--teal);color:#ece4d2;padding:0 9px;border-radius:4px;white-space:nowrap}
+header.top{background:var(--teal);color:#ece4d2;padding:36px 28px 30px}
+header.top .in{max-width:1080px;margin:0 auto}
+header.top h1{color:#ece4d2}
+header.top p{margin:10px 0 0;color:#cfd8cf}
+.launch{display:inline-block;margin-top:18px;background:#ece4d2;color:var(--teal);padding:10px 22px;border-radius:6px;text-decoration:none;font-size:20px}
+.launch:hover{background:#fff}
+nav.toc{background:var(--paper2);border:1px solid var(--line);border-radius:6px;padding:14px 22px;margin:28px 0}
+nav.toc ol{margin:0;padding-left:1.4em;columns:2;column-gap:40px}
+.box{border-left:5px solid var(--teal);background:#fbf6ea;padding:12px 18px;margin:16px 0}
+.box.warn{border-color:var(--warn)}
+.box.ok{border-color:var(--ok)}
+.box strong:first-child{color:var(--teal)}
+.box.warn strong:first-child{color:var(--warn)}
+/* 番号つき画面図 */
+.shot{position:relative;margin:18px 0 6px;border:1px solid var(--teal);border-radius:4px;overflow:hidden;line-height:0}
+.shot img{width:100%;height:auto;display:block}
+.hl{position:absolute;border:3px solid #f2ead8;box-shadow:0 0 0 2px var(--pink);border-radius:4px}
+.hl b,.num{display:inline-flex;align-items:center;justify-content:center;width:30px;height:30px;border-radius:50%;
+  background:var(--pink);color:#fff;font:700 17px/1 system-ui,sans-serif;border:2px solid #f2ead8}
+.hl b{position:absolute;left:-17px;top:-17px}
+.num{width:26px;height:26px;font-size:15px;vertical-align:-4px;margin-right:4px}
+.caption{font-size:15px;color:#4c5f5d;margin:4px 0 18px}
+.scrollnote{display:flex;gap:12px;align-items:center;background:var(--teal);color:#ece4d2;padding:8px 16px;border-radius:4px;font-size:16px;margin-top:22px}
+.scrollnote span{font-size:26px;line-height:1}
+/* 手順 */
+ol.steps{list-style:none;padding:0;counter-reset:s}
+ol.steps>li{counter-increment:s;position:relative;padding:4px 0 14px 58px;border-left:2px solid var(--line);margin-left:20px}
+ol.steps>li::before{content:counter(s);position:absolute;left:-21px;top:0;width:40px;height:40px;border-radius:50%;
+  background:var(--teal);color:#ece4d2;font:700 20px/40px system-ui,sans-serif;text-align:center}
+ol.steps>li:last-child{border-left-color:transparent}
+.four{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin:18px 0}
+.four div{background:var(--teal);color:#ece4d2;border-radius:6px;padding:12px 14px;font-size:16px;line-height:1.6}
+.four b{display:block;font-size:20px;font-family:"Hiragino Mincho ProN","Yu Mincho",serif}
+/* 2列 */
+.two{display:grid;grid-template-columns:1fr 1fr;gap:22px;align-items:start}
+.two>div{background:#fbf6ea;border:1px solid var(--line);border-radius:6px;padding:14px 18px}
+.two h3{margin-top:0}
+.small img{max-width:100%;border:1px solid var(--line);background:#fff}
+/* 紙重ね図 */
+.stack{position:relative;height:330px;margin:20px 0 10px;perspective:900px}
+.sheet{position:absolute;left:50%;width:300px;height:150px;margin-left:-150px;border-radius:6px;border:2px solid var(--teal);
+  transform:rotateX(55deg) rotateZ(-30deg);display:flex;align-items:center;justify-content:center;font-weight:700;font-size:17px;box-shadow:0 8px 14px rgba(15,61,64,.18)}
+.sheet span{transform:rotateZ(30deg) rotateX(-55deg);background:rgba(242,234,216,.92);padding:2px 10px;border-radius:4px}
+.s1{top:200px;background:#8a6a45;color:#173235}
+.s2{top:135px;background:#b9c4bb}
+.s3{top:70px;background:#c9cdd0}
+.s4{top:5px;background:#e3b892}
+.stacklegend{display:grid;grid-template-columns:auto 1fr;gap:4px 14px;font-size:16px}
+/* 左右図 */
+.lr{display:flex;gap:40px;justify-content:center;margin:20px 0}
+.fig{text-align:center;font-size:16px}
+.person{position:relative;width:140px;height:220px;margin:6px auto}
+.person .head{position:absolute;left:45px;top:0;width:50px;height:50px;border-radius:50%;background:#b9c4bb;border:2px solid var(--teal)}
+.person .torso{position:absolute;left:35px;top:56px;width:70px;height:100px;background:#b9c4bb;border:2px solid var(--teal)}
+.person .face{position:absolute;left:58px;top:20px;width:24px;height:8px;border-bottom:3px solid var(--teal);border-radius:0 0 50% 50%}
+.person .hand{position:absolute;top:150px;width:30px;height:30px;border-radius:50%;border:2px solid var(--teal);font:700 13px/26px system-ui;text-align:center}
+.person .r{background:var(--pink);color:#fff}
+.person .l{background:#ece4d2}
+table{border-collapse:collapse;width:100%;font-size:16px;margin:12px 0}
+th,td{border:1px solid var(--line);padding:8px 12px;text-align:left;vertical-align:top}
+th{background:var(--teal);color:#ece4d2;font-weight:600}
+td{background:#fbf6ea}
+.tag{display:inline-block;font-size:13px;padding:0 8px;border-radius:10px;font-weight:700;color:#fff;white-space:nowrap}
+.tag.no{background:var(--warn)}.tag.yes{background:var(--ok)}.tag.out{background:#6b6f6a}
+footer{margin-top:60px;font-size:14px;color:#4c5f5d}
+@media (max-width:760px){.two,.four{grid-template-columns:1fr}nav.toc ol{columns:1}.lr{flex-direction:column;align-items:center}}
+</style>
+</head>
+<body>
+<header class="top"><div class="in">
+  <h1>はじめての「立ち絵 装備レイヤー合成」</h1>
+  <p>人物の立ち絵（素体）に、剣や盾などの装備画像を重ねて位置を合わせるツールの手引きです。番号つきの画面図で、どこを押すかを1つずつ示します。</p>
+  <a class="launch" href="layer-editor.html" target="_blank" rel="noopener">編集ツールを開く →</a>
+</div></header>
+
+<main>
+<nav class="toc" aria-label="目次"><ol>
+  <li><a href="#what">このツールがすること・しないこと</a></li>
+  <li><a href="#start">起動のしかた</a></li>
+  <li><a href="#map">画面の地図（番号つき）</a></li>
+  <li><a href="#tutorial">最初の練習：デモ図形で動かして保存</a></li>
+  <li><a href="#four">基本の4手順（ガレスで試す）</a></li>
+  <li><a href="#noimage">装備画像がまだ無いとき</a></li>
+  <li><a href="#lr">正面・背面と左右</a></li>
+  <li><a href="#layers">奥と手前：紙の重ね順</a></li>
+  <li><a href="#method">手首交換と固定指</a></li>
+  <li><a href="#mask">マスクは必要な時だけ</a></li>
+  <li><a href="#json-png">JSONとPNGの違い</a></li>
+  <li><a href="#trouble">困ったとき</a></li>
+  <li><a href="#notyet">今のツールにできないこと</a></li>
+</ol></nav>
+
+<h2 id="what">1. このツールがすること・しないこと</h2>
+<div class="two">
+  <div>
+    <h3>すること</h3>
+    <ul>
+      <li>素体の上に、手元にある透明PNGの装備画像を重ねる</li>
+      <li>ドラッグや数値で、装備の位置・回転・大きさを合わせる</li>
+      <li>正面と背面を横に並べて、同じ大きさで見比べる</li>
+      <li>作業を<b>JSON</b>で保存し、あとで続きから開く</li>
+      <li>合成結果を<b>透明PNG</b>で書き出す</li>
+      <li>画像生成AIへ渡す<b>依頼文</b>と<b>参照ガイドPNG</b>を作る</li>
+    </ul>
+  </div>
+  <div>
+    <h3>しないこと</h3>
+    <ul>
+      <li><b>画像を生成しない。</b>装備の絵は、別の生成AIや作画で用意します</li>
+      <li>背景を透明にする加工はしない（透明PNGを用意して読みます）</li>
+      <li>装備を手の位置へ自動で合わせない（人が動かします）</li>
+      <li>合成結果を本編に登録しない。採否は作者が目で決めます</li>
+    </ul>
+  </div>
+</div>
+
+<h2 id="start">2. 起動のしかた</h2>
+<p>ログインやAPIキーは要りません。ターミナルで次の2行を実行し、ブラウザーで下のアドレスを開きます。</p>
+<pre class="box"><code>cd ~/Desktop/Terminus/trpg-gm-mock3
+python3 -m http.server 8765</code></pre>
+<p>アドレス：<a href="http://127.0.0.1:8765/tools/standee-layer-editor/layer-editor.html" target="_blank" rel="noopener">http://127.0.0.1:8765/tools/standee-layer-editor/layer-editor.html</a>
+（この手引きもそのサーバー経由で開いていれば、上の <a href="layer-editor.html" target="_blank" rel="noopener">編集ツールを開く</a> でも同じ画面が開きます）</p>
+<div class="box warn"><strong>注意：</strong>ファイルをダブルクリックして開く（アドレスが <code>file://</code> で始まる）と、<span class="btn">ガレス既存素体</span> の読み込みだけが失敗します。デモ図形や自分のPNGの読み込みは動きます。</div>
+
+<h2 id="map">3. 画面の地図（番号つき）</h2>
+<p>画面は左・中央・右の3列と、ページ下部の「生成依頼文」でできています。下の図はガレスを読み込んだ直後の、<b>ページ最上部</b>の様子です。</p>
+
+<figure class="shot" aria-label="ページ上部の画面図">
+  <img src="screenshots/07-gareth.png" alt="ガレス素体を読み込んだ編集画面の上部。左にレイヤー、中央に正面と背面、右に選択中レイヤーの数値と保存ボタン">
+  <div class="hl" style="left:1.2%;top:8.4%;width:97.6%;height:4%"><b>1</b></div>
+  <div class="hl" style="left:2.1%;top:21.8%;width:14.9%;height:4.8%"><b>2</b></div>
+  <div class="hl" style="left:2%;top:45.5%;width:15.3%;height:5.2%"><b>3</b></div>
+  <div class="hl" style="left:19.5%;top:17.7%;width:6.6%;height:2.4%"><b>4</b></div>
+  <div class="hl" style="left:19.7%;top:27.7%;width:22%;height:60.1%"><b>5</b></div>
+  <div class="hl" style="left:81.5%;top:20.5%;width:11.9%;height:14%"><b>6</b></div>
+  <div class="hl" style="left:81.5%;top:38.5%;width:11.9%;height:6.7%"><b>7</b></div>
+  <div class="hl" style="left:81.7%;top:49.2%;width:8.7%;height:3.5%"><b>8</b></div>
+  <div class="hl" style="left:81.7%;top:56.1%;width:9.1%;height:3.5%"><b>9</b></div>
+  <div class="hl" style="left:81.7%;top:60.4%;width:11.9%;height:3.6%"><b>10</b></div>
+</figure>
+<p class="caption">screenshots/07-gareth.png（画面幅1500px）に番号を重ねたものです。</p>
+
+<table>
+<tr><th>番号</th><th>名前</th><th>何をする所か</th></tr>
+<tr><td><span class="num">1</span></td><td>状態の帯</td><td>今の素材・選択中のレイヤー・未保存かどうか・直前の操作を表示します。<b>迷ったらまずここを読みます。</b>エラーはこの下に赤字で出ます。</td></tr>
+<tr><td><span class="num">2</span></td><td>編集する面</td><td><span class="btn">正面</span> / <span class="btn">背面</span>。左のレイヤー一覧と右の数値は、ここで選んだ面のものです。</td></tr>
+<tr><td><span class="num">3</span></td><td>レイヤーの1段</td><td>丸いボタンで<b>動かす対象</b>を選びます。<span class="btn">Choose File</span>（日本語環境では「ファイルを選択」）で画像を入れ、<span class="btn">外す</span>で外します。<span class="btn">表示</span>のチェックで一時的に隠せます。一覧は<b>上ほど手前</b>です。</td></tr>
+<tr><td><span class="num">4</span></td><td>拡大</td><td>見た目の大きさだけを変えます（35〜200%）。位置の数値は変わりません。</td></tr>
+<tr><td><span class="num">5</span></td><td>キャンバス</td><td>左が正面、右が背面。ドラッグすると<b>3で選んだレイヤー</b>が動きます。クリックした側の面が編集対象になります。ピンクの十字が接続点です。</td></tr>
+<tr><td><span class="num">6</span></td><td>位置・回転・縮尺</td><td>選択中のレイヤーを数値で合わせます。ドラッグの微調整に使います。</td></tr>
+<tr><td><span class="num">7</span></td><td>接続点（この面）</td><td>ピンクの十字の位置。手首や柄の付け根の目印で、依頼文と参照ガイドPNGに使われます。</td></tr>
+<tr><td><span class="num">8</span></td><td>設定をJSON保存</td><td>作業の保存（続きから再開する用）。</td></tr>
+<tr><td><span class="num">9</span></td><td>透明PNG（前後）</td><td>完成した合成画像を正面・背面の2枚で書き出します。</td></tr>
+<tr><td><span class="num">10</span></td><td>参照ガイドPNG（前後）</td><td>生成AIへ渡す下敷き画像を2枚書き出します。</td></tr>
+</table>
+
+<div class="scrollnote"><span>↓</span>ここから下は、ページを<b>一番下までスクロール</b>した状態の図です。素材の読み込みボタンと依頼文は画面の下にあります。</div>
+
+<figure class="shot" aria-label="ページ下部の画面図">
+  <img src="screenshots/01-demo.png" alt="ページを一番下までスクロールした編集画面。左下にデモ図形とガレス既存素体のボタン、下部に生成依頼文">
+  <div class="hl" style="left:2.1%;top:48.2%;width:5.1%;height:3.4%"><b>A</b></div>
+  <div class="hl" style="left:7.8%;top:48.2%;width:7.9%;height:3.4%"><b>B</b></div>
+  <div class="hl" style="left:2%;top:3%;width:15.6%;height:4%"><b>C</b></div>
+  <div class="hl" style="left:81.7%;top:5.6%;width:16.3%;height:2.8%"><b>D</b></div>
+  <div class="hl" style="left:2%;top:67.5%;width:41.3%;height:18.3%"><b>E</b></div>
+  <div class="hl" style="left:2%;top:87%;width:41.3%;height:12.5%"><b>F</b></div>
+  <div class="hl" style="left:44.3%;top:69.3%;width:53.6%;height:26%"><b>G</b></div>
+  <div class="hl" style="left:44.3%;top:96.3%;width:7.9%;height:3.5%"><b>H</b></div>
+</figure>
+<p class="caption">screenshots/01-demo.png。デモ図形を読み込み、一番下までスクロールした状態です。</p>
+
+<table>
+<tr><th>記号</th><th>名前</th><th>何をする所か</th></tr>
+<tr><td><span class="num">A</span></td><td>デモ図形</td><td>練習用の図形（自作の幾何図形。実キャラではありません）を一式読み込みます。</td></tr>
+<tr><td><span class="num">B</span></td><td>ガレス既存素体</td><td>ガレスの正面・背面の素体（装備なし）を読み込みます。</td></tr>
+<tr><td><span class="num">C</span></td><td>レイヤーの段（素体）</td><td>スクロールした後も、レイヤー一覧は左列の上の方にあります。</td></tr>
+<tr><td><span class="num">D</span></td><td>JSONから復元</td><td>保存したJSONを選ぶと、その時の作業に戻ります。</td></tr>
+<tr><td><span class="num">E</span></td><td>武器種・外観</td><td>依頼文に入る言葉を書きます。</td></tr>
+<tr><td><span class="num">F</span></td><td>方式・持ち手</td><td>手首交換か固定指か、右手か左手か（人物から見て）。</td></tr>
+<tr><td><span class="num">G</span></td><td>依頼文</td><td>自動で組み上がる文章です。直接は書き換えられません。</td></tr>
+<tr><td><span class="num">H</span></td><td>依頼文をコピー</td><td>クリップボードへコピーします。</td></tr>
+</table>
+<div class="box"><strong>読み込むと置き換わります。</strong><span class="btn">デモ図形</span> と <span class="btn">ガレス既存素体</span> は、今の作業を丸ごと置き換えます。未保存の変更があるときは確認が出ます。</div>
+
+<h2 id="tutorial">4. 最初の練習：デモ図形で「動かす」と「保存」だけ</h2>
+<p>まずは壊しても困らない図形で、2つの操作だけ試します。所要時間は数分です。</p>
+<ol class="steps">
+  <li><a href="layer-editor.html" target="_blank" rel="noopener">編集ツールを開き</a>、左列の下にある「素材を読む」が見えるまでスクロールして <span class="num">A</span> <span class="btn">デモ図形</span> を押します。正面と背面に、灰色の人型・剣・盾・肌色の丸が出ます。</li>
+  <li>ページを上に戻し、左列のレイヤー一覧で <b>「手前の装備」</b>の丸いボタンを押します（地図の <span class="num">3</span>）。状態の帯 <span class="num">1</span> が「選択：正面／手前の装備」になったことを確かめます。
+    <div class="box warn"><strong>ここが一番のつまずきどころです。</strong>デモを読み込んだ直後は「素体」が選ばれています。そのままドラッグすると人型ごと動きます。動かしたい物を先に選びます。</div></li>
+  <li>正面のキャンバス <span class="num">5</span> の上でドラッグします。剣が動けば成功です。細かく動かすときは、キャンバスをクリックしてから矢印キー（1px、<kbd>Shift</kbd>を押しながらで10px）。</li>
+  <li>右列の <span class="num">6</span> の「位置 x」が変わっていることを確かめます。数値を直接打って <kbd>Enter</kbd> でも動きます。</li>
+  <li>右列の <span class="num">8</span> <span class="btn">設定をJSON保存</span> を押します。<code>standee-layers.json</code> がダウンロードされ、状態の帯が「保存済み」になります。</li>
+  <li>（確認）剣をもう一度動かしてから、ページ下の <span class="num">D</span> で今のJSONを選びます。剣が保存した時の位置に戻れば、保存と復元ができています。</li>
+</ol>
+
+<h2 id="four">5. 基本の4手順（ガレスで試す）</h2>
+<div class="four">
+  <div><b>① 「ガレス既存素体」を押す</b><span class="btn" style="background:#ece4d2;color:#0f3d40">ガレス既存素体</span></div>
+  <div><b>② 装備画像を入れる</b>レイヤーの段の Choose File</div>
+  <div><b>③ 動かして合わせる</b>ドラッグ・矢印・数値</div>
+  <div><b>④ JSON保存</b><span class="btn" style="background:#ece4d2;color:#0f3d40">設定をJSON保存</span></div>
+</div>
+<div class="box warn"><strong>前提：</strong>②には、背景が透明な装備のPNGが<b>すでに手元にある</b>必要があります。まだ無い場合は先に <a href="#noimage">6. 装備画像がまだ無いとき</a> へ進んでください。</div>
+
+<h3>① 「ガレス既存素体」を押す</h3>
+<p>左列の下にある見出し「素材を読む」が見えるまでスクロールし、<span class="num">B</span> <span class="btn">ガレス既存素体</span> を押します。上の地図の図と同じ画面になれば成功です。状態の帯に「採否は未判定」と出るのは、このツールが合成結果を採用しない、という意味です。</p>
+
+<h3>② 装備画像を入れる（正面と背面は別々に）</h3>
+<ol class="steps">
+  <li><span class="num">2</span> で <span class="btn">正面</span> を選びます。</li>
+  <li>入れたいレイヤーの段（例：剣なら「手前の装備」<span class="num">3</span>）の <span class="btn">Choose File</span> を押し、<b>正面用</b>の透明PNGを選びます。その段が自動で選択状態になり、段の下が「画像あり」に変わります。</li>
+  <li><span class="num">2</span> で <span class="btn">背面</span> に切り替え、同じ段に<b>背面用</b>の透明PNGを選びます。</li>
+</ol>
+<p>読めるのは PNG / JPEG / WebP（1枚15MB・一辺4096pxまで）です。JPEGは透明を持てないので、装備は透明PNGを使います。どの段に入れるかは <a href="#layers">8. 紙の重ね順</a> を見てください。</p>
+
+<h3>③ 動かして合わせる</h3>
+<ol class="steps">
+  <li>左の一覧で、動かす段の丸いボタンが選ばれていることを確かめます（状態の帯でも確認できます）。</li>
+  <li>キャンバス <span class="num">5</span> でドラッグして大まかに置きます。</li>
+  <li>右列 <span class="num">6</span> の数値で仕上げます。位置x/yは画像の左上の位置、回転は度、縮尺は1が等倍です（回転と縮尺は画像の中心を軸にします）。</li>
+  <li>細部は <span class="num">4</span> の拡大を <b>100%</b> や <b>200%</b> にすると見やすくなります。</li>
+  <li>背面も同じように合わせます。背面は正面の位置を引き継ぎません。</li>
+</ol>
+
+<h3>④ JSON保存</h3>
+<p><span class="num">8</span> <span class="btn">設定をJSON保存</span>。続きをするときは <span class="num">D</span> <span class="btn">JSONから復元</span> でそのファイルを選びます。見た目を確定した画像が欲しいときだけ、<span class="num">9</span> <span class="btn">透明PNG（前後）</span> も押します（違いは <a href="#json-png">12</a>）。</p>
+
+<h2 id="noimage">6. 装備画像がまだ無いとき（生成の前段階）</h2>
+<p>このツールは絵を描きません。装備画像が無い人は、ここで<b>生成AIに渡す材料</b>を作り、ツールの外で生成してもらってから、5章の②へ戻ります。</p>
+<table>
+<tr><th>段階</th><th>どこで</th><th>状態</th></tr>
+<tr><td>a. 「ガレス既存素体」を押し、接続点を合わせる</td><td>このツール</td><td><span class="tag no">装備は未生成</span></td></tr>
+<tr><td>b. 依頼文を作り、参照ガイドPNGを書き出す</td><td>このツール</td><td><span class="tag no">装備は未生成</span></td></tr>
+<tr><td>c. 依頼文とガイドPNGを渡して生成・背景透過</td><td><span class="tag out">ツールの外</span> 生成AI・作画</td><td>ここで初めて装備画像ができる</td></tr>
+<tr><td>d. できた透明PNGを読み込んで合わせる</td><td>このツール（5章の②③④）</td><td><span class="tag yes">生成済み</span></td></tr>
+</table>
+
+<h3>a. 接続点を合わせる</h3>
+<p>接続点（ピンクの十字）は最初、画像の真ん中（x=328, y=599.5）にあります。持たせる手の<b>手首</b>（固定指なら握りの中心）へ動かします。</p>
+<ol class="steps">
+  <li><span class="num">2</span> で <span class="btn">正面</span>。右列 <span class="num">7</span> の x と y に数字を入れ、<kbd>Enter</kbd>。十字が動くのを見ながら、入力欄で <kbd>↑</kbd><kbd>↓</kbd> キーを押すと1ずつ動かせます。</li>
+  <li><span class="num">2</span> で <span class="btn">背面</span> に切り替え、背面の手首にも合わせます。背面は人物の右手が画面の<b>右</b>側に来ます（<a href="#lr">7章</a>）。</li>
+</ol>
+<div class="box"><strong>目安：</strong>ガレスの右手は、正面でおよそ x=150, y=645、背面でおよそ x=575, y=635 です。これは画面図から読み取った<b>概算</b>なので、十字を見て手首にぴったり合うまで直してください。キャンバスをクリックして十字を置く機能はありません（数値で動かします）。</div>
+
+<h3>b. 依頼文と参照ガイドPNG</h3>
+<ol class="steps">
+  <li>ページ下の <span class="num">E</span> に武器種（例：<code>片手剣</code>）と外観（例：<code>鋼の直刃、真鍮の鍔、革巻きの柄</code>）を書きます。</li>
+  <li><span class="num">F</span> で方式（<a href="#method">9章</a>）と持ち手を選びます。持ち手は<b>人物から見た</b>右・左です。</li>
+  <li><span class="num">G</span> に依頼文が組み上がります。接続点の数値・前後の左右・「素体を描き直さない」「左右反転で流用しない」などの条件が自動で入ります。</li>
+  <li><span class="num">H</span> <span class="btn">依頼文をコピー</span>。</li>
+  <li>上へ戻り、<span class="num">10</span> <span class="btn">参照ガイドPNG（前後）</span>。<code>guide-front.png</code> と <code>guide-back.png</code> がダウンロードされます。</li>
+</ol>
+<div class="two small">
+  <div><img src="screenshots/06-guide-front.png" alt="参照ガイドPNGの例。薄い素体とピンクの十字"><p class="caption">参照ガイドPNG（デモ図形の正面）。素体が薄く、接続点の十字が入ります。装備は入りません。</p></div>
+  <div><p>c. この2枚と依頼文を、生成AI（または作画する人）へ渡します。返ってきた画像の背景が透明でなければ、透明にしてから読み込みます。</p>
+  <p>d. できた正面用・背面用のPNGを、<a href="#four">5章</a>の②から読み込みます。生成された装備の手首を、ピンクの十字に合わせるように動かします。</p></div>
+</div>
+
+<h2 id="lr">7. 正面・背面と左右</h2>
+<p>キャラクターの「右手」は、正面から見ると画面の<b>左</b>、背中から見ると画面の<b>右</b>に来ます。依頼文はこの変換を自動で書きます。</p>
+<div class="lr">
+  <div class="fig"><b>正面</b>（こちらを向いている）
+    <div class="person"><div class="head"></div><div class="face"></div><div class="torso"></div><div class="hand r" style="left:4px">右</div><div class="hand l" style="left:106px">左</div></div>
+    人物の右手 ＝ 画面の左</div>
+  <div class="fig"><b>背面</b>（向こうを向いている）
+    <div class="person"><div class="head"></div><div class="torso"></div><div class="hand l" style="left:4px">左</div><div class="hand r" style="left:106px">右</div></div>
+    人物の右手 ＝ 画面の右</div>
+</div>
+<div class="box warn"><strong>反転で済ませません。</strong>正面用の装備を左右反転しても背面用にはなりません（剣の刃の向き、鞘の位置、見える面が変わるため）。正面用と背面用は別々の画像を用意します。このツールにも反転で代用する機能はありません。</div>
+
+<h2 id="layers">8. 奥と手前：紙の重ね順</h2>
+<p>1面は4枚の透明な紙を重ねたものと考えます。下の紙ほど奥、上の紙ほど手前です。左の一覧は<b>上ほど手前</b>の順に並んでいます。</p>
+<div class="two">
+  <div class="stack" aria-label="4枚の紙を重ねた図">
+    <div class="sheet s1"><span>奥の装備</span></div>
+    <div class="sheet s2"><span>素体</span></div>
+    <div class="sheet s3"><span>手前の装備</span></div>
+    <div class="sheet s4"><span>交換手/遮蔽指</span></div>
+  </div>
+  <div>
+    <div class="stacklegend">
+      <b>いちばん上</b><span><b>交換手/遮蔽指</b>：武器を握った手、または柄に掛かる指</span>
+      <b>3枚目</b><span><b>手前の装備</b>：体の前に来る物。手に持つ剣など</span>
+      <b>2枚目</b><span><b>素体</b>：人物本体</span>
+      <b>いちばん下</b><span><b>奥の装備</b>：体の後ろに隠れる物。背負った盾、体の陰になる鞘など</span>
+    </div>
+    <p style="font-size:16px">例：デモ図形では、正面の盾が「奥の装備」なので腕と胴の<b>後ろ</b>から覗き、剣は「手前の装備」なので腕の<b>前</b>に出ます。</p>
+  </div>
+</div>
+<p><b>アクリル外枠（参照）</b>は4枚とは別の確認用の重ね画像です。板の形の画像を読むと薄く重ねて表示されますが、透明PNGには入りません。</p>
+
+<h2 id="method">9. 手首交換と固定指</h2>
+<p>手に武器を持たせる方法は2つです。<span class="num">F</span> の「方式」で選ぶと、依頼文の書き方が変わります。</p>
+<div class="two">
+  <div>
+    <h3>手首交換</h3>
+    <p>武器を握った<b>手首から先</b>と武器を、1枚の絵として描いてもらいます。</p>
+    <ul>
+      <li>その1枚を「交換手/遮蔽指」の段に入れ、手首の切り口を接続点に合わせます</li>
+      <li>素体の元の手が見えて二重になるので、<a href="#mask">マスク</a>で元の手を隠します</li>
+    </ul>
+    <p style="font-size:16px">向くとき：元の手の形が武器の握りに合わないとき。</p>
+  </div>
+  <div>
+    <h3>固定指</h3>
+    <p>素体の手は<b>そのまま</b>使い、2枚に分けて描いてもらいます。</p>
+    <ul>
+      <li>武器本体 → 「手前の装備」</li>
+      <li>柄の手前に掛かる指だけ → 「交換手/遮蔽指」（武器の上に重なり、握っているように見えます）</li>
+      <li>素体の手を消さないので、マスクは普通いりません</li>
+    </ul>
+    <p style="font-size:16px">向くとき：素体の手がすでに握りの形のとき。</p>
+  </div>
+</div>
+<p>デモ図形は練習用に、剣（手前の装備）と肌色の丸（交換手/遮蔽指）を別々の段に入れてあります。実際の手首交換では、手と武器が1枚の絵になります。</p>
+
+<h2 id="mask">10. マスクは必要な時だけ</h2>
+<p>マスクは、素体の一部を四角く透明にする機能です。<b>素体の段にだけ</b>効き、装備の段は消しません。</p>
+<ul>
+  <li><b>使うとき：</b>手首交換で、素体の元の手が新しい手の周りからはみ出して見えるとき。</li>
+  <li><b>使わないとき：</b>固定指のとき、元の手が装備に完全に隠れているとき。不要なマスクは体を欠けさせるだけです。</li>
+</ul>
+<ol class="steps">
+  <li>左の一覧で <b>素体</b> の段を選びます。右列に「元の手を隠すマスク（素体だけ）」が現れます（他の段を選んでいる間は出ません）。</li>
+  <li><span class="btn">矩形を追加</span>。接続点を中心に80×80pxの四角が置かれ、赤い点線で表示されます。</li>
+  <li>x・y（左上）・w・h（幅・高さ）を数値で直します。要らなくなったら <span class="btn">削除</span>。</li>
+</ol>
+<p>マスクも面ごとです。背面にも必要なら、<span class="num">2</span> で背面に切り替えて同じ操作をします。赤い点線と十字は <span class="num">4</span> の横の「接続点・マスク枠を表示」で隠せます（書き出しには最初から入りません）。</p>
+
+<h2 id="json-png">11. 〜 12. JSONとPNGの違い</h2>
+<table>
+<tr><th></th><th>設定をJSON保存</th><th>透明PNG（前後）</th><th>参照ガイドPNG（前後）</th></tr>
+<tr><td>ファイル</td><td><code>standee-layers.json</code>（1つ）</td><td><code>standee-front.png</code><br><code>standee-back.png</code></td><td><code>guide-front.png</code><br><code>guide-back.png</code></td></tr>
+<tr><td>中身</td><td>読み込んだ画像そのもの・各段の位置/回転/縮尺・マスク・接続点・依頼文の入力</td><td>重ねた結果の絵だけ（接続点・マスク枠・外枠なし、背景透明）</td><td>薄い素体＋接続点の十字（＋外枠）。装備なし</td></tr>
+<tr><td>目的</td><td><b>作業の続きをする</b></td><td><b>できた絵を使う・見せる</b></td><td><b>生成AIへ渡す</b></td></tr>
+<tr><td>あとから動かせるか</td><td>はい。復元すれば剣だけ動かし直せます</td><td>いいえ。1枚の絵に固まっています</td><td>—</td></tr>
+</table>
+<div class="box"><strong>具体例：</strong>今日、剣の位置を合わせ終えたとします。明日「剣を5pxだけ下げたい」と思ったとき、JSONがあれば復元して剣の段を5px動かすだけです。透明PNGしか無いと、剣と体が1枚に固まっているので剣だけ動かせず、最初から合わせ直しになります。<b>両方とっておく</b>のが安全です。</div>
+<div class="two small">
+  <div><img src="screenshots/03-export-front.png" alt="透明PNGの書き出し例。人型、剣、盾が1枚になっている"><p class="caption">透明PNGの例（デモ図形の正面、元の手をマスクで隠した後）。十字や点線は入りません。</p></div>
+  <div><p>JSONは画像を中に含むので、ファイルが大きくなります（画像の数と大きさ次第で数MB〜）。中身は手で書き換えず、このツールで開きます。</p></div>
+</div>
+
+<h2 id="trouble">13. 困ったとき</h2>
+<table>
+<tr><th>こうなった</th><th>原因と直し方</th></tr>
+<tr><td>ドラッグしたら人物ごと動いた</td><td>「素体」が選ばれています。一覧で動かしたい段を選び直します。元に戻すボタンは無いので、右列 <span class="num">6</span> の位置x/yを 0 に戻します（素体の初期値は0, 0）。</td></tr>
+<tr><td>読み込んだのに見えない</td><td>(1) 編集する面が違う（正面に入れたつもりで背面に入れた）。(2) その段の「表示」が外れている。(3) 位置が画面外。<span class="num">6</span> で x/y を確かめます。</td></tr>
+<tr><td>装備の周りが白い四角になる</td><td>画像の背景が透明ではありません（JPEGなど）。透明PNGを用意します。</td></tr>
+<tr><td>赤字で「範囲外です」</td><td>位置は±5000、回転は±360°、縮尺は0.05〜10、接続点は画像の中（x 0〜656、y 0〜1199）。範囲外の値は反映されず、元の値が残ります。</td></tr>
+<tr><td>「ガレス素体を読めません」</td><td><code>file://</code> で開いています。<a href="#start">2章</a>の方法でサーバー経由で開きます。</td></tr>
+<tr><td>背面だけずれる</td><td>正面と背面の位置・接続点・マスクはすべて別々です。背面に切り替えて合わせ直します。</td></tr>
+</table>
+
+<h2 id="notyet">14. 今のツールにできないこと</h2>
+<p>使っていて「こうできたら楽」と思う所は、今の仕様では人の手で行います。将来の改善候補であり、現在は<b>ありません</b>。</p>
+<ul>
+  <li>画像の生成・背景の透明化（ツールの外で行う）</li>
+  <li>装備の手首を接続点へ自動で吸着させる</li>
+  <li>キャンバスをクリックして接続点を置く／マスクをドラッグで描く</li>
+  <li>正面の位置を背面へ写す</li>
+  <li>元に戻す（Undo）。こまめにJSON保存して代わりにします</li>
+  <li>キャンバスの大きさの変更（656×1199px固定。ガレス素体の寸法）</li>
+</ul>
+
+<footer>
+  この手引きは <code>tools/standee-layer-editor/</code> の index.html / app.js / core.js（2026-10-08時点）の内容から書いています。画面図は既存の screenshots/ を使用しました。
+  <a href="layer-editor.html" target="_blank" rel="noopener">編集ツールを開く</a>
+</footer>
+</main>
+</body>
+</html>

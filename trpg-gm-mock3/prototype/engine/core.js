@@ -36,7 +36,7 @@ let humanRequests=[];
 const CHAT_JOKE_RATE=.2;
 const esc=t=>String(t).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const personName=id=>PEOPLE.find(p=>p.id===id)?.name||id;
-function initialItems(){return Object.fromEntries(Object.entries(ITEM_DEFS).filter(([,d])=>d.start).map(([id,d])=>[id,{owner:d.start,holder:d.start,...(d.equip?{equipped:id==='lantern'}:{})}]));}
+function initialItems(){return Object.fromEntries(Object.entries(ITEM_DEFS).filter(([,d])=>d.start).map(([id,d])=>[id,{owner:d.start,holder:d.start,...(d.equip?{equipped:id==='lantern'}:{}),...(d.draw?{drawn:false}:{})}]));}
 function hasItem(who,item,s=state){return s.items[item]?.holder===who;}
 function ownedActions(who,actions,s){return actions.filter(a=>!ITEM_REQUIRED[a]||hasItem(who,ITEM_REQUIRED[a],s)&&s.items[ITEM_REQUIRED[a]].equipped!==false);}
 let recipient='all';

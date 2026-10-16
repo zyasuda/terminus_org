@@ -3,9 +3,9 @@ const loadPrototype=require('./load-prototype.cjs').load;
 const elements={};function el(){return {value:'',textContent:'',disabled:false,open:false,isConnected:true,classList:{add(){},remove(){}},setAttribute(){},dispatchEvent(){},focus(){},showModal(){this.open=true;},close(){this.open=false;},addEventListener(){}};}
 const context=vm.createContext({document:{getElementById:id=>elements[id]??=el()},window:{},el,Event:class{},crypto:require('node:crypto').webcrypto});
 loadPrototype(context);
-// 仲間本人として話すAI呼び出し（着脱・受け渡し・地図・灯り・戦闘の連携確認）は、すべて共通の speechStyle を通します。
+// 仲間本人として話すAI呼び出し（着脱・抜刀納刀・受け渡し・地図・灯り・戦闘の連携確認）は、すべて共通の speechStyle を通します。
 const personaCalls=require('./load-prototype.cjs').sources().map(s=>s.source).join('\n').match(/await ask\((?:'あなたは'\+person\.name|`あなたは\$\{person\.name|'あなたは'\+personName\(holder\)|`あなたは協力型TRPG|CONSENT_TOPICS\[topic\]\.decisionPrompt)[^\n]*/g)||[];
-if(personaCalls.length!==5||personaCalls.some(s=>!s.includes('speechStyle(')))throw Error('仲間本人のAI呼び出しに話し方が渡らない：'+personaCalls.length);
+if(personaCalls.length!==6||personaCalls.some(s=>!s.includes('speechStyle(')))throw Error('仲間本人のAI呼び出しに話し方が渡らない：'+personaCalls.length);
 vm.runInContext(`(async()=>{
  let checks=0;const ok=(v,m)=>{checks++;if(!v)throw Error(m)};
  state=initial();chat=[];state.knowledge.lydia.push('マレンだけの秘密');learnClue('lydia','darkness');state.knowledge.ines.push('自分だけの観察');
