@@ -1,0 +1,5 @@
+ブロムを既存の衣装部屋に登録してください。作者確認済み。読んでから実装: index.html, app.js, wardrobe.js, check.cjs, browser-check.cjs, measure-maren.cjs, README.md。編集はstandee-workshopのみ。mock3/旧tool/既存未コミット変更/秘密情報/.env/BORGは変更も秘密の読み取りも禁止。commit/push/公開/新依存/保存機能/新抽象は禁止。
+既存ガレスとマレンの操作を保持し、同じキャラ切替入口へブロムを追加。ブロムは金槌(右手)と盾(左腕)を独立booleanで着脱、4状態(素手/金槌だけ/盾だけ/両方)×前後8姿。棚クリックとドラッグで装着、人物上の品クリック→既存近接カードで棚へ戻す、キーボードも同じカードへ。各キャラの状態/undo独立保持、前後確認/舞台袖プレビューを共用。鞘不要。
+素材はmock3/prototype/art-preview/characters/brom-{empty,hammer-only,shield-only,hammer-shield}-{front,back}.pngを読取り調査。板外枠が目立つなら元絵のbrom-equipment-study/review.png(両方)、brom-equipment-study/empty-plate/_split-{front,back}.png(空)、brom-{hammer-only,shield-only}-study/review-v1.pngも調査し、板線のない透明元絵をassets/bromへコピー。画像編集/生成はしない。マレン同様全身バリアントを切り出し、頭頂/足裏/頭中心を実測して姿を正規化。ドワーフの体型を保持、衣装部屋では見やすい大きさを確保。手/盾の前後の左右が自然になる原画を選び、確認用8姿スクリーンショットと390px画像を残す。絵の採否はCodex/作者担当。
+新しい汎用仕組みではなく既存actor rulesの形を踏襲、brom規則を最小追加。金槌/盾のサムネを棚に置き、着用中鎧の札。新しい装備/光演出は今回作らない。README追加、check.cjsへ独立着脱/undoに必要な状態/8素材/座標確認、browser-checkへ8姿とキャラ間保持/undo/390px横overflowと既存回帰。必要ならmeasure-brom.cjsを同じ測定パターンで作成。
+Node24で検査。http://127.0.0.1:8791/稼働中。変更ファイル、各コマンド/終了コード/生出力、頭足位置の測定数字、未確認事項を報告してください。スクリーンショットの見た目の合否は決めない。

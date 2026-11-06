@@ -59,3 +59,6 @@ trpg-gm-isometric/
 # output/ にはClaude/Codexの書き出し、.codex-build/ にはCodexが企画書を作った作業場所がある
 output/
 .codex-build/
+
+# 独立したローカルリポジトリ(2026-10-16)。立ち絵の共通制作パッケージの正本
+standee-studio/

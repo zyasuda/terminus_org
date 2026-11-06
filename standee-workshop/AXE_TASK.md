@@ -1,0 +1,5 @@
+ブロムの手斧を追加。作者承認済み。BROM_TASK.md, wardrobe.js, app.js,index.html,check.cjs,browser-check.cjs,measure-brom.cjs,README.mdを読む。編集standee-workshopのみ、mock3/Standee-wizはコピー元として読取りのみ、既存変更/秘密/.env/BORG/commit/push/公開/新依存/新汎用抽象/保存は禁止。生成や画像編集はしない。
+右手は金槌/手斧/空を排他にし、左腕の盾は独立。状態は既存hammer booleanにaxe booleanを足す最小変更でも可(排他をwearで必ず守る)。既存4姿を維持。棚に手斧サムネ・装着、ドラッグ、人物の手斧→近接カード→戻す、キーボード同じカード入口、金槌に持替え、undo、キャラ間保持、背面/舞台袖。既存DOMやAPIを踏襲。
+確認済み手斧画像trpg-gm-mock3/prototype/art-preview/characters/brom-v64-{front,back}.pngは板外枠付き。探索はTerminus内だけ。Terminus外のStandee-wizおよび一時フォルダの資料は読まない(外部送信の承認対象外)。透明元絵があればコピーして既存同様α128で頭足頭xを測って正規化。無ければ既存v64前後をそのまま暫定登録し、板枠ありの制限をREADMEに記載。元絵編集はしない。肩幅と身長が既存に合うよう頭頂/足裏を揃える。背面右手が画面右に来るか確認し必要なら描画反転。
+手斧+盾素材の有無も調査。無ければ無理な盾の貼付合成はせず、『手斧姿は盾なし』として手斧装着時に盾を棚へ戻すことを操作前の棚説明と操作後の案内で明示。手斧中に盾を装備すると手斧が棚へ戻り盾のみになる。金槌は既存通り盾と併用可能。この制限はREADMEとテストへ。新素材を生成しない。
+check/browser-checkへ排他/盾併用条件/持替え/戻す/undo/キャラ保持/390px/ガレスマレン既存回帰。Node24で検査し、コマンド・終了コード・生出力を必ず全文か最後30行報告(前回生出力なしだったので今回は貼る)。手斧前後/390pxの画像をscreenshots/brom-axe-*.png。Codexが目視担当。変更ファイルと未完事項報告。

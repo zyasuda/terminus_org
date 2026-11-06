@@ -1,0 +1,4 @@
+作者が透過候補を承認し、リディアの替え衣装を登録する依頼です。読んだファイルを報告: wardrobe.js app.js index.html check.cjs README.md。範囲standee-workshopのみ、mock3既存変更を保護。commit/push/依存追加/画像編集/再生成/ブラウザ操作禁止。
+assets/designs/lydia-wine-empty-preview-v1.png を承認素材としてそのまま assets/lydia/wine-empty-v1.png にコピー。sharpはread-only測定だけ許可、必要ならCodexがコピー・測定を担当。1254square左右前後。alpha128で頭頂・頭中心・足裏を測りLYDIA_SRC同じ方法で各面を正規化。172cm表示足裏1140と既存displayFrameを維持。
+Lydia stateにoutfit:'normal'/'wine'を足す。Marenのdressと同じ最小パターンで切替、不変状態、向き保持。通常の素材を保ち、選択衣装からlayersを返す。小道具は素手のまま。UI既存.outfitsを俳優別(maren/lydia)2グループにし、通常／ワインをLydia衣装掛けに追加。switchActor、render、click handlerでそれぞれ正しいrules().dressと属性を利用。マレン通常／黒は維持、他キャラへ衣装ボタン出さない。spare-pegはmaren/lydia非表示、worn-tag衣装名を示す。FILESへwine素材追加。通常とワインの切替、前後、取り消し、俳優切替維持を小さなassertで検証。
+Node24 node check.cjs/node --check app.js/git diff --check -- standee-workshopの生出力と終了コードを報告。実画面の確認はCodexが担当。画像の採否判断は不要(承認済)。不要な汎用化しない。作業完了まで実装する。
