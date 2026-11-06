@@ -147,7 +147,7 @@ return `<svg viewBox="0 0 600 465" role="img" aria-labelledby="maptitle mapdesc"
 function advance(){
  if(state.phase!=='explore'||state.room!=='hall'||!state.opened||!state.lit)throw Error('まだ石扉の奥へは進めません。');
  state.phase='battle';state.navigation.offer=null;state.boss=state.noisy?30:24;
- say('GM',state.noisy?'音に気づいた番人が身構えた。胸の枠が強く閉じている。':'番人が振り向いた。敵の予告を見て作戦を決めよう。','gm');if($('sheet')?.open)$('sheet').close();render();return {performed:true};
+ say('GM',state.noisy?'音に気づいた番人が身構えた。胸の枠が強く閉じている。':'番人が振り向いた。敵の予告を見て作戦を決めよう。金槌・盾・片手剣・杖は、装備を頼んでから使えます。','gm');if($('sheet')?.open)$('sheet').close();render();return {performed:true};
 }
 // 明示した地図の依頼・行き先だけを実行。道の相談や否定は移動に変えません。
 function navigationIntent(text,to=recipient,s=state){
