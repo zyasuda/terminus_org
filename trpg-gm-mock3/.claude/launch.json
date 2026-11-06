@@ -1,0 +1,12 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "mock3",
+      "runtimeExecutable": "node",
+      "runtimeArgs": ["prototype/preview.cjs"],
+      "port": 8797,
+      "url": "http://127.0.0.1:8797"
+    }
+  ]
+}
