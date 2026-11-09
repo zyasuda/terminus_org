@@ -88,7 +88,27 @@ header{padding:12px 24px;height:58px}header h1{font-size:21px}header span{font-s
 </dialog>
 <svg width="0" height="0" aria-hidden="true" style="position:absolute"><defs id="diceColorFilters"></defs></svg>
 <dialog id="dicePanel" class="dice-panel" aria-labelledby="diceTitle"><div class="dice-head"><img src="images/gm_mascot.png" alt="GM"><div><h2 id="diceTitle">GMの判定</h2><p id="diceIntro"></p></div></div><div class="dice-plan" id="dicePlan"></div><label class="dice-support" id="diceSupportLabel" hidden><input type="checkbox" id="diceSupport">イネスが照明と見張りで支援（＋2）</label><label id="diceColorLabel" class="dice-support" hidden>色のプレビュー<select id="diceColorActor" aria-label="ダイスの色"></select></label><div class="dice-table"><span class="dice-label">D20 · 20面ダイス</span><div class="die" id="die"><img id="diceSprite" src="images/d20/d20-red-00.png" alt="赤い20面ダイス"></div></div><div id="diceRecords" class="dice-records" role="status" aria-live="polite"></div><div class="dice-buttons"><button id="diceClose">キャンセル</button><button id="diceRoll" class="primary">GMに判定を頼む</button></div></dialog>
-<script src="./engine/core.js"></script><script src="./engine/items.js"></script><script src="./engine/navigation.js"></script><script src="./engine/view.js"></script><script src="./engine/sheet.js"></script><script src="./engine/ai.js"></script><script src="./engine/battle.js"></script><script src="./engine/ui.js"></script><script src="./scenario.js"></script><script>bootGame();</script><script type="module">
+<script src="./engine/core.js"></script><script src="./engine/items.js"></script><script src="./engine/navigation.js"></script><script src="./engine/view.js"></script><script src="./engine/sheet.js"></script><script src="./engine/ai.js"></script><script src="./engine/battle.js"></script><script src="./engine/ui.js"></script><script src="./scenario.js"></script><script>
+// タイトル(title.html)→ 黒地に一言 → ゲーム。Standee-wiz の main.jsx の TitleGate と同じ流れ(2026-11-09 移植)。
+// URLに ?… が付いているとき(検査・録画・開発)はタイトルを通さず直行する。
+// ゲームはタイトルの裏で先に組み立てる。立体舞台(stage.js)が組み立て済みの状態を前提に起動するため(後にすると舞台が従来表示に落ちる。2026-11-09 実測)。
+// 一言は Standee-wiz の src/expedition/aphorisms.js と同じ一覧(オリジナルの文。演出だけなので Math.random で選ぶ)。
+(()=>{const FADE_MS=600,LINE_MS=2000,LINES=['闇は、帰る道を忘れた者の名をよく覚えている','剣を抜く前に、心はすでに幾度も敗れている','灯は道を照らすが、進むべき道までは選ばぬ','王冠は重く、墓土は王にも等しく降る','恐れは影である。逃げるほど長く伸びる','運命の扉は、叩く者より押す者に開く','人は失ったものを数え、残されたものを忘れがちだ','沈黙は臆病者の盾にも、賢者の剣にもなる','明日を知る者は、今日の一歩を恐れる','名誉は鐘の音、罪は夜更けの足音である','富は掌を満たすが、眠りまでは買えぬ','死は終幕ではない。生者が閉じる帳である','炎は闇を退けるが、灰に昨日を返さない','勇気とは恐れぬことではなく、恐れに名を与え進むこと','敵の顔を知るより、己の憎しみを知る方が難しい','一度選んだ道は、選ばなかった道の亡霊を連れてくる','時は癒やし手を装い、傷に新しい名をつける','王国が滅びる時、最初に沈黙するのは鐘である','誓いは言葉で結ばれ、行いで試される','目を閉じた者にも、地下の闇はまぶたの裏から届く','勝利の杯には、敗者の涙も注がれている','人は自由を望み、その代価を運命と呼ぶ','忘却は慈悲だが、記憶は刃を研ぐ','心が二つに裂ける時、選ばぬ側も血を流す','正しさは剣より鋭く、鞘に収めにくい','旅の終わりは、帰る場所を失った時に訪れる','祈りが届かぬ夜にも、足音は次の部屋へ向かう','誰も見ぬ善行こそ、暗闇に残る灯である','一人の死は静かであり、一つの沈黙は国を倒す','生き延びた者は、勝者と呼ばれる前に何かを失う'];
+ bootGame();if(location.search)return;
+ const cover=tag=>{const el=document.createElement(tag);el.style.cssText='position:fixed;inset:0;width:100%;height:100%;border:0;z-index:9999';return el;};
+ const fade=(el,done)=>el.animate([{opacity:1},{opacity:0}],{duration:FADE_MS,fill:'forwards'}).finished.then(done);
+ const frame=cover('iframe');frame.title='タイトル';frame.src='./title.html';
+ // タイトルが配信されていないときは、止めずにゲームへ進む
+ frame.onload=()=>{const start=frame.contentDocument?.querySelector('.start');if(!start){frame.remove();return;}
+  // 黒幕をタイトルの真下に先に敷いてから、タイトルを薄くする(裏で組み立て済みのゲームを透けさせない)
+  start.addEventListener('click',()=>setTimeout(()=>{const box=blackout();fade(frame,()=>{frame.remove();showLine(box);});},600),{once:true});};
+ document.body.append(frame);
+ function blackout(){const box=cover('div');box.style.cssText+=';z-index:9998;display:grid;place-items:center;padding:24px;box-sizing:border-box;background:#000';document.body.append(box);return box;}
+ function showLine(box){const p=document.createElement('p');p.textContent=LINES[Math.floor(Math.random()*LINES.length)];p.style.cssText='margin:0;max-width:32em;color:#e6e8ee;font-size:18px;line-height:1.8;text-align:center;overflow-wrap:anywhere';
+  box.append(p);
+  setTimeout(()=>{p.remove();fade(box,()=>box.remove());},LINE_MS);}
+})();
+</script><script type="module">
 import {createStage,STAGE_DEFAULTS} from './stage.js';
 try {stageView=createStage($('scene'),$('stageLook'),()=>{placeStagePoints();redrawEffects();});stageView.sync(stageSnapshot());
  // 表示枠だけを調整します。カメラや保存形式は変更しません。

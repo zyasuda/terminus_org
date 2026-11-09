@@ -1,0 +1,275 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Ephemera — タイトル試作(雨の水面)</title>
+<style>
+  html, body { margin: 0; height: 100%; background: #1a222a; overflow: hidden; }
+  canvas { display: block; width: 100vw; height: 100vh; }
+  .start { position: fixed; z-index: 1; top: 69%; left: 50%; transform: translate(-50%, -50%); padding: 10px 24px; border: 1px solid #a9afb2; background: #1a222a66; color: #e0ded6; font: 18px Georgia, serif; letter-spacing: .12em; cursor: pointer; }
+  .credit { position: fixed; z-index: 1; right: 0; bottom: max(12px, env(safe-area-inset-bottom)); left: 0; color: #a9afb2; font: 16px Georgia, serif; letter-spacing: .08em; text-align: center; }
+</style>
+</head>
+<body>
+<button class="start" type="button">PRESS START</button>
+<div class="credit">Developing by KING PAWN @sp</div>
+<!--
+  Standee-wiz の title-prototype.html(2026-11-09、3c3db17)を mock3 へ移したもの。同じ世界観 EPHEMERA のタイトル。
+  index.html が最初に重ねて表示し、PRESS START で一言の暗転を経てゲームへ進む。
+  変えたのは three.js と紙片の画像の読み込み先だけ。
+  真上から見た暗い水面の下に古い紙片(docs/media/ephemera-title-restored.png)が沈み、
+  ランダムな雨粒の波紋で紙片の見え方が局所的に揺らぐ。
+  起動: node prototype/preview.cjs → http://localhost:8797/prototype/title.html
+-->
+<script type="module">
+import * as THREE from "./vendor/three/three.module.min.js";
+
+// ---- 調整値 ----
+const SIM_SHORT = 320;       // 波の計算格子の短辺セル数。大きいほど細かい波紋になるが重くなる
+const DAMPING = 0.986;       // 1ステップごとの波の減衰。1に近いほど波紋が遠くまで残る
+const DROPS_PER_SEC = 2.6;   // 雨粒の平均個数/秒
+const DROP_RADIUS = [0.006, 0.016]; // 雨粒の半径(画面短辺比)の最小・最大
+const DROP_STRENGTH = [0.35, 0.8];  // 雨粒が水面を押し下げる強さの最小・最大
+const CLOUD_TRAVERSE_SECONDS = 80; // 雲の反射が画面幅を横切る時間
+const REFRACTION = 0.035;    // 波の傾きで紙片の像をずらす量(画面比)
+const PAPER_WIDTH = 0.94;    // 紙片の幅(画面幅比)。縦長画面では高さ側の制限が優先される
+const PAPER_HEIGHT = 0.68;   // 紙片の高さの上限(画面高さ比)
+// 水底・水の色(暗い灰青)。シェーダーは色変換をしないので、sRGBの値をそのまま渡す
+const WATER_COLOR = new THREE.Vector3(0x2c, 0x38, 0x43).divideScalar(255);
+const STEP_HZ = 60;          // 波の計算頻度。画面の更新頻度に関係なく一定にする
+
+const renderer = new THREE.WebGLRenderer({ antialias: false });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+document.body.append(renderer.domElement);
+
+const camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
+const quad = new THREE.Mesh(new THREE.PlaneGeometry(2, 2));
+const scene = new THREE.Scene();
+scene.add(quad);
+
+const VERT = `varying vec2 vUv; void main(){ vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }`;
+
+// やわらかい雲を低解像度の横繰り返しテクスチャで作り、波紋の反射だけで歪ませる。
+function makeCloudTexture() {
+  const canvas = document.createElement("canvas");
+  canvas.width = 512; canvas.height = 256;
+  const ctx = canvas.getContext("2d");
+  let seed = 0x51a7e;
+  const random = () => { seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0; return seed / 0x100000000; };
+  const puff = (x, y, rx, ry, opacity) => {
+    for (const shift of [-canvas.width, 0, canvas.width]) {
+      ctx.save(); ctx.translate(x + shift, y); ctx.scale(rx, ry);
+      const gradient = ctx.createRadialGradient(0, 0, 0, 0, 0, 1);
+      gradient.addColorStop(0, `rgba(211, 228, 237, ${opacity})`);
+      gradient.addColorStop(0.56, `rgba(188, 211, 224, ${opacity * 0.6})`);
+      gradient.addColorStop(1, "rgba(176, 201, 216, 0)");
+      ctx.fillStyle = gradient; ctx.beginPath(); ctx.arc(0, 0, 1, 0, Math.PI * 2); ctx.fill(); ctx.restore();
+    }
+  };
+  for (let cloud = 0; cloud < 4; cloud++) {
+    const x = random() * canvas.width, y = 10 + random() * 100;
+    const spreadX = 55 + random() * 105, spreadY = 14 + random() * 28;
+    for (let i = 0, count = 8 + Math.floor(random() * 4); i < count; i++) {
+      puff(x + (random() - 0.5) * spreadX, y + (random() - 0.5) * spreadY,
+        28 + random() * 56, 8 + random() * 18, 0.23 + random() * 0.12);
+    }
+  }
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.wrapS = THREE.RepeatWrapping;
+  texture.minFilter = THREE.LinearMipmapLinearFilter;
+  texture.generateMipmaps = true;
+  return texture;
+}
+
+// 波の計算: r=高さ, g=速度。隣4セルの平均へ引き戻すだけの簡易波動方程式。
+const simMat = new THREE.ShaderMaterial({
+  vertexShader: VERT,
+  uniforms: {
+    tState: { value: null },
+    texel: { value: new THREE.Vector2() },
+    damping: { value: DAMPING },
+  },
+  fragmentShader: `
+    uniform sampler2D tState; uniform vec2 texel; uniform float damping;
+    varying vec2 vUv;
+    void main(){
+      vec4 s = texture2D(tState, vUv);
+      float avg = 0.25 * (
+        texture2D(tState, vUv - vec2(texel.x, 0.0)).r + texture2D(tState, vUv + vec2(texel.x, 0.0)).r +
+        texture2D(tState, vUv - vec2(0.0, texel.y)).r + texture2D(tState, vUv + vec2(0.0, texel.y)).r);
+      s.g += (avg - s.r) * 2.0;
+      s.g *= damping;
+      s.r += s.g;
+      s.r *= 0.999; // 長時間で高さが片寄らないように少しずつ0へ戻す
+      gl_FragColor = s;
+    }`,
+});
+
+// 雨粒: 余弦の窪みを高さへ足す。
+const dropMat = new THREE.ShaderMaterial({
+  vertexShader: VERT,
+  uniforms: {
+    tState: { value: null },
+    center: { value: new THREE.Vector2() },
+    radius: { value: 0.01 },
+    strength: { value: 0.5 },
+    aspect: { value: 1 },
+  },
+  fragmentShader: `
+    uniform sampler2D tState; uniform vec2 center; uniform float radius, strength, aspect;
+    varying vec2 vUv;
+    void main(){
+      vec4 s = texture2D(tState, vUv);
+      vec2 d = (vUv - center) * vec2(aspect, 1.0);
+      float t = max(0.0, 1.0 - length(d) / radius);
+      s.r -= (0.5 - 0.5 * cos(t * 3.14159265)) * strength;
+      gl_FragColor = s;
+    }`,
+});
+
+// 表示: 波の傾きで紙片の像をずらし、水の色を重ね、傾いた所に空の映り込みを足す。
+const viewMat = new THREE.ShaderMaterial({
+  vertexShader: VERT,
+  uniforms: {
+    tState: { value: null },
+    tPaper: { value: null },
+    tCloud: { value: null },
+    texel: { value: new THREE.Vector2() },
+    paperRect: { value: new THREE.Vector4() }, // 紙片の左下xy・幅高さ(画面UV)
+    refraction: { value: REFRACTION },
+    water: { value: WATER_COLOR },
+    titleGlow: { value: 1 },
+    cloudOffset: { value: 0 },
+  },
+  fragmentShader: `
+    uniform sampler2D tState, tPaper, tCloud; uniform vec2 texel; uniform vec4 paperRect; uniform float titleGlow, cloudOffset;
+    uniform float refraction; uniform vec3 water;
+    varying vec2 vUv;
+    float h(vec2 p){ return texture2D(tState, p).r; }
+    void main(){
+      vec2 g = vec2(h(vUv + vec2(texel.x, 0.0)) - h(vUv - vec2(texel.x, 0.0)),
+                    h(vUv + vec2(0.0, texel.y)) - h(vUv - vec2(0.0, texel.y)));
+      vec3 n = normalize(vec3(-g * 6.0, 1.0));
+
+      // 屈折で水底の像をずらす(紙片は少し沈んでいるので傾きにそのまま比例させる)
+      vec2 uv = vUv + n.xy * refraction;
+      vec2 puv = (uv - paperRect.xy) / paperRect.zw;
+      vec4 paper = vec4(0.0);
+      if (puv.x >= 0.0 && puv.x <= 1.0 && puv.y >= 0.0 && puv.y <= 1.0) paper = texture2D(tPaper, puv);
+
+      // 水底: 暗い灰青。中央をわずかに明るく、四隅を落とす
+      float vig = smoothstep(1.15, 0.25, length((vUv - 0.5) * vec2(1.3, 1.0)));
+      vec3 bed = water * (0.55 + 0.55 * vig);
+
+      // 紙片は水を通して見るので、色を水色へ寄せて暗くする(古い紙が沈んだ見え方)
+      vec3 sunk = mix(paper.rgb * vec3(0.78, 0.80, 0.80), water, 0.38) * (0.75 + 0.3 * vig) * titleGlow;
+      // 紙片のすぐ外側に薄い影を落とす(水底から少し浮いて見える)
+      float shadow = texture2D(tPaper, (vUv - vec2(0.004, -0.006) - paperRect.xy) / paperRect.zw).a;
+      bed *= 1.0 - 0.35 * shadow;
+      vec3 col = mix(bed, sunk, paper.a);
+
+      // 淡い青空と雲を水面に映し、雲は波紋に沿って少し崩す
+      float sky = smoothstep(0.08, 0.64, vUv.y);
+      col = mix(col, vec3(0.48, 0.62, 0.72), sky * 0.30);
+      vec2 cloudUv = vUv + n.xy * 0.018;
+      cloudUv.x += cloudOffset;
+      float cloud = texture2D(tCloud, cloudUv).a;
+      col = mix(col, vec3(0.64, 0.73, 0.79), cloud * sky * 0.45);
+
+      // 水面の映り込み: 曇り空の光が波の斜面にだけ乗る
+      vec3 L = normalize(vec3(-0.35, 0.55, 1.0));
+      float spec = pow(max(dot(reflect(-L, n), vec3(0.0, 0.0, 1.0)), 0.0), 60.0);
+      float slope = clamp(length(g) * 9.0, 0.0, 1.0);
+      col += vec3(0.62, 0.70, 0.78) * (spec * 0.55 + slope * 0.06);
+      float lowerFade = smoothstep(0.72, 0.02, vUv.y);
+      col = mix(col, vec3(0.0), lowerFade * 0.65);
+
+      gl_FragColor = vec4(col, 1.0);
+    }`,
+});
+
+const rtOpts = { type: THREE.HalfFloatType, format: THREE.RGBAFormat, depthBuffer: false,
+  minFilter: THREE.LinearFilter, magFilter: THREE.LinearFilter, wrapS: THREE.ClampToEdgeWrapping, wrapT: THREE.ClampToEdgeWrapping };
+viewMat.uniforms.tCloud.value = makeCloudTexture();
+let rtA, rtB, simW = 1, simH = 1, aspect = 1;
+
+function pass(mat, target) {
+  quad.material = mat;
+  renderer.setRenderTarget(target);
+  renderer.render(scene, camera);
+}
+
+function swap() { const t = rtA; rtA = rtB; rtB = t; }
+
+let paperAspect = 2;
+function layout() {
+  const w = window.innerWidth, h = window.innerHeight;
+  renderer.setSize(w, h, false);
+  aspect = w / h;
+  // 画面の縦横比に合わせて格子を作り直す(格子が正方セルでないと波紋が楕円になる)
+  const nw = Math.round(aspect >= 1 ? SIM_SHORT * aspect : SIM_SHORT);
+  const nh = Math.round(aspect >= 1 ? SIM_SHORT : SIM_SHORT / aspect);
+  if (nw !== simW || nh !== simH) {
+    rtA?.dispose(); rtB?.dispose();
+    simW = nw; simH = nh;
+    rtA = new THREE.WebGLRenderTarget(simW, simH, rtOpts);
+    rtB = new THREE.WebGLRenderTarget(simW, simH, rtOpts);
+    for (const rt of [rtA, rtB]) { renderer.setRenderTarget(rt); renderer.setClearColor(0x000000, 0); renderer.clear(); }
+    renderer.setRenderTarget(null);
+  }
+  simMat.uniforms.texel.value.set(1 / simW, 1 / simH);
+  viewMat.uniforms.texel.value.set(1 / simW, 1 / simH);
+  dropMat.uniforms.aspect.value = aspect;
+  // 紙片を開始ボタンとの間隔を保って少し上へ置く
+  let pw = PAPER_WIDTH, ph = pw * aspect / paperAspect;
+  if (ph > PAPER_HEIGHT) { ph = PAPER_HEIGHT; pw = ph * paperAspect / aspect; }
+  viewMat.uniforms.paperRect.value.set(0.5 - pw / 2, 0.67 - ph / 2, pw, ph);
+}
+
+function addDrop() {
+  const u = dropMat.uniforms;
+  u.tState.value = rtA.texture;
+  u.center.value.set(Math.random(), Math.random());
+  u.radius.value = DROP_RADIUS[0] + Math.random() * (DROP_RADIUS[1] - DROP_RADIUS[0]);
+  u.strength.value = DROP_STRENGTH[0] + Math.random() * (DROP_STRENGTH[1] - DROP_STRENGTH[0]);
+  pass(dropMat, rtB); swap();
+}
+
+async function start() {
+  const paperTex = await new THREE.TextureLoader().loadAsync("./assets/title/ephemera-title-restored.png");
+  paperTex.colorSpace = THREE.NoColorSpace; // 色は表示シェーダーでそのまま扱う
+  paperTex.anisotropy = renderer.capabilities.getMaxAnisotropy();
+  paperAspect = paperTex.image.width / paperTex.image.height;
+  viewMat.uniforms.tPaper.value = paperTex;
+  let glowStarted = 0;
+  document.querySelector(".start").addEventListener("click", () => { glowStarted = performance.now(); }, { once: true });
+  layout();
+  window.addEventListener("resize", layout);
+
+  let last = performance.now(), cloudElapsed = 0;
+  let acc = 0;
+  renderer.setAnimationLoop(() => {
+    const now = performance.now(), dt = Math.min((now - last) / 1000, 0.1);
+    last = now; cloudElapsed += dt;
+    viewMat.uniforms.cloudOffset.value = (cloudElapsed / CLOUD_TRAVERSE_SECONDS) % 1;
+    viewMat.uniforms.titleGlow.value = 1 + 0.8 * Math.min((now - glowStarted) / 500, 1);
+    acc += dt;
+    // ponytail: 雨粒は一様乱数の位置・間隔。強弱の波や局所的なにわか雨が欲しくなったらここを変える
+    if (Math.random() < dt * DROPS_PER_SEC) addDrop();
+    let steps = 0;
+    while (acc >= 1 / STEP_HZ && steps < 4) {
+      simMat.uniforms.tState.value = rtA.texture;
+      pass(simMat, rtB); swap();
+      acc -= 1 / STEP_HZ; steps++;
+    }
+    if (steps === 4) acc = 0;
+    viewMat.uniforms.tState.value = rtA.texture;
+    pass(viewMat, null);
+  });
+  window.__titleReady = true;
+}
+start();
+</script>
+</body>
+</html>

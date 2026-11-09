@@ -1,0 +1,147 @@
+<!doctype html><html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>灰の竜と塔の魔法使い</title>
+<style>
+:root{--bg:#f3efe4;--paper:#fffcf3;--ink:#211d17;--muted:#6b6355;--line:#d8cfbb;--accent:#9b3d1f;--gold:#8a6a1c;--know:#e9e2cf;--secret:#2b2a33;--secretink:#f1e7c8}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#15130f;--paper:#1f1c17;--ink:#eee6d4;--muted:#a99f8b;--line:#3d372d;--accent:#e08a5f;--gold:#d8b45e;--know:#2a261f;--secret:#0c0b0f;--secretink:#f1e7c8}}
+:root[data-theme="dark"]{--bg:#15130f;--paper:#1f1c17;--ink:#eee6d4;--muted:#a99f8b;--line:#3d372d;--accent:#e08a5f;--gold:#d8b45e;--know:#2a261f;--secret:#0c0b0f;--secretink:#f1e7c8}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.8 "Hiragino Sans","Yu Gothic UI","Noto Sans JP",sans-serif}
+main{max-width:1100px;margin:auto;padding:0 20px 80px}
+header{padding:52px 0 24px;border-bottom:2px solid var(--ink)}
+.kicker{color:var(--accent);font-size:13px;letter-spacing:.08em;margin:0}
+h1{font:600 clamp(2rem,5vw,3.2rem)/1.2 "Hiragino Mincho ProN","Yu Mincho",serif;margin:.2em 0}
+h2{font:600 1.5rem/1.4 "Hiragino Mincho ProN","Yu Mincho",serif;margin:44px 0 10px;padding-top:10px;border-top:5px solid var(--accent);display:inline-block}
+h3{margin:0 0 4px;font-size:1.05rem}
+.lead{color:var(--muted);font-size:16px;max-width:48em}
+.truth{background:var(--secret);color:var(--secretink);border-radius:8px;padding:14px 18px;margin:16px 0}
+.truth b{color:#f0b46a}
+table{border-collapse:collapse;width:100%;font-size:14px;background:var(--paper)}th,td{border:1px solid var(--line);padding:7px 10px;text-align:left;vertical-align:top}th{background:var(--know)}
+.tw{overflow-x:auto;margin:12px 0}
+.hard{color:var(--accent);font-weight:700}
+.board{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px;margin-top:16px}
+.panel{background:var(--paper);border:1px solid var(--line);border-radius:10px;padding:16px 18px;position:relative}
+.panel .no{position:absolute;top:-12px;left:14px;background:var(--accent);color:#fff;border-radius:14px;padding:0 10px;font-size:12px;font-weight:700}
+.panel .stage{color:var(--gold);font-size:12px;font-weight:700;letter-spacing:.06em}
+.panel dl{margin:8px 0 0;display:grid;grid-template-columns:5.5em 1fr;gap:4px 10px;font-size:13.5px}
+.panel dt{color:var(--muted)}.panel dd{margin:0}
+.say{border-left:3px solid var(--gold);padding:4px 10px;margin:8px 0 0;font-size:13.5px;background:var(--know);border-radius:0 6px 6px 0}
+.who{font-weight:700}
+.nums{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin:14px 0}
+.num{background:var(--paper);border:1px solid var(--line);border-radius:8px;padding:12px 14px}
+.num b{display:block;font:600 2rem/1.1 "Hiragino Mincho ProN",serif;color:var(--accent)}
+.num span{font-size:13px;color:var(--muted)}
+.deal{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}
+.deal>div{background:var(--paper);border:1px solid var(--line);border-radius:10px;padding:14px 18px}
+.note{font-size:13px;color:var(--muted)}
+ul{padding-left:1.3em}li{margin:.25em 0}
+@media (max-width:760px){.board,.deal,.nums{grid-template-columns:1fr}.panel dl{grid-template-columns:1fr}main{padding:0 16px 60px}}
+</style></head><body><main>
+<header><p class="kicker">ブレスト用の下書き · 2026-11-09 · 未決</p><h1>灰の竜と塔の魔法使い(仮)</h1>
+<p class="lead">「共通の目的+配られる秘密の札」で遊ぶ1回90〜120分のシナリオの流れを、ストーリーボードとして描いた案です。人物はmock3の4人をそのまま使います。舞台・ルール・合意の仕組みも、今のコードの資産を前提にしています。</p></header>
+
+<h2>あらすじと真相</h2>
+<p>山あいの村の上に、古い塔が建っています。そこに棲みついた灰の竜が、夜な夜な村を襲うようになりました。村長は4人の冒険者に依頼します。「竜を討ってくれ」。</p>
+<div class="truth"><b>真相(エンディングまで誰も知らない):</b> 塔に住む老魔法使いヴェルンが、研究のために竜の卵を盗んだ。竜は卵を探して暴れているだけ。卵を返せば竜は鎮まって去る。ヴェルンは村長に口止め料を払っている。</div>
+<p><b>共通の目的:</b> 竜の脅威を村から取り除いて、生きて帰ること。これに失敗すると全員が負けます。秘密の札は、パーティが勝ったときしか達成できません。</p>
+
+<h2>結末を決める4つの選択</h2>
+<p>結末は、この4つの選択の組み合わせで決まります。判定はプログラムが行います。矛盾しない組み合わせは40通りです。</p>
+<div class="tw"><table>
+<tr><th>選択</th><th>取りうる結果</th><th>つながり</th></tr>
+<tr><td>竜</td><td>討つ / 鎮める / 縛る</td><td>鎮めるのは、卵を返したときだけ。討つには、塔の財宝の中にある竜殺しの槍が要る。縛るのは、魔法使いの鎖の術だけ</td></tr>
+<tr><td>卵</td><td>返す / 持ち去る / 壊す</td><td>返すと竜が鎮まる</td></tr>
+<tr><td>魔法使い</td><td>暴く / 手を組む / <b>自ら打ち明けさせる</b> / 討つ</td><td>「自ら打ち明けさせる」は、日記を読み解き、本人を説得したときだけ選べる。暴く側と組む側の両方の札を満たす、話し合いの道</td></tr>
+<tr><td>財宝</td><td>持ち去る / <b>山分けする</b> / 槍に使う / 置いていく</td><td>山分けは、金が欲しいガレスと、村の再建に充てたいイネスの両方を満たす交渉の道</td></tr>
+</table></div>
+
+<h2>秘密の札(1人3枚、毎回1枚を配る)</h2>
+<p>札はキャラクターの「根っこ」から作るので、どの札を引いても人物像はぶれません。条件はすべて、上の4つの選択だけで判定できる文にしています。</p>
+<div class="tw"><table>
+<tr><th>人物(根っこ)</th><th>札</th><th>判定条件</th><th>全員達成できる回</th></tr>
+<tr><td rowspan="3">ガレス<br><span class="note">金と約束</span></td><td>財宝を持ち帰る</td><td>財宝を持ち去る、または山分けする</td><td>14/27</td></tr>
+<tr><td>討伐の満額報酬</td><td>竜を討つ</td><td>8/27</td></tr>
+<tr><td>魔法使いと取引する</td><td>魔法使いと手を組む、または自ら打ち明けさせる</td><td>13/27</td></tr>
+<tr><td rowspan="3">マレン<br><span class="note">知ることへの執着</span></td><td>卵を研究に持ち帰る</td><td>卵を持ち去る</td><td>10/27</td></tr>
+<tr><td>禁術を暴く</td><td>魔法使いを暴く、または自ら打ち明けさせる</td><td>15/27</td></tr>
+<tr><td>竜と言葉を交わす</td><td>竜を鎮める、または縛る</td><td>10/27</td></tr>
+<tr><td rowspan="3">ブロム<br><span class="note">仲間を失った過去</span></td><td>誰も倒れずに帰る</td><td>竜と戦わない(討たない)</td><td>12/27</td></tr>
+<tr><td>竜を討って仇を取る</td><td>竜を討つ</td><td class="hard">6/27</td></tr>
+<tr><td>村に真相を伝える</td><td>魔法使いを暴く、または自ら打ち明けさせる</td><td>17/27</td></tr>
+<tr><td rowspan="3">イネス(あなた)<br><span class="note">村と道</span></td><td>竜を村から遠ざける</td><td>竜を討つ、または鎮める</td><td>15/27</td></tr>
+<tr><td>魔法使いを追い出す</td><td>魔法使いを暴く、または討つ</td><td>8/27</td></tr>
+<tr><td>財宝を村の再建に</td><td>財宝を山分けする</td><td>12/27</td></tr>
+</table></div>
+<p class="note">「全員達成できる回」は、その札が配られる27通りのうち、4人全員の札を満たす結末が1つでもある回の数です。</p>
+
+<h2>数えた結果(81通りの配り方を全部確かめた)</h2>
+<div class="nums">
+<div class="num"><b>43%</b><span>全員が達成できる結末がある配り方(35/81)。残りの57%は、誰かが必ず諦める</span></div>
+<div class="num"><b>17/35</b><span>全員達成の回のうち、「自ら打ち明けさせる」か「山分け」、つまり話し合いの道でしか届かない回</span></div>
+<div class="num"><b>2〜4人</b><span>最善の結末での達成人数。4人が35通り、3人が44通り、2人が2通り。全員が外れる配り方は無い</span></div>
+</div>
+<p>大団円の道があるかどうかは配り方で変わり、プレイヤーには分かりません。だから「打ち明ければ正解」にはならず、打ち明けるかどうかは毎回の賭けになります。いちばん厳しいのはブロムの「竜を討って仇を取る」(6/27)で、試遊で達成率を見て調整する候補です。</p>
+
+<h2>ストーリーボード(先方の6段階に沿って)</h2>
+<div class="board">
+<div class="panel"><span class="no">1</span><div class="stage">配役</div><h3>札が配られる</h3>
+<dl><dt>画面</dt><dd>自分の人物シートと、伏せた札。めくると自分の秘密の目的が出る。他人の札は裏面だけ</dd>
+<dt>知っていること</dt><dd>自分の札だけ</dd>
+<dt>会話の理由</dt><dd>まだ無い。ここで秘密の重さが伝わるかが大事</dd></dl></div>
+
+<div class="panel"><span class="no">2</span><div class="stage">導入</div><h3>村長の依頼</h3>
+<dl><dt>画面</dt><dd>村の広場。GM(AI)が依頼を読み上げる。各自が「表の目的」だけで自己紹介する</dd>
+<dt>知っていること</dt><dd>依頼は「竜を討て」。報酬の額は全員が聞く</dd>
+<dt>会話の理由</dt><dd>討伐の報酬に、ガレスとブロムの札が反応する</dd></dl>
+<p class="say"><span class="who">ガレス:</span> 満額なら、討つのが一番早いな。</p></div>
+
+<div class="panel"><span class="no">3</span><div class="stage">調査</div><h3>焼け跡の無い家畜</h3>
+<dl><dt>画面</dt><dd>村はずれの牧場。調べる地点が3つ</dd>
+<dt>知っていること</dt><dd>イネスだけが「竜にやられたのに焼け跡が無い」と気づく。ブロムだけが「村長の家に塔の紋章入りの革袋」を見る</dd>
+<dt>会話の理由</dt><dd>手がかりは見つけた本人だけが持つ。話すかどうかは本人次第(今のコードの仕組み)</dd></dl></div>
+
+<div class="panel"><span class="no">4</span><div class="stage">調査</div><h3>塔の麓の卵の殻</h3>
+<dl><dt>画面</dt><dd>塔の麓。灰に埋もれた殻の欠片と、破れた日記の切れ端</dd>
+<dt>知っていること</dt><dd>マレンだけが、殻を竜の卵だと鑑定できる。日記の切れ端は、拾った本人だけが読める</dd>
+<dt>会話の理由</dt><dd>「竜は卵を探しているのでは?」という仮説が生まれる。言えば竜を討たない流れになるので、討ちたい札の人は黙りたくなる</dd></dl></div>
+
+<div class="panel"><span class="no">5</span><div class="stage">議論・密談</div><h3>1対1の交渉</h3>
+<dl><dt>画面</dt><dd>塔の下での野営。宛先を1人に絞って話せる(今のコードの宛先選択を、人間どうしの密談に広げる)</dd>
+<dt>知っていること</dt><dd>相手が何を知っているかは、話すまで分からない</dd>
+<dt>会話の理由</dt><dd>山分けや取引は、全員の前では言いにくい</dd></dl>
+<p class="say"><span class="who">ガレス→イネス:</span> 財宝の半分は村に回す。その代わり、宝のことは他の2人には黙っていてくれないか。<br><span class="note">(竜を討つと財宝の槍を使うので、山分けとは両立しない。ガレスが「討伐の満額報酬」の札なら、この申し出は嘘になる)</span></p></div>
+
+<div class="panel"><span class="no">6</span><div class="stage">議論(山場)</div><h3>塔の最上階、竜と卵</h3>
+<dl><dt>画面</dt><dd>竜が卵の台座の前で唸っている。魔法使いヴェルンが鎖の術を構えて「討て」と叫ぶ</dd>
+<dt>知っていること</dt><dd>各自の手がかりと札。ここで初めて全員が同じ場面を見る</dd>
+<dt>会話の理由</dt><dd>4つの選択を一度に迫られる。打ち明けるか、黙って押し通すか。リーダーは置かないので、誰も他人の行動を決められない</dd></dl>
+<p class="say"><span class="who">マレン:</span> 待って。あの卵は、この竜のものよ。<br><span class="who">ブロム:</span> 戦わずに済むなら、それが一番だ。</p></div>
+
+<div class="panel"><span class="no">7</span><div class="stage">決着</div><h3>戦うか、鎮めるか</h3>
+<dl><dt>画面</dt><dd>討つなら、今の戦闘画面(予告・作戦・全員の確認・D20)。鎮めるなら、卵を返す儀式の判定。縛るなら、鎖の術を支える判定</dd>
+<dt>知っていること</dt><dd>選んだ道の危険。討つ道は激戦で、ブロムの「誰も倒れずに」と衝突する</dd>
+<dt>会話の理由</dt><dd>途中で意見を変える人が出る。全員の確認が要るので、変えた人は説明しなければならない</dd></dl></div>
+
+<div class="panel"><span class="no">8</span><div class="stage">エンディング</div><h3>真相と達成表</h3>
+<dl><dt>画面</dt><dd>GMが真相を語る。4人の札を一斉にめくり、達成/未達を並べる。後日談を1人2行ずつ読む</dd>
+<dt>知っていること</dt><dd>全部。「だからあの時渋ったのか」が起きる場面</dd>
+<dt>会話の理由</dt><dd>感想トーク(先方の機能)へ自然につながる。順位は出さない</dd></dl></div>
+</div>
+
+<h2>配り方の例2つ(検算済み)</h2>
+<div class="deal">
+<div><h3>例A: 大団円に届く回</h3>
+<p>ガレス「財宝を持ち帰る」/ マレン「禁術を暴く」/ ブロム「誰も倒れずに帰る」/ イネス「財宝を村の再建に」</p>
+<p>全員が達成できる結末は4つあります。代表は「卵を返して竜を鎮める+魔法使いを暴く+財宝を山分け」です。ただし、<b>ガレスとイネスが財宝について打ち明け合い、山分けに合意しないと届きません。</b>どちらかが黙って持ち去れば、もう片方は未達になります。</p></div>
+<div><h3>例B: 誰かが必ず諦める回</h3>
+<p>ガレス「財宝を持ち帰る」/ マレン「卵を研究に持ち帰る」/ ブロム「誰も倒れずに帰る」/ イネス「竜を村から遠ざける」</p>
+<p>全員の達成はできません。最善でも3人です。戦わずに竜を遠ざけるには卵を返すしかなく、それはマレンの札とぶつかります。<b>ここでマレンが正直に話すと、イネスに先回りされて卵を返されます。</b>打ち明けるのが損になる回です。</p></div>
+</div>
+
+<h2>まだ分からないこと</h2>
+<ul>
+<li><b>人間どうしで会話が続くか。</b>ここに書いたのは設計上の理由で、確かめられるのは人間4人で遊んだときだけです。</li>
+<li><b>AIの代役が秘密を抱えて振る舞えるか。</b>今のAIは頼まれれば応じるように作ってあるので、渋る、探りを入れる、話をそらす、といった振る舞いを足す改修が要ります。</li>
+<li><b>4つの選択を山場で一度に迫ると、重すぎないか。</b>2回に分ける案(塔の下で財宝、最上階で竜と卵と魔法使い)もあります。</li>
+<li><b>人が集まらない中で、何を先に確かめるか。</b>作者+AI3人の試遊では、流れと所要時間は確かめられますが、人間どうしの駆け引きは確かめられません。AIだけで多数回遊ばせると、札の達成率の偏りは測れます。</li>
+</ul>
+<p class="note">数え方: 4つの選択の矛盾しない組み合わせ40通りについて、81通りの配り方ごとに、全員の札の条件を満たす結末があるかを全部確かめました(<code>2026-11-09-ash-dragon-cards.py</code>。<code>python3</code> で実行すると同じ数字が出ます)。</p>
+</main></body></html>

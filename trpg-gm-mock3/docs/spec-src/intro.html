@@ -35,6 +35,7 @@
 <tr><td>サーバー</td><td>画面の配信(8797番)と、AIへの中継(8798番)。ブラウザーは同じオリジンの <code>POST /api/gm</code> だけを呼ぶ</td><td>preview.cjs、../trpg-gm-mock2/server.cjs</td></tr>
 </table></div>
 <ul>
+<li><b>起動の流れ(2026-11-09 追加):</b> 最初にタイトル画面(<code>title.html</code>、EPHEMERA)を全面に重ね、PRESS START で黒地に一言を2秒出してからゲームを見せます。ゲームの組み立て(<code>bootGame()</code>)はタイトルの裏で先に行います。URLに <code>?…</code> が付いているときはタイトルを出しません。詳しくは <a href="EPHEMERA.md">EPHEMERA.md</a> にあります。C章の起動の記述は、この追加より前のものです。</li>
 <li><b>状態は1つのオブジェクト(<code>state</code>)だけです。</b>初期値は E-2 のとおりで、描画は <code>state</code> を読むだけです。表示のために <code>state</code> を書き換えてはいけません。</li>
 <li><b>判定の結果は写しに適用します。</b>戦闘の判定は <code>structuredClone(state)</code> に対して行い、終わってから <code>state</code> に代入します。</li>
 <li><b>古いAI応答は捨てます。</b>再開始のたびに <code>generation</code> を1増やします。AIの応答が届いたとき、呼んだ時点の世代や <code>state</code> と違っていれば、何も表示せずに捨てます。</li>
