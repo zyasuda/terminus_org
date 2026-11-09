@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="協力型ファンタジーTRPG試作『坑道の向こう』の遊び方と現在の実装状況。">
+  <title>坑道の向こう | ゲーム紹介</title>
+  <style>
+    :root{color-scheme:dark;--bg:#171c1a;--panel:#222a26;--ink:#f3f0e6;--muted:#bac2b9;--gold:#d4b46e;--blue:#a9cbd0;--line:#465149;--green:#a8c5a3}
+    *{box-sizing:border-box}html{scroll-behavior:smooth}body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.75 system-ui,-apple-system,"Hiragino Kaku Gothic ProN",Meiryo,sans-serif}
+    a{color:var(--blue)}.wrap{max-width:1120px;margin:auto;padding:0 24px}header{padding:76px 0 58px;background:radial-gradient(ellipse at 75% 10%,#48564a 0,transparent 48%),linear-gradient(135deg,#222a26,#171c1a)}
+    .eyebrow{color:var(--gold);letter-spacing:.16em;font-size:.82rem}h1{font-size:clamp(2.5rem,7vw,5rem);line-height:1.08;margin:.35em 0}h2{font-size:clamp(1.7rem,4vw,2.5rem);line-height:1.25;margin:0 0 16px}h3{color:var(--gold);margin:.2em 0}.lead{max-width:760px;font-size:1.2rem;color:#e0e4db}.tag{display:inline-block;border:1px solid var(--line);border-radius:99px;padding:3px 12px;color:var(--muted);font-size:.85rem;margin:5px 5px 0 0}
+    nav{position:sticky;top:0;z-index:5;background:#171c1aee;border-bottom:1px solid var(--line);backdrop-filter:blur(8px)}nav .wrap{display:flex;gap:22px;overflow:auto;padding-top:12px;padding-bottom:12px;white-space:nowrap}nav a{text-decoration:none;font-size:.9rem}
+    section{padding:64px 0;border-bottom:1px solid var(--line)}.intro{color:var(--muted);max-width:800px;margin:0 0 28px}.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:20px}.card{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:22px}.card p{margin:.3em 0;color:var(--muted)}.steps{counter-reset:step;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px}.step{position:relative;padding:20px;background:var(--panel);border-radius:12px;border-top:2px solid var(--gold)}.step:before{counter-increment:step;content:"0" counter(step);color:var(--gold);font-size:.8rem;letter-spacing:.1em}
+    figure{margin:0;background:#0e1210;border-radius:12px;overflow:hidden;border:1px solid var(--line)}figure img{display:block;width:100%;height:auto}figcaption{padding:12px 15px;color:var(--muted);font-size:.9rem}.caption-note{color:#d8c996}
+    .people{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px}.person{padding:18px;background:var(--panel);border-radius:12px;border-bottom:2px solid var(--gold)}.person b{display:block;font-size:1.15rem}.person span{color:var(--muted);font-size:.9rem}
+    .callout{padding:18px 22px;border-left:3px solid var(--blue);background:#202826;color:var(--muted);border-radius:0 10px 10px 0}.state{display:inline-block;color:var(--green);font-size:.84rem}.state.partial{color:var(--gold)}.state.todo{color:#e4a9a0}.fine{font-size:.88rem;color:var(--muted)}footer{padding:38px 0 60px;color:var(--muted)}
+    @media(max-width:760px){.grid,.steps{grid-template-columns:1fr}.people{grid-template-columns:repeat(2,minmax(0,1fr))}header{padding:50px 0 42px}section{padding:46px 0}.wrap{padding:0 17px}}
+    @media print{body{background:white;color:#171c1a}nav{display:none}header,section{break-inside:avoid}.card,.step,.person,figure{background:#f4f3ed;color:#171c1a;border-color:#bbb}.intro,.card p,.person span,figcaption,.fine,footer{color:#444}a{color:#315a62}}
+  </style>
+</head>
+<body>
+<header><div class="wrap">
+  <div class="eyebrow">COOPERATIVE FANTASY ROLEPLAY</div>
+  <h1>坑道の向こう</h1>
+  <p class="lead">暗い坑道で手がかりを見つけ、仲間と相談し、役割をつないで番人に挑む。会話そのものが作戦になる、協力型ファンタジーTRPGのブラウザー試作です。</p>
+  <span class="tag">試作シナリオ 1本</span><span class="tag">人間1人＋AI3人</span><span class="tag">判定はプログラム</span>
+</div></header>
+<nav><div class="wrap"><a href="#idea">遊びの芯</a><a href="#flow">遊び方</a><a href="#screens">画面</a><a href="#roles">仲間</a><a href="#status">できること・未実装</a></div></nav>
+<main>
+<section id="idea"><div class="wrap"><h2>相談して、ひとつの作戦にする</h2><p class="intro">この試作が目指すのは、状況が不確かなときに仲間と相談し、役割と順番を決めて行動し、その結果を引き受ける遊びです。</p>
+  <div class="grid"><article class="card"><h3>一人ではできないことをつなぐ</h3><p>たとえばブロムが操作輪を支え、その間にイネスが工具で引っ掛かりを外す。誰が何を持ち、どの順で動くかが相談の材料になります。</p></article><article class="card"><h3>AIは語り、プログラムは判定する</h3><p>AIは発言の解釈や物語の語りを担当。ダイス、成否、ダメージ、状態変化はゲーム側が決めます。</p></article></div>
+</div></section>
+<section id="flow"><div class="wrap"><h2>坑道の探索から番人戦まで</h2><p class="intro">現行試作に実装されたシナリオの流れです。任意の隠し要素を見つけなくても先へ進めます。</p>
+  <div class="steps"><article class="step"><h3>仲間と持ち物を知る</h3><p>導入で仲間が自分の道具を紹介します。</p></article><article class="step"><h3>暗い入口を調べる</h3><p>ランタンを灯し、台車やレール、壁の傷を調べます。手がかりは発見者に届きます。</p></article><article class="step"><h3>相談して仕掛けを動かす</h3><p>排水室では役割を組み合わせ、操作輪と工具で水を抜きます。</p></article><article class="step"><h3>石扉を開ける</h3><p>鍵・支え・工具を組み合わせるか、別の方法を選びます。大きな音は番人を警戒させます。</p></article><article class="step"><h3>作戦を並べて戦う</h3><p>4人の行動を相談し、順番に解決。番人の予告を見て守り方を考えます。</p></article><article class="step"><h3>勝利か撤退か</h3><p>番人を倒すか、全員で撤退すると試作の結末です。</p></article></div>
+</div></section>
+<section id="screens"><div class="wrap"><h2>試作の画面</h2><p class="intro">以下は prototype/screenshots に保存されていた試作画面です。画面撮影時点の記録であり、現在のビルドで撮り直した写真ではありません。動作や表示が現行版と異なる場合があります。</p>
+  <div class="grid">
+    <figure><img src="../prototype/screenshots/desktop.png" alt="坑道の向こうのデスクトップ画面"><figcaption>探索画面。舞台、会話、人物、行動の入口をひとつの画面に配置した試作。</figcaption></figure>
+    <figure><img src="../prototype/screenshots/character-sheet-information.png" alt="キャラクターシートの情報欄"><figcaption>キャラクターシートの情報欄。本人だけが知る手がかりと、共有された情報を分けて記録します。</figcaption></figure>
+    <figure><img src="../prototype/screenshots/lydia-map.png" alt="マレンの古い坑道の地図"><figcaption>マレンが持つ地図。地図の記載と、実際に訪れた場所を区別します。</figcaption></figure>
+    <figure><img src="../prototype/screenshots/discovery-blue-dust.png" alt="暗闇に浮かぶ蒼白い塵"><figcaption>ランタンを消したときに見つかる蒼白い塵。隠し収納につながる探索要素です。</figcaption></figure>
+    <figure><img src="../prototype/screenshots/dice-battle-result.png" alt="戦闘のダイス判定結果"><figcaption>戦闘の判定表示。出目・補正・目標値を示し、結果はゲーム側で確定します。</figcaption></figure>
+    <figure><img src="../prototype/screenshots/stage-quality-hall.png" alt="石扉の広間の舞台"><figcaption>石扉の広間。背景の舞台と人物の立ち位置で場面を表現する2.5D試作。</figcaption></figure>
+  </div><p class="fine">画像の出典: リポジトリ内 prototype/screenshots/。再撮影と現行画面との照合は今後の更新で行います。</p>
+</div></section>
+<section id="roles"><div class="wrap"><h2>仲間それぞれの得意分野</h2><p class="intro">持ち物や能力が違うため、相談では「誰に頼むか」も作戦になります。</p><div class="people">
+  <article class="person"><b>イネス</b><span>斥候。痕跡を調べ、狭い隙間に入り、弱点を見抜く。</span></article><article class="person"><b>ブロム</b><span>盾役。重い扉や操作輪を支え、仲間をかばう。</span></article><article class="person"><b>ガレス</b><span>盗賊。錠前を外し、敵の急所を狙う。</span></article><article class="person"><b>マレン</b><span>魔法使い。ランタンを扱い、古い文字を読み、火球を放つ。</span></article>
+</div></div></section>
+<section id="status"><div class="wrap"><h2>現在の試作でできること</h2><p class="intro">これはリリース版の仕様ではなく、2026年11月6日付の実装状況記録に基づく説明です。</p><div class="grid">
+  <article class="card"><span class="state">実装済み</span><h3>探索と手がかり</h3><p>場面の調査、本人への手がかり表示、会話での共有、地図、移動。</p></article>
+  <article class="card"><span class="state">実装済み</span><h3>個別の持ち物と装備</h3><p>誰が持っているかを管理し、本人の了承を経て受け渡しや装備変更を行います。</p></article>
+  <article class="card"><span class="state">実装済み</span><h3>連携戦闘</h3><p>4人の作戦をそろえ、順番に判定・解決します。</p></article>
+  <article class="card"><span class="state partial">一部実装</span><h3>結末</h3><p>勝利と全員撤退の2通り。真相を推理して投票する仕組みはありません。</p></article>
+  <article class="card"><span class="state todo">未実装</span><h3>複数人オンライン</h3><p>複数端末の同期、ルーム、通話はありません。現在は人間1人とAI3人の試作です。</p></article>
+  <article class="card"><span class="state todo">未実装</span><h3>保存・継続</h3><p>冒険の保存と再開、キャラクターの持ち越しはまだありません。</p></article>
+</div><p class="callout" style="margin-top:22px">先方のプラットフォーム資料とは遊びの方向が異なる部分があります。この試作は協力型で、犯人役・投票・得点計算は実装していません。詳しくは <a href="PLATFORM_FIT.md">対応整理</a> をご覧ください。</p></div></section>
+</main>
+<footer><div class="wrap"><p>仕様と実装状況: <a href="SPEC.md">SPEC.md</a> · <a href="STATUS.md">STATUS.md</a> · <a href="CLIENT_PLATFORM.md">先方資料</a></p><p class="fine">本資料は試作の紹介です。記載の画面写真は撮影時点の表示を示し、現行版との一致は保証しません。</p></div></footer>
+</body></html>

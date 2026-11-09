@@ -1,0 +1,93 @@
+<header class="cover">
+<p class="kicker">再制作向け実装仕様 · 2026-11-09 · 基準コミット 76dfd4a</p>
+<h1>坑道の向こう</h1>
+<p class="lead">ブラウザー試作「坑道の向こう」を、ソースを見ずに作り直せるように書いた仕様です。画像・立体モデルの素材は別に渡します。それ以外のルール、AIへの指示文、画面、立体舞台、固定データは全部ここに書いてあります。</p>
+</header>
+
+<section id="use"><h2>0. この仕様書の読み方</h2>
+<ul>
+<li><b>正本は試作のコードです。</b>この仕様書は 2026-11-09 時点の <code>trpg-gm-mock3/prototype/</code> を読んで書きました。数値と文面はコードから取り出したもので、推測で補った箇所は「不明」「未確認」と書いてあります。</li>
+<li><b>引用の書き方:</b> <code>S:149</code> は「scenario.js の149行目」という意味です。1行に多くの文が詰まったファイルなので、行番号に加えて関数名や文面を添えています。略記は章ごとに冒頭で定めています(D章だけ <code>S</code> が stage.js を指します)。ソースが無くても仕様は読めます。引用は、試作と照合したい人向けです。</li>
+<li><b>節番号には章の記号が付いています</b>(例: A-7.2 は「ルールの章の7.2節」)。</li>
+<li><b>原文と書いてあるブロック</b>(AIへの指示文、固定の文言、E章のデータと定型文)は、スクリプトでソースから機械的に取り出したものです。一字一句そのまま使ってください。</li>
+<li><b>作り直しの順番の目安:</b> E章のデータ → A章のルール(F章の検査で確かめる) → B章のAIとの約束 → C章の画面 → D章の立体舞台。A章とB章が合っていれば、画面の見た目が違っても遊びは同じになります。</li>
+</ul>
+</section>
+
+<section id="what"><h2>1. 作るもの</h2>
+<p>4人パーティの協力型ファンタジーTRPGの単発シナリオです。人間の参加者は1人(既定はイネス)で、残りの3人(ブロム・ガレス・マレン)はAIが演じます。坑道入口・排水室・石扉の広間を探索し、扉を開けて「灯りの番人」と戦います。結末は勝利か全員撤退の2つです。</p>
+<p>遊びの中心は、仲間と相談してひとつの計画にまとめ、その結果を引き受けることです。<b>判定はプログラムが行い、語りはAIが担います。</b>ダイス、補正、成否、HP、所持品、場面の移動は、すべてルールのコードで決めます。AIの文章で状態を変えてはいけません。AIの返事が行動につながるのは、決まった形式を満たし、ゲーム側の再検査を通ったときだけです(B章)。</p>
+<div class="note"><b>試作に無いもの(勝手に足さない):</b> 複数端末の同期、音声通話、保存と再開、投票、犯人役、得点、灯石の最新仕様(MPの回復、灯石の光でだけ見える手がかり)、3通りの結末。</div>
+<p><b>完成の条件:</b> F章の検査がすべて通ること、E-3の再生ケースが同じ結果になること、2章の写真と同じ配置になること。</p>
+</section>
+
+<section id="shots"><h2>2. 画面写真(2026-11-09、現行コードで撮影)</h2>
+<p>幅1440×900で撮りました。状態はスクリプトで切り替えています(AIは未接続)。冒頭の仲間3人の発言は、AIを使わずに出る固定の紹介文です。</p>
+<div class="shots"><!--SHOTS--></div>
+</section>
+
+<section id="arch"><h2>3. 全体の構造</h2>
+<div class="tw"><table>
+<tr><th>層</th><th>役割</th><th>試作のファイル</th></tr>
+<tr><td>エンジン</td><td>状態の保持、所持品、移動、描画、人物シート、AI呼び出し、戦闘の進行、画面部品。シナリオに依存しない汎用部分</td><td>engine/core.js → items.js → navigation.js → view.js → sheet.js → ai.js → battle.js → ui.js</td></tr>
+<tr><td>シナリオ</td><td>人物、部屋、調査対象、行動とその効果、戦闘の数値、指示文、舞台の配置。差し替えれば別のシナリオになる部分</td><td>scenario.js</td></tr>
+<tr><td>立体舞台</td><td>Three.js 0.185.1 で背景の板、床、スタンディーを描く。WebGLが使えないときはDOM版に切り替わる</td><td>stage.js(module として最後に読む)</td></tr>
+<tr><td>サーバー</td><td>画面の配信(8797番)と、AIへの中継(8798番)。ブラウザーは同じオリジンの <code>POST /api/gm</code> だけを呼ぶ</td><td>preview.cjs、../trpg-gm-mock2/server.cjs</td></tr>
+</table></div>
+<ul>
+<li><b>状態は1つのオブジェクト(<code>state</code>)だけです。</b>初期値は E-2 のとおりで、描画は <code>state</code> を読むだけです。表示のために <code>state</code> を書き換えてはいけません。</li>
+<li><b>判定の結果は写しに適用します。</b>戦闘の判定は <code>structuredClone(state)</code> に対して行い、終わってから <code>state</code> に代入します。</li>
+<li><b>古いAI応答は捨てます。</b>再開始のたびに <code>generation</code> を1増やします。AIの応答が届いたとき、呼んだ時点の世代や <code>state</code> と違っていれば、何も表示せずに捨てます。</li>
+<li><b>AIの既定:</b> モデルは <code>claude-haiku-5-5</code> で、プレビューサーバーが環境変数 <code>MOCK3_LLM_MODEL</code> で決めます。ブラウザー側のタイムアウトは45秒です。中継(mock2のserver.cjs)には「claude で始まらない名前は <code>claude-haiku-4-5</code> に置き換える」という決まりがあります。既定の名前は claude で始まるので、この置き換えは起きません。設定画面の選択欄に最初に出る「Claude Haiku 4.5」は古いラベルで、モデル情報を受け取った時点で実際の名前に書き換わります。詳しくはB章の1節にあります。</li>
+<li><b>勝利の文は2つあり、出る場所が違います。</b>判定の結果としてGMの記録に出る文は「胸の枠が外れた。心石を戻すと、番人は静かになった。」です。結末の画面で行動欄に出る文は「胸の枠が外れた。心石を戻すと、番人はランタンを掲げ、坑道の灯りが戻った。」です。両方とも出します。</li>
+<li><b>人物の内部IDと表示名:</b> 魔法使いの内部IDは <code>lydia</code> で、表示名はマレンです。保存やAI応答の約束ごとはIDで扱うので、IDは変えないでください。AIに送るたびにIDと呼び名の対応を添えます(B章)。</li>
+</ul>
+</section>
+<!--CHAPTERS-->
+<section id="accept" class="chapter"><h2>F. 受け入れ検査</h2>
+<p>試作には、Nodeで実行する検査が付いています。2026-11-09 に全部を実行した結果は下の表のとおりです。作り直した版でも、同じ観点の検査を同じ件数以上で通してください。観点は、各検査の最終行に出る見出しです。</p>
+<div class="tw"><table>
+<tr><th>検査</th><th>結果</th><th>確かめていること</th></tr>
+<tr><td>check.cjs</td><td>PASS</td><td>連携の食い違い、本人の了承、変更したときの再確認、個別の撤退希望、全員撤退、戦闘の式(出目を固定して番人の枠と各HPを照合)</td></tr>
+<tr><td>opening-check.cjs</td><td>35件 PASS</td><td>GMの導入、実際の所持品と発言、限定開示、個別所有、人間の紹介、矛盾</td></tr>
+<tr><td>exploration-check.cjs</td><td>208件 PASS</td><td>明示依頼と短い了承、曖昧な提案の確認、相手の指定、発言の根拠</td></tr>
+<tr><td>lantern-check.cjs</td><td>55件 PASS</td><td>仲間からの依頼、明示依頼、ボタンでの本人了承、持ち主だけが操作できること</td></tr>
+<tr><td>navigation-check.cjs</td><td>71件 PASS</td><td>通路と地名の区別、マレンの地図だけ、未訪問の情報を守ること、個別所有</td></tr>
+<tr><td>inventory-check.cjs</td><td>129件 PASS</td><td>個別所有、入手、譲渡・貸与・返却、装備と能力、シートと記憶、装備に応じたスタンディーの絵</td></tr>
+<tr><td>ui-check.cjs</td><td>80件 PASS</td><td>戦闘プレビューの表示・進行保護・復帰、場面転換の暗転と更新</td></tr>
+<tr><td>profile-check.cjs</td><td>33件 PASS</td><td>本人の全設定、未開示の保護、発言の根拠と正本の照合、項目別の開示</td></tr>
+<tr><td>roleplay-check.cjs</td><td>32件 PASS</td><td>本人の設定と知識、仲間の秘密の保護、編集と任意の下書き</td></tr>
+<tr><td>lighting-check.cjs</td><td>137件 PASS</td><td>発言者への追従、7秒後の消灯、手動照明、色と広がり、不在の人物</td></tr>
+<tr><td>standee-check.cjs</td><td>78件 PASS</td><td>実際のGLBの解析、表・裏・側面、アクリル板の厚み、有効な寸法</td></tr>
+<tr><td>playtest-check.cjs</td><td>7件 PASS / 保留1件</td><td>E-3の実AI応答を再生し、依頼どおりに状態が変わること</td></tr>
+<tr><td>scenario-parity.cjs</td><td class="ng">FAIL</td><td>エンジンとシナリオを分ける前の旧版(c36fc01 の game.js)と関数の中身を比べる検査です。意図して変えた4つの関数(下記)で止まるため、作り直しの基準には使いません。</td></tr>
+</table></div>
+<p><b>scenario-parity が落ちる理由:</b> 旧版と中身が違う関数は次の4つです。どれも意図した変更で、比べる元が更新されていません。</p>
+<ul>
+<li><code>actionsFor</code> と <code>planIssues</code>(ada84b5): 偶数ラウンドの光線の予告では、ブロムの「かばう」を選べなくした。</li>
+<li><code>advance</code>(e2835bb): 戦闘開始時のGMの文に「金槌・盾・片手剣・杖は、装備を頼んでから使えます。」を足した。</li>
+<li><code>stageSnapshot</code>(23ff9a9): 装備と抜刀の表示欄を足した。</li>
+</ul>
+<p>関数の中身の比較で止まるので、その後にある振る舞いの比較は一度も実行されていません。そこでも差が出るかは分かっていません。</p>
+</section>
+
+<section id="quirks" class="chapter"><h2>G. 既知の挙動と不具合候補</h2>
+<p>コードを読み、実際に動かして見つけた挙動です。意図したものかどうかはコードから判断できません。作り直すときは<b>試作と同じ挙動を基準にし</b>、直すかどうかは作者が決めます。</p>
+<div class="tw"><table>
+<tr><th>#</th><th>挙動</th><th>確認方法</th></tr>
+<tr><td>1</td><td>点灯中のランタンを渡すと、<code>lit=true</code> のまま受け取った側は未装備になり、装備するまで消せない</td><td>VMで実行</td></tr>
+<tr><td>2</td><td>灯りが無いまま「石扉の奥へ進む」を押すと、例外が捕捉されない(<code>advance</code> が投げる)</td><td>コード</td></tr>
+<tr><td>3</td><td>すでに弱点が見つかっていると、「見抜く」に失敗しても「弱点を発見。」と表示される</td><td>コード</td></tr>
+<tr><td>4</td><td>knowledge に同じ文が2件入る(周囲の痕跡を探した後の壁の傷の調査、読解の後の壁の刻みの調査)</td><td>VMで実行</td></tr>
+<tr><td>5</td><td>番人が「左/右へ身をかわした。」というGMの文は、立体舞台があるときだけ出る</td><td>コード</td></tr>
+<tr><td>6</td><td>人物設定の照合は、AIの応答の形式が崩れていると通ってしまう。その場合、正しく見つかった食い違いが捨てられることがある</td><td>コード</td></tr>
+<tr><td>7</td><td>会話の分類で応答に <code>share</code> 欄が無いと例外になる</td><td>コード</td></tr>
+<tr><td>8</td><td>GMの吹き出し(<code>.gm-bubble</code>)は、最終的なCSSで常に非表示</td><td>コード</td></tr>
+<tr><td>9</td><td>舞台のキー操作で、上下の矢印キーは受け付けない(左右だけ)</td><td>コード</td></tr>
+<tr><td>10</td><td>場面転換の暗転時間 <code>sceneFadeMs</code> を0にすると、回り舞台の演出も起きない</td><td>コード</td></tr>
+<tr><td>11</td><td><code>discovery.cacheRetry</code> は初期状態に無く、未定義のまま始まる(偽として扱われる)</td><td>コード</td></tr>
+<tr><td>12</td><td>使われていない素材がある: sky-dusk-v1.jpg と旧版GLB 6件</td><td>コード</td></tr>
+</table></div>
+<p class="small">各章の末尾にも、その章を書く途中で確定できなかった点の一覧があります。</p>
+</section>
+<footer>関連: <a href="SPEC.md">企画と決定事項</a> · <a href="STATUS.md">実装状況</a> · <a href="mock3-guide.html">紹介ページ</a> · <a href="../prototype/README.md">作業記録</a></footer>

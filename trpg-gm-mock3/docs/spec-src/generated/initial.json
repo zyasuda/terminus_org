@@ -1,0 +1,181 @@
+{
+ "profiles": {
+  "known": {
+   "ines": {
+    "ines": [
+     "name",
+     "role"
+    ],
+    "brom": [
+     "name",
+     "role"
+    ],
+    "gareth": [
+     "name",
+     "role"
+    ],
+    "lydia": [
+     "name",
+     "role",
+     "item0"
+    ]
+   },
+   "brom": {
+    "ines": [
+     "name",
+     "role"
+    ],
+    "brom": [
+     "name",
+     "role"
+    ],
+    "gareth": [
+     "name",
+     "role"
+    ],
+    "lydia": [
+     "name",
+     "role",
+     "item0"
+    ]
+   },
+   "gareth": {
+    "ines": [
+     "name",
+     "role"
+    ],
+    "brom": [
+     "name",
+     "role"
+    ],
+    "gareth": [
+     "name",
+     "role"
+    ],
+    "lydia": [
+     "name",
+     "role",
+     "item0"
+    ]
+   },
+   "lydia": {
+    "ines": [
+     "name",
+     "role"
+    ],
+    "brom": [
+     "name",
+     "role"
+    ],
+    "gareth": [
+     "name",
+     "role"
+    ],
+    "lydia": [
+     "name",
+     "role",
+     "item0"
+    ]
+   }
+  },
+  "history": [],
+  "feedback": {}
+ },
+ "items": {
+  "rope": {
+   "owner": "ines",
+   "holder": "ines"
+  },
+  "hammer": {
+   "owner": "brom",
+   "holder": "brom",
+   "equipped": false
+  },
+  "shield": {
+   "owner": "brom",
+   "holder": "brom",
+   "equipped": false
+  },
+  "picks": {
+   "owner": "gareth",
+   "holder": "gareth"
+  },
+  "dagger": {
+   "owner": "gareth",
+   "holder": "gareth",
+   "equipped": false,
+   "drawn": false
+  },
+  "lantern": {
+   "owner": "lydia",
+   "holder": "lydia",
+   "equipped": true
+  },
+  "staff": {
+   "owner": "lydia",
+   "holder": "lydia",
+   "equipped": false
+  },
+  "lydia_map": {
+   "owner": "lydia",
+   "holder": "lydia"
+  }
+ },
+ "transfers": [],
+ "reports": [],
+ "navigation": {
+  "known": [
+   "entry"
+  ],
+  "maps": [],
+  "offer": null
+ },
+ "phase": "explore",
+ "room": "entry",
+ "lit": false,
+ "everLit": false,
+ "discovery": {
+  "etching": false,
+  "cache": false,
+  "opened": false,
+  "stoneOn": false,
+  "clues": {
+   "ines": [],
+   "brom": [],
+   "gareth": [],
+   "lydia": []
+  },
+  "shared": [],
+  "proposals": [],
+  "hints": 0
+ },
+ "visited": [
+  "entry"
+ ],
+ "seen": {},
+ "holding": false,
+ "drained": false,
+ "observedDrain": false,
+ "locked": true,
+ "supported": false,
+ "opened": false,
+ "noisy": false,
+ "runes": false,
+ "weak": false,
+ "boss": 24,
+ "round": 1,
+ "fire": 2,
+ "hp": {
+  "ines": 12,
+  "brom": 18,
+  "gareth": 15,
+  "lydia": 12
+ },
+ "knowledge": {
+  "ines": [],
+  "brom": [],
+  "gareth": [],
+  "lydia": []
+ },
+ "shared": []
+}

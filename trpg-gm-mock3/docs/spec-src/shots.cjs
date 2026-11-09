@@ -1,0 +1,17 @@
+const {chromium}=require(require('node:path').join(__dirname,'../../../trpg-gm-mock2/node_modules/playwright'));
+const OUT=require('node:path').join(__dirname,'../spec-img/');
+(async()=>{const b=await chromium.launch();
+ const shot=async(page,name)=>{await page.waitForTimeout(2500);await page.screenshot({path:OUT+name+'.png'});console.log('ok',name);};
+ const p=await (await b.newContext({viewport:{width:1440,height:900}})).newPage();
+ const errs=[];p.on('pageerror',e=>errs.push(e.message));
+ await p.goto('http://localhost:8797/prototype/',{waitUntil:'load'});await p.waitForTimeout(4000);
+ await shot(p,'01_start_dark');
+ await p.addScriptTag({content:'{state.lit=true;state.everLit=true;render();}'});await shot(p,'02_entry_lit');
+ await p.addScriptTag({content:"sheet('ines')"});await p.waitForTimeout(800);await shot(p,'03_sheet');
+ await p.addScriptTag({content:"document.getElementById('sheet').close()"});
+ await p.addScriptTag({content:"{state.room='drain';state.visited.push('drain');state.navigation.known.push('drain');render();}"});await shot(p,'04_drain');
+ await p.addScriptTag({content:"{state.room='hall';state.opened=true;state.phase='battle';render();}"});await shot(p,'05_battle');
+ await p.addScriptTag({content:"{state.phase='end';state.outcome='win';render();}"});await shot(p,'06_end');
+ const m=await (await b.newContext({viewport:{width:390,height:844},deviceScaleFactor:2})).newPage();
+ await m.goto('http://localhost:8797/prototype/',{waitUntil:'load'});await m.waitForTimeout(4000);await shot(m,'07_mobile');
+ console.log('errors',errs);await b.close();})();

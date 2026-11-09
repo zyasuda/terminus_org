@@ -8,6 +8,9 @@
 | [STATUS.md](STATUS.md) | どこまで完成したか、検査の実測、作業途中の項目 |
 | [CLIENT_PLATFORM.md](CLIENT_PLATFORM.md) | 先方から受け取った資料(コンセプト・技術スタック・遊び方の流れ…)。受け取るたびに追記 |
 | [PLATFORM_FIT.md](PLATFORM_FIT.md) | 先方資料と mock3 の対応、先方に確かめたいこと |
+| [mock3-guide.html](mock3-guide.html) | 人向けの紹介ページ。遊び方・画面例・実装済み/未実装を図入りで説明 |
+| [mock3-implementation-spec.html](mock3-implementation-spec.html) | ソースを見ずに再制作するための実装仕様(ルール・AIへの指示文の原文・画面・立体舞台・固定データ・受け入れ検査)。`spec-src/` から `python3 docs/spec-src/build.py` で作る。HTMLを直接直さない |
+| [spec-src/](spec-src/README.md) | 実装仕様の組み立て一式(章の本文・取り出しと組み立てのスクリプト・画面写真の撮影) |
 | [SPEC_consent.md](SPEC_consent.md) | Codexへの実装依頼書(汎用の合意)。実装済み: e9efb0e |
 | [SPEC_playtest-fixes.md](SPEC_playtest-fixes.md) | Codexへの実装依頼書(試遊で止まった2件)。実装済み: fd3c2a5 |
 
